@@ -1,0 +1,336 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "client.proto",
+    "version": "version not set"
+  },
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/clm/accounts": {
+      "get": {
+        "operationId": "ListAccounts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcListAccountsResponse"
+            }
+          }
+        },
+        "tags": [
+          "ChannelAuctioneerClient"
+        ]
+      },
+      "post": {
+        "operationId": "InitAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcInitAccountResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/clmrpcInitAccountRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ChannelAuctioneerClient"
+        ]
+      }
+    },
+    "/v1/clm/accounts/{account_sub_key_hex}": {
+      "delete": {
+        "operationId": "CloseAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcCloseAccountResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "account_sub_key_hex",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ChannelAuctioneerClient"
+        ]
+      },
+      "post": {
+        "operationId": "ModifyAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcModifyAccountResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "account_sub_key_hex",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/clmrpcModifyAccountRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ChannelAuctioneerClient"
+        ]
+      }
+    },
+    "/v1/clm/orders": {
+      "get": {
+        "operationId": "ListOrders",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcListOrdersResponse"
+            }
+          }
+        },
+        "tags": [
+          "ChannelAuctioneerClient"
+        ]
+      },
+      "post": {
+        "operationId": "SubmitOrder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcSubmitOrderResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/clmrpcSubmitOrderRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ChannelAuctioneerClient"
+        ]
+      }
+    },
+    "/v1/clm/orders/{order_nonce_hex}": {
+      "delete": {
+        "operationId": "CancelOrder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcCancelOrderResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "order_nonce_hex",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ChannelAuctioneerClient"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "clmrpcAccount": {
+      "type": "object",
+      "properties": {
+        "account_sub_key_hex": {
+          "type": "string"
+        },
+        "account_value": {
+          "type": "string",
+          "format": "int64"
+        },
+        "account_duration": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "clmrpcAsk": {
+      "type": "object",
+      "properties": {
+        "rate_fixed": {
+          "type": "string",
+          "format": "int64"
+        },
+        "amt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "min_duration_blocks": {
+          "type": "string",
+          "format": "int64"
+        },
+        "funding_fee_rate": {
+          "type": "string",
+          "format": "int64"
+        },
+        "order_nonce_hex": {
+          "type": "string"
+        }
+      }
+    },
+    "clmrpcBid": {
+      "type": "object",
+      "properties": {
+        "rate_fixed": {
+          "type": "string",
+          "format": "int64"
+        },
+        "amt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "min_duration_blocks": {
+          "type": "string",
+          "format": "int64"
+        },
+        "funding_fee_rate": {
+          "type": "string",
+          "format": "int64"
+        },
+        "order_nonce_hex": {
+          "type": "string"
+        }
+      }
+    },
+    "clmrpcCancelOrderResponse": {
+      "type": "object"
+    },
+    "clmrpcCloseAccountResponse": {
+      "type": "object"
+    },
+    "clmrpcInitAccountRequest": {
+      "type": "object",
+      "properties": {
+        "account_value": {
+          "type": "string",
+          "format": "int64"
+        },
+        "account_duration": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "clmrpcInitAccountResponse": {
+      "type": "object",
+      "properties": {
+        "account_sub_key_hex": {
+          "type": "string"
+        }
+      }
+    },
+    "clmrpcListAccountsResponse": {
+      "type": "object",
+      "properties": {
+        "accounts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/clmrpcAccount"
+          }
+        }
+      }
+    },
+    "clmrpcListOrdersResponse": {
+      "type": "object",
+      "properties": {
+        "asks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/clmrpcAsk"
+          }
+        },
+        "bids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/clmrpcBid"
+          }
+        }
+      }
+    },
+    "clmrpcModifyAccountRequest": {
+      "type": "object",
+      "properties": {
+        "account_sub_key_hex": {
+          "type": "string"
+        },
+        "new_account_balance": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "clmrpcModifyAccountResponse": {
+      "type": "object"
+    },
+    "clmrpcSubmitOrderRequest": {
+      "type": "object",
+      "properties": {
+        "ask": {
+          "$ref": "#/definitions/clmrpcAsk"
+        },
+        "bid": {
+          "$ref": "#/definitions/clmrpcBid"
+        }
+      }
+    },
+    "clmrpcSubmitOrderResponse": {
+      "type": "object",
+      "properties": {
+        "fail_string": {
+          "type": "string"
+        },
+        "accepted": {
+          "type": "boolean",
+          "format": "boolean"
+        }
+      }
+    }
+  }
+}

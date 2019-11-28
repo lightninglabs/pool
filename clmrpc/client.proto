@@ -1,0 +1,122 @@
+syntax = "proto3";
+
+import "google/api/annotations.proto";
+
+package clmrpc;
+
+service ChannelAuctioneerClient {
+    rpc InitAccount (InitAccountRequest) returns (InitAccountResponse) {
+        option (google.api.http) = {
+            post: "/v1/clm/accounts"
+            body: "*"
+        };
+    };
+    
+    rpc ListAccounts (ListAccountsRequest) returns (ListAccountsResponse) {
+        option (google.api.http) = {
+            get: "/v1/clm/accounts"
+        };
+    };
+    
+    rpc CloseAccount (CloseAccountRequest) returns (CloseAccountResponse) {
+        option (google.api.http) = {
+            delete: "/v1/clm/accounts/{account_sub_key_hex}"
+        };
+    };
+    
+    rpc ModifyAccount (ModifyAccountRequest) returns (ModifyAccountResponse) {
+        option (google.api.http) = {
+            post: "/v1/clm/accounts/{account_sub_key_hex}"
+            body: "*"
+        };
+    };
+    
+    rpc SubmitOrder (SubmitOrderRequest) returns (SubmitOrderResponse) {
+        option (google.api.http) = {
+            post: "/v1/clm/orders"
+            body: "*"
+        };
+    };
+    
+    rpc ListOrders (ListOrdersRequest) returns (ListOrdersResponse) {
+        option (google.api.http) = {
+            get: "/v1/clm/orders"
+        };
+    }
+    
+    rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse) {
+        option (google.api.http) = {
+            delete: "/v1/clm/orders/{order_nonce_hex}"
+        };
+    };
+}
+
+message InitAccountRequest {
+    int64 account_value = 1;
+    int64 account_duration = 2;
+}
+message InitAccountResponse {
+    string account_sub_key_hex = 1;
+}
+
+message ListAccountsRequest {}
+message ListAccountsResponse {
+    repeated Account accounts = 1;
+}
+
+message CloseAccountRequest {
+    string account_sub_key_hex = 1;
+}
+message CloseAccountResponse {}
+
+message ModifyAccountRequest {
+    string account_sub_key_hex = 1;
+    int64 new_account_balance = 2;
+}
+message ModifyAccountResponse{}
+
+message Account {
+    string account_sub_key_hex = 1;
+    int64 account_value = 2;
+    int64 account_duration = 3;
+}
+
+message SubmitOrderRequest {
+    oneof details {
+        Ask ask = 1;
+        Bid bid = 2;
+    }
+}
+message SubmitOrderResponse {
+    oneof details {
+        string fail_string = 1;
+        bool accepted = 2;
+    }
+}
+
+message ListOrdersRequest {}
+message ListOrdersResponse {
+    repeated Ask asks = 1;
+    repeated Bid bids = 2;
+}
+
+message CancelOrderRequest {
+    string order_nonce_hex = 1;
+}
+message CancelOrderResponse {}
+
+message Bid {
+    int64 rate_fixed = 1;
+    int64 amt = 2;
+    int64 min_duration_blocks = 3;
+    int64 funding_fee_rate = 4;
+    string order_nonce_hex = 5;
+}
+
+message Ask {
+    int64 rate_fixed = 1;
+    int64 amt = 2;
+    int64 min_duration_blocks = 3;
+    int64 funding_fee_rate = 4;
+    string order_nonce_hex = 5;
+}
