@@ -47,9 +47,7 @@ func main() {
 			Usage: "agorad daemon address host:port",
 		},
 	}
-	app.Commands = []cli.Command{
-		initAccountCommand,
-	}
+	app.Commands = append(app.Commands, accountsCommands...)
 
 	err := app.Run(os.Args)
 	if err != nil {
@@ -74,9 +72,17 @@ func getClient(ctx *cli.Context) (clmrpc.ChannelAuctioneerClientClient, func(),
 func parseAmt(text string) (btcutil.Amount, error) {
 	amtInt64, err := strconv.ParseInt(text, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("invalid amt value")
+		return 0, fmt.Errorf("invalid amt value: %v", err)
 	}
 	return btcutil.Amount(amtInt64), nil
+}
+
+func parseExpiry(text string) (uint32, error) {
+	expiry, err := strconv.ParseInt(text, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid expiry value: %v", err)
+	}
+	return uint32(expiry), nil
 }
 
 func getClientConn(address string) (*grpc.ClientConn, error) {

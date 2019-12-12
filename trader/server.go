@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/btcsuite/btcutil"
+	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/auctioneer"
 	"github.com/lightninglabs/agora/client/clientdb"
 	"github.com/lightninglabs/agora/client/clmrpc"
@@ -31,6 +33,7 @@ type Server struct {
 	lndServices    *lndclient.LndServices
 	auctioneer     *auctioneer.Client
 	db             *clientdb.DB
+	accountManager *account.Manager
 
 	quit chan struct{}
 	wg   sync.WaitGroup
@@ -48,7 +51,14 @@ func NewServer(lnd *lndclient.LndServices, auctionServer *auctioneer.Client,
 		lndServices: lnd,
 		auctioneer:  auctionServer,
 		db:          db,
-		quit:        make(chan struct{}),
+		accountManager: account.NewManager(&account.ManagerConfig{
+			Store:         db,
+			Auctioneer:    auctionServer,
+			Wallet:        lnd.WalletKit,
+			ChainNotifier: lnd.ChainNotifier,
+			TxSource:      lnd.Client,
+		}),
+		quit: make(chan struct{}),
 	}, nil
 }
 
@@ -90,6 +100,10 @@ func (s *Server) Start() error {
 
 	s.updateHeight(height)
 
+	if err := s.accountManager.Start(); err != nil {
+		return err
+	}
+
 	s.wg.Add(1)
 	go s.serverHandler(blockChan, blockErrChan)
 
@@ -104,11 +118,14 @@ func (s *Server) Stop() error {
 		return nil
 	}
 
-	log.Info("Trader server terminating")
+	log.Info("Stopping trader server")
+
+	s.accountManager.Stop()
+
 	close(s.quit)
 	s.wg.Wait()
 
-	log.Info("Trader server terminated")
+	log.Info("Stopped trader server")
 	return nil
 }
 
@@ -145,7 +162,20 @@ func (s *Server) updateHeight(height int32) {
 func (s *Server) InitAccount(ctx context.Context,
 	req *clmrpc.InitAccountRequest) (*clmrpc.InitAccountResponse, error) {
 
-	return nil, fmt.Errorf("unimplemented")
+	account, err := s.accountManager.InitAccount(
+		ctx, btcutil.Amount(req.AccountValue), req.AccountExpiry,
+		atomic.LoadUint32(&s.bestHeight),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &clmrpc.InitAccountResponse{
+		AccountPoint: &clmrpc.OutPoint{
+			Txid:        account.OutPoint.Hash[:],
+			OutputIndex: account.OutPoint.Index,
+		},
+	}, nil
 }
 
 func (s *Server) ListAccounts(ctx context.Context,

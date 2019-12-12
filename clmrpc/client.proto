@@ -52,11 +52,11 @@ service ChannelAuctioneerClient {
 }
 
 message InitAccountRequest {
-    int64 account_value = 1;
-    int64 account_duration = 2;
+    uint32 account_value = 1;
+    uint32 account_expiry = 2;
 }
 message InitAccountResponse {
-    string account_sub_key_hex = 1;
+    OutPoint account_point = 1;
 }
 
 message ListAccountsRequest {}
