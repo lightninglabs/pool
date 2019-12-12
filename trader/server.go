@@ -105,16 +105,7 @@ func (s *Server) serverHandler() {
 func (s *Server) InitAccount(ctx context.Context,
 	req *clmrpc.InitAccountRequest) (*clmrpc.InitAccountResponse, error) {
 
-	serverReq := &clmrpc.ServerInitAccountRequest{
-		AccountValue: req.AccountValue,
-	}
-	_, err := s.auctioneer.InitAccount(ctx, serverReq)
-	if err != nil {
-		return nil, err
-	}
-	return &clmrpc.InitAccountResponse{
-		AccountSubKeyHex: "beef",
-	}, nil
+	return nil, fmt.Errorf("unimplemented")
 }
 
 func (s *Server) ListAccounts(ctx context.Context,

@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	proxy "github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/lightninglabs/agora/client/auctioneer"
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/agora/client/trader"
 	"github.com/lightningnetwork/lnd/signal"
@@ -40,9 +41,9 @@ func daemon(config *config) error {
 	log.Infof("Auction server address: %v", config.AuctionServer)
 
 	// Create an instance of the auctioneer client library.
-	auctioneerClient, cleanup, err := getAuctioneerClient(
-		config.Network, config.AuctionServer, config.Insecure,
-		config.TLSPathAuctSrv, &lnd.LndServices,
+	auctioneerClient, cleanup, err := auctioneer.NewClient(
+		config.AuctionServer, config.Insecure, config.TLSPathAuctSrv,
+		lnd.WalletKit,
 	)
 	if err != nil {
 		return err

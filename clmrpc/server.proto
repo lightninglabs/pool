@@ -5,12 +5,20 @@ import "google/api/annotations.proto";
 package clmrpc;
 
 service ChannelAuctioneerServer {
+    rpc ReserveAccount (ReserveAccountRequest) returns (ReserveAccountResponse);
     rpc InitAccount (ServerInitAccountRequest) returns (ServerInitAccountResponse);
     rpc CloseAccount (ServerCloseAccountRequest) returns (ServerCloseAccountResponse);
     rpc ModifyAccount (ServerModifyAccountRequest) returns (ServerModifyAccountResponse);
     rpc SubmitOrder (ServerOrderRequest) returns (ServerOrderResponse);
     rpc CancelOrder (ServerOrderRequest) returns (ServerOrderResponse);
     rpc SubscribeBatchAuction (stream ClientAuctionMessage) returns (stream ServerAuctionMessage);
+}
+
+message ReserveAccountRequest {
+    bytes user_sub_key = 1;
+}
+message ReserveAccountResponse {
+    bytes auctioneer_key = 1;
 }
 
 message ServerInitAccountRequest {
@@ -30,17 +38,17 @@ message ServerInitAccountRequest {
     The value of the account in satoshis. Must match the amount of the
     account_point output.
     */
-    int64 account_value = 3;
+    uint32 account_value = 3;
 
     /**
-    Validity of the account in seconds.
+    The block height at which the account should expire.
     */
-    int64 account_duration = 4;
+    uint32 account_expiry = 4;
 
     /**
     The user's sub account key.
     */
-    bytes account_sub_key = 5;
+    bytes user_sub_key = 5;
 }
 message ServerInitAccountResponse {}
 
@@ -48,7 +56,7 @@ message ServerCloseAccountRequest {
     /**
     The user's sub account key.
     */
-    bytes account_sub_key = 1;
+    bytes user_sub_key = 1;
 
     /**
     Specifies where the money from the account should be sent to.
