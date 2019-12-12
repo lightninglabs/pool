@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lightninglabs/agora/client/auctioneer"
+	"github.com/lightninglabs/agora/client/clientdb"
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/loop/lndclient"
 )
@@ -20,21 +21,29 @@ const (
 )
 
 type Server struct {
-	lndServices *lndclient.LndServices
-	auctioneer  *auctioneer.Client
-
 	started uint32 // To be used atomically.
 	stopped uint32 // To be used atomically.
-	quit    chan struct{}
-	wg      sync.WaitGroup
+
+	lndServices *lndclient.LndServices
+	auctioneer  *auctioneer.Client
+	db          *clientdb.DB
+
+	quit chan struct{}
+	wg   sync.WaitGroup
 }
 
-func NewServer(lnd *lndclient.LndServices, auctionServer *auctioneer.Client) (
-	*Server, error) {
+func NewServer(lnd *lndclient.LndServices, auctionServer *auctioneer.Client,
+	dbDir string) (*Server, error) {
+
+	db, err := clientdb.New(dbDir)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Server{
 		lndServices: lnd,
 		auctioneer:  auctionServer,
+		db:          db,
 		quit:        make(chan struct{}),
 	}, nil
 }

@@ -50,8 +50,12 @@ func daemon(config *config) error {
 	defer cleanup()
 
 	// Instantiate the agorad gRPC server.
+	dbDir, err := getStoreDir(config.Network)
+	if err != nil {
+		return err
+	}
 	traderServer, err := trader.NewServer(
-		&lnd.LndServices, auctioneerClient,
+		&lnd.LndServices, auctioneerClient, dbDir,
 	)
 	if err != nil {
 		return err
