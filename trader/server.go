@@ -17,16 +17,20 @@ import (
 const (
 	// getInfoTimeout is the maximum time we allow for the initial getInfo
 	// call to the connected lnd node.
-	getInfoTimeout = 30 * time.Second
+	getInfoTimeout = 5 * time.Second
 )
 
 type Server struct {
 	started uint32 // To be used atomically.
 	stopped uint32 // To be used atomically.
 
-	lndServices *lndclient.LndServices
-	auctioneer  *auctioneer.Client
-	db          *clientdb.DB
+	// bestHeight is the best known height of the main chain. This MUST be
+	// used atomically.
+	bestHeight uint32
+
+	lndServices    *lndclient.LndServices
+	auctioneer     *auctioneer.Client
+	db             *clientdb.DB
 
 	quit chan struct{}
 	wg   sync.WaitGroup
@@ -55,20 +59,41 @@ func (s *Server) Start() error {
 	}
 
 	log.Infof("Starting trader server")
-	s.wg.Add(1)
 
-	// Log connected node.
-	ctx, cancel := context.WithTimeout(context.Background(), getInfoTimeout)
-	defer cancel()
-	info, err := s.lndServices.Client.GetInfo(ctx)
+	ctx := context.Background()
+
+	lndCtx, lndCancel := context.WithTimeout(ctx, getInfoTimeout)
+	defer lndCancel()
+	info, err := s.lndServices.Client.GetInfo(lndCtx)
 	if err != nil {
-		return fmt.Errorf("GetInfo error: %v", err)
+		return fmt.Errorf("unable to call GetInfo on lnd node: %v", err)
 	}
-	log.Infof("Connected to lnd node %v with pubkey %v",
-		info.Alias, hex.EncodeToString(info.IdentityPubkey[:]),
-	)
 
-	go s.serverHandler()
+	log.Infof("Connected to lnd node %v with pubkey %v", info.Alias,
+		hex.EncodeToString(info.IdentityPubkey[:]))
+
+	chainNotifier := s.lndServices.ChainNotifier
+	blockChan, blockErrChan, err := chainNotifier.RegisterBlockEpochNtfn(ctx)
+	if err != nil {
+		return err
+	}
+
+	var height int32
+	select {
+	case height = <-blockChan:
+	case err := <-blockErrChan:
+		return fmt.Errorf("unable to receive first block "+
+			"notification: %v", err)
+	case <-ctx.Done():
+		return nil
+	}
+
+	s.updateHeight(height)
+
+	s.wg.Add(1)
+	go s.serverHandler(blockChan, blockErrChan)
+
+	log.Infof("Trader server is now active")
 
 	return nil
 }
@@ -88,18 +113,33 @@ func (s *Server) Stop() error {
 }
 
 // serverHandler is the main event loop of the server.
-func (s *Server) serverHandler() {
+func (s *Server) serverHandler(blockChan chan int32, blockErrChan chan error) {
 	defer s.wg.Done()
 
-	for { // nolint
-		// TODO(guggero): Implement main event loop.
+	for {
 		select {
+		case height := <-blockChan:
+			log.Infof("Received new block notification: height=%v",
+				height)
+			s.updateHeight(height)
+
+		case err := <-blockErrChan:
+			if err != nil {
+				log.Errorf("Unable to receive block "+
+					"notification: %v", err)
+			}
 
 		// In case the server is shutting down.
 		case <-s.quit:
 			return
 		}
 	}
+}
+
+func (s *Server) updateHeight(height int32) {
+	// Store height atomically so the incoming request handler can access it
+	// without locking.
+	atomic.StoreUint32(&s.bestHeight, uint32(height))
 }
 
 func (s *Server) InitAccount(ctx context.Context,
