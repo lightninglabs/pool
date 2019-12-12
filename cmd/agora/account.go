@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
+	"fmt"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/urfave/cli"
 )
@@ -15,8 +18,30 @@ var accountsCommands = []cli.Command{
 		Category:  "Accounts",
 		Subcommands: []cli.Command{
 			newAccountCommand,
+			listAccountsCommand,
 		},
 	},
+}
+
+type Account struct {
+	TraderKey        string `json:"trader_key"`
+	OutPoint         string `json:"outpoint"`
+	Value            uint32 `json:"value"`
+	ExpirationHeight uint32 `json:"expiration_height"`
+	State            string `json:"state"`
+}
+
+// NewAccountFromProto creates a display Account from its proto.
+func NewAccountFromProto(a *clmrpc.Account) *Account {
+	var opHash chainhash.Hash
+	copy(opHash[:], a.Outpoint.Txid)
+	return &Account{
+		TraderKey:        hex.EncodeToString(a.TraderKey),
+		OutPoint:         fmt.Sprintf("%v:%d", opHash, a.Outpoint.OutputIndex),
+		Value:            a.Value,
+		ExpirationHeight: a.ExpirationHeight,
+		State:            a.State.String(),
+	}
 }
 
 var newAccountCommand = cli.Command{
@@ -95,6 +120,43 @@ func newAccount(ctx *cli.Context) error {
 	}
 
 	printRespJSON(resp)
+
+	return nil
+}
+
+var listAccountsCommand = cli.Command{
+	Name:        "list",
+	ShortName:   "l",
+	Usage:       "list all existing accounts",
+	Description: `List all existing accounts.`,
+	Action:      listAccounts,
+}
+
+func listAccounts(ctx *cli.Context) error {
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.ListAccounts(
+		context.Background(), &clmrpc.ListAccountsRequest{},
+	)
+	if err != nil {
+		return err
+	}
+
+	var listAccountsResp = struct {
+		Accounts []*Account `json:"accounts"`
+	}{
+		Accounts: make([]*Account, 0, len(resp.Accounts)),
+	}
+	for _, protoAccount := range resp.Accounts {
+		a := NewAccountFromProto(protoAccount)
+		listAccountsResp.Accounts = append(listAccountsResp.Accounts, a)
+	}
+
+	printJSON(listAccountsResp)
 
 	return nil
 }

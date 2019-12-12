@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "google/api/annotations.proto";
+import "server.proto";
 
 package clmrpc;
 
@@ -75,10 +76,18 @@ message ModifyAccountRequest {
 }
 message ModifyAccountResponse{}
 
+
+enum AccountState {
+    PENDING_OPEN = 0;
+    OPEN = 1;
+}
+
 message Account {
-    string account_sub_key_hex = 1;
-    int64 account_value = 2;
-    int64 account_duration = 3;
+    bytes trader_key = 1;
+    OutPoint outpoint = 2;
+    uint32 value = 3;
+    uint32 expiration_height = 4;
+    AccountState state = 5;
 }
 
 message SubmitOrderRequest {

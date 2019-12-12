@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -14,10 +16,22 @@ import (
 	"google.golang.org/grpc"
 )
 
+func printJSON(resp interface{}) {
+	b, err := json.Marshal(resp)
+	if err != nil {
+		fatal(err)
+	}
+
+	var out bytes.Buffer
+	_ = json.Indent(&out, b, "", "\t")
+	out.WriteString("\n")
+	_, _ = out.WriteTo(os.Stdout)
+}
+
 func printRespJSON(resp proto.Message) {
 	jsonMarshaler := &jsonpb.Marshaler{
 		EmitDefaults: true,
-		Indent:       "    ",
+		Indent:       "\t", // Matches indentation of printJSON.
 	}
 
 	jsonStr, err := jsonMarshaler.MarshalToString(resp)

@@ -181,7 +181,40 @@ func (s *Server) InitAccount(ctx context.Context,
 func (s *Server) ListAccounts(ctx context.Context,
 	req *clmrpc.ListAccountsRequest) (*clmrpc.ListAccountsResponse, error) {
 
-	return nil, fmt.Errorf("unimplemented")
+	accounts, err := s.db.Accounts()
+	if err != nil {
+		return nil, err
+	}
+
+	rpcAccounts := make([]*clmrpc.Account, 0, len(accounts))
+	for _, a := range accounts {
+		var rpcState clmrpc.AccountState
+		switch a.State {
+		case account.StateInitiated, account.StatePendingOpen:
+			rpcState = clmrpc.AccountState_PENDING_OPEN
+
+		case account.StateOpen:
+			rpcState = clmrpc.AccountState_OPEN
+
+		default:
+			return nil, fmt.Errorf("unknown state %v", a.State)
+		}
+
+		rpcAccounts = append(rpcAccounts, &clmrpc.Account{
+			TraderKey: a.TraderKey[:],
+			Outpoint: &clmrpc.OutPoint{
+				Txid:        a.OutPoint.Hash[:],
+				OutputIndex: a.OutPoint.Index,
+			},
+			Value:            uint32(a.Value),
+			ExpirationHeight: a.Expiry,
+			State:            rpcState,
+		})
+	}
+
+	return &clmrpc.ListAccountsResponse{
+		Accounts: rpcAccounts,
+	}, nil
 }
 
 func (s *Server) CloseAccount(ctx context.Context,
