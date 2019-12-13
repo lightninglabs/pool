@@ -6,10 +6,10 @@ import (
 	"strconv"
 
 	"github.com/btcsuite/btcutil"
-	"github.com/gogo/protobuf/jsonpb"
-	"github.com/gogo/protobuf/proto"
 	"github.com/lightninglabs/agora/client"
 	"github.com/lightninglabs/agora/client/clmrpc"
+	"github.com/lightninglabs/protobuf-hex-display/jsonpb"
+	"github.com/lightninglabs/protobuf-hex-display/proto"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
 )
