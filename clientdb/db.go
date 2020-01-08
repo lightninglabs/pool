@@ -87,6 +87,10 @@ func initDB(filepath string, firstInit bool) (*bbolt.DB, error) {
 		}
 
 		_, err = tx.CreateBucketIfNotExists(accountBucketKey)
+		if err != nil {
+			return err
+		}
+		_, err = tx.CreateBucketIfNotExists(ordersBucketKey)
 		return err
 	})
 	if err != nil {

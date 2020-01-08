@@ -5,7 +5,10 @@ import (
 	"io"
 
 	"github.com/lightninglabs/agora/client/account"
+	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lntypes"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
 )
 
@@ -28,9 +31,22 @@ func WriteElements(w io.Writer, elements ...interface{}) error {
 func WriteElement(w io.Writer, element interface{}) error {
 	switch e := element.(type) {
 	case account.State:
-		if err := lnwire.WriteElement(w, uint8(e)); err != nil {
-			return err
-		}
+		return lnwire.WriteElement(w, uint8(e))
+
+	case order.Version:
+		return lnwire.WriteElement(w, uint32(e))
+
+	case order.Type:
+		return lnwire.WriteElement(w, uint8(e))
+
+	case order.State:
+		return lnwire.WriteElement(w, uint8(e))
+
+	case order.SupplyUnit:
+		return lnwire.WriteElement(w, uint64(e))
+
+	case chainfee.SatPerKWeight:
+		return lnwire.WriteElement(w, uint64(e))
 
 	case keychain.KeyLocator:
 		if err := binary.Write(w, byteOrder, e.Family); err != nil {
@@ -39,6 +55,9 @@ func WriteElement(w io.Writer, element interface{}) error {
 		if err := binary.Write(w, byteOrder, e.Index); err != nil {
 			return err
 		}
+
+	case lntypes.Preimage:
+		return lnwire.WriteElement(w, e[:])
 
 	default:
 		return lnwire.WriteElement(w, element)
@@ -70,6 +89,41 @@ func ReadElement(r io.Reader, element interface{}) error {
 		}
 		*e = account.State(s)
 
+	case *order.Version:
+		var v uint32
+		if err := lnwire.ReadElement(r, &v); err != nil {
+			return err
+		}
+		*e = order.Version(v)
+
+	case *order.Type:
+		var v uint8
+		if err := lnwire.ReadElement(r, &v); err != nil {
+			return err
+		}
+		*e = order.Type(v)
+
+	case *order.State:
+		var s uint8
+		if err := lnwire.ReadElement(r, &s); err != nil {
+			return err
+		}
+		*e = order.State(s)
+
+	case *order.SupplyUnit:
+		var s uint64
+		if err := lnwire.ReadElement(r, &s); err != nil {
+			return err
+		}
+		*e = order.SupplyUnit(s)
+
+	case *chainfee.SatPerKWeight:
+		var v uint64
+		if err := lnwire.ReadElement(r, &v); err != nil {
+			return err
+		}
+		*e = chainfee.SatPerKWeight(v)
+
 	case *keychain.KeyLocator:
 		if err := binary.Read(r, byteOrder, &e.Family); err != nil {
 			return err
@@ -77,6 +131,13 @@ func ReadElement(r io.Reader, element interface{}) error {
 		if err := binary.Read(r, byteOrder, &e.Index); err != nil {
 			return err
 		}
+
+	case *lntypes.Preimage:
+		var preimage lntypes.Preimage
+		if err := lnwire.ReadElement(r, preimage[:]); err != nil {
+			return err
+		}
+		*e = preimage
 
 	default:
 		return lnwire.ReadElement(r, element)

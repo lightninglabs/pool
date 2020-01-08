@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"sync"
@@ -51,12 +52,8 @@ func daemon(config *config) error {
 	defer cleanup()
 
 	// Instantiate the agorad gRPC server.
-	dbDir, err := getStoreDir(config.Network)
-	if err != nil {
-		return err
-	}
 	traderServer, err := trader.NewServer(
-		&lnd.LndServices, auctioneerClient, dbDir,
+		&lnd.LndServices, auctioneerClient, config.serverDir,
 	)
 	if err != nil {
 		return err
@@ -74,7 +71,7 @@ func daemon(config *config) error {
 			config.RPCListen)
 
 	}
-	defer grpcListener.Close()
+	defer closeOrLog(grpcListener)
 
 	// We'll also create and start an accompanying proxy to serve clients
 	// through REST.
@@ -95,7 +92,7 @@ func daemon(config *config) error {
 		return fmt.Errorf("REST proxy unable to listen on %s",
 			config.RESTListen)
 	}
-	defer restListener.Close()
+	defer closeOrLog(restListener)
 	restProxy := &http.Server{Handler: mux}
 	go func() {
 		err := restProxy.Serve(restListener)
@@ -141,4 +138,11 @@ func daemon(config *config) error {
 
 	wg.Wait()
 	return nil
+}
+
+func closeOrLog(c io.Closer) {
+	err := c.Close()
+	if err != nil {
+		log.Errorf("could not close: %v", err)
+	}
 }

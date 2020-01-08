@@ -7,6 +7,7 @@ import (
 
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
+	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightninglabs/loop/lndclient"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -31,7 +32,7 @@ func NewClient(serverAddress string, insecure bool, tlsPathServer string,
 	}
 
 	cleanup := func() {
-		serverConn.Close()
+		_ = serverConn.Close()
 	}
 
 	return &Client{
@@ -113,4 +114,126 @@ func (c *Client) InitAccount(ctx context.Context, account *account.Account) erro
 		UserSubKey:    account.TraderKey[:],
 	})
 	return err
+}
+
+// SubmitOrder sends a fully finished order message to the server and interprets
+// its answer.
+func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
+	serverParams *order.ServerOrderParams) error {
+
+	// Prepare everything that is common to both ask and bid orders.
+	nonce := o.Nonce()
+	rpcRequest := &clmrpc.ServerSubmitOrderRequest{}
+	nodeAddrs := make([]*clmrpc.NodeAddress, 0, len(serverParams.Addrs))
+	for _, addr := range serverParams.Addrs {
+		nodeAddrs = append(nodeAddrs, &clmrpc.NodeAddress{
+			Network: addr.Network(),
+			Addr:    addr.String(),
+		})
+	}
+	details := &clmrpc.ServerOrder{
+		UserSubKey:     o.Details().AcctKey[:],
+		RateFixed:      int64(o.Details().FixedRate),
+		Amt:            int64(o.Details().Amt),
+		OrderNonce:     nonce[:],
+		OrderSig:       serverParams.RawSig,
+		MultiSigKey:    serverParams.MultiSigKey[:],
+		NodePub:        serverParams.NodePubkey[:],
+		NodeAddr:       nodeAddrs,
+		FundingFeeRate: int64(o.Details().FundingFeeRate),
+	}
+
+	// Split into server message which is type specific.
+	switch castOrder := o.(type) {
+	case *order.Ask:
+		serverAsk := &clmrpc.ServerAsk{
+			Details:           details,
+			MaxDurationBlocks: int64(castOrder.MaxDuration),
+			Version:           uint32(castOrder.Version),
+		}
+		rpcRequest.Details = &clmrpc.ServerSubmitOrderRequest_Ask{
+			Ask: serverAsk,
+		}
+
+	case *order.Bid:
+		serverBid := &clmrpc.ServerBid{
+			Details:           details,
+			MinDurationBlocks: int64(castOrder.MinDuration),
+			Version:           uint32(castOrder.Version),
+		}
+		rpcRequest.Details = &clmrpc.ServerSubmitOrderRequest_Bid{
+			Bid: serverBid,
+		}
+
+	default:
+		return fmt.Errorf("invalid order type: %v", castOrder)
+	}
+
+	// Submit the finished request and parse the response.
+	resp, err := c.client.SubmitOrder(ctx, rpcRequest)
+	if err != nil {
+		return err
+	}
+	switch submitResp := resp.Details.(type) {
+	case *clmrpc.ServerSubmitOrderResponse_InvalidOrder:
+		return &order.UserError{
+			FailMsg: submitResp.InvalidOrder.FailString,
+			Details: submitResp.InvalidOrder,
+		}
+
+	case *clmrpc.ServerSubmitOrderResponse_Accepted:
+		return nil
+
+	default:
+		return fmt.Errorf("unknown server response: %v", resp)
+	}
+}
+
+// CancelOrder sends an order cancellation message to the server.
+func (c *Client) CancelOrder(ctx context.Context, nonce order.Nonce) error {
+	_, err := c.client.CancelOrder(ctx, &clmrpc.ServerCancelOrderRequest{
+		OrderNonce: nonce[:],
+	})
+	return err
+}
+
+// OrderState queries the state of an order on the server. This only returns the
+// state as it's currently known to the server's database. For real-time updates
+// on the state, the SubscribeBatchAuction stream should be used.
+func (c *Client) OrderState(ctx context.Context, nonce order.Nonce) (
+	order.State, uint32, error) {
+
+	resp, err := c.client.OrderState(ctx, &clmrpc.ServerOrderStateRequest{
+		OrderNonce: nonce[:],
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Map RPC state to internal state.
+	switch resp.State {
+	case clmrpc.ServerOrderStateResponse_SUBMITTED:
+		return order.StateSubmitted, resp.UnitsUnfulfilled, nil
+
+	case clmrpc.ServerOrderStateResponse_CLEARED:
+		return order.StateCleared, resp.UnitsUnfulfilled, nil
+
+	case clmrpc.ServerOrderStateResponse_PARTIAL_FILL:
+		return order.StatePartialFill, resp.UnitsUnfulfilled, nil
+
+	case clmrpc.ServerOrderStateResponse_EXECUTED:
+		return order.StateExecuted, resp.UnitsUnfulfilled, nil
+
+	case clmrpc.ServerOrderStateResponse_CANCELED:
+		return order.StateCanceled, resp.UnitsUnfulfilled, nil
+
+	case clmrpc.ServerOrderStateResponse_EXPIRED:
+		return order.StateExpired, resp.UnitsUnfulfilled, nil
+
+	case clmrpc.ServerOrderStateResponse_FAILED:
+		return order.StateFailed, resp.UnitsUnfulfilled, nil
+
+	default:
+		return 0, 0, fmt.Errorf("invalid order state: %v", resp.State)
+	}
 }

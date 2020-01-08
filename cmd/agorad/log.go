@@ -1,9 +1,12 @@
+// As this file is very similar in every package, ignore the linter here.
+// nolint:dupl
 package main
 
 import (
 	"github.com/btcsuite/btclog"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/auctioneer"
+	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightninglabs/agora/client/trader"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/build"
@@ -21,6 +24,7 @@ func init() {
 	setSubLogger(Subsystem, log, nil)
 	addSubLogger(trader.Subsystem, trader.UseLogger)
 	addSubLogger(auctioneer.Subsystem, auctioneer.UseLogger)
+	addSubLogger(order.Subsystem, order.UseLogger)
 	addSubLogger("LNDC", lndclient.UseLogger)
 	addSubLogger("SGNL", signal.UseLogger)
 	addSubLogger(account.Subsystem, account.UseLogger)

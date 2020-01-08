@@ -38,12 +38,12 @@ func start() error {
 	}
 
 	// Parse ini file.
-	agoraDir := filepath.Join(agoraDirBase, config.Network)
-	if err := os.MkdirAll(agoraDir, os.ModePerm); err != nil {
+	config.serverDir = filepath.Join(agoraDirBase, config.Network)
+	if err := os.MkdirAll(config.serverDir, os.ModePerm); err != nil {
 		return err
 	}
 
-	configFile := filepath.Join(agoraDir, defaultConfigFilename)
+	configFile := filepath.Join(config.serverDir, defaultConfigFilename)
 	if err := flags.IniParse(configFile, &config); err != nil {
 		// If it's a parsing related error, then we'll return
 		// immediately, otherwise we can proceed as possibly the config

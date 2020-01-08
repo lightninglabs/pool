@@ -24,8 +24,6 @@ type lndConfig struct {
 	TLSPath     string `long:"tlspath" description:"Path to lnd tls certificate"`
 }
 
-type viewParameters struct{}
-
 type config struct {
 	ShowVersion    bool   `short:"V" long:"version" description:"Display version information and exit"`
 	Insecure       bool   `long:"insecure" description:"disable tls"`
@@ -43,7 +41,7 @@ type config struct {
 
 	Lnd *lndConfig `group:"lnd" namespace:"lnd"`
 
-	View viewParameters `command:"view" alias:"v" description:"View all orders in the database. This command can only be executed when agorad is not running."`
+	serverDir string
 }
 
 const (
