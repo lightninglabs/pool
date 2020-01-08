@@ -42,7 +42,47 @@ func (x InvalidOrder_FailReason) String() string {
 }
 
 func (InvalidOrder_FailReason) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{17, 0}
+	return fileDescriptor_ad098daeda4239f7, []int{20, 0}
+}
+
+type ServerOrderStateResponse_OrderState int32
+
+const (
+	ServerOrderStateResponse_SUBMITTED    ServerOrderStateResponse_OrderState = 0
+	ServerOrderStateResponse_CLEARED      ServerOrderStateResponse_OrderState = 1
+	ServerOrderStateResponse_PARTIAL_FILL ServerOrderStateResponse_OrderState = 2
+	ServerOrderStateResponse_EXECUTED     ServerOrderStateResponse_OrderState = 3
+	ServerOrderStateResponse_CANCELED     ServerOrderStateResponse_OrderState = 4
+	ServerOrderStateResponse_EXPIRED      ServerOrderStateResponse_OrderState = 5
+	ServerOrderStateResponse_FAILED       ServerOrderStateResponse_OrderState = 6
+)
+
+var ServerOrderStateResponse_OrderState_name = map[int32]string{
+	0: "SUBMITTED",
+	1: "CLEARED",
+	2: "PARTIAL_FILL",
+	3: "EXECUTED",
+	4: "CANCELED",
+	5: "EXPIRED",
+	6: "FAILED",
+}
+
+var ServerOrderStateResponse_OrderState_value = map[string]int32{
+	"SUBMITTED":    0,
+	"CLEARED":      1,
+	"PARTIAL_FILL": 2,
+	"EXECUTED":     3,
+	"CANCELED":     4,
+	"EXPIRED":      5,
+	"FAILED":       6,
+}
+
+func (x ServerOrderStateResponse_OrderState) String() string {
+	return proto.EnumName(ServerOrderStateResponse_OrderState_name, int32(x))
+}
+
+func (ServerOrderStateResponse_OrderState) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_ad098daeda4239f7, []int{25, 0}
 }
 
 type ReserveAccountRequest struct {
@@ -331,165 +371,237 @@ func (m *ServerCloseAccountResponse) GetCloseSig() []byte {
 	return nil
 }
 
-type ServerOrderRequest struct {
+type ServerSubmitOrderRequest struct {
 	// Types that are valid to be assigned to Details:
-	//	*ServerOrderRequest_Ask
-	//	*ServerOrderRequest_Bid
-	Details              isServerOrderRequest_Details `protobuf_oneof:"details"`
-	XXX_NoUnkeyedLiteral struct{}                     `json:"-"`
-	XXX_unrecognized     []byte                       `json:"-"`
-	XXX_sizecache        int32                        `json:"-"`
+	//	*ServerSubmitOrderRequest_Ask
+	//	*ServerSubmitOrderRequest_Bid
+	Details              isServerSubmitOrderRequest_Details `protobuf_oneof:"details"`
+	XXX_NoUnkeyedLiteral struct{}                           `json:"-"`
+	XXX_unrecognized     []byte                             `json:"-"`
+	XXX_sizecache        int32                              `json:"-"`
 }
 
-func (m *ServerOrderRequest) Reset()         { *m = ServerOrderRequest{} }
-func (m *ServerOrderRequest) String() string { return proto.CompactTextString(m) }
-func (*ServerOrderRequest) ProtoMessage()    {}
-func (*ServerOrderRequest) Descriptor() ([]byte, []int) {
+func (m *ServerSubmitOrderRequest) Reset()         { *m = ServerSubmitOrderRequest{} }
+func (m *ServerSubmitOrderRequest) String() string { return proto.CompactTextString(m) }
+func (*ServerSubmitOrderRequest) ProtoMessage()    {}
+func (*ServerSubmitOrderRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ad098daeda4239f7, []int{6}
 }
 
-func (m *ServerOrderRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_ServerOrderRequest.Unmarshal(m, b)
+func (m *ServerSubmitOrderRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ServerSubmitOrderRequest.Unmarshal(m, b)
 }
-func (m *ServerOrderRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_ServerOrderRequest.Marshal(b, m, deterministic)
+func (m *ServerSubmitOrderRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ServerSubmitOrderRequest.Marshal(b, m, deterministic)
 }
-func (m *ServerOrderRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ServerOrderRequest.Merge(m, src)
+func (m *ServerSubmitOrderRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ServerSubmitOrderRequest.Merge(m, src)
 }
-func (m *ServerOrderRequest) XXX_Size() int {
-	return xxx_messageInfo_ServerOrderRequest.Size(m)
+func (m *ServerSubmitOrderRequest) XXX_Size() int {
+	return xxx_messageInfo_ServerSubmitOrderRequest.Size(m)
 }
-func (m *ServerOrderRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_ServerOrderRequest.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_ServerOrderRequest proto.InternalMessageInfo
-
-type isServerOrderRequest_Details interface {
-	isServerOrderRequest_Details()
+func (m *ServerSubmitOrderRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ServerSubmitOrderRequest.DiscardUnknown(m)
 }
 
-type ServerOrderRequest_Ask struct {
+var xxx_messageInfo_ServerSubmitOrderRequest proto.InternalMessageInfo
+
+type isServerSubmitOrderRequest_Details interface {
+	isServerSubmitOrderRequest_Details()
+}
+
+type ServerSubmitOrderRequest_Ask struct {
 	Ask *ServerAsk `protobuf:"bytes,1,opt,name=ask,proto3,oneof"`
 }
 
-type ServerOrderRequest_Bid struct {
+type ServerSubmitOrderRequest_Bid struct {
 	Bid *ServerBid `protobuf:"bytes,2,opt,name=bid,proto3,oneof"`
 }
 
-func (*ServerOrderRequest_Ask) isServerOrderRequest_Details() {}
+func (*ServerSubmitOrderRequest_Ask) isServerSubmitOrderRequest_Details() {}
 
-func (*ServerOrderRequest_Bid) isServerOrderRequest_Details() {}
+func (*ServerSubmitOrderRequest_Bid) isServerSubmitOrderRequest_Details() {}
 
-func (m *ServerOrderRequest) GetDetails() isServerOrderRequest_Details {
+func (m *ServerSubmitOrderRequest) GetDetails() isServerSubmitOrderRequest_Details {
 	if m != nil {
 		return m.Details
 	}
 	return nil
 }
 
-func (m *ServerOrderRequest) GetAsk() *ServerAsk {
-	if x, ok := m.GetDetails().(*ServerOrderRequest_Ask); ok {
+func (m *ServerSubmitOrderRequest) GetAsk() *ServerAsk {
+	if x, ok := m.GetDetails().(*ServerSubmitOrderRequest_Ask); ok {
 		return x.Ask
 	}
 	return nil
 }
 
-func (m *ServerOrderRequest) GetBid() *ServerBid {
-	if x, ok := m.GetDetails().(*ServerOrderRequest_Bid); ok {
+func (m *ServerSubmitOrderRequest) GetBid() *ServerBid {
+	if x, ok := m.GetDetails().(*ServerSubmitOrderRequest_Bid); ok {
 		return x.Bid
 	}
 	return nil
 }
 
 // XXX_OneofWrappers is for the internal use of the proto package.
-func (*ServerOrderRequest) XXX_OneofWrappers() []interface{} {
+func (*ServerSubmitOrderRequest) XXX_OneofWrappers() []interface{} {
 	return []interface{}{
-		(*ServerOrderRequest_Ask)(nil),
-		(*ServerOrderRequest_Bid)(nil),
+		(*ServerSubmitOrderRequest_Ask)(nil),
+		(*ServerSubmitOrderRequest_Bid)(nil),
 	}
 }
 
-type ServerOrderResponse struct {
+type ServerSubmitOrderResponse struct {
 	// Types that are valid to be assigned to Details:
-	//	*ServerOrderResponse_InvalidOrder
-	//	*ServerOrderResponse_Accepted
-	Details              isServerOrderResponse_Details `protobuf_oneof:"details"`
-	XXX_NoUnkeyedLiteral struct{}                      `json:"-"`
-	XXX_unrecognized     []byte                        `json:"-"`
-	XXX_sizecache        int32                         `json:"-"`
+	//	*ServerSubmitOrderResponse_InvalidOrder
+	//	*ServerSubmitOrderResponse_Accepted
+	Details              isServerSubmitOrderResponse_Details `protobuf_oneof:"details"`
+	XXX_NoUnkeyedLiteral struct{}                            `json:"-"`
+	XXX_unrecognized     []byte                              `json:"-"`
+	XXX_sizecache        int32                               `json:"-"`
 }
 
-func (m *ServerOrderResponse) Reset()         { *m = ServerOrderResponse{} }
-func (m *ServerOrderResponse) String() string { return proto.CompactTextString(m) }
-func (*ServerOrderResponse) ProtoMessage()    {}
-func (*ServerOrderResponse) Descriptor() ([]byte, []int) {
+func (m *ServerSubmitOrderResponse) Reset()         { *m = ServerSubmitOrderResponse{} }
+func (m *ServerSubmitOrderResponse) String() string { return proto.CompactTextString(m) }
+func (*ServerSubmitOrderResponse) ProtoMessage()    {}
+func (*ServerSubmitOrderResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ad098daeda4239f7, []int{7}
 }
 
-func (m *ServerOrderResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_ServerOrderResponse.Unmarshal(m, b)
+func (m *ServerSubmitOrderResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ServerSubmitOrderResponse.Unmarshal(m, b)
 }
-func (m *ServerOrderResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_ServerOrderResponse.Marshal(b, m, deterministic)
+func (m *ServerSubmitOrderResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ServerSubmitOrderResponse.Marshal(b, m, deterministic)
 }
-func (m *ServerOrderResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ServerOrderResponse.Merge(m, src)
+func (m *ServerSubmitOrderResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ServerSubmitOrderResponse.Merge(m, src)
 }
-func (m *ServerOrderResponse) XXX_Size() int {
-	return xxx_messageInfo_ServerOrderResponse.Size(m)
+func (m *ServerSubmitOrderResponse) XXX_Size() int {
+	return xxx_messageInfo_ServerSubmitOrderResponse.Size(m)
 }
-func (m *ServerOrderResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_ServerOrderResponse.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_ServerOrderResponse proto.InternalMessageInfo
-
-type isServerOrderResponse_Details interface {
-	isServerOrderResponse_Details()
+func (m *ServerSubmitOrderResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ServerSubmitOrderResponse.DiscardUnknown(m)
 }
 
-type ServerOrderResponse_InvalidOrder struct {
+var xxx_messageInfo_ServerSubmitOrderResponse proto.InternalMessageInfo
+
+type isServerSubmitOrderResponse_Details interface {
+	isServerSubmitOrderResponse_Details()
+}
+
+type ServerSubmitOrderResponse_InvalidOrder struct {
 	InvalidOrder *InvalidOrder `protobuf:"bytes,1,opt,name=invalid_order,json=invalidOrder,proto3,oneof"`
 }
 
-type ServerOrderResponse_Accepted struct {
+type ServerSubmitOrderResponse_Accepted struct {
 	Accepted bool `protobuf:"varint,2,opt,name=accepted,proto3,oneof"`
 }
 
-func (*ServerOrderResponse_InvalidOrder) isServerOrderResponse_Details() {}
+func (*ServerSubmitOrderResponse_InvalidOrder) isServerSubmitOrderResponse_Details() {}
 
-func (*ServerOrderResponse_Accepted) isServerOrderResponse_Details() {}
+func (*ServerSubmitOrderResponse_Accepted) isServerSubmitOrderResponse_Details() {}
 
-func (m *ServerOrderResponse) GetDetails() isServerOrderResponse_Details {
+func (m *ServerSubmitOrderResponse) GetDetails() isServerSubmitOrderResponse_Details {
 	if m != nil {
 		return m.Details
 	}
 	return nil
 }
 
-func (m *ServerOrderResponse) GetInvalidOrder() *InvalidOrder {
-	if x, ok := m.GetDetails().(*ServerOrderResponse_InvalidOrder); ok {
+func (m *ServerSubmitOrderResponse) GetInvalidOrder() *InvalidOrder {
+	if x, ok := m.GetDetails().(*ServerSubmitOrderResponse_InvalidOrder); ok {
 		return x.InvalidOrder
 	}
 	return nil
 }
 
-func (m *ServerOrderResponse) GetAccepted() bool {
-	if x, ok := m.GetDetails().(*ServerOrderResponse_Accepted); ok {
+func (m *ServerSubmitOrderResponse) GetAccepted() bool {
+	if x, ok := m.GetDetails().(*ServerSubmitOrderResponse_Accepted); ok {
 		return x.Accepted
 	}
 	return false
 }
 
 // XXX_OneofWrappers is for the internal use of the proto package.
-func (*ServerOrderResponse) XXX_OneofWrappers() []interface{} {
+func (*ServerSubmitOrderResponse) XXX_OneofWrappers() []interface{} {
 	return []interface{}{
-		(*ServerOrderResponse_InvalidOrder)(nil),
-		(*ServerOrderResponse_Accepted)(nil),
+		(*ServerSubmitOrderResponse_InvalidOrder)(nil),
+		(*ServerSubmitOrderResponse_Accepted)(nil),
 	}
 }
+
+type ServerCancelOrderRequest struct {
+	//*
+	//The order's unique identifier.
+	OrderNonce           []byte   `protobuf:"bytes,1,opt,name=order_nonce,json=orderNonce,proto3" json:"order_nonce,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ServerCancelOrderRequest) Reset()         { *m = ServerCancelOrderRequest{} }
+func (m *ServerCancelOrderRequest) String() string { return proto.CompactTextString(m) }
+func (*ServerCancelOrderRequest) ProtoMessage()    {}
+func (*ServerCancelOrderRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ad098daeda4239f7, []int{8}
+}
+
+func (m *ServerCancelOrderRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ServerCancelOrderRequest.Unmarshal(m, b)
+}
+func (m *ServerCancelOrderRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ServerCancelOrderRequest.Marshal(b, m, deterministic)
+}
+func (m *ServerCancelOrderRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ServerCancelOrderRequest.Merge(m, src)
+}
+func (m *ServerCancelOrderRequest) XXX_Size() int {
+	return xxx_messageInfo_ServerCancelOrderRequest.Size(m)
+}
+func (m *ServerCancelOrderRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ServerCancelOrderRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ServerCancelOrderRequest proto.InternalMessageInfo
+
+func (m *ServerCancelOrderRequest) GetOrderNonce() []byte {
+	if m != nil {
+		return m.OrderNonce
+	}
+	return nil
+}
+
+type ServerCancelOrderResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ServerCancelOrderResponse) Reset()         { *m = ServerCancelOrderResponse{} }
+func (m *ServerCancelOrderResponse) String() string { return proto.CompactTextString(m) }
+func (*ServerCancelOrderResponse) ProtoMessage()    {}
+func (*ServerCancelOrderResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ad098daeda4239f7, []int{9}
+}
+
+func (m *ServerCancelOrderResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ServerCancelOrderResponse.Unmarshal(m, b)
+}
+func (m *ServerCancelOrderResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ServerCancelOrderResponse.Marshal(b, m, deterministic)
+}
+func (m *ServerCancelOrderResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ServerCancelOrderResponse.Merge(m, src)
+}
+func (m *ServerCancelOrderResponse) XXX_Size() int {
+	return xxx_messageInfo_ServerCancelOrderResponse.Size(m)
+}
+func (m *ServerCancelOrderResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ServerCancelOrderResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ServerCancelOrderResponse proto.InternalMessageInfo
 
 type ClientAuctionMessage struct {
 	// Types that are valid to be assigned to Msg:
@@ -507,7 +619,7 @@ func (m *ClientAuctionMessage) Reset()         { *m = ClientAuctionMessage{} }
 func (m *ClientAuctionMessage) String() string { return proto.CompactTextString(m) }
 func (*ClientAuctionMessage) ProtoMessage()    {}
 func (*ClientAuctionMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{8}
+	return fileDescriptor_ad098daeda4239f7, []int{10}
 }
 
 func (m *ClientAuctionMessage) XXX_Unmarshal(b []byte) error {
@@ -611,7 +723,7 @@ func (m *OrderMatchPrepare) Reset()         { *m = OrderMatchPrepare{} }
 func (m *OrderMatchPrepare) String() string { return proto.CompactTextString(m) }
 func (*OrderMatchPrepare) ProtoMessage()    {}
 func (*OrderMatchPrepare) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{9}
+	return fileDescriptor_ad098daeda4239f7, []int{11}
 }
 
 func (m *OrderMatchPrepare) XXX_Unmarshal(b []byte) error {
@@ -642,7 +754,7 @@ func (m *OrderMatchAccept) Reset()         { *m = OrderMatchAccept{} }
 func (m *OrderMatchAccept) String() string { return proto.CompactTextString(m) }
 func (*OrderMatchAccept) ProtoMessage()    {}
 func (*OrderMatchAccept) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{10}
+	return fileDescriptor_ad098daeda4239f7, []int{12}
 }
 
 func (m *OrderMatchAccept) XXX_Unmarshal(b []byte) error {
@@ -673,7 +785,7 @@ func (m *OrderMatchSign) Reset()         { *m = OrderMatchSign{} }
 func (m *OrderMatchSign) String() string { return proto.CompactTextString(m) }
 func (*OrderMatchSign) ProtoMessage()    {}
 func (*OrderMatchSign) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{11}
+	return fileDescriptor_ad098daeda4239f7, []int{13}
 }
 
 func (m *OrderMatchSign) XXX_Unmarshal(b []byte) error {
@@ -704,7 +816,7 @@ func (m *OrderMatchFinalize) Reset()         { *m = OrderMatchFinalize{} }
 func (m *OrderMatchFinalize) String() string { return proto.CompactTextString(m) }
 func (*OrderMatchFinalize) ProtoMessage()    {}
 func (*OrderMatchFinalize) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{12}
+	return fileDescriptor_ad098daeda4239f7, []int{14}
 }
 
 func (m *OrderMatchFinalize) XXX_Unmarshal(b []byte) error {
@@ -735,7 +847,7 @@ func (m *ServerAuctionMessage) Reset()         { *m = ServerAuctionMessage{} }
 func (m *ServerAuctionMessage) String() string { return proto.CompactTextString(m) }
 func (*ServerAuctionMessage) ProtoMessage()    {}
 func (*ServerAuctionMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{13}
+	return fileDescriptor_ad098daeda4239f7, []int{15}
 }
 
 func (m *ServerAuctionMessage) XXX_Unmarshal(b []byte) error {
@@ -756,37 +868,164 @@ func (m *ServerAuctionMessage) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ServerAuctionMessage proto.InternalMessageInfo
 
-type ServerBid struct {
+type ServerOrder struct {
+	//*
+	//The user's sub key of the account to use for the order.
+	UserSubKey []byte `protobuf:"bytes,1,opt,name=user_sub_key,json=userSubKey,proto3" json:"user_sub_key,omitempty"`
 	//*
 	//Fixed order rate in parts per million.
-	RateFixed int64 `protobuf:"varint,1,opt,name=rate_fixed,json=rateFixed,proto3" json:"rate_fixed,omitempty"`
+	RateFixed int64 `protobuf:"varint,2,opt,name=rate_fixed,json=rateFixed,proto3" json:"rate_fixed,omitempty"`
 	//*
 	//Order amount in satoshis.
-	Amt int64 `protobuf:"varint,2,opt,name=amt,proto3" json:"amt,omitempty"`
-	//*
-	//Required minimum channel duration in blocks.
-	MinDurationBlocks int64 `protobuf:"varint,3,opt,name=min_duration_blocks,json=minDurationBlocks,proto3" json:"min_duration_blocks,omitempty"`
+	Amt int64 `protobuf:"varint,3,opt,name=amt,proto3" json:"amt,omitempty"`
 	//*
 	//Order nonce, acts as unique order identifier.
-	OrderNonce []byte `protobuf:"bytes,7,opt,name=order_nonce,json=orderNonce,proto3" json:"order_nonce,omitempty"`
+	OrderNonce []byte `protobuf:"bytes,6,opt,name=order_nonce,json=orderNonce,proto3" json:"order_nonce,omitempty"`
 	//*
-	//Signature for the order.
-	OrderSig             []byte       `protobuf:"bytes,8,opt,name=order_sig,json=orderSig,proto3" json:"order_sig,omitempty"`
-	MultiSigKey          []byte       `protobuf:"bytes,9,opt,name=multi_sig_key,json=multiSigKey,proto3" json:"multi_sig_key,omitempty"`
-	NodePub              []byte       `protobuf:"bytes,10,opt,name=node_pub,json=nodePub,proto3" json:"node_pub,omitempty"`
-	NodeAddr             *NodeAddress `protobuf:"bytes,11,opt,name=node_addr,json=nodeAddr,proto3" json:"node_addr,omitempty"`
-	ChanType             uint32       `protobuf:"varint,13,opt,name=chan_type,json=chanType,proto3" json:"chan_type,omitempty"`
-	FundingFeeRate       int64        `protobuf:"varint,14,opt,name=funding_fee_rate,json=fundingFeeRate,proto3" json:"funding_fee_rate,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	//Signature of the order's digest, signed with the user's account key. The
+	//signature must be fixed-size LN wire format encoded. Version 0 includes the
+	//fields version, rate_fixed, amt and min/max_duration_blocks in the order
+	//digest.
+	OrderSig []byte `protobuf:"bytes,7,opt,name=order_sig,json=orderSig,proto3" json:"order_sig,omitempty"`
+	//*
+	//The multi signature key of the node creating the order, will be used for the
+	//target channel's funding TX 2-of-2 multi signature output.
+	MultiSigKey []byte `protobuf:"bytes,8,opt,name=multi_sig_key,json=multiSigKey,proto3" json:"multi_sig_key,omitempty"`
+	//*
+	//The pubkey of the node creating the order.
+	NodePub []byte `protobuf:"bytes,9,opt,name=node_pub,json=nodePub,proto3" json:"node_pub,omitempty"`
+	//*
+	//The network addresses of the node creating the order.
+	NodeAddr []*NodeAddress `protobuf:"bytes,10,rep,name=node_addr,json=nodeAddr,proto3" json:"node_addr,omitempty"`
+	//*
+	//The type of the channel that should be opened.
+	ChanType uint32 `protobuf:"varint,12,opt,name=chan_type,json=chanType,proto3" json:"chan_type,omitempty"`
+	//*
+	//Preferred fee rate to be used for the channel funding transaction, expressed
+	//in satoshis per 1000 weight units (sat/kW).
+	FundingFeeRate       int64    `protobuf:"varint,13,opt,name=funding_fee_rate,json=fundingFeeRate,proto3" json:"funding_fee_rate,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ServerOrder) Reset()         { *m = ServerOrder{} }
+func (m *ServerOrder) String() string { return proto.CompactTextString(m) }
+func (*ServerOrder) ProtoMessage()    {}
+func (*ServerOrder) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ad098daeda4239f7, []int{16}
+}
+
+func (m *ServerOrder) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ServerOrder.Unmarshal(m, b)
+}
+func (m *ServerOrder) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ServerOrder.Marshal(b, m, deterministic)
+}
+func (m *ServerOrder) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ServerOrder.Merge(m, src)
+}
+func (m *ServerOrder) XXX_Size() int {
+	return xxx_messageInfo_ServerOrder.Size(m)
+}
+func (m *ServerOrder) XXX_DiscardUnknown() {
+	xxx_messageInfo_ServerOrder.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ServerOrder proto.InternalMessageInfo
+
+func (m *ServerOrder) GetUserSubKey() []byte {
+	if m != nil {
+		return m.UserSubKey
+	}
+	return nil
+}
+
+func (m *ServerOrder) GetRateFixed() int64 {
+	if m != nil {
+		return m.RateFixed
+	}
+	return 0
+}
+
+func (m *ServerOrder) GetAmt() int64 {
+	if m != nil {
+		return m.Amt
+	}
+	return 0
+}
+
+func (m *ServerOrder) GetOrderNonce() []byte {
+	if m != nil {
+		return m.OrderNonce
+	}
+	return nil
+}
+
+func (m *ServerOrder) GetOrderSig() []byte {
+	if m != nil {
+		return m.OrderSig
+	}
+	return nil
+}
+
+func (m *ServerOrder) GetMultiSigKey() []byte {
+	if m != nil {
+		return m.MultiSigKey
+	}
+	return nil
+}
+
+func (m *ServerOrder) GetNodePub() []byte {
+	if m != nil {
+		return m.NodePub
+	}
+	return nil
+}
+
+func (m *ServerOrder) GetNodeAddr() []*NodeAddress {
+	if m != nil {
+		return m.NodeAddr
+	}
+	return nil
+}
+
+func (m *ServerOrder) GetChanType() uint32 {
+	if m != nil {
+		return m.ChanType
+	}
+	return 0
+}
+
+func (m *ServerOrder) GetFundingFeeRate() int64 {
+	if m != nil {
+		return m.FundingFeeRate
+	}
+	return 0
+}
+
+type ServerBid struct {
+	//*
+	//The common fields shared between both ask and bid order types.
+	Details *ServerOrder `protobuf:"bytes,1,opt,name=details,proto3" json:"details,omitempty"`
+	//*
+	//Required minimum number of blocks that a channel opened as a result of this
+	//bid should be kept open.
+	MinDurationBlocks int64 `protobuf:"varint,2,opt,name=min_duration_blocks,json=minDurationBlocks,proto3" json:"min_duration_blocks,omitempty"`
+	//*
+	//The version of the order format that is used. Will be increased once new
+	//features are added.
+	Version              uint32   `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *ServerBid) Reset()         { *m = ServerBid{} }
 func (m *ServerBid) String() string { return proto.CompactTextString(m) }
 func (*ServerBid) ProtoMessage()    {}
 func (*ServerBid) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{14}
+	return fileDescriptor_ad098daeda4239f7, []int{17}
 }
 
 func (m *ServerBid) XXX_Unmarshal(b []byte) error {
@@ -807,18 +1046,11 @@ func (m *ServerBid) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ServerBid proto.InternalMessageInfo
 
-func (m *ServerBid) GetRateFixed() int64 {
+func (m *ServerBid) GetDetails() *ServerOrder {
 	if m != nil {
-		return m.RateFixed
+		return m.Details
 	}
-	return 0
-}
-
-func (m *ServerBid) GetAmt() int64 {
-	if m != nil {
-		return m.Amt
-	}
-	return 0
+	return nil
 }
 
 func (m *ServerBid) GetMinDurationBlocks() int64 {
@@ -828,86 +1060,35 @@ func (m *ServerBid) GetMinDurationBlocks() int64 {
 	return 0
 }
 
-func (m *ServerBid) GetOrderNonce() []byte {
+func (m *ServerBid) GetVersion() uint32 {
 	if m != nil {
-		return m.OrderNonce
-	}
-	return nil
-}
-
-func (m *ServerBid) GetOrderSig() []byte {
-	if m != nil {
-		return m.OrderSig
-	}
-	return nil
-}
-
-func (m *ServerBid) GetMultiSigKey() []byte {
-	if m != nil {
-		return m.MultiSigKey
-	}
-	return nil
-}
-
-func (m *ServerBid) GetNodePub() []byte {
-	if m != nil {
-		return m.NodePub
-	}
-	return nil
-}
-
-func (m *ServerBid) GetNodeAddr() *NodeAddress {
-	if m != nil {
-		return m.NodeAddr
-	}
-	return nil
-}
-
-func (m *ServerBid) GetChanType() uint32 {
-	if m != nil {
-		return m.ChanType
-	}
-	return 0
-}
-
-func (m *ServerBid) GetFundingFeeRate() int64 {
-	if m != nil {
-		return m.FundingFeeRate
+		return m.Version
 	}
 	return 0
 }
 
 type ServerAsk struct {
 	//*
-	//Fixed order rate in parts per million.
-	RateFixed int64 `protobuf:"varint,1,opt,name=rate_fixed,json=rateFixed,proto3" json:"rate_fixed,omitempty"`
+	//The common fields shared between both ask and bid order types.
+	Details *ServerOrder `protobuf:"bytes,1,opt,name=details,proto3" json:"details,omitempty"`
 	//*
-	//Order amount in satoshis.
-	Amt int64 `protobuf:"varint,2,opt,name=amt,proto3" json:"amt,omitempty"`
+	//The maximum number of blocks the liquidity provider is willing to provide
+	//the channel funds for.
+	MaxDurationBlocks int64 `protobuf:"varint,4,opt,name=max_duration_blocks,json=maxDurationBlocks,proto3" json:"max_duration_blocks,omitempty"`
 	//*
-	//Required minimum channel duration in blocks.
-	MaxDurationBlocks int64 `protobuf:"varint,3,opt,name=max_duration_blocks,json=maxDurationBlocks,proto3" json:"max_duration_blocks,omitempty"`
-	//*
-	//Order nonce, acts as unique order identifier.
-	OrderNonce []byte `protobuf:"bytes,7,opt,name=order_nonce,json=orderNonce,proto3" json:"order_nonce,omitempty"`
-	//*
-	//Signature for the order.
-	OrderSig             []byte       `protobuf:"bytes,8,opt,name=order_sig,json=orderSig,proto3" json:"order_sig,omitempty"`
-	MultiSigKey          []byte       `protobuf:"bytes,9,opt,name=multi_sig_key,json=multiSigKey,proto3" json:"multi_sig_key,omitempty"`
-	NodePub              []byte       `protobuf:"bytes,10,opt,name=node_pub,json=nodePub,proto3" json:"node_pub,omitempty"`
-	NodeAddr             *NodeAddress `protobuf:"bytes,11,opt,name=node_addr,json=nodeAddr,proto3" json:"node_addr,omitempty"`
-	ChanType             uint32       `protobuf:"varint,13,opt,name=chan_type,json=chanType,proto3" json:"chan_type,omitempty"`
-	FundingFeeRate       int64        `protobuf:"varint,14,opt,name=funding_fee_rate,json=fundingFeeRate,proto3" json:"funding_fee_rate,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	//The version of the order format that is used. Will be increased once new
+	//features are added.
+	Version              uint32   `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *ServerAsk) Reset()         { *m = ServerAsk{} }
 func (m *ServerAsk) String() string { return proto.CompactTextString(m) }
 func (*ServerAsk) ProtoMessage()    {}
 func (*ServerAsk) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{15}
+	return fileDescriptor_ad098daeda4239f7, []int{18}
 }
 
 func (m *ServerAsk) XXX_Unmarshal(b []byte) error {
@@ -928,18 +1109,11 @@ func (m *ServerAsk) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ServerAsk proto.InternalMessageInfo
 
-func (m *ServerAsk) GetRateFixed() int64 {
+func (m *ServerAsk) GetDetails() *ServerOrder {
 	if m != nil {
-		return m.RateFixed
+		return m.Details
 	}
-	return 0
-}
-
-func (m *ServerAsk) GetAmt() int64 {
-	if m != nil {
-		return m.Amt
-	}
-	return 0
+	return nil
 }
 
 func (m *ServerAsk) GetMaxDurationBlocks() int64 {
@@ -949,51 +1123,9 @@ func (m *ServerAsk) GetMaxDurationBlocks() int64 {
 	return 0
 }
 
-func (m *ServerAsk) GetOrderNonce() []byte {
+func (m *ServerAsk) GetVersion() uint32 {
 	if m != nil {
-		return m.OrderNonce
-	}
-	return nil
-}
-
-func (m *ServerAsk) GetOrderSig() []byte {
-	if m != nil {
-		return m.OrderSig
-	}
-	return nil
-}
-
-func (m *ServerAsk) GetMultiSigKey() []byte {
-	if m != nil {
-		return m.MultiSigKey
-	}
-	return nil
-}
-
-func (m *ServerAsk) GetNodePub() []byte {
-	if m != nil {
-		return m.NodePub
-	}
-	return nil
-}
-
-func (m *ServerAsk) GetNodeAddr() *NodeAddress {
-	if m != nil {
-		return m.NodeAddr
-	}
-	return nil
-}
-
-func (m *ServerAsk) GetChanType() uint32 {
-	if m != nil {
-		return m.ChanType
-	}
-	return 0
-}
-
-func (m *ServerAsk) GetFundingFeeRate() int64 {
-	if m != nil {
-		return m.FundingFeeRate
+		return m.Version
 	}
 	return 0
 }
@@ -1009,7 +1141,7 @@ func (m *CancelOrder) Reset()         { *m = CancelOrder{} }
 func (m *CancelOrder) String() string { return proto.CompactTextString(m) }
 func (*CancelOrder) ProtoMessage()    {}
 func (*CancelOrder) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{16}
+	return fileDescriptor_ad098daeda4239f7, []int{19}
 }
 
 func (m *CancelOrder) XXX_Unmarshal(b []byte) error {
@@ -1050,7 +1182,7 @@ func (m *InvalidOrder) Reset()         { *m = InvalidOrder{} }
 func (m *InvalidOrder) String() string { return proto.CompactTextString(m) }
 func (*InvalidOrder) ProtoMessage()    {}
 func (*InvalidOrder) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{17}
+	return fileDescriptor_ad098daeda4239f7, []int{20}
 }
 
 func (m *InvalidOrder) XXX_Unmarshal(b []byte) error {
@@ -1104,7 +1236,7 @@ func (m *Input) Reset()         { *m = Input{} }
 func (m *Input) String() string { return proto.CompactTextString(m) }
 func (*Input) ProtoMessage()    {}
 func (*Input) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{18}
+	return fileDescriptor_ad098daeda4239f7, []int{21}
 }
 
 func (m *Input) XXX_Unmarshal(b []byte) error {
@@ -1154,7 +1286,7 @@ func (m *ServerModifyAccountRequest) Reset()         { *m = ServerModifyAccountR
 func (m *ServerModifyAccountRequest) String() string { return proto.CompactTextString(m) }
 func (*ServerModifyAccountRequest) ProtoMessage()    {}
 func (*ServerModifyAccountRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{19}
+	return fileDescriptor_ad098daeda4239f7, []int{22}
 }
 
 func (m *ServerModifyAccountRequest) XXX_Unmarshal(b []byte) error {
@@ -1222,7 +1354,7 @@ func (m *ServerModifyAccountResponse) Reset()         { *m = ServerModifyAccount
 func (m *ServerModifyAccountResponse) String() string { return proto.CompactTextString(m) }
 func (*ServerModifyAccountResponse) ProtoMessage()    {}
 func (*ServerModifyAccountResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{20}
+	return fileDescriptor_ad098daeda4239f7, []int{23}
 }
 
 func (m *ServerModifyAccountResponse) XXX_Unmarshal(b []byte) error {
@@ -1257,6 +1389,98 @@ func (m *ServerModifyAccountResponse) GetNewAccountPoint() *OutPoint {
 	return nil
 }
 
+type ServerOrderStateRequest struct {
+	OrderNonce           []byte   `protobuf:"bytes,1,opt,name=order_nonce,json=orderNonce,proto3" json:"order_nonce,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ServerOrderStateRequest) Reset()         { *m = ServerOrderStateRequest{} }
+func (m *ServerOrderStateRequest) String() string { return proto.CompactTextString(m) }
+func (*ServerOrderStateRequest) ProtoMessage()    {}
+func (*ServerOrderStateRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ad098daeda4239f7, []int{24}
+}
+
+func (m *ServerOrderStateRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ServerOrderStateRequest.Unmarshal(m, b)
+}
+func (m *ServerOrderStateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ServerOrderStateRequest.Marshal(b, m, deterministic)
+}
+func (m *ServerOrderStateRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ServerOrderStateRequest.Merge(m, src)
+}
+func (m *ServerOrderStateRequest) XXX_Size() int {
+	return xxx_messageInfo_ServerOrderStateRequest.Size(m)
+}
+func (m *ServerOrderStateRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ServerOrderStateRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ServerOrderStateRequest proto.InternalMessageInfo
+
+func (m *ServerOrderStateRequest) GetOrderNonce() []byte {
+	if m != nil {
+		return m.OrderNonce
+	}
+	return nil
+}
+
+type ServerOrderStateResponse struct {
+	//*
+	//The state the order currently is in.
+	State ServerOrderStateResponse_OrderState `protobuf:"varint,1,opt,name=state,proto3,enum=clmrpc.ServerOrderStateResponse_OrderState" json:"state,omitempty"`
+	//*
+	//The number of currently unfilled units of this order. This will be equal to
+	//the total amount of units until the order has reached the state PARTIAL_FILL
+	//or EXECUTED.
+	UnitsUnfulfilled     uint32   `protobuf:"varint,2,opt,name=units_unfulfilled,json=unitsUnfulfilled,proto3" json:"units_unfulfilled,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ServerOrderStateResponse) Reset()         { *m = ServerOrderStateResponse{} }
+func (m *ServerOrderStateResponse) String() string { return proto.CompactTextString(m) }
+func (*ServerOrderStateResponse) ProtoMessage()    {}
+func (*ServerOrderStateResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_ad098daeda4239f7, []int{25}
+}
+
+func (m *ServerOrderStateResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ServerOrderStateResponse.Unmarshal(m, b)
+}
+func (m *ServerOrderStateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ServerOrderStateResponse.Marshal(b, m, deterministic)
+}
+func (m *ServerOrderStateResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ServerOrderStateResponse.Merge(m, src)
+}
+func (m *ServerOrderStateResponse) XXX_Size() int {
+	return xxx_messageInfo_ServerOrderStateResponse.Size(m)
+}
+func (m *ServerOrderStateResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ServerOrderStateResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ServerOrderStateResponse proto.InternalMessageInfo
+
+func (m *ServerOrderStateResponse) GetState() ServerOrderStateResponse_OrderState {
+	if m != nil {
+		return m.State
+	}
+	return ServerOrderStateResponse_SUBMITTED
+}
+
+func (m *ServerOrderStateResponse) GetUnitsUnfulfilled() uint32 {
+	if m != nil {
+		return m.UnitsUnfulfilled
+	}
+	return 0
+}
+
 type NodeAddress struct {
 	Network              string   `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
 	Addr                 string   `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
@@ -1269,7 +1493,7 @@ func (m *NodeAddress) Reset()         { *m = NodeAddress{} }
 func (m *NodeAddress) String() string { return proto.CompactTextString(m) }
 func (*NodeAddress) ProtoMessage()    {}
 func (*NodeAddress) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{21}
+	return fileDescriptor_ad098daeda4239f7, []int{26}
 }
 
 func (m *NodeAddress) XXX_Unmarshal(b []byte) error {
@@ -1320,7 +1544,7 @@ func (m *OutPoint) Reset()         { *m = OutPoint{} }
 func (m *OutPoint) String() string { return proto.CompactTextString(m) }
 func (*OutPoint) ProtoMessage()    {}
 func (*OutPoint) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ad098daeda4239f7, []int{22}
+	return fileDescriptor_ad098daeda4239f7, []int{27}
 }
 
 func (m *OutPoint) XXX_Unmarshal(b []byte) error {
@@ -1357,6 +1581,7 @@ func (m *OutPoint) GetOutputIndex() uint32 {
 
 func init() {
 	proto.RegisterEnum("clmrpc.InvalidOrder_FailReason", InvalidOrder_FailReason_name, InvalidOrder_FailReason_value)
+	proto.RegisterEnum("clmrpc.ServerOrderStateResponse_OrderState", ServerOrderStateResponse_OrderState_name, ServerOrderStateResponse_OrderState_value)
 	proto.RegisterType((*ReserveAccountRequest)(nil), "clmrpc.ReserveAccountRequest")
 	proto.RegisterType((*ReserveAccountResponse)(nil), "clmrpc.ReserveAccountResponse")
 	proto.RegisterType((*ServerInitAccountRequest)(nil), "clmrpc.ServerInitAccountRequest")
@@ -1364,14 +1589,17 @@ func init() {
 	proto.RegisterType((*ServerCloseAccountRequest)(nil), "clmrpc.ServerCloseAccountRequest")
 	proto.RegisterMapType((map[int64][]byte)(nil), "clmrpc.ServerCloseAccountRequest.CloseOutputsEntry")
 	proto.RegisterType((*ServerCloseAccountResponse)(nil), "clmrpc.ServerCloseAccountResponse")
-	proto.RegisterType((*ServerOrderRequest)(nil), "clmrpc.ServerOrderRequest")
-	proto.RegisterType((*ServerOrderResponse)(nil), "clmrpc.ServerOrderResponse")
+	proto.RegisterType((*ServerSubmitOrderRequest)(nil), "clmrpc.ServerSubmitOrderRequest")
+	proto.RegisterType((*ServerSubmitOrderResponse)(nil), "clmrpc.ServerSubmitOrderResponse")
+	proto.RegisterType((*ServerCancelOrderRequest)(nil), "clmrpc.ServerCancelOrderRequest")
+	proto.RegisterType((*ServerCancelOrderResponse)(nil), "clmrpc.ServerCancelOrderResponse")
 	proto.RegisterType((*ClientAuctionMessage)(nil), "clmrpc.ClientAuctionMessage")
 	proto.RegisterType((*OrderMatchPrepare)(nil), "clmrpc.OrderMatchPrepare")
 	proto.RegisterType((*OrderMatchAccept)(nil), "clmrpc.OrderMatchAccept")
 	proto.RegisterType((*OrderMatchSign)(nil), "clmrpc.OrderMatchSign")
 	proto.RegisterType((*OrderMatchFinalize)(nil), "clmrpc.OrderMatchFinalize")
 	proto.RegisterType((*ServerAuctionMessage)(nil), "clmrpc.ServerAuctionMessage")
+	proto.RegisterType((*ServerOrder)(nil), "clmrpc.ServerOrder")
 	proto.RegisterType((*ServerBid)(nil), "clmrpc.ServerBid")
 	proto.RegisterType((*ServerAsk)(nil), "clmrpc.ServerAsk")
 	proto.RegisterType((*CancelOrder)(nil), "clmrpc.CancelOrder")
@@ -1380,6 +1608,8 @@ func init() {
 	proto.RegisterType((*ServerModifyAccountRequest)(nil), "clmrpc.ServerModifyAccountRequest")
 	proto.RegisterMapType((map[int64][]byte)(nil), "clmrpc.ServerModifyAccountRequest.OutputsEntry")
 	proto.RegisterType((*ServerModifyAccountResponse)(nil), "clmrpc.ServerModifyAccountResponse")
+	proto.RegisterType((*ServerOrderStateRequest)(nil), "clmrpc.ServerOrderStateRequest")
+	proto.RegisterType((*ServerOrderStateResponse)(nil), "clmrpc.ServerOrderStateResponse")
 	proto.RegisterType((*NodeAddress)(nil), "clmrpc.NodeAddress")
 	proto.RegisterType((*OutPoint)(nil), "clmrpc.OutPoint")
 }
@@ -1387,90 +1617,103 @@ func init() {
 func init() { proto.RegisterFile("server.proto", fileDescriptor_ad098daeda4239f7) }
 
 var fileDescriptor_ad098daeda4239f7 = []byte{
-	// 1320 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x57, 0x4d, 0x6f, 0xdb, 0x46,
-	0x13, 0xd6, 0x97, 0x2d, 0x69, 0x28, 0x39, 0xf2, 0xda, 0xc9, 0xab, 0xc8, 0xce, 0x1b, 0x87, 0x41,
-	0x5e, 0xf8, 0x10, 0x28, 0x81, 0x82, 0x00, 0xf9, 0x78, 0x81, 0x54, 0x72, 0x62, 0xd8, 0x6e, 0x1d,
-	0x07, 0x54, 0x9a, 0xe6, 0x46, 0xac, 0xc8, 0x95, 0xb2, 0x30, 0xb5, 0x64, 0xb9, 0x64, 0x6c, 0xb5,
-	0xc7, 0xfe, 0xa2, 0xfe, 0x9b, 0xfc, 0x82, 0x9e, 0x7b, 0x6e, 0x2f, 0xc5, 0xce, 0x92, 0x12, 0x65,
-	0xc9, 0x36, 0x1a, 0xf4, 0xd8, 0x1b, 0xf7, 0x99, 0x67, 0x3e, 0x76, 0x76, 0x66, 0x77, 0x08, 0x35,
-	0xc9, 0xc2, 0xcf, 0x2c, 0x6c, 0x07, 0xa1, 0x1f, 0xf9, 0x64, 0xd5, 0xf1, 0xc6, 0x61, 0xe0, 0xb4,
-	0xb6, 0x47, 0xbe, 0x3f, 0xf2, 0xd8, 0x23, 0x1a, 0xf0, 0x47, 0x54, 0x08, 0x3f, 0xa2, 0x11, 0xf7,
-	0x85, 0xd4, 0x2c, 0xf3, 0x39, 0xdc, 0xb4, 0x18, 0xea, 0x75, 0x1d, 0xc7, 0x8f, 0x45, 0x64, 0xb1,
-	0x1f, 0x63, 0x26, 0x23, 0xb2, 0x03, 0xb5, 0x58, 0xb2, 0xd0, 0x96, 0xf1, 0xc0, 0x3e, 0x65, 0x93,
-	0x66, 0x7e, 0x27, 0xbf, 0x5b, 0xb3, 0x40, 0x61, 0xfd, 0x78, 0xf0, 0x2d, 0x9b, 0x98, 0xaf, 0xe0,
-	0xd6, 0x45, 0x55, 0x19, 0xf8, 0x42, 0x32, 0xf2, 0x00, 0xd6, 0x68, 0xec, 0x28, 0x37, 0x8c, 0x85,
-	0x19, 0xed, 0xfa, 0x0c, 0x55, 0x06, 0x7e, 0xcb, 0x43, 0xb3, 0x8f, 0x21, 0x1f, 0x0a, 0x1e, 0x5d,
-	0xf0, 0xff, 0x14, 0xea, 0x54, 0x23, 0x76, 0xe0, 0x73, 0x11, 0xa1, 0x09, 0xa3, 0xd3, 0x68, 0xeb,
-	0x6d, 0xb5, 0x4f, 0xe2, 0xe8, 0x9d, 0xc2, 0xad, 0x5a, 0x42, 0xc3, 0x15, 0xba, 0x4e, 0xd4, 0xa4,
-	0x13, 0xf2, 0x20, 0x6a, 0x16, 0x12, 0xd7, 0x1a, 0xed, 0x23, 0x48, 0xee, 0xcf, 0xac, 0x7f, 0xa6,
-	0x5e, 0xcc, 0x9a, 0xc5, 0x9d, 0xfc, 0x6e, 0x7d, 0x6a, 0xeb, 0x83, 0xc2, 0xb2, 0xb6, 0xd8, 0x79,
-	0xc0, 0xc3, 0x49, 0xb3, 0x84, 0xac, 0x54, 0xf5, 0x0d, 0x82, 0x0b, 0x99, 0x5a, 0x59, 0xc8, 0xd4,
-	0x16, 0xdc, 0x5e, 0xb2, 0x4f, 0x9d, 0x2c, 0xf3, 0x4b, 0x3e, 0x95, 0xee, 0x79, 0xbe, 0xfc, 0xdb,
-	0xc7, 0x40, 0x3e, 0x42, 0xdd, 0x51, 0x8a, 0xb6, 0x1f, 0x47, 0x41, 0x1c, 0xc9, 0x66, 0x61, 0xa7,
-	0xb8, 0x6b, 0x74, 0x9e, 0xa4, 0x89, 0xba, 0xd4, 0x76, 0x1b, 0xb1, 0x13, 0xad, 0xf5, 0x46, 0x44,
-	0xe1, 0xc4, 0xaa, 0x39, 0x19, 0xa8, 0xf5, 0x0a, 0xd6, 0x17, 0x28, 0xa4, 0x01, 0xc5, 0x34, 0x8e,
-	0xa2, 0xa5, 0x3e, 0xc9, 0x26, 0xac, 0xe8, 0x1c, 0xea, 0x4c, 0xeb, 0xc5, 0x8b, 0xc2, 0xb3, 0xbc,
-	0xf9, 0x1c, 0x5a, 0xcb, 0xbc, 0x27, 0x55, 0xb2, 0x05, 0x55, 0x1d, 0xb8, 0xe4, 0xa3, 0x64, 0x5f,
-	0x15, 0x04, 0xfa, 0x7c, 0x64, 0x8e, 0x81, 0x68, 0xd5, 0x93, 0xd0, 0x65, 0x61, 0x9a, 0x8d, 0x07,
-	0x50, 0xa4, 0xf2, 0x34, 0x29, 0x85, 0xf5, 0xf9, 0x1d, 0x76, 0xe5, 0xe9, 0x41, 0xce, 0x52, 0x72,
-	0x45, 0x1b, 0x70, 0x17, 0xe3, 0x59, 0xa0, 0xf5, 0xb8, 0xab, 0x68, 0x03, 0xee, 0xf6, 0xaa, 0x50,
-	0x76, 0x59, 0x44, 0xb9, 0x27, 0xcd, 0x9f, 0x61, 0x63, 0xce, 0x5d, 0x12, 0xe2, 0x4b, 0xa8, 0x73,
-	0xf1, 0x99, 0x7a, 0xdc, 0xb5, 0x7d, 0x25, 0x48, 0x3c, 0x6f, 0xa6, 0x26, 0x0f, 0xb5, 0x10, 0x95,
-	0x0e, 0x72, 0x56, 0x8d, 0x67, 0xd6, 0x64, 0x1b, 0x2a, 0xd4, 0x71, 0x58, 0x10, 0x31, 0x1d, 0x4a,
-	0xe5, 0x20, 0x67, 0x4d, 0x91, 0xac, 0xf3, 0xdf, 0xf3, 0xb0, 0xb9, 0xe7, 0x71, 0x26, 0xa2, 0xae,
-	0xee, 0x8f, 0x63, 0x26, 0x25, 0x1d, 0x31, 0xf2, 0x14, 0xca, 0x41, 0xc8, 0x02, 0x1a, 0xb2, 0xc4,
-	0xf1, 0xed, 0x69, 0xf5, 0x2b, 0x0f, 0xc7, 0x34, 0x72, 0x3e, 0xbd, 0xd3, 0x84, 0x83, 0x9c, 0x95,
-	0x72, 0x49, 0x07, 0x56, 0xb5, 0x9b, 0x24, 0x03, 0xcd, 0x45, 0xad, 0x2e, 0xca, 0x0f, 0x72, 0x56,
-	0xc2, 0x24, 0x0f, 0xa1, 0x24, 0xf9, 0x48, 0x60, 0x1f, 0x18, 0x9d, 0x5b, 0x8b, 0x1a, 0x7d, 0x3e,
-	0x12, 0x07, 0x39, 0x0b, 0x59, 0xe4, 0x19, 0x54, 0x86, 0x5c, 0x50, 0x8f, 0xff, 0xc4, 0xb0, 0x27,
-	0x8c, 0x4e, 0x6b, 0x51, 0x63, 0x3f, 0x61, 0xa8, 0x6d, 0xa7, 0xec, 0xde, 0x0a, 0x14, 0xc7, 0x72,
-	0x64, 0x6e, 0xc0, 0xfa, 0xc2, 0x16, 0x4c, 0x02, 0x8d, 0x8b, 0x11, 0x9a, 0x0d, 0x58, 0x9b, 0x8f,
-	0xc1, 0xdc, 0x04, 0xb2, 0xe8, 0xc3, 0xbc, 0x05, 0x9b, 0x49, 0x19, 0xcc, 0xa5, 0xd0, 0xfc, 0xa3,
-	0x00, 0xd5, 0xe9, 0xc1, 0x93, 0x3b, 0x00, 0x21, 0x8d, 0x98, 0x3d, 0xe4, 0xe7, 0xcc, 0x4d, 0x6a,
-	0xb8, 0xaa, 0x90, 0x7d, 0x05, 0xa8, 0xda, 0xa6, 0x63, 0x9d, 0xb5, 0xa2, 0xa5, 0x3e, 0x49, 0x1b,
-	0x36, 0xc6, 0x5c, 0xd8, 0x6e, 0x1c, 0xe2, 0xad, 0x69, 0x0f, 0x3c, 0xdf, 0x39, 0x95, 0x98, 0xa5,
-	0xa2, 0xb5, 0x3e, 0xe6, 0xe2, 0x75, 0x22, 0xe9, 0xa1, 0x80, 0xdc, 0x05, 0x03, 0x0b, 0xc5, 0x16,
-	0xbe, 0x70, 0x58, 0xb3, 0xac, 0xbb, 0x15, 0xa1, 0xb7, 0x0a, 0x51, 0x45, 0xaf, 0x09, 0xaa, 0xe8,
-	0x2b, 0xba, 0xe8, 0x11, 0xe8, 0xf3, 0x11, 0x31, 0xa1, 0x3e, 0x8e, 0xbd, 0x88, 0x2b, 0x21, 0x76,
-	0x7b, 0x15, 0x09, 0x06, 0x82, 0x7d, 0x3e, 0x52, 0xed, 0x7e, 0x1b, 0x2a, 0xc2, 0x77, 0x99, 0x1d,
-	0xc4, 0x83, 0x26, 0xa0, 0xb8, 0xac, 0xd6, 0xef, 0xe2, 0x01, 0x79, 0x0c, 0x55, 0x14, 0x51, 0xd7,
-	0x0d, 0x9b, 0x06, 0x1e, 0xcb, 0x46, 0x7a, 0x2c, 0x6f, 0x7d, 0x97, 0x75, 0x5d, 0x37, 0x64, 0x52,
-	0x5a, 0x68, 0x40, 0x2d, 0xb0, 0x05, 0x3f, 0x51, 0x61, 0x47, 0x93, 0x80, 0x35, 0xeb, 0x78, 0xb9,
-	0x55, 0x14, 0xf0, 0x7e, 0x12, 0x30, 0xb2, 0x0b, 0x8d, 0x61, 0x2c, 0x5c, 0x2e, 0x46, 0xf6, 0x90,
-	0x31, 0x5b, 0xa5, 0xa9, 0xb9, 0x86, 0x1b, 0x5f, 0x4b, 0xf0, 0x7d, 0xc6, 0x2c, 0x1a, 0xb1, 0xa3,
-	0x52, 0xa5, 0xd4, 0x58, 0x39, 0x2a, 0x55, 0x56, 0x1a, 0xab, 0x47, 0xa5, 0xca, 0x6a, 0xa3, 0x7c,
-	0x54, 0xaa, 0xd4, 0x1a, 0xf5, 0x4c, 0xf2, 0xbb, 0xf2, 0xf4, 0xeb, 0x92, 0x4f, 0xcf, 0x2f, 0x4d,
-	0x3e, 0x3d, 0xff, 0x37, 0xf9, 0x57, 0x24, 0xbf, 0x0d, 0xc6, 0x1e, 0x15, 0x0e, 0xf3, 0xf4, 0x6d,
-	0x74, 0x21, 0x39, 0xf9, 0x8b, 0xc9, 0x31, 0x7f, 0xcd, 0x43, 0x2d, 0x7b, 0x9f, 0x5d, 0xab, 0x41,
-	0xbe, 0x01, 0x63, 0x48, 0xb9, 0x67, 0x87, 0x8c, 0x4a, 0x5f, 0xe0, 0xc9, 0xad, 0x75, 0xee, 0x2e,
-	0xbb, 0x1b, 0xdb, 0xfb, 0x94, 0x7b, 0x16, 0xd2, 0x2c, 0x18, 0x4e, 0xbf, 0x95, 0x0b, 0xb4, 0x20,
-	0xa3, 0x90, 0x8b, 0x11, 0x9e, 0x6c, 0x55, 0x13, 0xfa, 0x88, 0x98, 0x77, 0x00, 0x66, 0xaa, 0xe4,
-	0x06, 0x18, 0x87, 0x6f, 0x3f, 0x74, 0xbf, 0x3b, 0x7c, 0x6d, 0x77, 0x8f, 0xdf, 0x37, 0x72, 0xe6,
-	0x07, 0x58, 0x39, 0x14, 0x41, 0xac, 0xae, 0xaf, 0x8a, 0x7a, 0xfe, 0xae, 0x1c, 0x14, 0xa6, 0x0c,
-	0xe5, 0x96, 0x2b, 0x35, 0x7b, 0xf6, 0x6e, 0x15, 0x2d, 0x40, 0x08, 0x5f, 0x7e, 0xf3, 0xcf, 0x42,
-	0xfa, 0x72, 0x1d, 0xfb, 0x2e, 0x1f, 0x4e, 0xfe, 0x99, 0xd9, 0xe4, 0x21, 0x80, 0x60, 0x67, 0x36,
-	0xfa, 0x91, 0xc9, 0xdd, 0x5c, 0x9f, 0xa5, 0x2b, 0x88, 0x23, 0xab, 0x2a, 0xd8, 0x19, 0x7e, 0x49,
-	0x72, 0x08, 0xe5, 0xf4, 0x45, 0x2f, 0xe2, 0x8b, 0xfe, 0x68, 0xfe, 0x21, 0x5b, 0x16, 0x59, 0x7b,
-	0xee, 0x35, 0x4f, 0xf5, 0x55, 0x23, 0x29, 0xc7, 0x69, 0xcc, 0x03, 0xea, 0xa9, 0xc2, 0xc0, 0x9b,
-	0xbb, 0x68, 0xad, 0x0b, 0x76, 0x96, 0x58, 0xe9, 0x69, 0x01, 0xe9, 0x82, 0x91, 0xe1, 0xe3, 0x40,
-	0x63, 0x74, 0x76, 0xe6, 0xdd, 0x2f, 0x8e, 0x6c, 0x16, 0xcc, 0x2c, 0xb5, 0x5e, 0x40, 0xed, 0xab,
-	0xc7, 0x86, 0x5f, 0xf2, 0xb0, 0xb5, 0x74, 0x8f, 0xc9, 0xab, 0xfc, 0x3f, 0xb8, 0x91, 0xdd, 0xce,
-	0x6c, 0x7c, 0xa8, 0xcf, 0x02, 0x50, 0x1d, 0xfd, 0x7f, 0x58, 0xcf, 0xf2, 0xf4, 0x51, 0x15, 0x2e,
-	0x39, 0xaa, 0x1b, 0x33, 0x5d, 0x04, 0xcc, 0x97, 0x60, 0x64, 0xfa, 0x96, 0x34, 0xa1, 0x2c, 0x58,
-	0x74, 0xe6, 0x87, 0x7a, 0xfc, 0xa8, 0x5a, 0xe9, 0x92, 0x10, 0x28, 0x61, 0xd3, 0x17, 0x10, 0xc6,
-	0x6f, 0xb3, 0x07, 0x95, 0xd4, 0xb2, 0x92, 0x47, 0xe7, 0xdc, 0x4d, 0x62, 0xc4, 0x6f, 0x62, 0x42,
-	0x4d, 0x1f, 0x8e, 0xcd, 0x85, 0xcb, 0xce, 0x51, 0xb7, 0x6e, 0xcd, 0x61, 0x9d, 0x2f, 0x25, 0xf8,
-	0xcf, 0xde, 0x27, 0x2a, 0x04, 0xf3, 0xba, 0xd3, 0xb9, 0x59, 0xe7, 0x85, 0x9c, 0xc0, 0xda, 0xfc,
-	0xec, 0x4d, 0xee, 0xa4, 0x3b, 0x5a, 0x3a, 0xce, 0xb7, 0xfe, 0x7b, 0x99, 0x38, 0xc9, 0xa9, 0x05,
-	0x46, 0xe6, 0x44, 0xc9, 0xb5, 0x87, 0xdd, 0xba, 0x77, 0x05, 0x23, 0xb1, 0xf9, 0x3d, 0xd4, 0xb2,
-	0x83, 0x1f, 0xb9, 0x77, 0xed, 0x48, 0xda, 0x32, 0xaf, 0xa2, 0x24, 0x66, 0x3f, 0x42, 0x7d, 0xae,
-	0x2e, 0x88, 0x79, 0x7d, 0x63, 0xb4, 0xee, 0x5f, 0xc9, 0x49, 0x2c, 0xef, 0x83, 0xd1, 0x8f, 0x07,
-	0x63, 0x1e, 0xe9, 0x0b, 0xb0, 0x35, 0xaf, 0x93, 0x9d, 0x44, 0x5b, 0x5b, 0x4b, 0x65, 0x33, 0x3b,
-	0xd9, 0xab, 0xf7, 0xab, 0xed, 0xfc, 0x00, 0x37, 0xfb, 0xf1, 0x40, 0xfd, 0xc7, 0x0c, 0x58, 0x0f,
-	0x87, 0x22, 0x5d, 0x07, 0x64, 0x3b, 0xd5, 0x5a, 0x36, 0x36, 0xb6, 0xb6, 0x2f, 0x0c, 0xc6, 0x73,
-	0xd2, 0xdd, 0xfc, 0xe3, 0xfc, 0x60, 0x15, 0x7f, 0xfe, 0x9e, 0xfc, 0x15, 0x00, 0x00, 0xff, 0xff,
-	0xc6, 0x19, 0xdf, 0x24, 0x32, 0x0e, 0x00, 0x00,
+	// 1536 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x57, 0x4b, 0x6f, 0xdb, 0xc6,
+	0x16, 0xd6, 0xd3, 0x96, 0x0e, 0x25, 0x87, 0x1e, 0x3b, 0x89, 0xa2, 0x38, 0x37, 0x0e, 0x83, 0x5c,
+	0x18, 0x48, 0xae, 0x12, 0x28, 0x08, 0x90, 0xc7, 0x05, 0x72, 0x29, 0x59, 0x86, 0xe5, 0xeb, 0x17,
+	0x28, 0x3b, 0xf5, 0x8e, 0xa0, 0xc4, 0x91, 0x32, 0x30, 0x3d, 0x64, 0x39, 0xa4, 0x1f, 0xdd, 0x15,
+	0xed, 0xaa, 0xff, 0xa6, 0x3f, 0xa1, 0xff, 0xa2, 0xbf, 0xa0, 0xe8, 0xb2, 0xfb, 0x6c, 0x8a, 0x19,
+	0x0e, 0x25, 0x52, 0x92, 0xed, 0x36, 0xe8, 0x8e, 0xf3, 0x9d, 0xf7, 0x99, 0x73, 0xce, 0x1c, 0x42,
+	0x85, 0x61, 0xff, 0x1c, 0xfb, 0x0d, 0xcf, 0x77, 0x03, 0x17, 0x2d, 0x0c, 0x9c, 0x33, 0xdf, 0x1b,
+	0xd4, 0xd7, 0x46, 0xae, 0x3b, 0x72, 0xf0, 0x4b, 0xcb, 0x23, 0x2f, 0x2d, 0x4a, 0xdd, 0xc0, 0x0a,
+	0x88, 0x4b, 0x59, 0xc4, 0xa5, 0xbd, 0x83, 0xbb, 0x06, 0x16, 0x72, 0xfa, 0x60, 0xe0, 0x86, 0x34,
+	0x30, 0xf0, 0xb7, 0x21, 0x66, 0x01, 0x5a, 0x87, 0x4a, 0xc8, 0xb0, 0x6f, 0xb2, 0xb0, 0x6f, 0x9e,
+	0xe2, 0xab, 0x5a, 0x76, 0x3d, 0xbb, 0x51, 0x31, 0x80, 0x63, 0xbd, 0xb0, 0xff, 0x7f, 0x7c, 0xa5,
+	0x7d, 0x84, 0x7b, 0xd3, 0xa2, 0xcc, 0x73, 0x29, 0xc3, 0xe8, 0x19, 0x2c, 0x59, 0xe1, 0x80, 0x9b,
+	0xc1, 0xd8, 0x4f, 0x48, 0x57, 0x27, 0x28, 0x57, 0xf0, 0x5b, 0x16, 0x6a, 0x3d, 0xe1, 0x72, 0x97,
+	0x92, 0x60, 0xca, 0xfe, 0x1b, 0xa8, 0x5a, 0x11, 0x62, 0x7a, 0x2e, 0xa1, 0x81, 0x50, 0xa1, 0x34,
+	0xd5, 0x46, 0x14, 0x56, 0xe3, 0x20, 0x0c, 0x0e, 0x39, 0x6e, 0x54, 0x24, 0x9b, 0x38, 0x09, 0xd3,
+	0x52, 0x8c, 0x0d, 0x7c, 0xe2, 0x05, 0xb5, 0x9c, 0x34, 0x1d, 0xa1, 0x3d, 0x01, 0xa2, 0xa7, 0x13,
+	0xed, 0xe7, 0x96, 0x13, 0xe2, 0x5a, 0x7e, 0x3d, 0xbb, 0x51, 0x1d, 0xeb, 0xfa, 0xc4, 0xb1, 0xa4,
+	0x2e, 0x7c, 0xe9, 0x11, 0xff, 0xaa, 0x56, 0x10, 0x5c, 0xb1, 0x68, 0x47, 0x80, 0x33, 0x99, 0x2a,
+	0xce, 0x64, 0xea, 0x21, 0x3c, 0x98, 0x13, 0x67, 0x94, 0x2c, 0xed, 0xd7, 0x6c, 0x4c, 0x6d, 0x3b,
+	0x2e, 0xfb, 0xdb, 0xd7, 0x80, 0x4e, 0xa0, 0x3a, 0xe0, 0x82, 0xa6, 0x1b, 0x06, 0x5e, 0x18, 0xb0,
+	0x5a, 0x6e, 0x3d, 0xbf, 0xa1, 0x34, 0x5f, 0xc7, 0x89, 0xba, 0x56, 0x77, 0x43, 0x60, 0x07, 0x91,
+	0x54, 0x87, 0x06, 0xfe, 0x95, 0x51, 0x19, 0x24, 0xa0, 0xfa, 0x47, 0x58, 0x9e, 0x61, 0x41, 0x2a,
+	0xe4, 0x63, 0x3f, 0xf2, 0x06, 0xff, 0x44, 0xab, 0x50, 0x8c, 0x72, 0x18, 0x65, 0x3a, 0x3a, 0xbc,
+	0xcf, 0xbd, 0xcd, 0x6a, 0xef, 0xa0, 0x3e, 0xcf, 0xba, 0xac, 0x92, 0x87, 0x50, 0x8e, 0x1c, 0x67,
+	0x64, 0x24, 0xe3, 0x2a, 0x09, 0xa0, 0x47, 0x46, 0x1a, 0x8b, 0x4b, 0xa3, 0x17, 0xf6, 0xcf, 0x48,
+	0x70, 0xe0, 0xdb, 0xd8, 0x8f, 0x73, 0xf2, 0x0c, 0xf2, 0x16, 0x3b, 0x95, 0x05, 0xb1, 0x9c, 0x8e,
+	0x53, 0x67, 0xa7, 0xdb, 0x19, 0x83, 0xd3, 0x39, 0x5b, 0x9f, 0xd8, 0xc2, 0xab, 0x19, 0xb6, 0x16,
+	0xb1, 0x39, 0x5b, 0x9f, 0xd8, 0xad, 0x32, 0x2c, 0xda, 0x38, 0xb0, 0x88, 0xc3, 0xb4, 0xef, 0xc7,
+	0x57, 0x91, 0xb2, 0x2a, 0xfd, 0xfd, 0x00, 0x55, 0x42, 0xcf, 0x2d, 0x87, 0xd8, 0xa6, 0xcb, 0x09,
+	0xd2, 0x81, 0xd5, 0x58, 0x73, 0x37, 0x22, 0x0a, 0xa1, 0xed, 0x8c, 0x51, 0x21, 0x89, 0x33, 0x5a,
+	0x83, 0x92, 0x35, 0x18, 0x60, 0x2f, 0xc0, 0x91, 0x47, 0xa5, 0xed, 0x8c, 0x31, 0x46, 0x92, 0x3e,
+	0x7c, 0x88, 0x03, 0x6f, 0x5b, 0x74, 0x80, 0x9d, 0x54, 0xe0, 0x8f, 0x41, 0x11, 0x96, 0x4d, 0xea,
+	0xd2, 0x01, 0x8e, 0x6b, 0x41, 0x40, 0xfb, 0x1c, 0x99, 0x14, 0x5a, 0x4a, 0x58, 0x16, 0xda, 0x1f,
+	0x59, 0x58, 0x6d, 0x3b, 0x04, 0xd3, 0x40, 0x8f, 0xda, 0x70, 0x0f, 0x33, 0x66, 0x8d, 0x30, 0x7a,
+	0x03, 0x8b, 0x9e, 0x8f, 0x3d, 0xcb, 0xc7, 0x32, 0xa4, 0x07, 0xe3, 0x26, 0xe3, 0x0a, 0xf6, 0xac,
+	0x60, 0xf0, 0xf9, 0x30, 0x62, 0xd8, 0xce, 0x18, 0x31, 0x2f, 0x6a, 0xc2, 0x42, 0x14, 0x80, 0x4c,
+	0x71, 0x6d, 0x56, 0x4a, 0x17, 0xf4, 0xed, 0x8c, 0x21, 0x39, 0xd1, 0x0b, 0x28, 0x30, 0x32, 0xa2,
+	0xa2, 0xdd, 0x94, 0xe6, 0xbd, 0x59, 0x89, 0x1e, 0x19, 0xd1, 0xed, 0x8c, 0x21, 0xb8, 0xd0, 0x5b,
+	0x28, 0x0d, 0x09, 0xb5, 0x1c, 0xf2, 0x1d, 0x16, 0xad, 0xa7, 0x34, 0xeb, 0xb3, 0x12, 0x5b, 0x92,
+	0x83, 0x27, 0x34, 0xe6, 0x6e, 0x15, 0x21, 0x7f, 0xc6, 0x46, 0xda, 0x0a, 0x2c, 0xcf, 0x84, 0xa0,
+	0x21, 0x50, 0xa7, 0x3d, 0xd4, 0x54, 0x58, 0x4a, 0xfb, 0xa0, 0xad, 0x02, 0x9a, 0xb5, 0xa1, 0xdd,
+	0x83, 0x55, 0x59, 0x67, 0xa9, 0x14, 0x6a, 0xbf, 0xe7, 0x40, 0x89, 0x08, 0xd1, 0x75, 0xdf, 0xde,
+	0xb6, 0x8f, 0x00, 0x7c, 0x2b, 0xc0, 0xe6, 0x90, 0x5c, 0xca, 0x92, 0xc8, 0x1b, 0x65, 0x8e, 0x6c,
+	0x71, 0x80, 0xb7, 0x99, 0x75, 0x16, 0x88, 0x3c, 0xe5, 0x0d, 0xfe, 0x39, 0x7d, 0xf9, 0x0b, 0xd3,
+	0x97, 0xcf, 0xfb, 0x29, 0x62, 0xe0, 0xfd, 0xb4, 0x18, 0xf5, 0x93, 0x00, 0x7a, 0x64, 0x84, 0x34,
+	0xa8, 0x9e, 0x85, 0x4e, 0x40, 0x38, 0x51, 0x78, 0x54, 0x12, 0x0c, 0x8a, 0x00, 0x7b, 0x64, 0xc4,
+	0x5d, 0x7a, 0x00, 0x25, 0xea, 0xda, 0xd8, 0xf4, 0xc2, 0x7e, 0xad, 0x2c, 0xc8, 0x8b, 0xfc, 0x7c,
+	0x18, 0xf6, 0xd1, 0x2b, 0x28, 0x0b, 0x92, 0x65, 0xdb, 0x7e, 0x0d, 0xc4, 0x80, 0x59, 0x89, 0xaf,
+	0x62, 0xdf, 0xb5, 0xb1, 0x6e, 0xdb, 0x3e, 0x66, 0xcc, 0x10, 0x0a, 0xf8, 0x41, 0x74, 0xf7, 0x67,
+	0x8b, 0x9a, 0xc1, 0x95, 0x87, 0x6b, 0x15, 0x31, 0x37, 0x4b, 0x1c, 0x38, 0xba, 0xf2, 0x30, 0xda,
+	0x00, 0x75, 0x18, 0x52, 0x9b, 0xd0, 0x91, 0x39, 0xc4, 0xd8, 0xe4, 0x61, 0xd7, 0xaa, 0x22, 0xd4,
+	0x25, 0x89, 0x6f, 0x61, 0x6c, 0x58, 0x01, 0xde, 0x29, 0x94, 0x0a, 0x6a, 0x71, 0xa7, 0x50, 0x2a,
+	0xaa, 0x0b, 0x3b, 0x85, 0x92, 0xa2, 0x56, 0xb4, 0x9f, 0xb2, 0x50, 0x1e, 0x37, 0x31, 0xfa, 0xcf,
+	0xb8, 0x73, 0x64, 0xed, 0xae, 0xa4, 0x1b, 0x3d, 0x6a, 0x81, 0x98, 0x07, 0x35, 0x60, 0xe5, 0x8c,
+	0x50, 0xd3, 0x0e, 0x7d, 0xf1, 0x0a, 0x9a, 0x7d, 0xc7, 0x1d, 0x9c, 0x32, 0x99, 0xfe, 0xe5, 0x33,
+	0x42, 0x37, 0x25, 0xa5, 0x25, 0x08, 0xa8, 0x06, 0x8b, 0xe7, 0xd8, 0x67, 0xc4, 0xa5, 0x72, 0xf6,
+	0xc7, 0xc7, 0x9d, 0x42, 0x29, 0xaf, 0x16, 0xb4, 0x1f, 0xc7, 0xce, 0xe8, 0xec, 0xf4, 0x6b, 0x9c,
+	0xb1, 0x2e, 0x67, 0x9c, 0x29, 0x48, 0x67, 0xac, 0xcb, 0xeb, 0x9d, 0x29, 0xa6, 0x9c, 0xd1, 0x1a,
+	0xa0, 0x24, 0x3a, 0xfe, 0xf6, 0x39, 0xf1, 0x73, 0x16, 0x2a, 0xc9, 0x71, 0x75, 0xab, 0x04, 0xfa,
+	0x1f, 0x28, 0x43, 0x8b, 0x38, 0xa6, 0x8f, 0x2d, 0xe6, 0x52, 0x91, 0xb0, 0xa5, 0xe6, 0xe3, 0x79,
+	0xa3, 0xaf, 0xb1, 0x65, 0x11, 0xc7, 0x10, 0x6c, 0x06, 0x0c, 0xc7, 0xdf, 0xdc, 0x84, 0xd0, 0xc0,
+	0x02, 0x9f, 0xd0, 0x91, 0xa8, 0xec, 0x72, 0xc4, 0xd0, 0x13, 0x88, 0xf6, 0x08, 0x60, 0x22, 0x8a,
+	0xee, 0x80, 0xd2, 0xdd, 0xff, 0xa4, 0xef, 0x76, 0x37, 0x4d, 0x7d, 0xef, 0x48, 0xcd, 0x68, 0x9f,
+	0xa0, 0xd8, 0xa5, 0x5e, 0xc8, 0x67, 0x48, 0x89, 0x3f, 0x75, 0x37, 0x2e, 0x05, 0x63, 0x0e, 0x6e,
+	0x96, 0x70, 0x31, 0x73, 0xf2, 0x46, 0xe5, 0x0d, 0x10, 0x90, 0x78, 0xe5, 0xb5, 0x2f, 0xb9, 0xf8,
+	0x95, 0xda, 0x73, 0x6d, 0x32, 0xbc, 0xfa, 0x67, 0xf6, 0x90, 0x17, 0x00, 0x14, 0x5f, 0x98, 0xc2,
+	0x0e, 0x93, 0x03, 0xb2, 0x3a, 0x49, 0x97, 0x17, 0x06, 0x46, 0x99, 0xe2, 0x0b, 0xf1, 0xc5, 0x50,
+	0x17, 0x16, 0xe3, 0xd7, 0x3b, 0x2f, 0x9a, 0xeb, 0x65, 0xba, 0x70, 0xe6, 0x79, 0xd6, 0x48, 0xbd,
+	0xdc, 0xb1, 0x3c, 0x2f, 0x2a, 0x6e, 0x38, 0xf6, 0xb9, 0x6f, 0x39, 0xbc, 0x30, 0xe2, 0xa2, 0xa2,
+	0xf8, 0x42, 0x6a, 0x69, 0x45, 0x04, 0xa4, 0x83, 0x92, 0xe0, 0x17, 0x85, 0xa5, 0x34, 0xd7, 0xd3,
+	0xe6, 0x67, 0xd7, 0x33, 0x03, 0x26, 0x9a, 0xea, 0xef, 0xa1, 0xf2, 0xd5, 0x2b, 0xc2, 0x0f, 0x59,
+	0x78, 0x38, 0x37, 0x46, 0xf9, 0xe8, 0xfe, 0x1b, 0xee, 0x24, 0xc3, 0x99, 0xac, 0x0a, 0xd5, 0x89,
+	0x03, 0x7c, 0xbe, 0xfd, 0x17, 0x96, 0x93, 0x7c, 0xd1, 0x55, 0xe5, 0xae, 0xb9, 0xaa, 0x3b, 0x13,
+	0x59, 0x01, 0x68, 0xef, 0xe1, 0x7e, 0xa2, 0x43, 0x7b, 0x81, 0x15, 0xe0, 0xbf, 0xfc, 0xe6, 0x7e,
+	0x19, 0x6f, 0xb1, 0x49, 0x61, 0xe9, 0xbe, 0x0e, 0x45, 0xc6, 0x01, 0x21, 0xb7, 0xd4, 0x7c, 0x3e,
+	0x67, 0x1e, 0xa4, 0x04, 0x1a, 0x09, 0x28, 0x92, 0x44, 0xcf, 0x61, 0x39, 0xa4, 0x24, 0x60, 0x66,
+	0x48, 0x87, 0xa1, 0x33, 0x24, 0x8e, 0x23, 0xdf, 0x8b, 0xaa, 0xa1, 0x0a, 0xc2, 0xf1, 0x04, 0xd7,
+	0x5c, 0x80, 0x89, 0x06, 0x54, 0x85, 0x72, 0xef, 0xb8, 0xb5, 0xd7, 0x3d, 0x3a, 0xea, 0x6c, 0xaa,
+	0x19, 0xa4, 0xc0, 0x62, 0x7b, 0xb7, 0xa3, 0x1b, 0x9d, 0x4d, 0x35, 0x8b, 0x54, 0xa8, 0x1c, 0xea,
+	0xc6, 0x51, 0x57, 0xdf, 0x35, 0xb7, 0xba, 0xbb, 0xbb, 0x6a, 0x0e, 0x55, 0xa0, 0xd4, 0x39, 0xe9,
+	0xb4, 0x8f, 0x39, 0x73, 0x9e, 0x9f, 0xda, 0xfa, 0x7e, 0xbb, 0xb3, 0xdb, 0xd9, 0x54, 0x0b, 0x5c,
+	0xb4, 0x73, 0x72, 0xd8, 0xe5, 0xa2, 0x45, 0x04, 0xb0, 0xb0, 0xa5, 0x77, 0x39, 0x61, 0x41, 0xfb,
+	0x00, 0x4a, 0x62, 0xfe, 0xf3, 0x11, 0x45, 0x71, 0x70, 0xe1, 0xfa, 0xd1, 0x7a, 0x56, 0x36, 0xe2,
+	0x23, 0x42, 0x50, 0x10, 0x8f, 0x47, 0x4e, 0xc0, 0xe2, 0x5b, 0x6b, 0x41, 0x29, 0xbe, 0x13, 0x4e,
+	0x0f, 0x2e, 0x89, 0x2d, 0x13, 0x2c, 0xbe, 0x91, 0x06, 0x95, 0xa8, 0xac, 0x4d, 0x42, 0x6d, 0x7c,
+	0x29, 0xa3, 0x4e, 0x61, 0xcd, 0x5f, 0x8a, 0x70, 0xbf, 0xfd, 0xd9, 0xa2, 0x14, 0x3b, 0xfa, 0xf8,
+	0xef, 0x22, 0x4a, 0x2f, 0x3a, 0x80, 0xa5, 0xf4, 0x1f, 0x0a, 0x7a, 0x14, 0x5f, 0xc0, 0xdc, 0x9f,
+	0x9e, 0xfa, 0xbf, 0xae, 0x23, 0xcb, 0xeb, 0x34, 0x40, 0x49, 0xf4, 0x02, 0xba, 0xb5, 0x4d, 0xea,
+	0x4f, 0x6e, 0xe0, 0x90, 0x3a, 0x8f, 0xa1, 0x92, 0x5c, 0x8f, 0xd1, 0x93, 0x5b, 0x17, 0xf7, 0xba,
+	0x76, 0x13, 0x8b, 0x54, 0x7b, 0x02, 0xd5, 0x54, 0x47, 0x21, 0xed, 0xf6, 0x91, 0x52, 0x7f, 0x7a,
+	0x23, 0xcf, 0x24, 0x09, 0x89, 0xf5, 0x78, 0x3a, 0x09, 0xb3, 0xfb, 0xfa, 0x74, 0x12, 0xe6, 0xed,
+	0xd6, 0x46, 0xfa, 0x01, 0x9b, 0xd2, 0x39, 0xbb, 0x0a, 0x4f, 0xeb, 0x9c, 0xb3, 0xef, 0xa2, 0x83,
+	0x54, 0x2f, 0x3c, 0xbe, 0xbe, 0xf5, 0x22, 0x8d, 0xeb, 0xb7, 0xf5, 0x26, 0xfa, 0x06, 0xee, 0xf6,
+	0xc2, 0x3e, 0xff, 0xad, 0xec, 0xe3, 0x96, 0x58, 0x1e, 0xa3, 0x82, 0x43, 0x6b, 0xb1, 0xe8, 0xbc,
+	0xf5, 0xba, 0xbe, 0x36, 0xf5, 0x87, 0x92, 0xa2, 0x6e, 0x64, 0x5f, 0x65, 0xfb, 0x0b, 0xe2, 0x5f,
+	0xfc, 0xf5, 0x9f, 0x01, 0x00, 0x00, 0xff, 0xff, 0x2c, 0x7e, 0x6b, 0x42, 0xc1, 0x0f, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -1489,8 +1732,9 @@ type ChannelAuctioneerServerClient interface {
 	InitAccount(ctx context.Context, in *ServerInitAccountRequest, opts ...grpc.CallOption) (*ServerInitAccountResponse, error)
 	CloseAccount(ctx context.Context, in *ServerCloseAccountRequest, opts ...grpc.CallOption) (*ServerCloseAccountResponse, error)
 	ModifyAccount(ctx context.Context, in *ServerModifyAccountRequest, opts ...grpc.CallOption) (*ServerModifyAccountResponse, error)
-	SubmitOrder(ctx context.Context, in *ServerOrderRequest, opts ...grpc.CallOption) (*ServerOrderResponse, error)
-	CancelOrder(ctx context.Context, in *ServerOrderRequest, opts ...grpc.CallOption) (*ServerOrderResponse, error)
+	SubmitOrder(ctx context.Context, in *ServerSubmitOrderRequest, opts ...grpc.CallOption) (*ServerSubmitOrderResponse, error)
+	CancelOrder(ctx context.Context, in *ServerCancelOrderRequest, opts ...grpc.CallOption) (*ServerCancelOrderResponse, error)
+	OrderState(ctx context.Context, in *ServerOrderStateRequest, opts ...grpc.CallOption) (*ServerOrderStateResponse, error)
 	SubscribeBatchAuction(ctx context.Context, opts ...grpc.CallOption) (ChannelAuctioneerServer_SubscribeBatchAuctionClient, error)
 }
 
@@ -1538,8 +1782,8 @@ func (c *channelAuctioneerServerClient) ModifyAccount(ctx context.Context, in *S
 	return out, nil
 }
 
-func (c *channelAuctioneerServerClient) SubmitOrder(ctx context.Context, in *ServerOrderRequest, opts ...grpc.CallOption) (*ServerOrderResponse, error) {
-	out := new(ServerOrderResponse)
+func (c *channelAuctioneerServerClient) SubmitOrder(ctx context.Context, in *ServerSubmitOrderRequest, opts ...grpc.CallOption) (*ServerSubmitOrderResponse, error) {
+	out := new(ServerSubmitOrderResponse)
 	err := c.cc.Invoke(ctx, "/clmrpc.ChannelAuctioneerServer/SubmitOrder", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -1547,9 +1791,18 @@ func (c *channelAuctioneerServerClient) SubmitOrder(ctx context.Context, in *Ser
 	return out, nil
 }
 
-func (c *channelAuctioneerServerClient) CancelOrder(ctx context.Context, in *ServerOrderRequest, opts ...grpc.CallOption) (*ServerOrderResponse, error) {
-	out := new(ServerOrderResponse)
+func (c *channelAuctioneerServerClient) CancelOrder(ctx context.Context, in *ServerCancelOrderRequest, opts ...grpc.CallOption) (*ServerCancelOrderResponse, error) {
+	out := new(ServerCancelOrderResponse)
 	err := c.cc.Invoke(ctx, "/clmrpc.ChannelAuctioneerServer/CancelOrder", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *channelAuctioneerServerClient) OrderState(ctx context.Context, in *ServerOrderStateRequest, opts ...grpc.CallOption) (*ServerOrderStateResponse, error) {
+	out := new(ServerOrderStateResponse)
+	err := c.cc.Invoke(ctx, "/clmrpc.ChannelAuctioneerServer/OrderState", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1593,8 +1846,9 @@ type ChannelAuctioneerServerServer interface {
 	InitAccount(context.Context, *ServerInitAccountRequest) (*ServerInitAccountResponse, error)
 	CloseAccount(context.Context, *ServerCloseAccountRequest) (*ServerCloseAccountResponse, error)
 	ModifyAccount(context.Context, *ServerModifyAccountRequest) (*ServerModifyAccountResponse, error)
-	SubmitOrder(context.Context, *ServerOrderRequest) (*ServerOrderResponse, error)
-	CancelOrder(context.Context, *ServerOrderRequest) (*ServerOrderResponse, error)
+	SubmitOrder(context.Context, *ServerSubmitOrderRequest) (*ServerSubmitOrderResponse, error)
+	CancelOrder(context.Context, *ServerCancelOrderRequest) (*ServerCancelOrderResponse, error)
+	OrderState(context.Context, *ServerOrderStateRequest) (*ServerOrderStateResponse, error)
 	SubscribeBatchAuction(ChannelAuctioneerServer_SubscribeBatchAuctionServer) error
 }
 
@@ -1675,7 +1929,7 @@ func _ChannelAuctioneerServer_ModifyAccount_Handler(srv interface{}, ctx context
 }
 
 func _ChannelAuctioneerServer_SubmitOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ServerOrderRequest)
+	in := new(ServerSubmitOrderRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -1687,13 +1941,13 @@ func _ChannelAuctioneerServer_SubmitOrder_Handler(srv interface{}, ctx context.C
 		FullMethod: "/clmrpc.ChannelAuctioneerServer/SubmitOrder",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ChannelAuctioneerServerServer).SubmitOrder(ctx, req.(*ServerOrderRequest))
+		return srv.(ChannelAuctioneerServerServer).SubmitOrder(ctx, req.(*ServerSubmitOrderRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _ChannelAuctioneerServer_CancelOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ServerOrderRequest)
+	in := new(ServerCancelOrderRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -1705,7 +1959,25 @@ func _ChannelAuctioneerServer_CancelOrder_Handler(srv interface{}, ctx context.C
 		FullMethod: "/clmrpc.ChannelAuctioneerServer/CancelOrder",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ChannelAuctioneerServerServer).CancelOrder(ctx, req.(*ServerOrderRequest))
+		return srv.(ChannelAuctioneerServerServer).CancelOrder(ctx, req.(*ServerCancelOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ChannelAuctioneerServer_OrderState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ServerOrderStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChannelAuctioneerServerServer).OrderState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/clmrpc.ChannelAuctioneerServer/OrderState",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChannelAuctioneerServerServer).OrderState(ctx, req.(*ServerOrderStateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1763,6 +2035,10 @@ var _ChannelAuctioneerServer_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelOrder",
 			Handler:    _ChannelAuctioneerServer_CancelOrder_Handler,
+		},
+		{
+			MethodName: "OrderState",
+			Handler:    _ChannelAuctioneerServer_OrderState_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -12,42 +12,42 @@ service ChannelAuctioneerClient {
             body: "*"
         };
     };
-    
+
     rpc ListAccounts (ListAccountsRequest) returns (ListAccountsResponse) {
         option (google.api.http) = {
             get: "/v1/clm/accounts"
         };
     };
-    
+
     rpc CloseAccount (CloseAccountRequest) returns (CloseAccountResponse) {
         option (google.api.http) = {
             delete: "/v1/clm/accounts/{account_sub_key_hex}"
         };
     };
-    
+
     rpc ModifyAccount (ModifyAccountRequest) returns (ModifyAccountResponse) {
         option (google.api.http) = {
             post: "/v1/clm/accounts/{account_sub_key_hex}"
             body: "*"
         };
     };
-    
+
     rpc SubmitOrder (SubmitOrderRequest) returns (SubmitOrderResponse) {
         option (google.api.http) = {
             post: "/v1/clm/orders"
             body: "*"
         };
     };
-    
+
     rpc ListOrders (ListOrdersRequest) returns (ListOrdersResponse) {
         option (google.api.http) = {
             get: "/v1/clm/orders"
         };
     }
-    
+
     rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse) {
         option (google.api.http) = {
-            delete: "/v1/clm/orders/{order_nonce_hex}"
+            delete: "/v1/clm/orders/{order_nonce}"
         };
     };
 }
@@ -57,7 +57,8 @@ message InitAccountRequest {
     uint32 account_expiry = 2;
 }
 
-message ListAccountsRequest {}
+message ListAccountsRequest {
+}
 message ListAccountsResponse {
     repeated Account accounts = 1;
 }
@@ -65,13 +66,15 @@ message ListAccountsResponse {
 message CloseAccountRequest {
     string account_sub_key_hex = 1;
 }
-message CloseAccountResponse {}
+message CloseAccountResponse {
+}
 
 message ModifyAccountRequest {
     string account_sub_key_hex = 1;
     int64 new_account_balance = 2;
 }
-message ModifyAccountResponse{}
+message ModifyAccountResponse {
+}
 
 
 enum AccountState {
@@ -95,34 +98,110 @@ message SubmitOrderRequest {
 }
 message SubmitOrderResponse {
     oneof details {
-        string fail_string = 1;
+        /**
+        Order failed with the given reason.
+        */
+        InvalidOrder invalid_order = 1;
+
+        /**
+        Order was accepted.
+        */
         bool accepted = 2;
     }
 }
 
-message ListOrdersRequest {}
+message ListOrdersRequest {
+}
 message ListOrdersResponse {
     repeated Ask asks = 1;
     repeated Bid bids = 2;
 }
 
 message CancelOrderRequest {
-    string order_nonce_hex = 1;
+    bytes order_nonce = 1;
 }
-message CancelOrderResponse {}
+message CancelOrderResponse {
+}
+
+message Order {
+    /**
+    The user's sub key of the account that is used for the order.
+    */
+    bytes user_sub_key = 1 [json_name = "user_sub_key"];
+
+    /**
+    Fixed order rate in parts per million.
+    */
+    int64 rate_fixed = 2 [json_name = "rate_fixed"];
+
+    /**
+    Order amount in satoshis.
+    */
+    int64 amt = 3 [json_name = "amt"];
+
+    /**
+    Preferred fee rate to be used for the channel funding transaction, expressed
+    in satoshis per 1000 weight units (sat/kW).
+    */
+    int64 funding_fee_rate = 4 [json_name = "funding_fee_rate"];
+
+    /**
+    Order nonce, acts as unique order identifier.
+    */
+    bytes order_nonce = 5 [json_name = "order_nonce"];
+
+    /**
+    The state the order currently is in.
+    */
+    string state = 6 [json_name = "state"];
+
+    /**
+    The number of order units the amount corresponds to.
+    */
+    uint32 units = 7 [json_name = "units"];
+
+    /**
+    The number of currently unfilled units of this order. This will be equal to
+    the total amount of units until the order has reached the state PARTIAL_FILL
+    or EXECUTED.
+    */
+    uint32 units_unfulfilled = 8 [json_name = "units_unfulfilled"];
+}
 
 message Bid {
-    int64 rate_fixed = 1;
-    int64 amt = 2;
-    int64 min_duration_blocks = 3;
-    int64 funding_fee_rate = 4;
-    string order_nonce_hex = 5;
+    /**
+    The common fields shared between both ask and bid order types.
+    */
+    Order details = 1 [json_name = "details"];
+
+    /**
+    Required minimum number of blocks that a channel opened as a result of this
+    bid should be kept open.
+    */
+    int64 min_duration_blocks = 2 [json_name = "min_duration_blocks"];
+
+    /**
+    The version of the order format that is used. Will be increased once new
+    features are added.
+    */
+    uint32 version = 3 [json_name = "version"];
 }
 
 message Ask {
-    int64 rate_fixed = 1;
-    int64 amt = 2;
-    int64 min_duration_blocks = 3;
-    int64 funding_fee_rate = 4;
-    string order_nonce_hex = 5;
+    /**
+    The common fields shared between both ask and bid order types.
+    */
+    Order details = 1 [json_name = "details"];
+
+    /**
+    The maximum number of blocks the liquidity provider is willing to provide
+    the channel funds for.
+    */
+    int64 max_duration_blocks = 2 [json_name = "max_duration_blocks"];
+
+    /**
+    The version of the order format that is used. Will be increased once new
+    features are added.
+    */
+    uint32 version = 3 [json_name = "version"];
 }

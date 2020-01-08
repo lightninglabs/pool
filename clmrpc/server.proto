@@ -9,8 +9,9 @@ service ChannelAuctioneerServer {
     rpc InitAccount (ServerInitAccountRequest) returns (ServerInitAccountResponse);
     rpc CloseAccount (ServerCloseAccountRequest) returns (ServerCloseAccountResponse);
     rpc ModifyAccount (ServerModifyAccountRequest) returns (ServerModifyAccountResponse);
-    rpc SubmitOrder (ServerOrderRequest) returns (ServerOrderResponse);
-    rpc CancelOrder (ServerOrderRequest) returns (ServerOrderResponse);
+    rpc SubmitOrder (ServerSubmitOrderRequest) returns (ServerSubmitOrderResponse);
+    rpc CancelOrder (ServerCancelOrderRequest) returns (ServerCancelOrderResponse);
+    rpc OrderState (ServerOrderStateRequest) returns (ServerOrderStateResponse);
     rpc SubscribeBatchAuction (stream ClientAuctionMessage) returns (stream ServerAuctionMessage);
 }
 
@@ -50,7 +51,8 @@ message ServerInitAccountRequest {
     */
     bytes user_sub_key = 5;
 }
-message ServerInitAccountResponse {}
+message ServerInitAccountResponse {
+}
 
 message ServerCloseAccountRequest {
     /**
@@ -71,31 +73,40 @@ message ServerCloseAccountResponse {
     bytes close_sig = 1;
 }
 
-message ServerOrderRequest {
+message ServerSubmitOrderRequest {
     oneof details {
         /**
         Submit an ask order.
         */
         ServerAsk ask = 1;
-        
+
         /**
         Submit a bid order.
         */
         ServerBid bid = 2;
     }
 }
-message ServerOrderResponse {
+message ServerSubmitOrderResponse {
     oneof details {
         /**
         Order failed with the given reason.
         */
         InvalidOrder invalid_order = 1;
-        
+
         /**
         Order was accepted.
         */
         bool accepted = 2;
     }
+}
+
+message ServerCancelOrderRequest {
+    /**
+    The order's unique identifier.
+    */
+    bytes order_nonce = 1;
+}
+message ServerCancelOrderResponse {
 }
 
 message ClientAuctionMessage {
@@ -107,103 +118,125 @@ message ClientAuctionMessage {
     }
 }
 
-message OrderMatchPrepare {}
-message OrderMatchAccept {}
-message OrderMatchSign {}
-message OrderMatchFinalize {}
-message ServerAuctionMessage {}
+message OrderMatchPrepare {
+}
+message OrderMatchAccept {
+}
+message OrderMatchSign {
+}
+message OrderMatchFinalize {
+}
+message ServerAuctionMessage {
+}
 
-message ServerBid {
+message ServerOrder {
+    /**
+    The user's sub key of the account to use for the order.
+    */
+    bytes user_sub_key = 1;
+
     /**
     Fixed order rate in parts per million.
     */
-    int64 rate_fixed = 1;
-    
+    int64 rate_fixed = 2;
+
     /**
     Order amount in satoshis.
     */
-    int64 amt = 2;
-    
-    /**
-    Required minimum channel duration in blocks.
-    */
-    int64 min_duration_blocks = 3;
+    int64 amt = 3;
 
     // TODO(guggero): implement
-    // bool instant = 4;
-    // bool kill_or_fill = 5;
-    // repeated bytes must_fill_pub = 6;
-    reserved 4, 5, 6;
+    // bool kill_or_fill = 4;
+    // repeated bytes must_fill_pub = 5;
+    reserved 4, 5;
 
     /**
     Order nonce, acts as unique order identifier.
     */
-    bytes order_nonce = 7;
+    bytes order_nonce = 6;
 
     /**
-    Signature for the order.
+    Signature of the order's digest, signed with the user's account key. The
+    signature must be fixed-size LN wire format encoded. Version 0 includes the
+    fields version, rate_fixed, amt, funding_fee_rate and
+    min/max_duration_blocks in the order digest.
     */
-    bytes order_sig = 8;
+    bytes order_sig = 7;
 
-    bytes multi_sig_key = 9;
-    bytes node_pub = 10;
-    NodeAddress node_addr = 11;
+    /**
+    The multi signature key of the node creating the order, will be used for the
+    target channel's funding TX 2-of-2 multi signature output. 
+    */
+    bytes multi_sig_key = 8;
+
+    /**
+    The pubkey of the node creating the order.
+    */
+    bytes node_pub = 9;
+
+    /**
+    The network addresses of the node creating the order.
+    */
+    repeated NodeAddress node_addr = 10;
 
     /*
     // TODO(guggero): implement 
-    int64 min_node_score = 12;
+    int64 min_node_score = 11;
     */
-    reserved 12;
-    
-    uint32 chan_type = 13;
-    int64 funding_fee_rate = 14;
+    reserved 11;
+
+    /**
+    The type of the channel that should be opened.
+    */
+    uint32 chan_type = 12;
+
+    /**
+    Preferred fee rate to be used for the channel funding transaction, expressed
+    in satoshis per 1000 weight units (sat/kW).
+    */
+    int64 funding_fee_rate = 13;
+}
+
+message ServerBid {
+    /**
+    The common fields shared between both ask and bid order types.
+    */
+    ServerOrder details = 1;
+
+    /**
+    Required minimum number of blocks that a channel opened as a result of this
+    bid should be kept open.
+    */
+    int64 min_duration_blocks = 2;
+
+    // TODO(guggero): implement
+    // bool instant = 3;
+    reserved 3;
+
+    /**
+    The version of the order format that is used. Will be increased once new
+    features are added.
+    */
+    uint32 version = 4;
 }
 
 message ServerAsk {
     /**
-    Fixed order rate in parts per million.
+    The common fields shared between both ask and bid order types.
     */
-    int64 rate_fixed = 1;
+    ServerOrder details = 1;
 
     /**
-    Order amount in satoshis.
+    The maximum number of blocks the liquidity provider is willing to provide
+    the channel funds for.
     */
-    int64 amt = 2;
+    int64 max_duration_blocks = 4;
 
     /**
-    Required minimum channel duration in blocks.
+    The version of the order format that is used. Will be increased once new
+    features are added.
     */
-    int64 max_duration_blocks = 3;
-    
-    /**
-    // TODO(guggero): implement
-    bool kill_or_fill = 4;
-    repeated bytes must_fill_pub = 6;
-    */
-    reserved 4, 5, 6;
-
-    /**
-    Order nonce, acts as unique order identifier.
-    */
-    bytes order_nonce = 7;
-    
-    /**
-    Signature for the order.
-    */
-    bytes order_sig = 8;
-
-    bytes multi_sig_key = 9;
-    bytes node_pub = 10;
-    NodeAddress node_addr = 11;
-
-    /*
-    // TODO(guggero): implement 
-    int64 min_node_score = 12;
-    */
-    reserved 12;
-    
-    uint32 chan_type = 13;
-    int64 funding_fee_rate = 14;
+    uint32 version = 5;
 }
 
 message CancelOrder {
@@ -240,6 +273,34 @@ message ServerModifyAccountRequest {
 message ServerModifyAccountResponse {
     bytes new_account_sig = 1;
     OutPoint new_account_point = 2;
+}
+
+message ServerOrderStateRequest {
+    bytes order_nonce = 1;
+}
+
+message ServerOrderStateResponse {
+    enum OrderState {
+        SUBMITTED = 0;
+        CLEARED = 1;
+        PARTIAL_FILL = 2;
+        EXECUTED = 3;
+        CANCELED = 4;
+        EXPIRED = 5;
+        FAILED = 6;
+    }
+
+    /**
+    The state the order currently is in.
+    */
+    OrderState state = 1;
+
+    /**
+    The number of currently unfilled units of this order. This will be equal to
+    the total amount of units until the order has reached the state PARTIAL_FILL
+    or EXECUTED.
+    */
+    uint32 units_unfulfilled = 2;
 }
 
 message NodeAddress {

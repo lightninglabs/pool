@@ -153,15 +153,15 @@ func request_ChannelAuctioneerClient_CancelOrder_0(ctx context.Context, marshale
 		_   = err
 	)
 
-	val, ok = pathParams["order_nonce_hex"]
+	val, ok = pathParams["order_nonce"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "order_nonce_hex")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "order_nonce")
 	}
 
-	protoReq.OrderNonceHex, err = runtime.String(val)
+	protoReq.OrderNonce, err = runtime.Bytes(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "order_nonce_hex", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "order_nonce", err)
 	}
 
 	msg, err := client.CancelOrder(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -363,7 +363,7 @@ var (
 
 	pattern_ChannelAuctioneerClient_ListOrders_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "clm", "orders"}, ""))
 
-	pattern_ChannelAuctioneerClient_CancelOrder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "clm", "orders", "order_nonce_hex"}, ""))
+	pattern_ChannelAuctioneerClient_CancelOrder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "clm", "orders", "order_nonce"}, ""))
 )
 
 var (

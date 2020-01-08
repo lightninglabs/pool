@@ -149,7 +149,7 @@
         ]
       }
     },
-    "/v1/clm/orders/{order_nonce_hex}": {
+    "/v1/clm/orders/{order_nonce}": {
       "delete": {
         "operationId": "CancelOrder",
         "responses": {
@@ -162,10 +162,11 @@
         },
         "parameters": [
           {
-            "name": "order_nonce_hex",
+            "name": "order_nonce",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "byte"
           }
         ],
         "tags": [
@@ -175,6 +176,13 @@
     }
   },
   "definitions": {
+    "InvalidOrderFailReason": {
+      "type": "string",
+      "enum": [
+        "INVALID_AMT"
+      ],
+      "default": "INVALID_AMT"
+    },
     "clmrpcAccount": {
       "type": "object",
       "properties": {
@@ -209,48 +217,38 @@
     "clmrpcAsk": {
       "type": "object",
       "properties": {
-        "rate_fixed": {
-          "type": "string",
-          "format": "int64"
+        "details": {
+          "$ref": "#/definitions/clmrpcOrder",
+          "description": "*\nThe common fields shared between both ask and bid order types."
         },
-        "amt": {
+        "max_duration_blocks": {
           "type": "string",
-          "format": "int64"
+          "format": "int64",
+          "description": "*\nThe maximum number of blocks the liquidity provider is willing to provide\nthe channel funds for."
         },
-        "min_duration_blocks": {
-          "type": "string",
-          "format": "int64"
-        },
-        "funding_fee_rate": {
-          "type": "string",
-          "format": "int64"
-        },
-        "order_nonce_hex": {
-          "type": "string"
+        "version": {
+          "type": "integer",
+          "format": "int64",
+          "description": "*\nThe version of the order format that is used. Will be increased once new\nfeatures are added."
         }
       }
     },
     "clmrpcBid": {
       "type": "object",
       "properties": {
-        "rate_fixed": {
-          "type": "string",
-          "format": "int64"
-        },
-        "amt": {
-          "type": "string",
-          "format": "int64"
+        "details": {
+          "$ref": "#/definitions/clmrpcOrder",
+          "description": "*\nThe common fields shared between both ask and bid order types."
         },
         "min_duration_blocks": {
           "type": "string",
-          "format": "int64"
+          "format": "int64",
+          "description": "*\nRequired minimum number of blocks that a channel opened as a result of this\nbid should be kept open."
         },
-        "funding_fee_rate": {
-          "type": "string",
-          "format": "int64"
-        },
-        "order_nonce_hex": {
-          "type": "string"
+        "version": {
+          "type": "integer",
+          "format": "int64",
+          "description": "*\nThe version of the order format that is used. Will be increased once new\nfeatures are added."
         }
       }
     },
@@ -270,6 +268,21 @@
         "account_expiry": {
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "clmrpcInvalidOrder": {
+      "type": "object",
+      "properties": {
+        "order_nonce": {
+          "type": "string",
+          "format": "byte"
+        },
+        "fail_reason": {
+          "$ref": "#/definitions/InvalidOrderFailReason"
+        },
+        "fail_string": {
+          "type": "string"
         }
       }
     },
@@ -316,6 +329,50 @@
     "clmrpcModifyAccountResponse": {
       "type": "object"
     },
+    "clmrpcOrder": {
+      "type": "object",
+      "properties": {
+        "user_sub_key": {
+          "type": "string",
+          "format": "byte",
+          "description": "*\nThe user's sub key of the account that is used for the order."
+        },
+        "rate_fixed": {
+          "type": "string",
+          "format": "int64",
+          "description": "*\nFixed order rate in parts per million."
+        },
+        "amt": {
+          "type": "string",
+          "format": "int64",
+          "description": "*\nOrder amount in satoshis."
+        },
+        "funding_fee_rate": {
+          "type": "string",
+          "format": "int64",
+          "description": "*\nPreferred fee rate to be used for the channel funding transaction, expressed\nin satoshis per 1000 weight units (sat/kW)."
+        },
+        "order_nonce": {
+          "type": "string",
+          "format": "byte",
+          "description": "*\nOrder nonce, acts as unique order identifier."
+        },
+        "state": {
+          "type": "string",
+          "description": "*\nThe state the order currently is in."
+        },
+        "units": {
+          "type": "integer",
+          "format": "int64",
+          "description": "*\nThe number of order units the amount corresponds to."
+        },
+        "units_unfulfilled": {
+          "type": "integer",
+          "format": "int64",
+          "description": "*\nThe number of currently unfilled units of this order. This will be equal to\nthe total amount of units until the order has reached the state PARTIAL_FILL\nor EXECUTED."
+        }
+      }
+    },
     "clmrpcOutPoint": {
       "type": "object",
       "properties": {
@@ -345,12 +402,14 @@
     "clmrpcSubmitOrderResponse": {
       "type": "object",
       "properties": {
-        "fail_string": {
-          "type": "string"
+        "invalid_order": {
+          "$ref": "#/definitions/clmrpcInvalidOrder",
+          "description": "*\nOrder failed with the given reason."
         },
         "accepted": {
           "type": "boolean",
-          "format": "boolean"
+          "format": "boolean",
+          "description": "*\nOrder was accepted."
         }
       }
     }
