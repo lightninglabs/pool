@@ -1,6 +1,6 @@
 // As this file is very similar in every package, ignore the linter here.
 // nolint:dupl
-package main
+package client
 
 import (
 	"github.com/btcsuite/btclog"

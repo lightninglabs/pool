@@ -22,10 +22,11 @@ type Client struct {
 
 // NewClient returns a new instance to initiate auctions with.
 func NewClient(serverAddress string, insecure bool, tlsPathServer string,
-	wallet lndclient.WalletKitClient) (*Client, func(), error) {
+	wallet lndclient.WalletKitClient, dialOpts ...grpc.DialOption) (
+	*Client, func(), error) {
 
 	serverConn, err := getAuctionServerConn(
-		serverAddress, insecure, tlsPathServer,
+		serverAddress, insecure, tlsPathServer, dialOpts...,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -42,11 +43,11 @@ func NewClient(serverAddress string, insecure bool, tlsPathServer string,
 }
 
 // getAuctionServerConn returns a connection to the auction server.
-func getAuctionServerConn(address string, insecure bool, tlsPath string) (
-	*grpc.ClientConn, error) {
+func getAuctionServerConn(address string, insecure bool, tlsPath string,
+	dialOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
 
-	// Create a dial options array.
-	opts := []grpc.DialOption{}
+	// Create a copy of the dial options array.
+	opts := dialOpts
 
 	// There are three options to connect to a auction server, either
 	// insecure, using a self-signed certificate or with a certificate
