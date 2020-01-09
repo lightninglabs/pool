@@ -119,7 +119,7 @@ func newAccount(ctx *cli.Context) error {
 		return err
 	}
 
-	printRespJSON(resp)
+	printJSON(NewAccountFromProto(resp))
 
 	return nil
 }

@@ -6,7 +6,7 @@ import "server.proto";
 package clmrpc;
 
 service ChannelAuctioneerClient {
-    rpc InitAccount (InitAccountRequest) returns (InitAccountResponse) {
+    rpc InitAccount (InitAccountRequest) returns (Account) {
         option (google.api.http) = {
             post: "/v1/clm/accounts"
             body: "*"
@@ -55,9 +55,6 @@ service ChannelAuctioneerClient {
 message InitAccountRequest {
     uint32 account_value = 1;
     uint32 account_expiry = 2;
-}
-message InitAccountResponse {
-    OutPoint account_point = 1;
 }
 
 message ListAccountsRequest {}

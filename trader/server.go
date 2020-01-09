@@ -160,7 +160,7 @@ func (s *Server) updateHeight(height int32) {
 }
 
 func (s *Server) InitAccount(ctx context.Context,
-	req *clmrpc.InitAccountRequest) (*clmrpc.InitAccountResponse, error) {
+	req *clmrpc.InitAccountRequest) (*clmrpc.Account, error) {
 
 	account, err := s.accountManager.InitAccount(
 		ctx, btcutil.Amount(req.AccountValue), req.AccountExpiry,
@@ -170,12 +170,7 @@ func (s *Server) InitAccount(ctx context.Context,
 		return nil, err
 	}
 
-	return &clmrpc.InitAccountResponse{
-		AccountPoint: &clmrpc.OutPoint{
-			Txid:        account.OutPoint.Hash[:],
-			OutputIndex: account.OutPoint.Index,
-		},
-	}, nil
+	return marshallAccount(account)
 }
 
 func (s *Server) ListAccounts(ctx context.Context,
@@ -187,33 +182,41 @@ func (s *Server) ListAccounts(ctx context.Context,
 	}
 
 	rpcAccounts := make([]*clmrpc.Account, 0, len(accounts))
-	for _, a := range accounts {
-		var rpcState clmrpc.AccountState
-		switch a.State {
-		case account.StateInitiated, account.StatePendingOpen:
-			rpcState = clmrpc.AccountState_PENDING_OPEN
-
-		case account.StateOpen:
-			rpcState = clmrpc.AccountState_OPEN
-
-		default:
-			return nil, fmt.Errorf("unknown state %v", a.State)
+	for _, account := range accounts {
+		rpcAccount, err := marshallAccount(account)
+		if err != nil {
+			return nil, err
 		}
-
-		rpcAccounts = append(rpcAccounts, &clmrpc.Account{
-			TraderKey: a.TraderKey[:],
-			Outpoint: &clmrpc.OutPoint{
-				Txid:        a.OutPoint.Hash[:],
-				OutputIndex: a.OutPoint.Index,
-			},
-			Value:            uint32(a.Value),
-			ExpirationHeight: a.Expiry,
-			State:            rpcState,
-		})
+		rpcAccounts = append(rpcAccounts, rpcAccount)
 	}
 
 	return &clmrpc.ListAccountsResponse{
 		Accounts: rpcAccounts,
+	}, nil
+}
+
+func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
+	var rpcState clmrpc.AccountState
+	switch a.State {
+	case account.StateInitiated, account.StatePendingOpen:
+		rpcState = clmrpc.AccountState_PENDING_OPEN
+
+	case account.StateOpen:
+		rpcState = clmrpc.AccountState_OPEN
+
+	default:
+		return nil, fmt.Errorf("unknown state %v", a.State)
+	}
+
+	return &clmrpc.Account{
+		TraderKey: a.TraderKey[:],
+		Outpoint: &clmrpc.OutPoint{
+			Txid:        a.OutPoint.Hash[:],
+			OutputIndex: a.OutPoint.Index,
+		},
+		Value:            uint32(a.Value),
+		ExpirationHeight: a.Expiry,
+		State:            rpcState,
 	}, nil
 }
 

@@ -36,7 +36,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcInitAccountResponse"
+              "$ref": "#/definitions/clmrpcAccount"
             }
           }
         },
@@ -270,14 +270,6 @@
         "account_expiry": {
           "type": "integer",
           "format": "int64"
-        }
-      }
-    },
-    "clmrpcInitAccountResponse": {
-      "type": "object",
-      "properties": {
-        "account_point": {
-          "$ref": "#/definitions/clmrpcOutPoint"
         }
       }
     },

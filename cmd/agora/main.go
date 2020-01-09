@@ -28,7 +28,7 @@ func printJSON(resp interface{}) {
 	_, _ = out.WriteTo(os.Stdout)
 }
 
-func printRespJSON(resp proto.Message) {
+func printRespJSON(resp proto.Message) { // nolint
 	jsonMarshaler := &jsonpb.Marshaler{
 		EmitDefaults: true,
 		Indent:       "\t", // Matches indentation of printJSON.
