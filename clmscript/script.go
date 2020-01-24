@@ -36,15 +36,9 @@ func TraderKeyTweak(batchKey *btcec.PublicKey, secret [32]byte,
 
 // AccountScript returns the witness script of an account on-chain.
 //
-// OP_IF
-//	<account expiry>
-//	OP_CHECKLOCKTIMEVERIFY
-//	OP_DROP
-//	<trader key>
-//	OP_CHECKSIG
-// OP_ELSE
-//	OP_2 <trader key> <auctioneer key> OP_2
-//	OP_CHECKMULTISIG
+// <trader_key> OP_CHECKSIGVERIFY
+// <auctioneer_key> OP_CHECKSIG OP_IFDUP OP_NOTIF
+//	<account_expiry> OP_CHECKLOCKTIMEVERIFY
 // OP_ENDIF
 func AccountScript(expiry uint32, traderKey, auctioneerKey,
 	batchKey *btcec.PublicKey, secret [32]byte) ([]byte, error) {
@@ -55,22 +49,16 @@ func AccountScript(expiry uint32, traderKey, auctioneerKey,
 
 	builder := txscript.NewScriptBuilder()
 
-	builder.AddOp(txscript.OP_IF)
-
-	builder.AddInt64(int64(expiry))
-	builder.AddOp(txscript.OP_CHECKLOCKTIMEVERIFY)
-	builder.AddOp(txscript.OP_DROP)
 	builder.AddData(tweakedTraderKey.SerializeCompressed())
+	builder.AddOp(txscript.OP_CHECKSIGVERIFY)
+
+	builder.AddData(tweakedAuctioneerKey.SerializeCompressed())
 	builder.AddOp(txscript.OP_CHECKSIG)
 
-	builder.AddOp(txscript.OP_ELSE)
-
-	builder.AddOp(txscript.OP_2)
-	builder.AddData(tweakedTraderKey.SerializeCompressed())
-	builder.AddData(tweakedAuctioneerKey.SerializeCompressed())
-	builder.AddOp(txscript.OP_2)
-	builder.AddOp(txscript.OP_CHECKMULTISIG)
-
+	builder.AddOp(txscript.OP_IFDUP)
+	builder.AddOp(txscript.OP_NOTIF)
+	builder.AddInt64(int64(expiry))
+	builder.AddOp(txscript.OP_CHECKLOCKTIMEVERIFY)
 	builder.AddOp(txscript.OP_ENDIF)
 
 	script, err := builder.Script()
