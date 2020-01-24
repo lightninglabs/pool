@@ -2,6 +2,7 @@ package clmscript
 
 import (
 	"bytes"
+	"crypto/sha256"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/txscript"
@@ -18,6 +19,21 @@ const (
 	AccountKeyFamily keychain.KeyFamily = 220
 )
 
+// TraderKeyTweak computes the tweak based on the current per-batch key and
+// shared secret that should be applied to an account's trader key. The tweak is
+// computed as the following:
+//
+//	tweak = sha256(batchKey || secret || traderKey)
+func TraderKeyTweak(batchKey *btcec.PublicKey, secret [32]byte,
+	traderKey *btcec.PublicKey) []byte {
+
+	h := sha256.New()
+	_, _ = h.Write(batchKey.SerializeCompressed())
+	_, _ = h.Write(secret[:])
+	_, _ = h.Write(traderKey.SerializeCompressed())
+	return h.Sum(nil)
+}
+
 // AccountScript returns the witness script of an account on-chain.
 //
 // OP_IF
@@ -30,7 +46,13 @@ const (
 //	OP_2 <trader key> <auctioneer key> OP_2
 //	OP_CHECKMULTISIG
 // OP_ENDIF
-func AccountScript(expiry uint32, traderKey, auctioneerKey *btcec.PublicKey) ([]byte, error) {
+func AccountScript(expiry uint32, traderKey, auctioneerKey,
+	batchKey *btcec.PublicKey, secret [32]byte) ([]byte, error) {
+
+	traderKeyTweak := TraderKeyTweak(batchKey, secret, traderKey)
+	tweakedTraderKey := input.TweakPubKeyWithTweak(traderKey, traderKeyTweak)
+	tweakedAuctioneerKey := input.TweakPubKey(auctioneerKey, tweakedTraderKey)
+
 	builder := txscript.NewScriptBuilder()
 
 	builder.AddOp(txscript.OP_IF)
@@ -38,14 +60,14 @@ func AccountScript(expiry uint32, traderKey, auctioneerKey *btcec.PublicKey) ([]
 	builder.AddInt64(int64(expiry))
 	builder.AddOp(txscript.OP_CHECKLOCKTIMEVERIFY)
 	builder.AddOp(txscript.OP_DROP)
-	builder.AddData(traderKey.SerializeCompressed())
+	builder.AddData(tweakedTraderKey.SerializeCompressed())
 	builder.AddOp(txscript.OP_CHECKSIG)
 
 	builder.AddOp(txscript.OP_ELSE)
 
 	builder.AddOp(txscript.OP_2)
-	builder.AddData(traderKey.SerializeCompressed())
-	builder.AddData(auctioneerKey.SerializeCompressed())
+	builder.AddData(tweakedTraderKey.SerializeCompressed())
+	builder.AddData(tweakedAuctioneerKey.SerializeCompressed())
 	builder.AddOp(txscript.OP_2)
 	builder.AddOp(txscript.OP_CHECKMULTISIG)
 

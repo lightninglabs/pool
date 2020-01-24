@@ -10,6 +10,21 @@ import (
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
+// Reservation contains information about the different keys required for to
+// create a new account.
+type Reservation struct {
+	// AuctioneerKey is the base auctioneer's key in the 2-of-2 multi-sig
+	// construction of a CLM account. This key will never be included in the
+	// account script, but rather it will be tweaked with the per-batch
+	// trader key to prevent script reuse and provide plausible deniability
+	// between account outputs to third parties.
+	AuctioneerKey *btcec.PublicKey
+
+	// InitialBatchKey is the initial batch key that is used to tweak the
+	// trader key of an account.
+	InitialBatchKey *btcec.PublicKey
+}
+
 // State describes the different possible states of an account.
 type State uint8
 
@@ -55,13 +70,33 @@ type Account struct {
 	// without cooperation of the auctioneer.
 	Expiry uint32
 
-	// TraderKey is the trader's key in the 2-of-2 multi-sig construction of
-	// a CLM account. It is also the identifying component of an account.
+	// TraderKey is the base trader's key in the 2-of-2 multi-sig
+	// construction of a CLM account. This key will never be included in the
+	// account script, but rather it will be tweaked with the per-batch key
+	// and the account secret to prevent script reuse and provide plausible
+	// deniability between account outputs to third parties.
 	TraderKey *keychain.KeyDescriptor
 
-	// AuctioneerKey is the auctioneer's key in the 2-of-2 multi-sig
-	// construction of a CLM account.
+	// AuctioneerKey is the base auctioneer's key in the 2-of-2 multi-sig
+	// construction of a CLM account. This key will never be included in the
+	// account script, but rather it will be tweaked with the per-batch
+	// trader key to prevent script reuse and provide plausible deniability
+	// between account outputs to third parties.
 	AuctioneerKey *btcec.PublicKey
+
+	// BatchKey is the batch key that is used to tweak the trader key of an
+	// account with, along with the secret. This will be incremented by the
+	// curve's base point each time the account is modified or participates
+	// in a cleared batch to prevent output script reuse for accounts
+	// on-chain.
+	BatchKey *btcec.PublicKey
+
+	// Secret is a static shared secret between the trader and the
+	// auctioneer that is used to tweak the trader key of an account with,
+	// along with the batch key. This ensures that only the trader and
+	// auctioneer are able to successfully identify every past/future output
+	// of an account.
+	Secret [32]byte
 
 	// State describes the state of the account.
 	State State
@@ -75,14 +110,16 @@ type Account struct {
 	OutPoint wire.OutPoint
 }
 
-// Output returns the on-chain output associated with the account.
+// Output returns the current on-chain output associated with the account.
 func (a *Account) Output() (*wire.TxOut, error) {
 	script, err := clmscript.AccountScript(
-		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey,
+		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey, a.BatchKey,
+		a.Secret,
 	)
 	if err != nil {
 		return nil, err
 	}
+
 	return &wire.TxOut{
 		Value:    int64(a.Value),
 		PkScript: script,
@@ -129,9 +166,8 @@ type Store interface {
 type Auctioneer interface {
 	// ReserveAccount reserves an account with the auctioneer. It returns a
 	// the public key we should use for them in our 2-of-2 multi-sig
-	// construction. The trader key is provided and used as a tweak to the
-	// auctioneer's long-term key to achieve deterministic account creation.
-	ReserveAccount(context.Context, *btcec.PublicKey) (*btcec.PublicKey, error)
+	// construction.
+	ReserveAccount(context.Context) (*Reservation, error)
 
 	// InitAccount initializes an account with the auctioneer such that it
 	// can be used once fully confirmed.

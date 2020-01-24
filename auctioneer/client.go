@@ -80,18 +80,32 @@ func getAuctionServerConn(address string, insecure bool, tlsPath string,
 	return conn, nil
 }
 
-// ReserveAccount reserves an account with the auctioneer. It returns a the
-// public key we should use for them in our 2-of-2 multi-sig construction.
-func (c *Client) ReserveAccount(ctx context.Context,
-	traderKey *btcec.PublicKey) (*btcec.PublicKey, error) {
-
-	resp, err := c.client.ReserveAccount(ctx, &clmrpc.ReserveAccountRequest{
-		UserSubKey: traderKey.SerializeCompressed(),
-	})
+// ReserveAccount reserves an account with the auctioneer. It returns the base
+// public key we should use for them in our 2-of-2 multi-sig construction, and
+// the initial batch key.
+func (c *Client) ReserveAccount(ctx context.Context) (*account.Reservation, error) {
+	resp, err := c.client.ReserveAccount(ctx, &clmrpc.ReserveAccountRequest{})
 	if err != nil {
 		return nil, err
 	}
-	return btcec.ParsePubKey(resp.AuctioneerKey, btcec.S256())
+
+	auctioneerKey, err := btcec.ParsePubKey(
+		resp.AuctioneerKey, btcec.S256(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	initialBatchKey, err := btcec.ParsePubKey(
+		resp.InitialBatchKey, btcec.S256(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &account.Reservation{
+		AuctioneerKey:   auctioneerKey,
+		InitialBatchKey: initialBatchKey,
+	}, nil
 }
 
 // InitAccount initializes an account with the auctioneer such that it can be

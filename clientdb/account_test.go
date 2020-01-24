@@ -31,6 +31,11 @@ var (
 		},
 		PubKey: testTraderKey,
 	}
+
+	testRawBatchKey, _ = hex.DecodeString("02824d0cbac65e01712124c50ff2cc74ce22851d7b444c1bf2ae66afefb8eaf27f")
+	testBatchKey, _    = btcec.ParsePubKey(testRawBatchKey, btcec.S256())
+
+	sharedSecret = [32]byte{0x73, 0x65, 0x63, 0x72, 0x65, 0x74}
 )
 
 func newTestDB(t *testing.T) (*DB, func()) {
@@ -78,6 +83,8 @@ func TestAccounts(t *testing.T) {
 		Expiry:        1337,
 		TraderKey:     testTraderKeyDesc,
 		AuctioneerKey: testAuctioneerKey,
+		BatchKey:      testBatchKey,
+		Secret:        sharedSecret,
 		State:         account.StateInitiated,
 		HeightHint:    1,
 	}

@@ -16,10 +16,22 @@ service ChannelAuctioneerServer {
 }
 
 message ReserveAccountRequest {
-    bytes user_sub_key = 1;
 }
 message ReserveAccountResponse {
+    /*
+    The base key of the auctioneer. This key should be tweaked with the trader's
+    per-batch tweaked key to obtain the corresponding per-batch tweaked
+    auctioneer key.
+    */
     bytes auctioneer_key = 1;
+
+    /*
+    The initial per-batch key to be used for the account. For every cleared
+    batch that the account participates in, this key will be incremented by the
+    base point of its curve, resulting in a new key for both the trader and
+    auctioneer in every batch.
+    */
+    bytes initial_batch_key = 2;
 }
 
 message ServerInitAccountRequest {

@@ -59,6 +59,10 @@ type ManagerConfig struct {
 	// that is deriving keys, creating transactions, etc.
 	Wallet lndclient.WalletKitClient
 
+	// Signer is responsible for deriving shared secrets for accounts
+	// between the trader and auctioneer.
+	Signer lndclient.SignerClient
+
 	// ChainNotifier is responsible for requesting confirmation and spend
 	// notifications for accounts.
 	ChainNotifier lndclient.ChainNotifierClient
@@ -165,10 +169,19 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	}
 
 	// With our key obtained, we'll reserve an account with our auctioneer,
-	// who will provide us with their key. Their key is composed of their
-	// long-term key tweaked with ours, which helps us achieve deterministic
-	// account creation.
-	auctioneerKey, err := m.cfg.Auctioneer.ReserveAccount(ctx, keyDesc.PubKey)
+	// who will provide us with their base key and our initial per-batch
+	// key.
+	reservation, err := m.cfg.Auctioneer.ReserveAccount(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// We'll also need to compute a shared secret based on both base keys
+	// (the trader and auctioneer's) to ensure only they are able to
+	// successfully identify every past/future output of the account.
+	secret, err := m.cfg.Signer.DeriveSharedKey(
+		ctx, reservation.AuctioneerKey, &keyDesc.KeyLocator,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +193,9 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 		Value:         value,
 		Expiry:        expiry,
 		TraderKey:     keyDesc,
-		AuctioneerKey: auctioneerKey,
+		AuctioneerKey: reservation.AuctioneerKey,
+		BatchKey:      reservation.InitialBatchKey,
+		Secret:        secret,
 		State:         StateInitiated,
 		HeightHint:    bestHeight,
 	}

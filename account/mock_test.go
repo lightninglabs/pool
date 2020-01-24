@@ -30,6 +30,11 @@ var (
 		},
 		PubKey: testTraderKey,
 	}
+
+	testRawBatchKey, _ = hex.DecodeString("02824d0cbac65e01712124c50ff2cc74ce22851d7b444c1bf2ae66afefb8eaf27f")
+	testBatchKey, _    = btcec.ParsePubKey(testRawBatchKey, btcec.S256())
+
+	sharedSecret = [32]byte{0x73, 0x65, 0x63, 0x72, 0x65, 0x74}
 )
 
 type mockStore struct {
@@ -105,10 +110,11 @@ type mockAuctioneer struct {
 	Auctioneer
 }
 
-func (a *mockAuctioneer) ReserveAccount(context.Context,
-	*btcec.PublicKey) (*btcec.PublicKey, error) {
-
-	return testAuctioneerKey, nil
+func (a *mockAuctioneer) ReserveAccount(context.Context) (*Reservation, error) {
+	return &Reservation{
+		AuctioneerKey:   testAuctioneerKey,
+		InitialBatchKey: testBatchKey,
+	}, nil
 }
 
 func (a *mockAuctioneer) InitAccount(context.Context, *Account) error {
@@ -118,6 +124,7 @@ func (a *mockAuctioneer) InitAccount(context.Context, *Account) error {
 type mockWallet struct {
 	TxSource
 	lndclient.WalletKitClient
+	lndclient.SignerClient
 
 	txs []*wire.MsgTx
 
@@ -129,6 +136,13 @@ func (w *mockWallet) DeriveNextKey(ctx context.Context,
 	family int32) (*keychain.KeyDescriptor, error) {
 
 	return testTraderKeyDesc, nil
+}
+
+func (w *mockWallet) DeriveSharedKey(ctx context.Context,
+	ephemeralKey *btcec.PublicKey,
+	keyLocator *keychain.KeyLocator) ([32]byte, error) {
+
+	return sharedSecret, nil
 }
 
 func (w *mockWallet) PublishTransaction(ctx context.Context, tx *wire.MsgTx) error {

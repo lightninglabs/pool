@@ -64,6 +64,9 @@ func WriteElement(w io.Writer, element interface{}) error {
 	case lntypes.Preimage:
 		return lnwire.WriteElement(w, e[:])
 
+	case [32]byte:
+		return lnwire.WriteElement(w, e[:])
+
 	default:
 		return lnwire.WriteElement(w, element)
 	}
@@ -151,6 +154,13 @@ func ReadElement(r io.Reader, element interface{}) error {
 			return err
 		}
 		*e = preimage
+
+	case *[32]byte:
+		var b [32]byte
+		if err := lnwire.ReadElement(r, b[:]); err != nil {
+			return err
+		}
+		*e = b
 
 	default:
 		return lnwire.ReadElement(r, element)

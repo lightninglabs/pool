@@ -138,8 +138,8 @@ func (db *DB) Accounts() ([]*account.Account, error) {
 
 func serializeAccount(w io.Writer, a *account.Account) error {
 	return WriteElements(
-		w, a.Value, a.Expiry, a.TraderKey, a.AuctioneerKey, a.State,
-		a.HeightHint, a.OutPoint,
+		w, a.Value, a.Expiry, a.TraderKey, a.AuctioneerKey, a.BatchKey,
+		a.Secret, a.State, a.HeightHint, a.OutPoint,
 	)
 }
 
@@ -147,7 +147,7 @@ func deserializeAccount(r io.Reader) (*account.Account, error) {
 	var a account.Account
 	err := ReadElements(
 		r, &a.Value, &a.Expiry, &a.TraderKey, &a.AuctioneerKey,
-		&a.State, &a.HeightHint, &a.OutPoint,
+		&a.BatchKey, &a.Secret, &a.State, &a.HeightHint, &a.OutPoint,
 	)
 	return &a, err
 }

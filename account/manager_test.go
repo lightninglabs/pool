@@ -41,6 +41,7 @@ func newTestHarness(t *testing.T) *testHarness {
 			Store:         store,
 			Auctioneer:    &mockAuctioneer{},
 			Wallet:        wallet,
+			Signer:        wallet,
 			ChainNotifier: notifier,
 			TxSource:      wallet,
 		}),
@@ -188,6 +189,8 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 		Expiry:        expiry,
 		TraderKey:     testTraderKeyDesc,
 		AuctioneerKey: testAuctioneerKey,
+		BatchKey:      testBatchKey,
+		Secret:        sharedSecret,
 		HeightHint:    bestHeight,
 		State:         StateInitiated,
 	}
