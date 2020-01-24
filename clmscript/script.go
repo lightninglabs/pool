@@ -58,6 +58,17 @@ func AccountScript(expiry uint32, traderKey, auctioneerKey *btcec.PublicKey) ([]
 	return input.WitnessScriptHash(script)
 }
 
+// IncrementKey increments the given key by the backing curve's base point.
+func IncrementKey(key *btcec.PublicKey) *btcec.PublicKey {
+	curveParams := key.Curve.Params()
+	newX, newY := key.Curve.Add(key.X, key.Y, curveParams.Gx, curveParams.Gy)
+	return &btcec.PublicKey{
+		X:     newX,
+		Y:     newY,
+		Curve: btcec.S256(),
+	}
+}
+
 // LocateOutputScript determines whether a transaction includes an output with a
 // specific script. If it does, the output index is returned.
 func LocateOutputScript(tx *wire.MsgTx, script []byte) (uint32, bool) {
