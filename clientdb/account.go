@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/coreos/bbolt"
 	"github.com/lightninglabs/agora/client/account"
 )
@@ -22,7 +23,7 @@ var (
 
 // getAccountKey returns the key for an account which is not partial.
 func getAccountKey(account *account.Account) []byte {
-	return account.TraderKey[:]
+	return account.TraderKey.PubKey.SerializeCompressed()
 }
 
 // AddAccount adds a record for the account to the database.
@@ -87,7 +88,7 @@ func (db *DB) UpdateAccount(account *account.Account,
 
 // Account retrieves a specific account by trader key or returns
 // ErrAccountNotFound if it's not found.
-func (db *DB) Account(accountKey [33]byte) (*account.Account, error) {
+func (db *DB) Account(traderKey *btcec.PublicKey) (*account.Account, error) {
 	var account *account.Account
 	err := db.View(func(tx *bbolt.Tx) error {
 		accounts, err := getBucket(tx, accountBucketKey)
@@ -95,7 +96,7 @@ func (db *DB) Account(accountKey [33]byte) (*account.Account, error) {
 			return err
 		}
 
-		accountBytes := accounts.Get(accountKey[:])
+		accountBytes := accounts.Get(traderKey.SerializeCompressed())
 		if accountBytes == nil {
 			return ErrAccountNotFound
 		}
@@ -137,16 +138,16 @@ func (db *DB) Accounts() ([]*account.Account, error) {
 
 func serializeAccount(w io.Writer, a *account.Account) error {
 	return WriteElements(
-		w, a.Value, a.Expiry, a.TraderKey, a.TraderKeyLocator,
-		a.AuctioneerKey, a.State, a.HeightHint, a.OutPoint,
+		w, a.Value, a.Expiry, a.TraderKey, a.AuctioneerKey, a.State,
+		a.HeightHint, a.OutPoint,
 	)
 }
 
 func deserializeAccount(r io.Reader) (*account.Account, error) {
 	var a account.Account
 	err := ReadElements(
-		r, &a.Value, &a.Expiry, &a.TraderKey, &a.TraderKeyLocator,
-		&a.AuctioneerKey, &a.State, &a.HeightHint, &a.OutPoint,
+		r, &a.Value, &a.Expiry, &a.TraderKey, &a.AuctioneerKey,
+		&a.State, &a.HeightHint, &a.OutPoint,
 	)
 	return &a, err
 }

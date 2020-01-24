@@ -148,6 +148,6 @@ func dummyOrder(t *testing.T, amt btcutil.Amount) *order.Kit {
 		Index:  345,
 	}
 	kit.FundingFeeRate = chainfee.FeePerKwFloor
-	kit.AcctKey = [33]byte{77, 88, 99}
+	kit.AcctKey = testTraderKey
 	return kit
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/loop/lndclient"
@@ -14,8 +15,8 @@ import (
 // expiryReq is an internal message we'll sumbit to the Watcher to process for
 // external expiration requests.
 type expiryReq struct {
-	// accountKey is the user key of the account.
-	accountKey [33]byte
+	// traderKey is the base trader key of the account.
+	traderKey *btcec.PublicKey
 
 	// expiry is the expiry of the account as a block height.
 	expiry uint32
@@ -31,17 +32,17 @@ type Config struct {
 	// HandleAccountConf abstracts the operations that should be performed
 	// for an account once we detect its confirmation. The account is
 	// identified by its user sub key (i.e., trader key).
-	HandleAccountConf func([33]byte, *chainntnfs.TxConfirmation) error
+	HandleAccountConf func(*btcec.PublicKey, *chainntnfs.TxConfirmation) error
 
 	// HandleAccountSpend abstracts the operations that should be performed
 	// for an account once we detect its spend. The account is identified by
 	// its user sub key (i.e., trader key).
-	HandleAccountSpend func([33]byte, *chainntnfs.SpendDetail) error
+	HandleAccountSpend func(*btcec.PublicKey, *chainntnfs.SpendDetail) error
 
 	// HandleAccountExpiry the operations that should be perform for an
 	// account once it's expired. The account is identified by its user sub
 	// key (i.e., trader key).
-	HandleAccountExpiry func([33]byte) error
+	HandleAccountExpiry func(*btcec.PublicKey) error
 }
 
 // Watcher is responsible for the on-chain interaction of an account, whether
@@ -111,7 +112,7 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 
 		// expirations keeps track of all registered accounts that
 		// expire at a certain height.
-		expirations = make(map[uint32][][33]byte)
+		expirations = make(map[uint32][]*btcec.PublicKey)
 	)
 
 	for {
@@ -121,12 +122,13 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 		case newBlock := <-blockChan:
 			bestHeight = uint32(newBlock)
 
-			for _, accountKey := range expirations[bestHeight] {
-				err := w.cfg.HandleAccountExpiry(accountKey)
+			for _, traderKey := range expirations[bestHeight] {
+				err := w.cfg.HandleAccountExpiry(traderKey)
 				if err != nil {
 					log.Errorf("Unable to handle "+
 						"expiration of account %x: %v",
-						accountKey, err)
+						traderKey.SerializeCompressed(),
+						err)
 				}
 			}
 
@@ -141,18 +143,19 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 		case req := <-w.expiryReqs:
 			// If it's already expired, we don't need to track it.
 			if req.expiry <= bestHeight {
-				err := w.cfg.HandleAccountExpiry(req.accountKey)
+				err := w.cfg.HandleAccountExpiry(req.traderKey)
 				if err != nil {
 					log.Errorf("Unable to handle "+
 						"expiration of account %x: %v",
-						req.accountKey, err)
+						req.traderKey.SerializeCompressed(),
+						err)
 				}
 
 				continue
 			}
 
 			expirations[req.expiry] = append(
-				expirations[req.expiry], req.accountKey,
+				expirations[req.expiry], req.traderKey,
 			)
 
 		case <-w.quit:
@@ -162,8 +165,8 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 }
 
 // WatchAccountConf watches a new account on-chain for its confirmation.
-func (w *Watcher) WatchAccountConf(accountKey [33]byte, txHash chainhash.Hash,
-	script []byte, numConfs, heightHint uint32) error {
+func (w *Watcher) WatchAccountConf(traderKey *btcec.PublicKey,
+	txHash chainhash.Hash, script []byte, numConfs, heightHint uint32) error {
 
 	ctx := context.Background()
 	confChan, errChan, err := w.cfg.ChainNotifier.RegisterConfirmationsNtfn(
@@ -174,7 +177,7 @@ func (w *Watcher) WatchAccountConf(accountKey [33]byte, txHash chainhash.Hash,
 	}
 
 	w.wg.Add(1)
-	go w.waitForAccountConf(accountKey, confChan, errChan)
+	go w.waitForAccountConf(traderKey, confChan, errChan)
 
 	return nil
 }
@@ -183,22 +186,23 @@ func (w *Watcher) WatchAccountConf(accountKey [33]byte, txHash chainhash.Hash,
 // necessary steps once confirmed.
 //
 // NOTE: This method must be run as a goroutine.
-func (w *Watcher) waitForAccountConf(accountKey [33]byte,
+func (w *Watcher) waitForAccountConf(traderKey *btcec.PublicKey,
 	confChan chan *chainntnfs.TxConfirmation, errChan chan error) {
 
 	defer w.wg.Done()
 
 	select {
 	case conf := <-confChan:
-		if err := w.cfg.HandleAccountConf(accountKey, conf); err != nil {
+		if err := w.cfg.HandleAccountConf(traderKey, conf); err != nil {
 			log.Errorf("Unable to handle confirmation for account "+
-				"%x: %v", accountKey, err)
+				"%x: %v", traderKey.SerializeCompressed(), err)
 		}
 
 	case err := <-errChan:
 		if err != nil {
 			log.Errorf("Unable to determine confirmation for "+
-				"account %x: %v", accountKey, err)
+				"account %x: %v",
+				traderKey.SerializeCompressed(), err)
 		}
 
 	case <-w.quit:
@@ -207,7 +211,7 @@ func (w *Watcher) waitForAccountConf(accountKey [33]byte,
 }
 
 // WatchAccountSpend watches for the spend of an account.
-func (w *Watcher) WatchAccountSpend(accountKey [33]byte,
+func (w *Watcher) WatchAccountSpend(traderKey *btcec.PublicKey,
 	accountPoint wire.OutPoint, script []byte, heightHint uint32) error {
 
 	ctx := context.Background()
@@ -219,7 +223,7 @@ func (w *Watcher) WatchAccountSpend(accountKey [33]byte,
 	}
 
 	w.wg.Add(1)
-	go w.waitForAccountSpend(accountKey, spendChan, errChan)
+	go w.waitForAccountSpend(traderKey, spendChan, errChan)
 
 	return nil
 }
@@ -228,23 +232,23 @@ func (w *Watcher) WatchAccountSpend(accountKey [33]byte,
 // steps once spent.
 //
 // NOTE: This method must be run as a goroutine.
-func (w *Watcher) waitForAccountSpend(accountKey [33]byte,
+func (w *Watcher) waitForAccountSpend(traderKey *btcec.PublicKey,
 	spendChan chan *chainntnfs.SpendDetail, errChan chan error) {
 
 	defer w.wg.Done()
 
 	select {
 	case spend := <-spendChan:
-		err := w.cfg.HandleAccountSpend(accountKey, spend)
+		err := w.cfg.HandleAccountSpend(traderKey, spend)
 		if err != nil {
 			log.Errorf("Unable to handle spend for account %x: %v",
-				accountKey, err)
+				traderKey.SerializeCompressed(), err)
 		}
 
 	case err := <-errChan:
 		if err != nil {
 			log.Errorf("Unable to determine spend for account %x: "+
-				"%v", accountKey, err)
+				"%v", traderKey.SerializeCompressed(), err)
 		}
 
 	case <-w.quit:
@@ -253,11 +257,13 @@ func (w *Watcher) waitForAccountSpend(accountKey [33]byte,
 }
 
 // WatchAccountExpiration watches for the expiration of an account on-chain.
-func (w *Watcher) WatchAccountExpiration(accountKey [33]byte, expiry uint32) error {
+func (w *Watcher) WatchAccountExpiration(traderKey *btcec.PublicKey,
+	expiry uint32) error {
+
 	select {
 	case w.expiryReqs <- &expiryReq{
-		accountKey: accountKey,
-		expiry:     expiry,
+		traderKey: traderKey,
+		expiry:    expiry,
 	}:
 		return nil
 

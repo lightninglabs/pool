@@ -106,7 +106,7 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 			"order: %v", err)
 	}
 	rawSig, err := m.cfg.Signer.SignMessage(
-		ctx, digest[:], acct.TraderKeyLocator,
+		ctx, digest[:], acct.TraderKey.KeyLocator,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to sign "+

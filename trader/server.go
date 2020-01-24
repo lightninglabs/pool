@@ -231,7 +231,7 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 	}
 
 	return &clmrpc.Account{
-		TraderKey: a.TraderKey[:],
+		TraderKey: a.TraderKey.PubKey.SerializeCompressed(),
 		Outpoint: &clmrpc.OutPoint{
 			Txid:        a.OutPoint.Hash[:],
 			OutputIndex: a.OutPoint.Index,
@@ -366,7 +366,7 @@ func (s *Server) ListOrders(ctx context.Context, _ *clmrpc.ListOrdersRequest) (
 
 		dbDetails := dbOrder.Details()
 		details := &clmrpc.Order{
-			UserSubKey:       dbDetails.AcctKey[:],
+			UserSubKey:       dbDetails.AcctKey.SerializeCompressed(),
 			RateFixed:        int64(dbDetails.FixedRate),
 			Amt:              int64(dbDetails.Amt),
 			FundingFeeRate:   int64(dbDetails.FixedRate),
@@ -440,8 +440,8 @@ func parseRPCOrder(version uint32, details *clmrpc.Order) (*order.Kit, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error parsing account key: %v", err)
 	}
-	copy(kit.AcctKey[:], pubKey.SerializeCompressed())
 
+	kit.AcctKey = pubKey
 	kit.Version = order.Version(version)
 	kit.FixedRate = uint32(details.RateFixed)
 	kit.Amt = btcutil.Amount(details.Amt)

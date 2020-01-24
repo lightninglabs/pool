@@ -16,22 +16,19 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
-func init() {
-	copy(testTraderKey[:], testRawTraderKey)
-}
-
 var (
-	testAuctioneerKey [33]byte
-	testTraderKey     [33]byte
+	testRawAuctioneerKey, _ = hex.DecodeString("02187d1a0e30f4e5016fc1137363ee9e7ed5dde1e6c50f367422336df7a108b716")
+	testAuctioneerKey, _    = btcec.ParsePubKey(testRawAuctioneerKey, btcec.S256())
 
 	testRawTraderKey, _ = hex.DecodeString("036b51e0cc2d9e5988ee4967e0ba67ef3727bb633fea21a0af58e0c9395446ba09")
-	testTraderPubKey, _ = btcec.ParsePubKey(testRawTraderKey, btcec.S256())
-	testTraderKeyDesc   = &keychain.KeyDescriptor{
+	testTraderKey, _    = btcec.ParsePubKey(testRawTraderKey, btcec.S256())
+
+	testTraderKeyDesc = &keychain.KeyDescriptor{
 		KeyLocator: keychain.KeyLocator{
 			Family: clmscript.AccountKeyFamily,
 			Index:  0,
 		},
-		PubKey: testTraderPubKey,
+		PubKey: testTraderKey,
 	}
 )
 
@@ -52,7 +49,10 @@ func (s *mockStore) AddAccount(account *Account) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.accounts[account.TraderKey] = *account
+	var accountKey [33]byte
+	copy(accountKey[:], account.TraderKey.PubKey.SerializeCompressed())
+
+	s.accounts[accountKey] = *account
 	return nil
 }
 
@@ -60,7 +60,10 @@ func (s *mockStore) UpdateAccount(account *Account, modifiers ...Modifier) error
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.accounts[account.TraderKey]; !ok {
+	var accountKey [33]byte
+	copy(accountKey[:], account.TraderKey.PubKey.SerializeCompressed())
+
+	if _, ok := s.accounts[accountKey]; !ok {
 		return errors.New("account not found")
 	}
 
@@ -68,13 +71,16 @@ func (s *mockStore) UpdateAccount(account *Account, modifiers ...Modifier) error
 		modifier(account)
 	}
 
-	s.accounts[account.TraderKey] = *account
+	s.accounts[accountKey] = *account
 	return nil
 }
 
-func (s *mockStore) Account(accountKey [33]byte) (*Account, error) {
+func (s *mockStore) Account(traderKey *btcec.PublicKey) (*Account, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	var accountKey [33]byte
+	copy(accountKey[:], traderKey.SerializeCompressed())
 
 	account, ok := s.accounts[accountKey]
 	if !ok {
@@ -99,7 +105,9 @@ type mockAuctioneer struct {
 	Auctioneer
 }
 
-func (a *mockAuctioneer) ReserveAccount(context.Context, [33]byte) ([33]byte, error) {
+func (a *mockAuctioneer) ReserveAccount(context.Context,
+	*btcec.PublicKey) (*btcec.PublicKey, error) {
+
 	return testAuctioneerKey, nil
 }
 

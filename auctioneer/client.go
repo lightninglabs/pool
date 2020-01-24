@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/agora/client/order"
@@ -82,18 +83,15 @@ func getAuctionServerConn(address string, insecure bool, tlsPath string,
 // ReserveAccount reserves an account with the auctioneer. It returns a the
 // public key we should use for them in our 2-of-2 multi-sig construction.
 func (c *Client) ReserveAccount(ctx context.Context,
-	traderKey [33]byte) ([33]byte, error) {
+	traderKey *btcec.PublicKey) (*btcec.PublicKey, error) {
 
 	resp, err := c.client.ReserveAccount(ctx, &clmrpc.ReserveAccountRequest{
-		UserSubKey: traderKey[:],
+		UserSubKey: traderKey.SerializeCompressed(),
 	})
 	if err != nil {
-		return [33]byte{}, err
+		return nil, err
 	}
-
-	var auctioneerKey [33]byte
-	copy(auctioneerKey[:], resp.AuctioneerKey)
-	return auctioneerKey, nil
+	return btcec.ParsePubKey(resp.AuctioneerKey, btcec.S256())
 }
 
 // InitAccount initializes an account with the auctioneer such that it can be
@@ -112,7 +110,7 @@ func (c *Client) InitAccount(ctx context.Context, account *account.Account) erro
 		AccountScript: accountOutput.PkScript,
 		AccountValue:  uint32(account.Value),
 		AccountExpiry: account.Expiry,
-		UserSubKey:    account.TraderKey[:],
+		UserSubKey:    account.TraderKey.PubKey.SerializeCompressed(),
 	})
 	return err
 }
@@ -133,7 +131,7 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		})
 	}
 	details := &clmrpc.ServerOrder{
-		UserSubKey:     o.Details().AcctKey[:],
+		UserSubKey:     o.Details().AcctKey.SerializeCompressed(),
 		RateFixed:      int64(o.Details().FixedRate),
 		Amt:            int64(o.Details().Amt),
 		OrderNonce:     nonce[:],

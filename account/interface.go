@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/agora/client/clmscript"
@@ -56,16 +57,11 @@ type Account struct {
 
 	// TraderKey is the trader's key in the 2-of-2 multi-sig construction of
 	// a CLM account. It is also the identifying component of an account.
-	TraderKey [33]byte
-
-	// TraderKeyLocator is the key locator used to obtain the trader key.
-	// This will be needed for operations that require a signature under
-	// said key.
-	TraderKeyLocator keychain.KeyLocator
+	TraderKey *keychain.KeyDescriptor
 
 	// AuctioneerKey is the auctioneer's key in the 2-of-2 multi-sig
 	// construction of a CLM account.
-	AuctioneerKey [33]byte
+	AuctioneerKey *btcec.PublicKey
 
 	// State describes the state of the account.
 	State State
@@ -82,7 +78,7 @@ type Account struct {
 // Output returns the on-chain output associated with the account.
 func (a *Account) Output() (*wire.TxOut, error) {
 	script, err := clmscript.AccountScript(
-		a.Expiry, a.TraderKey, a.AuctioneerKey,
+		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey,
 	)
 	if err != nil {
 		return nil, err
@@ -122,7 +118,7 @@ type Store interface {
 
 	// Account retrieves the account associated with the given trader key
 	// from the database.
-	Account([33]byte) (*Account, error)
+	Account(*btcec.PublicKey) (*Account, error)
 
 	// Accounts retrieves all existing accounts.
 	Accounts() ([]*Account, error)
@@ -135,7 +131,7 @@ type Auctioneer interface {
 	// the public key we should use for them in our 2-of-2 multi-sig
 	// construction. The trader key is provided and used as a tweak to the
 	// auctioneer's long-term key to achieve deterministic account creation.
-	ReserveAccount(context.Context, [33]byte) ([33]byte, error)
+	ReserveAccount(context.Context, *btcec.PublicKey) (*btcec.PublicKey, error)
 
 	// InitAccount initializes an account with the auctioneer such that it
 	// can be used once fully confirmed.

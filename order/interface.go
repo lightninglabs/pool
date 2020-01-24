@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -183,7 +184,7 @@ type Kit struct {
 	FundingFeeRate chainfee.SatPerKWeight
 
 	// AcctKey is key of the account the order belongs to.
-	AcctKey [33]byte
+	AcctKey *btcec.PublicKey
 }
 
 // Nonce is the unique identifier of each order and MUST be created by hashing a

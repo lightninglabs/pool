@@ -3,6 +3,7 @@ package clmscript
 import (
 	"bytes"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/input"
@@ -29,7 +30,7 @@ const (
 //	OP_2 <trader key> <auctioneer key> OP_2
 //	OP_CHECKMULTISIG
 // OP_ENDIF
-func AccountScript(expiry uint32, traderKey, auctioneerKey [33]byte) ([]byte, error) {
+func AccountScript(expiry uint32, traderKey, auctioneerKey *btcec.PublicKey) ([]byte, error) {
 	builder := txscript.NewScriptBuilder()
 
 	builder.AddOp(txscript.OP_IF)
@@ -37,14 +38,14 @@ func AccountScript(expiry uint32, traderKey, auctioneerKey [33]byte) ([]byte, er
 	builder.AddInt64(int64(expiry))
 	builder.AddOp(txscript.OP_CHECKLOCKTIMEVERIFY)
 	builder.AddOp(txscript.OP_DROP)
-	builder.AddData(traderKey[:])
+	builder.AddData(traderKey.SerializeCompressed())
 	builder.AddOp(txscript.OP_CHECKSIG)
 
 	builder.AddOp(txscript.OP_ELSE)
 
 	builder.AddOp(txscript.OP_2)
-	builder.AddData(traderKey[:])
-	builder.AddData(auctioneerKey[:])
+	builder.AddData(traderKey.SerializeCompressed())
+	builder.AddData(auctioneerKey.SerializeCompressed())
 	builder.AddOp(txscript.OP_2)
 	builder.AddOp(txscript.OP_CHECKMULTISIG)
 

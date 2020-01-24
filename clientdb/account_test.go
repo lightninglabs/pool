@@ -1,11 +1,13 @@
 package clientdb
 
 import (
+	"encoding/hex"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/davecgh/go-spew/spew"
@@ -16,6 +18,19 @@ import (
 
 var (
 	testOutPoint = wire.OutPoint{Index: 1}
+
+	testRawAuctioneerKey, _ = hex.DecodeString("02187d1a0e30f4e5016fc1137363ee9e7ed5dde1e6c50f367422336df7a108b716")
+	testAuctioneerKey, _    = btcec.ParsePubKey(testRawAuctioneerKey, btcec.S256())
+
+	testRawTraderKey, _ = hex.DecodeString("036b51e0cc2d9e5988ee4967e0ba67ef3727bb633fea21a0af58e0c9395446ba09")
+	testTraderKey, _    = btcec.ParsePubKey(testRawTraderKey, btcec.S256())
+	testTraderKeyDesc   = &keychain.KeyDescriptor{
+		KeyLocator: keychain.KeyLocator{
+			Family: clmscript.AccountKeyFamily,
+			Index:  0,
+		},
+		PubKey: testTraderKey,
+	}
 )
 
 func newTestDB(t *testing.T) (*DB, func()) {
@@ -39,7 +54,7 @@ func newTestDB(t *testing.T) (*DB, func()) {
 func assertAccountExists(t *testing.T, db *DB, expected *account.Account) {
 	t.Helper()
 
-	found, err := db.Account(expected.TraderKey)
+	found, err := db.Account(expected.TraderKey.PubKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,14 +74,10 @@ func TestAccounts(t *testing.T) {
 
 	// Create a test account we'll use to interact with the database.
 	a := &account.Account{
-		Value:     btcutil.SatoshiPerBitcoin,
-		Expiry:    1337,
-		TraderKey: [33]byte{1},
-		TraderKeyLocator: keychain.KeyLocator{
-			Family: clmscript.AccountKeyFamily,
-			Index:  1,
-		},
-		AuctioneerKey: [33]byte{2},
+		Value:         btcutil.SatoshiPerBitcoin,
+		Expiry:        1337,
+		TraderKey:     testTraderKeyDesc,
+		AuctioneerKey: testAuctioneerKey,
 		State:         account.StateInitiated,
 		HeightHint:    1,
 	}

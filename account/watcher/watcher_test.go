@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 )
@@ -14,9 +15,10 @@ const (
 )
 
 var (
-	testTraderKey [33]byte
-	zeroOutPoint  wire.OutPoint
-	testScript, _ = hex.DecodeString("00149589c15e7a8a8065f75aad5f3337cfccf909174a")
+	zeroOutPoint        wire.OutPoint
+	rawTestTraderKey, _ = hex.DecodeString("02d0de0999f50eaacaae5b6e178eec7c8bd99dd797bc9f7cfb497e2188884d59f3")
+	testTraderKey, _    = btcec.ParsePubKey(rawTestTraderKey, btcec.S256())
+	testScript, _       = hex.DecodeString("00149589c15e7a8a8065f75aad5f3337cfccf909174a")
 )
 
 // TestWatcherConf ensures that the watcher performs its expected operations
@@ -30,7 +32,7 @@ func TestWatcherConf(t *testing.T) {
 	// The HandleAccountConf closure will use a signal to indicate that it's
 	// been invoked once a confirmation notification is received.
 	confSignal := make(chan struct{})
-	handleConf := func([33]byte, *chainntnfs.TxConfirmation) error {
+	handleConf := func(*btcec.PublicKey, *chainntnfs.TxConfirmation) error {
 		close(confSignal)
 		return nil
 	}
@@ -83,7 +85,7 @@ func TestWatcherSpend(t *testing.T) {
 	// The HandleAccountSpend closure will use a signal to indicate that
 	// it's been invoked once a spend notification is received.
 	spendSignal := make(chan struct{})
-	handleSpend := func([33]byte, *chainntnfs.SpendDetail) error {
+	handleSpend := func(*btcec.PublicKey, *chainntnfs.SpendDetail) error {
 		close(spendSignal)
 		return nil
 	}
@@ -141,7 +143,7 @@ func TestWatcherExpiry(t *testing.T) {
 	// The HandleAccountExpiry closure will use a signal to indicate that
 	// it's been invoked once an expiry notification is received.
 	expirySignal := make(chan struct{})
-	handleExpiry := func([33]byte) error {
+	handleExpiry := func(*btcec.PublicKey) error {
 		close(expirySignal)
 		return nil
 	}
@@ -201,7 +203,7 @@ func TestWatcherAccountAlreadyExpired(t *testing.T) {
 	// The HandleAccountExpiry closure will use a signal to indicate that
 	// it's been invoked once an expiry notification is received.
 	expirySignal := make(chan struct{})
-	handleExpiry := func([33]byte) error {
+	handleExpiry := func(*btcec.PublicKey) error {
 		close(expirySignal)
 		return nil
 	}
