@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/agora/client/order"
@@ -127,6 +128,35 @@ func (c *Client) InitAccount(ctx context.Context, account *account.Account) erro
 		UserSubKey:    account.TraderKey.PubKey.SerializeCompressed(),
 	})
 	return err
+}
+
+// CloseAccount sends an intent to the auctioneer that we'd like to close the
+// account with the associated trader key by withdrawing the funds to the given
+// outputs. The auctioneer's signature is returned, allowing us to broadcast a
+// transaction sweeping the account.
+func (c *Client) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
+	outputs []*wire.TxOut) ([]byte, error) {
+
+	var rpcOutputs []*clmrpc.Output
+	if len(outputs) > 0 {
+		rpcOutputs = make([]*clmrpc.Output, 0, len(outputs))
+		for _, output := range outputs {
+			rpcOutputs = append(rpcOutputs, &clmrpc.Output{
+				Value:  uint32(output.Value),
+				Script: output.PkScript,
+			})
+		}
+	}
+
+	resp, err := c.client.ModifyAccount(ctx, &clmrpc.ServerModifyAccountRequest{
+		UserSubKey: traderKey.SerializeCompressed(),
+		NewOutputs: rpcOutputs,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.AccountSig, nil
 }
 
 // SubmitOrder sends a fully finished order message to the server and interprets

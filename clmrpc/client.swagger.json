@@ -56,28 +56,6 @@
       }
     },
     "/v1/clm/accounts/{account_sub_key_hex}": {
-      "delete": {
-        "operationId": "CloseAccount",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/clmrpcCloseAccountResponse"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "account_sub_key_hex",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "ChannelAuctioneerClient"
-        ]
-      },
       "post": {
         "operationId": "ModifyAccount",
         "responses": {
@@ -102,6 +80,32 @@
             "schema": {
               "$ref": "#/definitions/clmrpcModifyAccountRequest"
             }
+          }
+        ],
+        "tags": [
+          "ChannelAuctioneerClient"
+        ]
+      }
+    },
+    "/v1/clm/accounts/{trader_key}": {
+      "delete": {
+        "operationId": "CloseAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcCloseAccountResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "trader_key",
+            "description": "The trader key associated with the account that will be closed.",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "byte"
           }
         ],
         "tags": [
@@ -188,21 +192,31 @@
       "properties": {
         "trader_key": {
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "description": "The identifying component of an account. This is the key used for the trader\nin the 2-of-2 multi-sig construction of an account with an auctioneer."
         },
         "outpoint": {
-          "$ref": "#/definitions/clmrpcOutPoint"
+          "$ref": "#/definitions/clmrpcOutPoint",
+          "description": "The current outpoint associated with the account. This will change every\ntime the account has been updated."
         },
         "value": {
           "type": "integer",
-          "format": "int64"
+          "format": "int64",
+          "description": "The current value in satoshis of the account."
         },
         "expiration_height": {
           "type": "integer",
-          "format": "int64"
+          "format": "int64",
+          "description": "The height at which the account will expire."
         },
         "state": {
-          "$ref": "#/definitions/clmrpcAccountState"
+          "$ref": "#/definitions/clmrpcAccountState",
+          "description": "The current state of the account."
+        },
+        "close_txid": {
+          "type": "string",
+          "format": "byte",
+          "description": "The hash of the account's closing transaction, if any."
         }
       }
     },
@@ -211,10 +225,12 @@
       "enum": [
         "PENDING_OPEN",
         "OPEN",
-        "EXPIRED"
+        "EXPIRED",
+        "PENDING_CLOSED",
+        "CLOSED"
       ],
       "default": "PENDING_OPEN",
-      "description": " - PENDING_OPEN: The state of an account when it is pending its confirmation on-chain.\n - OPEN: The state of an account once it has confirmed on-chain.\n - EXPIRED: The state of an account once its expiration has been reached and its closing\ntransaction has confirmed."
+      "description": " - PENDING_OPEN: The state of an account when it is pending its confirmation on-chain.\n - OPEN: The state of an account once it has confirmed on-chain.\n - EXPIRED: The state of an account once its expiration has been reached and its closing\ntransaction has confirmed.\n - PENDING_CLOSED: The state of an account when we're waiting for the closing transaction of\nan account to confirm that required cooperation with the auctioneer.\n - CLOSED: The state of an account once its closing transaction has confirmed."
     },
     "clmrpcAsk": {
       "type": "object",
@@ -258,7 +274,14 @@
       "type": "object"
     },
     "clmrpcCloseAccountResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "close_txid": {
+          "type": "string",
+          "format": "byte",
+          "description": "The hash of the closing transaction."
+        }
+      }
     },
     "clmrpcInitAccountRequest": {
       "type": "object",
@@ -387,6 +410,21 @@
           "type": "integer",
           "format": "int64",
           "description": "*\nThe index of the output on the transaction."
+        }
+      }
+    },
+    "clmrpcOutput": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The value, in satoshis, of the output."
+        },
+        "script": {
+          "type": "string",
+          "format": "byte",
+          "description": "The script of the output to send the value to."
         }
       }
     },

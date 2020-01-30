@@ -21,7 +21,7 @@ service ChannelAuctioneerClient {
 
     rpc CloseAccount (CloseAccountRequest) returns (CloseAccountResponse) {
         option (google.api.http) = {
-            delete: "/v1/clm/accounts/{account_sub_key_hex}"
+            delete: "/v1/clm/accounts/{trader_key}"
         };
     };
 
@@ -64,9 +64,19 @@ message ListAccountsResponse {
 }
 
 message CloseAccountRequest {
-    string account_sub_key_hex = 1;
+    // The trader key associated with the account that will be closed.
+    bytes trader_key = 1 [json_name = "trader_key"];
+
+    /*
+    The outputs that should be created as a result of closing the account. If
+    none are specified, then the funds within the account are sent to an address
+    the backing lnd node controls.
+    */
+    repeated Output outputs = 2 [json_name = "outputs"];
 }
 message CloseAccountResponse {
+    // The hash of the closing transaction.
+    bytes close_txid = 1 [json_name = "close_txid"];
 }
 
 message ModifyAccountRequest {
@@ -89,14 +99,41 @@ enum AccountState {
     transaction has confirmed.
     */
     EXPIRED = 2;
+
+    /*
+    The state of an account when we're waiting for the closing transaction of
+    an account to confirm that required cooperation with the auctioneer.
+    */
+    PENDING_CLOSED = 3;
+
+    // The state of an account once its closing transaction has confirmed.
+    CLOSED = 4;
 }
 
 message Account {
+    /*
+    The identifying component of an account. This is the key used for the trader
+    in the 2-of-2 multi-sig construction of an account with an auctioneer.
+    */
     bytes trader_key = 1;
+
+    /*
+    The current outpoint associated with the account. This will change every
+    time the account has been updated.
+    */
     OutPoint outpoint = 2;
+
+    // The current value in satoshis of the account.
     uint32 value = 3;
+
+    // The height at which the account will expire.
     uint32 expiration_height = 4;
+
+    // The current state of the account.
     AccountState state = 5;
+
+    // The hash of the account's closing transaction, if any.
+    bytes close_txid = 6;
 }
 
 message SubmitOrderRequest {

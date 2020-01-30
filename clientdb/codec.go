@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 
+	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -66,6 +67,11 @@ func WriteElement(w io.Writer, element interface{}) error {
 
 	case [32]byte:
 		return lnwire.WriteElement(w, e[:])
+
+	case *wire.MsgTx:
+		if err := e.Serialize(w); err != nil {
+			return err
+		}
 
 	default:
 		return lnwire.WriteElement(w, element)
@@ -161,6 +167,13 @@ func ReadElement(r io.Reader, element interface{}) error {
 			return err
 		}
 		*e = b
+
+	case **wire.MsgTx:
+		var tx wire.MsgTx
+		if err := tx.Deserialize(r); err != nil {
+			return err
+		}
+		*e = &tx
 
 	default:
 		return lnwire.ReadElement(r, element)

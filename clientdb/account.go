@@ -137,10 +137,24 @@ func (db *DB) Accounts() ([]*account.Account, error) {
 }
 
 func serializeAccount(w io.Writer, a *account.Account) error {
-	return WriteElements(
+	err := WriteElements(
 		w, a.Value, a.Expiry, a.TraderKey, a.AuctioneerKey, a.BatchKey,
 		a.Secret, a.State, a.HeightHint, a.OutPoint,
 	)
+	if err != nil {
+		return err
+	}
+
+	// The close transaction is only found in the following states.
+	if a.State == account.StatePendingClosed ||
+		a.State == account.StateClosed {
+
+		if err := WriteElement(w, a.CloseTx); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func deserializeAccount(r io.Reader) (*account.Account, error) {
@@ -149,5 +163,18 @@ func deserializeAccount(r io.Reader) (*account.Account, error) {
 		r, &a.Value, &a.Expiry, &a.TraderKey, &a.AuctioneerKey,
 		&a.BatchKey, &a.Secret, &a.State, &a.HeightHint, &a.OutPoint,
 	)
-	return &a, err
+	if err != nil {
+		return nil, err
+	}
+
+	// The close transaction is only found in the following states.
+	if a.State == account.StatePendingClosed ||
+		a.State == account.StateClosed {
+
+		if err := ReadElement(r, &a.CloseTx); err != nil {
+			return nil, err
+		}
+	}
+
+	return &a, nil
 }

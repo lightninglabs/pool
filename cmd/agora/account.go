@@ -19,6 +19,7 @@ var accountsCommands = []cli.Command{
 		Subcommands: []cli.Command{
 			newAccountCommand,
 			listAccountsCommand,
+			closeAccountCommand,
 		},
 	},
 }
@@ -29,18 +30,22 @@ type Account struct {
 	Value            uint32 `json:"value"`
 	ExpirationHeight uint32 `json:"expiration_height"`
 	State            string `json:"state"`
+	CloseTxid        string `json:"close_txid"`
 }
 
 // NewAccountFromProto creates a display Account from its proto.
 func NewAccountFromProto(a *clmrpc.Account) *Account {
-	var opHash chainhash.Hash
+	var opHash, closeTxHash chainhash.Hash
 	copy(opHash[:], a.Outpoint.Txid)
+	copy(closeTxHash[:], a.CloseTxid)
+
 	return &Account{
 		TraderKey:        hex.EncodeToString(a.TraderKey),
 		OutPoint:         fmt.Sprintf("%v:%d", opHash, a.Outpoint.OutputIndex),
 		Value:            a.Value,
 		ExpirationHeight: a.ExpirationHeight,
 		State:            a.State.String(),
+		CloseTxid:        closeTxHash.String(),
 	}
 }
 
@@ -157,6 +162,70 @@ func listAccounts(ctx *cli.Context) error {
 	}
 
 	printJSON(listAccountsResp)
+
+	return nil
+}
+
+var closeAccountCommand = cli.Command{
+	Name:        "close",
+	ShortName:   "c",
+	Usage:       "close an existing account",
+	Description: `Close an existing accounts`,
+	ArgsUsage:   "trader_key",
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:  "trader_key",
+			Usage: "the trader key associated with the account",
+		},
+	},
+	Action: closeAccount,
+}
+
+func closeAccount(ctx *cli.Context) error {
+	args := ctx.Args()
+
+	var traderKeyHex string
+	switch {
+	case ctx.IsSet("trader_key"):
+		traderKeyHex = ctx.String("trader_key")
+	case args.Present():
+		traderKeyHex = args.First()
+		args = args.Tail()
+	default:
+		// Show command help if no arguments and flags were provided.
+		return cli.ShowCommandHelp(ctx, "close")
+	}
+
+	traderKey, err := hex.DecodeString(traderKeyHex)
+	if err != nil {
+		return err
+	}
+
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.CloseAccount(
+		context.Background(), &clmrpc.CloseAccountRequest{
+			TraderKey: traderKey,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	var closeTxid chainhash.Hash
+	copy(closeTxid[:], resp.CloseTxid)
+
+	closeAccountResp := struct {
+		CloseTxid string `json:"close_txid"`
+	}{
+		CloseTxid: closeTxid.String(),
+	}
+
+	printJSON(closeAccountResp)
 
 	return nil
 }

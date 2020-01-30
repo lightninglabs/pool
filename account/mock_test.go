@@ -7,11 +7,14 @@ import (
 	"sync"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/agora/client/clmscript"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/chainntnfs"
+	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -121,15 +124,28 @@ func (a *mockAuctioneer) InitAccount(context.Context, *Account) error {
 	return nil
 }
 
+func (a *mockAuctioneer) CloseAccount(context.Context, *btcec.PublicKey,
+	[]*wire.TxOut) ([]byte, error) {
+
+	return []byte("auctioneer sig"), nil
+}
+
 type mockWallet struct {
 	TxSource
 	lndclient.WalletKitClient
 	lndclient.SignerClient
 
-	txs []*wire.MsgTx
+	txs         []*wire.MsgTx
+	publishChan chan *wire.MsgTx
 
 	sendOutputs func(context.Context, []*wire.TxOut,
 		chainfee.SatPerKWeight) (*wire.MsgTx, error)
+}
+
+func newMockWallet() *mockWallet {
+	return &mockWallet{
+		publishChan: make(chan *wire.MsgTx, 1),
+	}
 }
 
 func (w *mockWallet) DeriveNextKey(ctx context.Context,
@@ -146,6 +162,7 @@ func (w *mockWallet) DeriveSharedKey(ctx context.Context,
 }
 
 func (w *mockWallet) PublishTransaction(ctx context.Context, tx *wire.MsgTx) error {
+	w.publishChan <- tx
 	return nil
 }
 
@@ -164,6 +181,13 @@ func (w *mockWallet) SendOutputs(ctx context.Context, outputs []*wire.TxOut,
 	return tx, nil
 }
 
+func (w *mockWallet) NextAddr(ctx context.Context) (btcutil.Address, error) {
+	pubKeyHash := btcutil.Hash160(testTraderKey.SerializeCompressed())
+	return btcutil.NewAddressWitnessPubKeyHash(
+		pubKeyHash, &chaincfg.MainNetParams,
+	)
+}
+
 func (w *mockWallet) ListTransactions(ctx context.Context) ([]*wire.MsgTx, error) {
 	return w.txs, nil
 }
@@ -176,6 +200,12 @@ func (w *mockWallet) interceptSendOutputs(f func(context.Context, []*wire.TxOut,
 	chainfee.SatPerKWeight) (*wire.MsgTx, error)) {
 
 	w.sendOutputs = f
+}
+
+func (w *mockWallet) SignOutputRaw(context.Context, *wire.MsgTx,
+	[]*input.SignDescriptor) ([][]byte, error) {
+
+	return [][]byte{[]byte("trader sig")}, nil
 }
 
 type mockChainNotifier struct {

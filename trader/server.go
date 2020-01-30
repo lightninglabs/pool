@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/auctioneer"
@@ -230,8 +233,19 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 	case account.StateExpired:
 		rpcState = clmrpc.AccountState_EXPIRED
 
+	case account.StatePendingClosed:
+		rpcState = clmrpc.AccountState_PENDING_CLOSED
+
+	case account.StateClosed:
+		rpcState = clmrpc.AccountState_CLOSED
+
 	default:
 		return nil, fmt.Errorf("unknown state %v", a.State)
+	}
+
+	var closeTxHash chainhash.Hash
+	if a.CloseTx != nil {
+		closeTxHash = a.CloseTx.TxHash()
 	}
 
 	return &clmrpc.Account{
@@ -243,13 +257,46 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 		Value:            uint32(a.Value),
 		ExpirationHeight: a.Expiry,
 		State:            rpcState,
+		CloseTxid:        closeTxHash[:],
 	}, nil
 }
 
 func (s *Server) CloseAccount(ctx context.Context,
 	req *clmrpc.CloseAccountRequest) (*clmrpc.CloseAccountResponse, error) {
 
-	return nil, fmt.Errorf("unimplemented")
+	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
+	if err != nil {
+		return nil, err
+	}
+
+	var closeOutputs []*wire.TxOut
+	if len(req.Outputs) > 0 {
+		closeOutputs = make([]*wire.TxOut, 0, len(req.Outputs))
+		for _, output := range req.Outputs {
+			// Make sure they've provided a valid output script.
+			_, err := txscript.ParsePkScript(output.Script)
+			if err != nil {
+				return nil, err
+			}
+
+			closeOutputs = append(closeOutputs, &wire.TxOut{
+				Value:    int64(output.Value),
+				PkScript: output.Script,
+			})
+		}
+	}
+
+	closeTx, err := s.accountManager.CloseAccount(
+		ctx, traderKey, closeOutputs, atomic.LoadUint32(&s.bestHeight),
+	)
+	if err != nil {
+		return nil, err
+	}
+	closeTxHash := closeTx.TxHash()
+
+	return &clmrpc.CloseAccountResponse{
+		CloseTxid: closeTxHash[:],
+	}, nil
 }
 
 func (s *Server) ModifyAccount(ctx context.Context,

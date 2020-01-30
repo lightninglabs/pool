@@ -47,6 +47,15 @@ const (
 	// expiration height. An account in this state can still be used if
 	// renewed.
 	StateExpired = 4
+
+	// StatePendingClosed denotes that an account was fully spent by a
+	// transaction broadcast by the trader and is pending its confirmation.
+	StatePendingClosed = 5
+
+	// StateClosed denotes that an account was closed by a transaction
+	// broadcast by the trader that fully spent the account. An account in
+	// this state can no longer be used.
+	StateClosed = 6
 )
 
 // String returns a human-readable description of an account's state.
@@ -60,6 +69,10 @@ func (s State) String() string {
 		return "StateOpen"
 	case StateExpired:
 		return "StateExpired"
+	case StatePendingClosed:
+		return "StatePendingClosed"
+	case StateClosed:
+		return "StateClosed"
 	default:
 		return "unknown"
 	}
@@ -115,6 +128,13 @@ type Account struct {
 	// OutPoint is the outpoint of the output used to fund the account. This
 	// only exists once the account has reached StatePendingOpen.
 	OutPoint wire.OutPoint
+
+	// CloseTx is the closing transaction of an account. This will only be
+	// populated if the account is in any of the following states:
+	//
+	//	- StatePendingClosed
+	//	- StateClosed
+	CloseTx *wire.MsgTx
 }
 
 // Output returns the current on-chain output associated with the account.
@@ -133,6 +153,17 @@ func (a *Account) Output() (*wire.TxOut, error) {
 	}, nil
 }
 
+// NextOutputScript returns the next on-chain output script that is to be
+// associated with the account. This is done by using the next batch key, which
+// results from incrementing the current one by its curve's base point.
+func (a *Account) NextOutputScript() ([]byte, error) {
+	nextBatchKey := clmscript.IncrementKey(a.BatchKey)
+	return clmscript.AccountScript(
+		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey, nextBatchKey,
+		a.Secret,
+	)
+}
+
 // Modifier abstracts the modification of an account through a function.
 type Modifier func(*Account)
 
@@ -148,6 +179,14 @@ func StateModifier(state State) Modifier {
 func OutPointModifier(op wire.OutPoint) Modifier {
 	return func(account *Account) {
 		account.OutPoint = op
+	}
+}
+
+// CloseTxModifier is a functional option that modifies the closing transaction
+// of an account.
+func CloseTxModifier(tx *wire.MsgTx) Modifier {
+	return func(account *Account) {
+		account.CloseTx = tx
 	}
 }
 
@@ -179,6 +218,13 @@ type Auctioneer interface {
 	// InitAccount initializes an account with the auctioneer such that it
 	// can be used once fully confirmed.
 	InitAccount(context.Context, *Account) error
+
+	// CloseAccount sends an intent to the auctioneer that we'd like to
+	// close the account with the associated trader key by withdrawing the
+	// funds to the given outputs. The auctioneer's signature is returned,
+	// allowing us to broadcast a transaction sweeping the account.
+	CloseAccount(context.Context, *btcec.PublicKey,
+		[]*wire.TxOut) ([]byte, error)
 }
 
 // TxSource is a source that provides us with transactions previously broadcast

@@ -54,6 +54,10 @@ func request_ChannelAuctioneerClient_ListAccounts_0(ctx context.Context, marshal
 
 }
 
+var (
+	filter_ChannelAuctioneerClient_CloseAccount_0 = &utilities.DoubleArray{Encoding: map[string]int{"trader_key": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+)
+
 func request_ChannelAuctioneerClient_CloseAccount_0(ctx context.Context, marshaler runtime.Marshaler, client ChannelAuctioneerClientClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq CloseAccountRequest
 	var metadata runtime.ServerMetadata
@@ -65,15 +69,19 @@ func request_ChannelAuctioneerClient_CloseAccount_0(ctx context.Context, marshal
 		_   = err
 	)
 
-	val, ok = pathParams["account_sub_key_hex"]
+	val, ok = pathParams["trader_key"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "account_sub_key_hex")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "trader_key")
 	}
 
-	protoReq.AccountSubKeyHex, err = runtime.String(val)
+	protoReq.TraderKey, err = runtime.Bytes(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "account_sub_key_hex", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "trader_key", err)
+	}
+
+	if err := runtime.PopulateQueryParameters(&protoReq, req.URL.Query(), filter_ChannelAuctioneerClient_CloseAccount_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	msg, err := client.CloseAccount(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -355,7 +363,7 @@ var (
 
 	pattern_ChannelAuctioneerClient_ListAccounts_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "clm", "accounts"}, ""))
 
-	pattern_ChannelAuctioneerClient_CloseAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "clm", "accounts", "account_sub_key_hex"}, ""))
+	pattern_ChannelAuctioneerClient_CloseAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "clm", "accounts", "trader_key"}, ""))
 
 	pattern_ChannelAuctioneerClient_ModifyAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "clm", "accounts", "account_sub_key_hex"}, ""))
 

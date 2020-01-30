@@ -7,7 +7,6 @@ package clmrpc;
 service ChannelAuctioneerServer {
     rpc ReserveAccount (ReserveAccountRequest) returns (ReserveAccountResponse);
     rpc InitAccount (ServerInitAccountRequest) returns (ServerInitAccountResponse);
-    rpc CloseAccount (ServerCloseAccountRequest) returns (ServerCloseAccountResponse);
     rpc ModifyAccount (ServerModifyAccountRequest) returns (ServerModifyAccountResponse);
     rpc SubmitOrder (ServerSubmitOrderRequest) returns (ServerSubmitOrderResponse);
     rpc CancelOrder (ServerCancelOrderRequest) returns (ServerCancelOrderResponse);
@@ -64,25 +63,6 @@ message ServerInitAccountRequest {
     bytes user_sub_key = 5;
 }
 message ServerInitAccountResponse {
-}
-
-message ServerCloseAccountRequest {
-    /**
-    The user's sub account key.
-    */
-    bytes user_sub_key = 1;
-
-    /**
-    Specifies where the money from the account should be sent to.
-    */
-    map<int64, bytes> close_outputs = 2;
-}
-message ServerCloseAccountResponse {
-    /**
-    Signature that allows the user to broadcast their account closing
-    transaction.
-    */
-    bytes close_sig = 1;
 }
 
 message ServerSubmitOrderRequest {
@@ -267,24 +247,49 @@ message InvalidOrder {
 }
 
 message Input {
+    // The outpoint that the input corresponds to.
     OutPoint outpoint = 1;
-    int64 input_value = 2;
+}
+
+message Output {
+    // The value, in satoshis, of the output.
+    uint32 value = 1 [json_name = "value"];
+
+    // The script of the output to send the value to.
+    bytes script = 2 [json_name = "script"];
 }
 
 message ServerModifyAccountRequest {
-    OutPoint account_point = 1;
+    /*
+    The user sub key that corresponds to the account to be modified. This is
+    also known as the trader key.
+    */
+    bytes user_sub_key = 1;
 
-    Input new_inputs = 2;
-    map<int64, bytes> outputs = 3;
+    /*
+    An additional set of inputs that can be included in the spending transaction
+    of an account. These can be used to deposit more funds into an account.
+    These must be under control of the backing lnd node's wallet.
+    */
+    repeated Input new_inputs = 2;
 
-    int64 new_account_balance = 4;
+    /*
+    An additional set of outputs that can be included in the spending
+    transaction of an account. These can be used to withdraw funds from an
+    account.
+    */
+    repeated Output new_outputs = 3;
 
+    // The new parameters to apply for the account.
     ServerInitAccountRequest new_account = 5;
 }
 
 message ServerModifyAccountResponse {
-    bytes new_account_sig = 1;
-    OutPoint new_account_point = 2;
+    /**
+    The auctioneer's signature that allows a trader to broadcast a transaction
+    spending from an account output.
+    */
+    bytes account_sig = 1;
 }
 
 message ServerOrderStateRequest {

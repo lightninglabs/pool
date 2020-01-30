@@ -1,6 +1,7 @@
 package account
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/davecgh/go-spew/spew"
@@ -30,7 +33,7 @@ type testHarness struct {
 
 func newTestHarness(t *testing.T) *testHarness {
 	store := newMockStore()
-	wallet := &mockWallet{}
+	wallet := newMockWallet()
 	notifier := newMockChainNotifier()
 
 	return &testHarness{
@@ -57,10 +60,6 @@ func (h *testHarness) start() {
 
 func (h *testHarness) stop() {
 	h.manager.Stop()
-}
-
-func (h *testHarness) notifyAccountConf(conf *chainntnfs.TxConfirmation) {
-	h.notifier.confChan <- conf
 }
 
 func (h *testHarness) assertAcccountExists(expected *Account) {
@@ -120,6 +119,80 @@ func (h *testHarness) expireAccount(account *Account) {
 	h.assertAcccountExists(account)
 }
 
+func (h *testHarness) closeAccount(account *Account, outputs []*wire.TxOut,
+	bestHeight uint32) *wire.MsgTx {
+
+	h.t.Helper()
+
+	// Close the account with the auctioneer.
+	go func() {
+		_, err := h.manager.CloseAccount(
+			context.Background(), account.TraderKey.PubKey, outputs,
+			bestHeight,
+		)
+		if err != nil {
+			h.t.Logf("unable to close account: %v", err)
+		}
+	}()
+
+	// This should prompt the account's closing transaction to be broadcast
+	// and its state transitioned to StatePendingClosed.
+	var closeTx *wire.MsgTx
+	select {
+	case closeTx = <-h.wallet.publishChan:
+	case <-time.After(timeout):
+		h.t.Fatal("expected close transaction to be broadcast")
+	}
+
+	checkCloseTx(h.t, closeTx, account)
+
+	account.State = StatePendingClosed
+	account.CloseTx = closeTx
+	h.assertAcccountExists(account)
+
+	// Notify the transaction as a spend of the account.
+	h.notifier.spendChan <- &chainntnfs.SpendDetail{SpendingTx: closeTx}
+
+	// This should prompt the account to now be in a StateClosed state.
+	account.State = StateClosed
+	h.assertAcccountExists(account)
+
+	return closeTx
+}
+
+func checkCloseTx(t *testing.T, closeTx *wire.MsgTx, account *Account) {
+	t.Helper()
+
+	// The closing transaction should only include one output, which should
+	// be a P2WPKH output of the account's trader key.
+	if len(closeTx.TxOut) != 1 {
+		t.Fatalf("expected 1 output in close transaction, found %d",
+			len(closeTx.TxOut))
+	}
+
+	_, addrs, _, err := txscript.ExtractPkScriptAddrs(
+		closeTx.TxOut[0].PkScript, &chaincfg.MainNetParams,
+	)
+	if err != nil {
+		t.Fatalf("unable to extract address: %v", err)
+	}
+	if len(addrs) != 1 {
+		t.Fatalf("expected 1 address, found %d", len(addrs))
+	}
+	addr, ok := addrs[0].(*btcutil.AddressWitnessPubKeyHash)
+	if !ok {
+		t.Fatalf("expected P2WPKH address, found %T", addr)
+	}
+
+	witnessProgram := btcutil.Hash160(
+		account.TraderKey.PubKey.SerializeCompressed(),
+	)
+	if !bytes.Equal(addr.WitnessProgram(), witnessProgram) {
+		t.Fatalf("expected witness program %x, got %x", witnessProgram,
+			addr.WitnessProgram())
+	}
+}
+
 func (h *testHarness) restartManager() {
 	h.t.Helper()
 
@@ -139,36 +212,21 @@ func (h *testHarness) restartManager() {
 }
 
 // TestNewAccountHappyFlow ensures that we are able to create a new account
-// throughout the happy flow.
+// and close it throughout the happy flow.
 func TestNewAccountHappyFlow(t *testing.T) {
 	t.Parallel()
+
+	const bestHeight = 100
 
 	h := newTestHarness(t)
 	h.start()
 	defer h.stop()
 
-	// Create a new account. Its initial state should be Pending.
-	ctx := context.Background()
-	account, err := h.manager.InitAccount(
-		ctx, maxAccountValue, maxAccountExpiry, 100,
+	account := h.openAccount(
+		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
 	)
-	if err != nil {
-		t.Fatalf("unable to create new account: %v", err)
-	}
-	if account.State != StatePendingOpen {
-		t.Fatalf("expected account state %v, got %v", StatePendingOpen,
-			account.State)
-	}
 
-	// The same account should be found in the store.
-	h.assertAcccountExists(account)
-
-	// Notify the confirmation of the account.
-	h.notifyAccountConf(&chainntnfs.TxConfirmation{})
-
-	// This should prompt the account to now be in a Confirmed state.
-	account.State = StateOpen
-	h.assertAcccountExists(account)
+	h.closeAccount(account, nil, bestHeight+1)
 }
 
 // TestResumeAccountAfterRestart ensures we're able to properly create a new
@@ -247,9 +305,23 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 	h.wallet.interceptSendOutputs(sendOutputsInterceptor)
 
 	// Restart the manager. This should cause any pending accounts to be
-	// resumed. In our case, we should have an account transaction in our
-	// TxSource, so a new one shouldn't be created.
+	// resumed and their transaction rebroadcast/recreated. In our case, we
+	// should have an account transaction in our TxSource, so a new one
+	// shouldn't be created.
 	h.restartManager()
+
+	select {
+	case accountTx := <-h.wallet.publishChan:
+		if accountTx.TxHash() != tx.TxHash() {
+			t.Fatalf("transaction mismatch after restart: "+
+				"%v vs %v", accountTx.TxHash(),
+				tx.TxHash())
+		}
+
+	case <-time.After(timeout):
+		h.t.Fatal("expected account transaction to be " +
+			"rebroadcast")
+	}
 
 	select {
 	case <-sendOutputsSignal:
@@ -267,7 +339,7 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 	h.assertAcccountExists(account)
 
 	// Notify the confirmation of the account.
-	h.notifyAccountConf(&chainntnfs.TxConfirmation{})
+	h.notifier.confChan <- &chainntnfs.TxConfirmation{}
 
 	// This should prompt the account to now be in a Confirmed state.
 	account.State = StateOpen

@@ -108,6 +108,29 @@ func TestAccounts(t *testing.T) {
 	}
 	assertAccountExists(t, db, a)
 
+	// Now, transition the account from StatePendingOpen to
+	// StatePendingClosed and include a closing transaction. If the database
+	// update is successful, the in-memory account should be updated as
+	// well.
+	closeTx := &wire.MsgTx{
+		Version: 2,
+		TxIn: []*wire.TxIn{
+			{
+				PreviousOutPoint: testOutPoint,
+				SignatureScript:  []byte{},
+			},
+		},
+		TxOut: []*wire.TxOut{},
+	}
+	err = db.UpdateAccount(
+		a, account.StateModifier(account.StatePendingClosed),
+		account.CloseTxModifier(closeTx),
+	)
+	if err != nil {
+		t.Fatalf("unable to update account: %v", err)
+	}
+	assertAccountExists(t, db, a)
+
 	// Retrieving all accounts should show that we only have one account,
 	// the same one.
 	accounts, err := db.Accounts()
