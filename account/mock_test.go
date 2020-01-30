@@ -213,5 +213,11 @@ func (n *mockChainNotifier) RegisterSpendNtfn(ctx context.Context,
 func (n *mockChainNotifier) RegisterBlockEpochNtfn(
 	ctx context.Context) (chan int32, chan error, error) {
 
+	// Mimic the actual ChainNotifier by sending a notification upon
+	// registration.
+	go func() {
+		n.blockChan <- 0
+	}()
+
 	return n.blockChan, n.errChan, nil
 }

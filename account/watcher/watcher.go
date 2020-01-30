@@ -115,6 +115,18 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 		expirations = make(map[uint32][]*btcec.PublicKey)
 	)
 
+	// Wait for the initial block notification to be received before we
+	// begin handling requests.
+	select {
+	case newBlock := <-blockChan:
+		bestHeight = uint32(newBlock)
+	case err := <-errChan:
+		log.Errorf("Unable to receive initial block notification: %v",
+			err)
+	case <-w.quit:
+		return
+	}
+
 	for {
 		select {
 		// A new block notification has arrived, update our known
