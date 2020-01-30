@@ -42,6 +42,11 @@ const (
 	// StateOpen denotes that the account's funding transaction has been
 	// included in the chain with sufficient depth.
 	StateOpen State = 2
+
+	// StateExpired denotes that the chain has reached an account's
+	// expiration height. An account in this state can still be used if
+	// renewed.
+	StateExpired = 4
 )
 
 // String returns a human-readable description of an account's state.
@@ -53,6 +58,8 @@ func (s State) String() string {
 		return "StatePendingOpen"
 	case StateOpen:
 		return "StateOpen"
+	case StateExpired:
+		return "StateExpired"
 	default:
 		return "unknown"
 	}

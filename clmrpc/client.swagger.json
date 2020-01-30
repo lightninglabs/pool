@@ -210,9 +210,11 @@
       "type": "string",
       "enum": [
         "PENDING_OPEN",
-        "OPEN"
+        "OPEN",
+        "EXPIRED"
       ],
-      "default": "PENDING_OPEN"
+      "default": "PENDING_OPEN",
+      "description": " - PENDING_OPEN: The state of an account when it is pending its confirmation on-chain.\n - OPEN: The state of an account once it has confirmed on-chain.\n - EXPIRED: The state of an account once its expiration has been reached and its closing\ntransaction has confirmed."
     },
     "clmrpcAsk": {
       "type": "object",

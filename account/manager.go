@@ -358,6 +358,20 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account,
 				err)
 		}
 
+	// In StateExpired, we'll wait for the account to be spent such that it
+	// can be marked as closed if we decide to close it.
+	case StateExpired:
+		log.Infof("Watching expired account %x for spend",
+			account.TraderKey)
+
+		err = m.watcher.WatchAccountSpend(
+			account.TraderKey.PubKey, account.OutPoint,
+			accountOutput.PkScript, account.HeightHint,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to watch for spend: %v", err)
+		}
+
 	default:
 		return fmt.Errorf("unhandled account state %v", account.State)
 	}
@@ -445,9 +459,21 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 	return nil
 }
 
-// handleAccountExpiry handles the expiration of an account.
+// handleAccountExpiry marks an account as expired within the database.
 func (m *Manager) handleAccountExpiry(traderKey *btcec.PublicKey) error {
-	// TODO(wilmer): Sweep account output and mark account as expired.
+	account, err := m.cfg.Store.Account(traderKey)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Account %x has expired as of height %v",
+		traderKey.SerializeCompressed(), account.Expiry)
+
+	err = m.cfg.Store.UpdateAccount(account, StateModifier(StateExpired))
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

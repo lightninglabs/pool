@@ -227,6 +227,9 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 	case account.StateOpen:
 		rpcState = clmrpc.AccountState_OPEN
 
+	case account.StateExpired:
+		rpcState = clmrpc.AccountState_EXPIRED
+
 	default:
 		return nil, fmt.Errorf("unknown state %v", a.State)
 	}

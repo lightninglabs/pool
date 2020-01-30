@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/lntest/wait"
@@ -81,6 +82,42 @@ func (h *testHarness) assertAcccountExists(expected *Account) {
 	if err != nil {
 		h.t.Fatal(err)
 	}
+}
+
+func (h *testHarness) openAccount(value btcutil.Amount, expiry uint32,
+	bestHeight uint32) *Account {
+
+	h.t.Helper()
+
+	// Create a new account. Its initial state should be StatePendingOpen.
+	ctx := context.Background()
+	account, err := h.manager.InitAccount(ctx, value, expiry, bestHeight)
+	if err != nil {
+		h.t.Fatalf("unable to create new account: %v", err)
+	}
+
+	// The same account should be found in the store.
+	h.assertAcccountExists(account)
+
+	// Notify the confirmation of the account.
+	h.notifier.confChan <- &chainntnfs.TxConfirmation{}
+
+	// This should prompt the account to now be in a StateOpen state.
+	account.State = StateOpen
+	h.assertAcccountExists(account)
+
+	return account
+}
+
+func (h *testHarness) expireAccount(account *Account) {
+	h.t.Helper()
+
+	// Notify the height at which the account expires.
+	h.notifier.blockChan <- int32(account.Expiry)
+
+	// This should prompt the account to now be in a StateExpired state.
+	account.State = StateExpired
+	h.assertAcccountExists(account)
 }
 
 func (h *testHarness) restartManager() {
@@ -235,4 +272,23 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 	// This should prompt the account to now be in a Confirmed state.
 	account.State = StateOpen
 	h.assertAcccountExists(account)
+}
+
+// TestAccountExpiration ensures that we properly detect when an account expires
+// on-chain. As a result, the account should be marked as StateExpired in the
+// database.
+func TestAccountExpiration(t *testing.T) {
+	t.Parallel()
+
+	const bestHeight = 100
+
+	h := newTestHarness(t)
+	h.start()
+	defer h.stop()
+
+	account := h.openAccount(
+		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+	)
+
+	h.expireAccount(account)
 }

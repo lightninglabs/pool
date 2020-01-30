@@ -78,8 +78,17 @@ message ModifyAccountResponse {
 
 
 enum AccountState {
+    // The state of an account when it is pending its confirmation on-chain.
     PENDING_OPEN = 0;
+
+    // The state of an account once it has confirmed on-chain.
     OPEN = 1;
+
+    /*
+    The state of an account once its expiration has been reached and its closing
+    transaction has confirmed.
+    */
+    EXPIRED = 2;
 }
 
 message Account {
