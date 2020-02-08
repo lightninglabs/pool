@@ -9,8 +9,8 @@ type SupplyUnit uint64
 
 const (
 	// BaseSupplyUnit is the smallest channel that can be bought or sold in
-	// the system.
-	BaseSupplyUnit uint64 = 100000
+	// the system. These units are expressed in satoshis.
+	BaseSupplyUnit SupplyUnit = 100_000
 )
 
 // NewSupplyFromSats calculates the number of supply units that can be bought or
@@ -18,11 +18,11 @@ const (
 func NewSupplyFromSats(sats btcutil.Amount) SupplyUnit {
 	// TODO(roasbeef): ensure proper rounding, etc.
 
-	return SupplyUnit(uint64(sats) / BaseSupplyUnit)
+	return SupplyUnit(uint64(sats) / uint64(BaseSupplyUnit))
 }
 
 // ToSatoshis maps a set number of supply units to the corresponding number of
 // satoshis.
 func (s SupplyUnit) ToSatoshis() btcutil.Amount {
-	return btcutil.Amount(uint64(s) * BaseSupplyUnit)
+	return btcutil.Amount(uint64(s) * uint64(BaseSupplyUnit))
 }
