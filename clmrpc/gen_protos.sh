@@ -16,9 +16,9 @@ done
 protoc -I/usr/local/include -I. \
        -I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis \
        --grpc-gateway_out=logtostderr=true:. \
-       client.proto
+       trader.proto
 
 protoc -I/usr/local/include -I. \
        -I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis \
        --swagger_out=logtostderr=true:. \
-       client.proto
+       trader.proto

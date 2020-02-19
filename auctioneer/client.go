@@ -18,7 +18,7 @@ import (
 // Client performs the client side part of auctions. This interface exists to be
 // able to implement a stub.
 type Client struct {
-	client clmrpc.ChannelAuctioneerServerClient
+	client clmrpc.ChannelAuctioneerClient
 	wallet lndclient.WalletKitClient
 }
 
@@ -39,7 +39,7 @@ func NewClient(serverAddress string, insecure bool, tlsPathServer string,
 	}
 
 	return &Client{
-		client: clmrpc.NewChannelAuctioneerServerClient(serverConn),
+		client: clmrpc.NewChannelAuctioneerClient(serverConn),
 		wallet: wallet,
 	}, cleanup, nil
 }

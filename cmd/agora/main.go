@@ -70,7 +70,7 @@ func main() {
 	}
 }
 
-func getClient(ctx *cli.Context) (clmrpc.ChannelAuctioneerClientClient, func(),
+func getClient(ctx *cli.Context) (clmrpc.TraderClient, func(),
 	error) {
 
 	rpcServer := ctx.GlobalString("rpcserver")
@@ -80,7 +80,7 @@ func getClient(ctx *cli.Context) (clmrpc.ChannelAuctioneerClientClient, func(),
 	}
 	cleanup := func() { conn.Close() }
 
-	traderClient := clmrpc.NewChannelAuctioneerClientClient(conn)
+	traderClient := clmrpc.NewTraderClient(conn)
 	return traderClient, cleanup, nil
 }
 

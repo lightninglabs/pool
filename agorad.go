@@ -101,7 +101,7 @@ func Start(config *Config) error {
 
 	serverOpts := []grpc.ServerOption{}
 	grpcServer := grpc.NewServer(serverOpts...)
-	clmrpc.RegisterChannelAuctioneerClientServer(grpcServer, traderServer)
+	clmrpc.RegisterTraderServer(grpcServer, traderServer)
 
 	// Next, start the gRPC server listening for HTTP/2 connections.
 	// If the provided grpcListener is not nil, it means agorad is being
@@ -130,7 +130,7 @@ func Start(config *Config) error {
 		defer cancel()
 		mux := proxy.NewServeMux()
 		proxyOpts := []grpc.DialOption{grpc.WithInsecure()}
-		err = clmrpc.RegisterChannelAuctioneerClientHandlerFromEndpoint(
+		err = clmrpc.RegisterTraderHandlerFromEndpoint(
 			ctx, mux, config.RPCListen, proxyOpts,
 		)
 		if err != nil {

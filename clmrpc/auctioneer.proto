@@ -4,7 +4,7 @@ import "google/api/annotations.proto";
 
 package clmrpc;
 
-service ChannelAuctioneerServer {
+service ChannelAuctioneer {
     rpc ReserveAccount (ReserveAccountRequest) returns (ReserveAccountResponse);
     rpc InitAccount (ServerInitAccountRequest) returns (ServerInitAccountResponse);
     rpc ModifyAccount (ServerModifyAccountRequest) returns (ServerModifyAccountResponse);

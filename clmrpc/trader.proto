@@ -1,11 +1,11 @@
 syntax = "proto3";
 
 import "google/api/annotations.proto";
-import "server.proto";
+import "auctioneer.proto";
 
 package clmrpc;
 
-service ChannelAuctioneerClient {
+service Trader {
     rpc InitAccount (InitAccountRequest) returns (Account) {
         option (google.api.http) = {
             post: "/v1/clm/accounts"

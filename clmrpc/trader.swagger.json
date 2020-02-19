@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "client.proto",
+    "title": "trader.proto",
     "version": "version not set"
   },
   "schemes": [
@@ -27,7 +27,7 @@
           }
         },
         "tags": [
-          "ChannelAuctioneerClient"
+          "Trader"
         ]
       },
       "post": {
@@ -51,7 +51,7 @@
           }
         ],
         "tags": [
-          "ChannelAuctioneerClient"
+          "Trader"
         ]
       }
     },
@@ -83,7 +83,7 @@
           }
         ],
         "tags": [
-          "ChannelAuctioneerClient"
+          "Trader"
         ]
       }
     },
@@ -109,7 +109,7 @@
           }
         ],
         "tags": [
-          "ChannelAuctioneerClient"
+          "Trader"
         ]
       }
     },
@@ -125,7 +125,7 @@
           }
         },
         "tags": [
-          "ChannelAuctioneerClient"
+          "Trader"
         ]
       },
       "post": {
@@ -149,7 +149,7 @@
           }
         ],
         "tags": [
-          "ChannelAuctioneerClient"
+          "Trader"
         ]
       }
     },
@@ -174,7 +174,7 @@
           }
         ],
         "tags": [
-          "ChannelAuctioneerClient"
+          "Trader"
         ]
       }
     }
