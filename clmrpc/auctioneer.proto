@@ -94,7 +94,7 @@ message ServerSubmitOrderResponse {
 
 message ServerCancelOrderRequest {
     /**
-    The order's unique identifier.
+    The order's unique 32 byte identifier.
     */
     bytes order_nonce = 1;
 }
@@ -103,22 +103,310 @@ message ServerCancelOrderResponse {
 
 message ClientAuctionMessage {
     oneof msg {
-        OrderMatchPrepare prepare = 1;
-        OrderMatchAccept accept = 2;
-        OrderMatchSign sign = 3;
-        OrderMatchFinalize finalize = 4;
+        /**
+        Signal the intent to receive updates about a certain account and start
+        by sending the commitment part of the authentication handshake. This is
+        step 1 of the 3-way handshake.
+        */
+        AccountCommitment commit = 1;
+
+        /**
+        Subscribe to update and interactive order execution events for account
+        given and all its orders. Contains the final signature and is step 3 of
+        the 3-way authentication handshake.
+        */
+        AccountSubscription subscribe = 2;
+
+        /**
+        Accept the orders to be matched.
+        */
+        OrderMatchAccept accept = 3;
+
+        /**
+        Reject a whole batch.
+        */
+        OrderMatchReject reject = 4;
+
+        /**
+        The channel funding negotiations with the matched peer were successful
+        and the inputs to spend from the accounts are now signed.
+        */
+        OrderMatchSign sign = 5;
     }
 }
 
-message OrderMatchPrepare {
+message AccountCommitment {
+    /**
+    The SHA256 hash of the user's account sub key and a 32 byte random nonce.
+    commit_hash = SHA256(accountPubKey || nonce)
+    */
+    bytes commit_hash = 1;
 }
+
+message AccountSubscription {
+    /**
+    The user's sub account key of the account to subscribe to.
+    */
+    bytes user_sub_key = 1;
+
+    /**
+    The random 32 byte nonce the trader used to create the commitment hash.
+    */
+    bytes commit_nonce = 2;
+
+    /**
+    The signature over the auth_hash which is the hash of the commitment and
+    challenge. The signature is created with the user's sub account key they
+    committed to.
+    auth_hash = SHA256(SHA256(accountPubKey || nonce) || challenge)
+    */
+    bytes auth_sig = 3;
+}
+
 message OrderMatchAccept {
+    /**
+    A list of all order nonces of the orders that are accepted by the trader to
+    be matched by the auctioneer. Orders that didn't have all their units
+    fulfilled need to be tracked by the trader locally by applying all diffs
+    resulting from an executed batch.
+    */
+    repeated bytes order_nonce = 1;
+
+    /**
+    The batch ID this acceptance message refers to. Must be set to avoid out-of-
+    order responses from disrupting the batching process.
+    */
+    bytes batch_id = 2;
 }
+
+message OrderMatchReject {
+    enum RejectReason {
+        /// The reason cannot be mapped to a specific code.
+        UNKNOWN = 0;
+
+        /**
+        The client didn't come up with the same result as the server and is
+        rejecting the batch because of that.
+        */
+        SERVER_MISBEHAVIOR = 1;
+    }
+
+    /**
+    The ID of the batch to reject.
+    */
+    bytes batch_id = 1;
+
+    /**
+    The reason/error string for the rejection.
+    */
+    string reason = 2;
+
+    /**
+    The reason as a code.
+    */
+    RejectReason reason_code = 3;
+}
+
 message OrderMatchSign {
+    /**
+    The ID of the batch that the signatures are meant for.
+    */
+    bytes batch_id = 1;
+
+    /**
+    A map with the witnesses to spend the accounts being spent in a batch
+    transaction. The map key corresponds to the user's sub key of the account in
+    the batch transaction. The account key/ID has to be hex encoded into a
+    string because protobuf doesn't allow bytes as a map key data type.
+    */
+    map<string, AccountWitness> account_witness = 2;
 }
-message OrderMatchFinalize {
+
+message AccountWitness {
+    /**
+    The full witness stack that is needed to spend an account input.
+    */
+    repeated bytes witness = 1;
 }
+
 message ServerAuctionMessage {
+    oneof msg {
+        /**
+        Step 2 of the 3-way authentication handshake. Contains the
+        authentication challenge. Subscriptions sent by the trader must sign
+        the message SHA256(SHA256(accountPubKey || nonce) || challenge)
+        with their account sub key to prove ownership of said key.
+        */
+        ServerChallenge challenge = 1;
+
+        /**
+        The auctioneer has matched a set of orders into a batch and now
+        instructs the traders to validate the batch and prepare for order
+        execution. Because traders have the possibility of backing out of a
+        batch, multiple of these messages with the SAME batch_id can be sent.
+        */
+        OrderMatchPrepare prepare = 2;
+
+        /**
+        All traders have accepted and signed the batch and the final transaction
+        was broadcast.
+        */
+        OrderMatchFinalize finalize = 3;
+
+        /**
+        The server is shutting down for maintenance. Traders should close the
+        long-lived stream/connection and try to connect again after some time.
+        */
+        ServerShutdown shutdown = 4;
+    }
+}
+
+message ServerChallenge {
+    /**
+    The unique challenge for each stream that has to be signed with the user's
+    sub key for each account subscription.
+    */
+    bytes challenge = 1;
+
+    /**
+    The commit hash the challenge was created for.
+    */
+    bytes commit_hash = 2;
+}
+
+message OrderMatchPrepare {
+    /**
+    Maps a user's own order_nonce to the opposite order type they were matched
+    with. The order_nonce is a 32 byte hex encoded string because bytes is not
+    allowed as a map key data type in protobuf.
+    */
+    map<string, MatchedOrder> matched_orders = 1;
+
+    /**
+    A list of the user's own accounts that are being spent by the matched
+    orders. The list contains the differences that would be applied by the
+    server when executing the orders.
+    */
+    repeated AccountDiff charged_accounts = 2;
+
+    /**
+    The transaction indices of the newly created channel points for the matched
+    orders.
+    */
+    repeated uint32 new_chan_tx_indices = 3;
+
+    /**
+    The batch transaction with all non-witness data.
+    */
+    bytes batch_transaction = 4;
+
+    /**
+    Fee rate of the batch transaction, expressed in satoshis per 1000 weight
+    units (sat/kW).
+    */
+    int64 fee_rate_sat_per_kw = 5;
+
+    /**
+    Fee rebate in satoshis, offered if another batch participant wants to pay
+    more fees for a faster confirmation.
+    */
+    int64 fee_rebate_sat = 6;
+
+    /**
+    The 32 byte unique identifier of this batch.
+    */
+    bytes batch_id = 7;
+}
+
+message OrderMatchFinalize {
+    /**
+    The unique identifier of the finalized batch.
+    */
+    bytes batch_id = 1;
+
+    /**
+    The final transaction ID of the published batch transaction.
+    */
+    bytes batch_txid = 2;
+
+    /**
+    The current block height at the time the batch transaction was published to
+    the network.
+    */
+    uint32 height_hint = 3;
+}
+
+message ServerShutdown {
+}
+
+message MatchedOrder {
+    /**
+    The bids the trader's own order was matched against. This list is empty if
+    the trader's order was a bid order itself.
+    */
+    repeated MatchedBid matched_bid = 1;
+
+    /**
+    The asks the trader's own order was matched against. This list is empty if
+    the trader's order was an ask order itself.
+    */
+    repeated MatchedAsk matched_ask = 2;
+}
+
+message MatchedAsk {
+    /**
+    The ask order that was matched against.
+    */
+    ServerAsk ask = 1;
+
+    /**
+    The number of units that were filled from/by this matched order.
+    */
+    uint32 units_filled = 2;
+}
+message MatchedBid {
+    /**
+    The ask order that was matched against.
+    */
+    ServerBid bid = 1;
+
+    /**
+    The number of units that were filled from/by this matched order.
+    */
+    uint32 units_filled = 2;
+}
+
+message AccountDiff {
+    enum AccountState {
+        OUTPUT_RECREATED = 0;
+        OUTPUT_DUST_EXTENDED_OFFCHAIN = 1;
+        OUTPUT_DUST_ADDED_TO_FEES = 2;
+        OUTPUT_FULLY_SPENT = 3;
+    }
+
+    /**
+    The final balance of the account after the executed batch.
+    */
+    int64 ending_balance = 1;
+
+    /**
+    Depending on the amount of the final balance of the account, the remainder
+    is either sent to a new on-chain output, extended off-chain or fully
+    consumed by the batch and its fees.
+    */
+    AccountState ending_state = 2;
+
+    /**
+    If the account was re-created on-chain then the new account outpoint is set
+    here. If the account was fully spent or the remainder was extended off-chain
+    then no new account outpoint is created.
+    */
+    OutPoint outpoint = 3;
+
+    /**
+    The expiry of the new account outpoint.
+    */
+    uint32 expiry = 4;
 }
 
 message ServerOrder {
@@ -143,14 +431,14 @@ message ServerOrder {
     reserved 4, 5;
 
     /**
-    Order nonce, acts as unique order identifier.
+    Order nonce of 32 byte length, acts as unique order identifier.
     */
     bytes order_nonce = 6;
 
     /**
     Signature of the order's digest, signed with the user's account key. The
     signature must be fixed-size LN wire format encoded. Version 0 includes the
-    fields version, rate_fixed, amt, funding_fee_rate and
+    fields version, rate_fixed, amt, funding_fee_rate_sat_per_kw and
     min/max_duration_blocks in the order digest.
     */
     bytes order_sig = 7;
@@ -186,7 +474,7 @@ message ServerOrder {
     Preferred fee rate to be used for the channel funding transaction, expressed
     in satoshis per 1000 weight units (sat/kW).
     */
-    int64 funding_fee_rate = 13;
+    int64 funding_fee_rate_sat_per_kw = 13;
 }
 
 message ServerBid {
@@ -296,17 +584,17 @@ message ServerOrderStateRequest {
     bytes order_nonce = 1;
 }
 
-message ServerOrderStateResponse {
-    enum OrderState {
-        SUBMITTED = 0;
-        CLEARED = 1;
-        PARTIAL_FILL = 2;
-        EXECUTED = 3;
-        CANCELED = 4;
-        EXPIRED = 5;
-        FAILED = 6;
-    }
+enum OrderState {
+    ORDER_SUBMITTED = 0;
+    ORDER_CLEARED = 1;
+    ORDER_PARTIALLY_FILLED = 2;
+    ORDER_EXECUTED = 3;
+    ORDER_CANCELED = 4;
+    ORDER_EXPIRED = 5;
+    ORDER_FAILED = 6;
+}
 
+message ServerOrderStateResponse {
     /**
     The state the order currently is in.
     */

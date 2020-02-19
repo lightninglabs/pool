@@ -23,6 +23,106 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
+type OrderState int32
+
+const (
+	OrderState_ORDER_SUBMITTED        OrderState = 0
+	OrderState_ORDER_CLEARED          OrderState = 1
+	OrderState_ORDER_PARTIALLY_FILLED OrderState = 2
+	OrderState_ORDER_EXECUTED         OrderState = 3
+	OrderState_ORDER_CANCELED         OrderState = 4
+	OrderState_ORDER_EXPIRED          OrderState = 5
+	OrderState_ORDER_FAILED           OrderState = 6
+)
+
+var OrderState_name = map[int32]string{
+	0: "ORDER_SUBMITTED",
+	1: "ORDER_CLEARED",
+	2: "ORDER_PARTIALLY_FILLED",
+	3: "ORDER_EXECUTED",
+	4: "ORDER_CANCELED",
+	5: "ORDER_EXPIRED",
+	6: "ORDER_FAILED",
+}
+
+var OrderState_value = map[string]int32{
+	"ORDER_SUBMITTED":        0,
+	"ORDER_CLEARED":          1,
+	"ORDER_PARTIALLY_FILLED": 2,
+	"ORDER_EXECUTED":         3,
+	"ORDER_CANCELED":         4,
+	"ORDER_EXPIRED":          5,
+	"ORDER_FAILED":           6,
+}
+
+func (x OrderState) String() string {
+	return proto.EnumName(OrderState_name, int32(x))
+}
+
+func (OrderState) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{0}
+}
+
+type OrderMatchReject_RejectReason int32
+
+const (
+	/// The reason cannot be mapped to a specific code.
+	OrderMatchReject_UNKNOWN OrderMatchReject_RejectReason = 0
+	//*
+	//The client didn't come up with the same result as the server and is
+	//rejecting the batch because of that.
+	OrderMatchReject_SERVER_MISBEHAVIOR OrderMatchReject_RejectReason = 1
+)
+
+var OrderMatchReject_RejectReason_name = map[int32]string{
+	0: "UNKNOWN",
+	1: "SERVER_MISBEHAVIOR",
+}
+
+var OrderMatchReject_RejectReason_value = map[string]int32{
+	"UNKNOWN":            0,
+	"SERVER_MISBEHAVIOR": 1,
+}
+
+func (x OrderMatchReject_RejectReason) String() string {
+	return proto.EnumName(OrderMatchReject_RejectReason_name, int32(x))
+}
+
+func (OrderMatchReject_RejectReason) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{12, 0}
+}
+
+type AccountDiff_AccountState int32
+
+const (
+	AccountDiff_OUTPUT_RECREATED              AccountDiff_AccountState = 0
+	AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN AccountDiff_AccountState = 1
+	AccountDiff_OUTPUT_DUST_ADDED_TO_FEES     AccountDiff_AccountState = 2
+	AccountDiff_OUTPUT_FULLY_SPENT            AccountDiff_AccountState = 3
+)
+
+var AccountDiff_AccountState_name = map[int32]string{
+	0: "OUTPUT_RECREATED",
+	1: "OUTPUT_DUST_EXTENDED_OFFCHAIN",
+	2: "OUTPUT_DUST_ADDED_TO_FEES",
+	3: "OUTPUT_FULLY_SPENT",
+}
+
+var AccountDiff_AccountState_value = map[string]int32{
+	"OUTPUT_RECREATED":              0,
+	"OUTPUT_DUST_EXTENDED_OFFCHAIN": 1,
+	"OUTPUT_DUST_ADDED_TO_FEES":     2,
+	"OUTPUT_FULLY_SPENT":            3,
+}
+
+func (x AccountDiff_AccountState) String() string {
+	return proto.EnumName(AccountDiff_AccountState_name, int32(x))
+}
+
+func (AccountDiff_AccountState) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{23, 0}
+}
+
 type InvalidOrder_FailReason int32
 
 const (
@@ -42,47 +142,7 @@ func (x InvalidOrder_FailReason) String() string {
 }
 
 func (InvalidOrder_FailReason) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{18, 0}
-}
-
-type ServerOrderStateResponse_OrderState int32
-
-const (
-	ServerOrderStateResponse_SUBMITTED    ServerOrderStateResponse_OrderState = 0
-	ServerOrderStateResponse_CLEARED      ServerOrderStateResponse_OrderState = 1
-	ServerOrderStateResponse_PARTIAL_FILL ServerOrderStateResponse_OrderState = 2
-	ServerOrderStateResponse_EXECUTED     ServerOrderStateResponse_OrderState = 3
-	ServerOrderStateResponse_CANCELED     ServerOrderStateResponse_OrderState = 4
-	ServerOrderStateResponse_EXPIRED      ServerOrderStateResponse_OrderState = 5
-	ServerOrderStateResponse_FAILED       ServerOrderStateResponse_OrderState = 6
-)
-
-var ServerOrderStateResponse_OrderState_name = map[int32]string{
-	0: "SUBMITTED",
-	1: "CLEARED",
-	2: "PARTIAL_FILL",
-	3: "EXECUTED",
-	4: "CANCELED",
-	5: "EXPIRED",
-	6: "FAILED",
-}
-
-var ServerOrderStateResponse_OrderState_value = map[string]int32{
-	"SUBMITTED":    0,
-	"CLEARED":      1,
-	"PARTIAL_FILL": 2,
-	"EXECUTED":     3,
-	"CANCELED":     4,
-	"EXPIRED":      5,
-	"FAILED":       6,
-}
-
-func (x ServerOrderStateResponse_OrderState) String() string {
-	return proto.EnumName(ServerOrderStateResponse_OrderState_name, int32(x))
-}
-
-func (ServerOrderStateResponse_OrderState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{24, 0}
+	return fileDescriptor_f3883418d94ca37f, []int{28, 0}
 }
 
 type ReserveAccountRequest struct {
@@ -449,7 +509,7 @@ func (*ServerSubmitOrderResponse) XXX_OneofWrappers() []interface{} {
 
 type ServerCancelOrderRequest struct {
 	//*
-	//The order's unique identifier.
+	//The order's unique 32 byte identifier.
 	OrderNonce           []byte   `protobuf:"bytes,1,opt,name=order_nonce,json=orderNonce,proto3" json:"order_nonce,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -521,10 +581,11 @@ var xxx_messageInfo_ServerCancelOrderResponse proto.InternalMessageInfo
 
 type ClientAuctionMessage struct {
 	// Types that are valid to be assigned to Msg:
-	//	*ClientAuctionMessage_Prepare
+	//	*ClientAuctionMessage_Commit
+	//	*ClientAuctionMessage_Subscribe
 	//	*ClientAuctionMessage_Accept
+	//	*ClientAuctionMessage_Reject
 	//	*ClientAuctionMessage_Sign
-	//	*ClientAuctionMessage_Finalize
 	Msg                  isClientAuctionMessage_Msg `protobuf_oneof:"msg"`
 	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
 	XXX_unrecognized     []byte                     `json:"-"`
@@ -560,29 +621,35 @@ type isClientAuctionMessage_Msg interface {
 	isClientAuctionMessage_Msg()
 }
 
-type ClientAuctionMessage_Prepare struct {
-	Prepare *OrderMatchPrepare `protobuf:"bytes,1,opt,name=prepare,proto3,oneof"`
+type ClientAuctionMessage_Commit struct {
+	Commit *AccountCommitment `protobuf:"bytes,1,opt,name=commit,proto3,oneof"`
+}
+
+type ClientAuctionMessage_Subscribe struct {
+	Subscribe *AccountSubscription `protobuf:"bytes,2,opt,name=subscribe,proto3,oneof"`
 }
 
 type ClientAuctionMessage_Accept struct {
-	Accept *OrderMatchAccept `protobuf:"bytes,2,opt,name=accept,proto3,oneof"`
+	Accept *OrderMatchAccept `protobuf:"bytes,3,opt,name=accept,proto3,oneof"`
+}
+
+type ClientAuctionMessage_Reject struct {
+	Reject *OrderMatchReject `protobuf:"bytes,4,opt,name=reject,proto3,oneof"`
 }
 
 type ClientAuctionMessage_Sign struct {
-	Sign *OrderMatchSign `protobuf:"bytes,3,opt,name=sign,proto3,oneof"`
+	Sign *OrderMatchSign `protobuf:"bytes,5,opt,name=sign,proto3,oneof"`
 }
 
-type ClientAuctionMessage_Finalize struct {
-	Finalize *OrderMatchFinalize `protobuf:"bytes,4,opt,name=finalize,proto3,oneof"`
-}
+func (*ClientAuctionMessage_Commit) isClientAuctionMessage_Msg() {}
 
-func (*ClientAuctionMessage_Prepare) isClientAuctionMessage_Msg() {}
+func (*ClientAuctionMessage_Subscribe) isClientAuctionMessage_Msg() {}
 
 func (*ClientAuctionMessage_Accept) isClientAuctionMessage_Msg() {}
 
-func (*ClientAuctionMessage_Sign) isClientAuctionMessage_Msg() {}
+func (*ClientAuctionMessage_Reject) isClientAuctionMessage_Msg() {}
 
-func (*ClientAuctionMessage_Finalize) isClientAuctionMessage_Msg() {}
+func (*ClientAuctionMessage_Sign) isClientAuctionMessage_Msg() {}
 
 func (m *ClientAuctionMessage) GetMsg() isClientAuctionMessage_Msg {
 	if m != nil {
@@ -591,9 +658,16 @@ func (m *ClientAuctionMessage) GetMsg() isClientAuctionMessage_Msg {
 	return nil
 }
 
-func (m *ClientAuctionMessage) GetPrepare() *OrderMatchPrepare {
-	if x, ok := m.GetMsg().(*ClientAuctionMessage_Prepare); ok {
-		return x.Prepare
+func (m *ClientAuctionMessage) GetCommit() *AccountCommitment {
+	if x, ok := m.GetMsg().(*ClientAuctionMessage_Commit); ok {
+		return x.Commit
+	}
+	return nil
+}
+
+func (m *ClientAuctionMessage) GetSubscribe() *AccountSubscription {
+	if x, ok := m.GetMsg().(*ClientAuctionMessage_Subscribe); ok {
+		return x.Subscribe
 	}
 	return nil
 }
@@ -605,6 +679,13 @@ func (m *ClientAuctionMessage) GetAccept() *OrderMatchAccept {
 	return nil
 }
 
+func (m *ClientAuctionMessage) GetReject() *OrderMatchReject {
+	if x, ok := m.GetMsg().(*ClientAuctionMessage_Reject); ok {
+		return x.Reject
+	}
+	return nil
+}
+
 func (m *ClientAuctionMessage) GetSign() *OrderMatchSign {
 	if x, ok := m.GetMsg().(*ClientAuctionMessage_Sign); ok {
 		return x.Sign
@@ -612,55 +693,134 @@ func (m *ClientAuctionMessage) GetSign() *OrderMatchSign {
 	return nil
 }
 
-func (m *ClientAuctionMessage) GetFinalize() *OrderMatchFinalize {
-	if x, ok := m.GetMsg().(*ClientAuctionMessage_Finalize); ok {
-		return x.Finalize
-	}
-	return nil
-}
-
 // XXX_OneofWrappers is for the internal use of the proto package.
 func (*ClientAuctionMessage) XXX_OneofWrappers() []interface{} {
 	return []interface{}{
-		(*ClientAuctionMessage_Prepare)(nil),
+		(*ClientAuctionMessage_Commit)(nil),
+		(*ClientAuctionMessage_Subscribe)(nil),
 		(*ClientAuctionMessage_Accept)(nil),
+		(*ClientAuctionMessage_Reject)(nil),
 		(*ClientAuctionMessage_Sign)(nil),
-		(*ClientAuctionMessage_Finalize)(nil),
 	}
 }
 
-type OrderMatchPrepare struct {
+type AccountCommitment struct {
+	//*
+	//The SHA256 hash of the user's account sub key and a 32 byte random nonce.
+	//commit_hash = SHA256(accountPubKey || nonce)
+	CommitHash           []byte   `protobuf:"bytes,1,opt,name=commit_hash,json=commitHash,proto3" json:"commit_hash,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *OrderMatchPrepare) Reset()         { *m = OrderMatchPrepare{} }
-func (m *OrderMatchPrepare) String() string { return proto.CompactTextString(m) }
-func (*OrderMatchPrepare) ProtoMessage()    {}
-func (*OrderMatchPrepare) Descriptor() ([]byte, []int) {
+func (m *AccountCommitment) Reset()         { *m = AccountCommitment{} }
+func (m *AccountCommitment) String() string { return proto.CompactTextString(m) }
+func (*AccountCommitment) ProtoMessage()    {}
+func (*AccountCommitment) Descriptor() ([]byte, []int) {
 	return fileDescriptor_f3883418d94ca37f, []int{9}
 }
 
-func (m *OrderMatchPrepare) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_OrderMatchPrepare.Unmarshal(m, b)
+func (m *AccountCommitment) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_AccountCommitment.Unmarshal(m, b)
 }
-func (m *OrderMatchPrepare) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_OrderMatchPrepare.Marshal(b, m, deterministic)
+func (m *AccountCommitment) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_AccountCommitment.Marshal(b, m, deterministic)
 }
-func (m *OrderMatchPrepare) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_OrderMatchPrepare.Merge(m, src)
+func (m *AccountCommitment) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AccountCommitment.Merge(m, src)
 }
-func (m *OrderMatchPrepare) XXX_Size() int {
-	return xxx_messageInfo_OrderMatchPrepare.Size(m)
+func (m *AccountCommitment) XXX_Size() int {
+	return xxx_messageInfo_AccountCommitment.Size(m)
 }
-func (m *OrderMatchPrepare) XXX_DiscardUnknown() {
-	xxx_messageInfo_OrderMatchPrepare.DiscardUnknown(m)
+func (m *AccountCommitment) XXX_DiscardUnknown() {
+	xxx_messageInfo_AccountCommitment.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_OrderMatchPrepare proto.InternalMessageInfo
+var xxx_messageInfo_AccountCommitment proto.InternalMessageInfo
+
+func (m *AccountCommitment) GetCommitHash() []byte {
+	if m != nil {
+		return m.CommitHash
+	}
+	return nil
+}
+
+type AccountSubscription struct {
+	//*
+	//The user's sub account key of the account to subscribe to.
+	UserSubKey []byte `protobuf:"bytes,1,opt,name=user_sub_key,json=userSubKey,proto3" json:"user_sub_key,omitempty"`
+	//*
+	//The random 32 byte nonce the trader used to create the commitment hash.
+	CommitNonce []byte `protobuf:"bytes,2,opt,name=commit_nonce,json=commitNonce,proto3" json:"commit_nonce,omitempty"`
+	//*
+	//The signature over the auth_hash which is the hash of the commitment and
+	//challenge. The signature is created with the user's sub account key they
+	//committed to.
+	//auth_hash = SHA256(SHA256(accountPubKey || nonce) || challenge)
+	AuthSig              []byte   `protobuf:"bytes,3,opt,name=auth_sig,json=authSig,proto3" json:"auth_sig,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *AccountSubscription) Reset()         { *m = AccountSubscription{} }
+func (m *AccountSubscription) String() string { return proto.CompactTextString(m) }
+func (*AccountSubscription) ProtoMessage()    {}
+func (*AccountSubscription) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{10}
+}
+
+func (m *AccountSubscription) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_AccountSubscription.Unmarshal(m, b)
+}
+func (m *AccountSubscription) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_AccountSubscription.Marshal(b, m, deterministic)
+}
+func (m *AccountSubscription) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AccountSubscription.Merge(m, src)
+}
+func (m *AccountSubscription) XXX_Size() int {
+	return xxx_messageInfo_AccountSubscription.Size(m)
+}
+func (m *AccountSubscription) XXX_DiscardUnknown() {
+	xxx_messageInfo_AccountSubscription.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_AccountSubscription proto.InternalMessageInfo
+
+func (m *AccountSubscription) GetUserSubKey() []byte {
+	if m != nil {
+		return m.UserSubKey
+	}
+	return nil
+}
+
+func (m *AccountSubscription) GetCommitNonce() []byte {
+	if m != nil {
+		return m.CommitNonce
+	}
+	return nil
+}
+
+func (m *AccountSubscription) GetAuthSig() []byte {
+	if m != nil {
+		return m.AuthSig
+	}
+	return nil
+}
 
 type OrderMatchAccept struct {
+	//*
+	//A list of all order nonces of the orders that are accepted by the trader to
+	//be matched by the auctioneer. Orders that didn't have all their units
+	//fulfilled need to be tracked by the trader locally by applying all diffs
+	//resulting from an executed batch.
+	OrderNonce [][]byte `protobuf:"bytes,1,rep,name=order_nonce,json=orderNonce,proto3" json:"order_nonce,omitempty"`
+	//*
+	//The batch ID this acceptance message refers to. Must be set to avoid out-of-
+	//order responses from disrupting the batching process.
+	BatchId              []byte   `protobuf:"bytes,2,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -670,7 +830,7 @@ func (m *OrderMatchAccept) Reset()         { *m = OrderMatchAccept{} }
 func (m *OrderMatchAccept) String() string { return proto.CompactTextString(m) }
 func (*OrderMatchAccept) ProtoMessage()    {}
 func (*OrderMatchAccept) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{10}
+	return fileDescriptor_f3883418d94ca37f, []int{11}
 }
 
 func (m *OrderMatchAccept) XXX_Unmarshal(b []byte) error {
@@ -691,17 +851,101 @@ func (m *OrderMatchAccept) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_OrderMatchAccept proto.InternalMessageInfo
 
+func (m *OrderMatchAccept) GetOrderNonce() [][]byte {
+	if m != nil {
+		return m.OrderNonce
+	}
+	return nil
+}
+
+func (m *OrderMatchAccept) GetBatchId() []byte {
+	if m != nil {
+		return m.BatchId
+	}
+	return nil
+}
+
+type OrderMatchReject struct {
+	//*
+	//The ID of the batch to reject.
+	BatchId []byte `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	//*
+	//The reason/error string for the rejection.
+	Reason string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	//*
+	//The reason as a code.
+	ReasonCode           OrderMatchReject_RejectReason `protobuf:"varint,3,opt,name=reason_code,json=reasonCode,proto3,enum=clmrpc.OrderMatchReject_RejectReason" json:"reason_code,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                      `json:"-"`
+	XXX_unrecognized     []byte                        `json:"-"`
+	XXX_sizecache        int32                         `json:"-"`
+}
+
+func (m *OrderMatchReject) Reset()         { *m = OrderMatchReject{} }
+func (m *OrderMatchReject) String() string { return proto.CompactTextString(m) }
+func (*OrderMatchReject) ProtoMessage()    {}
+func (*OrderMatchReject) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{12}
+}
+
+func (m *OrderMatchReject) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_OrderMatchReject.Unmarshal(m, b)
+}
+func (m *OrderMatchReject) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_OrderMatchReject.Marshal(b, m, deterministic)
+}
+func (m *OrderMatchReject) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OrderMatchReject.Merge(m, src)
+}
+func (m *OrderMatchReject) XXX_Size() int {
+	return xxx_messageInfo_OrderMatchReject.Size(m)
+}
+func (m *OrderMatchReject) XXX_DiscardUnknown() {
+	xxx_messageInfo_OrderMatchReject.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_OrderMatchReject proto.InternalMessageInfo
+
+func (m *OrderMatchReject) GetBatchId() []byte {
+	if m != nil {
+		return m.BatchId
+	}
+	return nil
+}
+
+func (m *OrderMatchReject) GetReason() string {
+	if m != nil {
+		return m.Reason
+	}
+	return ""
+}
+
+func (m *OrderMatchReject) GetReasonCode() OrderMatchReject_RejectReason {
+	if m != nil {
+		return m.ReasonCode
+	}
+	return OrderMatchReject_UNKNOWN
+}
+
 type OrderMatchSign struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	//*
+	//The ID of the batch that the signatures are meant for.
+	BatchId []byte `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	//*
+	//A map with the witnesses to spend the accounts being spent in a batch
+	//transaction. The map key corresponds to the user's sub key of the account in
+	//the batch transaction. The account key/ID has to be hex encoded into a
+	//string because protobuf doesn't allow bytes as a map key data type.
+	AccountWitness       map[string]*AccountWitness `protobuf:"bytes,2,rep,name=account_witness,json=accountWitness,proto3" json:"account_witness,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
+	XXX_unrecognized     []byte                     `json:"-"`
+	XXX_sizecache        int32                      `json:"-"`
 }
 
 func (m *OrderMatchSign) Reset()         { *m = OrderMatchSign{} }
 func (m *OrderMatchSign) String() string { return proto.CompactTextString(m) }
 func (*OrderMatchSign) ProtoMessage()    {}
 func (*OrderMatchSign) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{11}
+	return fileDescriptor_f3883418d94ca37f, []int{13}
 }
 
 func (m *OrderMatchSign) XXX_Unmarshal(b []byte) error {
@@ -722,48 +966,78 @@ func (m *OrderMatchSign) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_OrderMatchSign proto.InternalMessageInfo
 
-type OrderMatchFinalize struct {
+func (m *OrderMatchSign) GetBatchId() []byte {
+	if m != nil {
+		return m.BatchId
+	}
+	return nil
+}
+
+func (m *OrderMatchSign) GetAccountWitness() map[string]*AccountWitness {
+	if m != nil {
+		return m.AccountWitness
+	}
+	return nil
+}
+
+type AccountWitness struct {
+	//*
+	//The full witness stack that is needed to spend an account input.
+	Witness              [][]byte `protobuf:"bytes,1,rep,name=witness,proto3" json:"witness,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *OrderMatchFinalize) Reset()         { *m = OrderMatchFinalize{} }
-func (m *OrderMatchFinalize) String() string { return proto.CompactTextString(m) }
-func (*OrderMatchFinalize) ProtoMessage()    {}
-func (*OrderMatchFinalize) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{12}
+func (m *AccountWitness) Reset()         { *m = AccountWitness{} }
+func (m *AccountWitness) String() string { return proto.CompactTextString(m) }
+func (*AccountWitness) ProtoMessage()    {}
+func (*AccountWitness) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{14}
 }
 
-func (m *OrderMatchFinalize) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_OrderMatchFinalize.Unmarshal(m, b)
+func (m *AccountWitness) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_AccountWitness.Unmarshal(m, b)
 }
-func (m *OrderMatchFinalize) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_OrderMatchFinalize.Marshal(b, m, deterministic)
+func (m *AccountWitness) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_AccountWitness.Marshal(b, m, deterministic)
 }
-func (m *OrderMatchFinalize) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_OrderMatchFinalize.Merge(m, src)
+func (m *AccountWitness) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AccountWitness.Merge(m, src)
 }
-func (m *OrderMatchFinalize) XXX_Size() int {
-	return xxx_messageInfo_OrderMatchFinalize.Size(m)
+func (m *AccountWitness) XXX_Size() int {
+	return xxx_messageInfo_AccountWitness.Size(m)
 }
-func (m *OrderMatchFinalize) XXX_DiscardUnknown() {
-	xxx_messageInfo_OrderMatchFinalize.DiscardUnknown(m)
+func (m *AccountWitness) XXX_DiscardUnknown() {
+	xxx_messageInfo_AccountWitness.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_OrderMatchFinalize proto.InternalMessageInfo
+var xxx_messageInfo_AccountWitness proto.InternalMessageInfo
+
+func (m *AccountWitness) GetWitness() [][]byte {
+	if m != nil {
+		return m.Witness
+	}
+	return nil
+}
 
 type ServerAuctionMessage struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	// Types that are valid to be assigned to Msg:
+	//	*ServerAuctionMessage_Challenge
+	//	*ServerAuctionMessage_Prepare
+	//	*ServerAuctionMessage_Finalize
+	//	*ServerAuctionMessage_Shutdown
+	Msg                  isServerAuctionMessage_Msg `protobuf_oneof:"msg"`
+	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
+	XXX_unrecognized     []byte                     `json:"-"`
+	XXX_sizecache        int32                      `json:"-"`
 }
 
 func (m *ServerAuctionMessage) Reset()         { *m = ServerAuctionMessage{} }
 func (m *ServerAuctionMessage) String() string { return proto.CompactTextString(m) }
 func (*ServerAuctionMessage) ProtoMessage()    {}
 func (*ServerAuctionMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{13}
+	return fileDescriptor_f3883418d94ca37f, []int{15}
 }
 
 func (m *ServerAuctionMessage) XXX_Unmarshal(b []byte) error {
@@ -784,6 +1058,562 @@ func (m *ServerAuctionMessage) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ServerAuctionMessage proto.InternalMessageInfo
 
+type isServerAuctionMessage_Msg interface {
+	isServerAuctionMessage_Msg()
+}
+
+type ServerAuctionMessage_Challenge struct {
+	Challenge *ServerChallenge `protobuf:"bytes,1,opt,name=challenge,proto3,oneof"`
+}
+
+type ServerAuctionMessage_Prepare struct {
+	Prepare *OrderMatchPrepare `protobuf:"bytes,2,opt,name=prepare,proto3,oneof"`
+}
+
+type ServerAuctionMessage_Finalize struct {
+	Finalize *OrderMatchFinalize `protobuf:"bytes,3,opt,name=finalize,proto3,oneof"`
+}
+
+type ServerAuctionMessage_Shutdown struct {
+	Shutdown *ServerShutdown `protobuf:"bytes,4,opt,name=shutdown,proto3,oneof"`
+}
+
+func (*ServerAuctionMessage_Challenge) isServerAuctionMessage_Msg() {}
+
+func (*ServerAuctionMessage_Prepare) isServerAuctionMessage_Msg() {}
+
+func (*ServerAuctionMessage_Finalize) isServerAuctionMessage_Msg() {}
+
+func (*ServerAuctionMessage_Shutdown) isServerAuctionMessage_Msg() {}
+
+func (m *ServerAuctionMessage) GetMsg() isServerAuctionMessage_Msg {
+	if m != nil {
+		return m.Msg
+	}
+	return nil
+}
+
+func (m *ServerAuctionMessage) GetChallenge() *ServerChallenge {
+	if x, ok := m.GetMsg().(*ServerAuctionMessage_Challenge); ok {
+		return x.Challenge
+	}
+	return nil
+}
+
+func (m *ServerAuctionMessage) GetPrepare() *OrderMatchPrepare {
+	if x, ok := m.GetMsg().(*ServerAuctionMessage_Prepare); ok {
+		return x.Prepare
+	}
+	return nil
+}
+
+func (m *ServerAuctionMessage) GetFinalize() *OrderMatchFinalize {
+	if x, ok := m.GetMsg().(*ServerAuctionMessage_Finalize); ok {
+		return x.Finalize
+	}
+	return nil
+}
+
+func (m *ServerAuctionMessage) GetShutdown() *ServerShutdown {
+	if x, ok := m.GetMsg().(*ServerAuctionMessage_Shutdown); ok {
+		return x.Shutdown
+	}
+	return nil
+}
+
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*ServerAuctionMessage) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
+		(*ServerAuctionMessage_Challenge)(nil),
+		(*ServerAuctionMessage_Prepare)(nil),
+		(*ServerAuctionMessage_Finalize)(nil),
+		(*ServerAuctionMessage_Shutdown)(nil),
+	}
+}
+
+type ServerChallenge struct {
+	//*
+	//The unique challenge for each stream that has to be signed with the user's
+	//sub key for each account subscription.
+	Challenge []byte `protobuf:"bytes,1,opt,name=challenge,proto3" json:"challenge,omitempty"`
+	//*
+	//The commit hash the challenge was created for.
+	CommitHash           []byte   `protobuf:"bytes,2,opt,name=commit_hash,json=commitHash,proto3" json:"commit_hash,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ServerChallenge) Reset()         { *m = ServerChallenge{} }
+func (m *ServerChallenge) String() string { return proto.CompactTextString(m) }
+func (*ServerChallenge) ProtoMessage()    {}
+func (*ServerChallenge) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{16}
+}
+
+func (m *ServerChallenge) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ServerChallenge.Unmarshal(m, b)
+}
+func (m *ServerChallenge) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ServerChallenge.Marshal(b, m, deterministic)
+}
+func (m *ServerChallenge) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ServerChallenge.Merge(m, src)
+}
+func (m *ServerChallenge) XXX_Size() int {
+	return xxx_messageInfo_ServerChallenge.Size(m)
+}
+func (m *ServerChallenge) XXX_DiscardUnknown() {
+	xxx_messageInfo_ServerChallenge.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ServerChallenge proto.InternalMessageInfo
+
+func (m *ServerChallenge) GetChallenge() []byte {
+	if m != nil {
+		return m.Challenge
+	}
+	return nil
+}
+
+func (m *ServerChallenge) GetCommitHash() []byte {
+	if m != nil {
+		return m.CommitHash
+	}
+	return nil
+}
+
+type OrderMatchPrepare struct {
+	//*
+	//Maps a user's own order_nonce to the opposite order type they were matched
+	//with. The order_nonce is a 32 byte hex encoded string because bytes is not
+	//allowed as a map key data type in protobuf.
+	MatchedOrders map[string]*MatchedOrder `protobuf:"bytes,1,rep,name=matched_orders,json=matchedOrders,proto3" json:"matched_orders,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	//*
+	//A list of the user's own accounts that are being spent by the matched
+	//orders. The list contains the differences that would be applied by the
+	//server when executing the orders.
+	ChargedAccounts []*AccountDiff `protobuf:"bytes,2,rep,name=charged_accounts,json=chargedAccounts,proto3" json:"charged_accounts,omitempty"`
+	//*
+	//The transaction indices of the newly created channel points for the matched
+	//orders.
+	NewChanTxIndices []uint32 `protobuf:"varint,3,rep,packed,name=new_chan_tx_indices,json=newChanTxIndices,proto3" json:"new_chan_tx_indices,omitempty"`
+	//*
+	//The batch transaction with all non-witness data.
+	BatchTransaction []byte `protobuf:"bytes,4,opt,name=batch_transaction,json=batchTransaction,proto3" json:"batch_transaction,omitempty"`
+	//*
+	//Fee rate of the batch transaction, expressed in satoshis per 1000 weight
+	//units (sat/kW).
+	FeeRateSatPerKw int64 `protobuf:"varint,5,opt,name=fee_rate_sat_per_kw,json=feeRateSatPerKw,proto3" json:"fee_rate_sat_per_kw,omitempty"`
+	//*
+	//Fee rebate in satoshis, offered if another batch participant wants to pay
+	//more fees for a faster confirmation.
+	FeeRebateSat int64 `protobuf:"varint,6,opt,name=fee_rebate_sat,json=feeRebateSat,proto3" json:"fee_rebate_sat,omitempty"`
+	//*
+	//The 32 byte unique identifier of this batch.
+	BatchId              []byte   `protobuf:"bytes,7,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *OrderMatchPrepare) Reset()         { *m = OrderMatchPrepare{} }
+func (m *OrderMatchPrepare) String() string { return proto.CompactTextString(m) }
+func (*OrderMatchPrepare) ProtoMessage()    {}
+func (*OrderMatchPrepare) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{17}
+}
+
+func (m *OrderMatchPrepare) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_OrderMatchPrepare.Unmarshal(m, b)
+}
+func (m *OrderMatchPrepare) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_OrderMatchPrepare.Marshal(b, m, deterministic)
+}
+func (m *OrderMatchPrepare) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OrderMatchPrepare.Merge(m, src)
+}
+func (m *OrderMatchPrepare) XXX_Size() int {
+	return xxx_messageInfo_OrderMatchPrepare.Size(m)
+}
+func (m *OrderMatchPrepare) XXX_DiscardUnknown() {
+	xxx_messageInfo_OrderMatchPrepare.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_OrderMatchPrepare proto.InternalMessageInfo
+
+func (m *OrderMatchPrepare) GetMatchedOrders() map[string]*MatchedOrder {
+	if m != nil {
+		return m.MatchedOrders
+	}
+	return nil
+}
+
+func (m *OrderMatchPrepare) GetChargedAccounts() []*AccountDiff {
+	if m != nil {
+		return m.ChargedAccounts
+	}
+	return nil
+}
+
+func (m *OrderMatchPrepare) GetNewChanTxIndices() []uint32 {
+	if m != nil {
+		return m.NewChanTxIndices
+	}
+	return nil
+}
+
+func (m *OrderMatchPrepare) GetBatchTransaction() []byte {
+	if m != nil {
+		return m.BatchTransaction
+	}
+	return nil
+}
+
+func (m *OrderMatchPrepare) GetFeeRateSatPerKw() int64 {
+	if m != nil {
+		return m.FeeRateSatPerKw
+	}
+	return 0
+}
+
+func (m *OrderMatchPrepare) GetFeeRebateSat() int64 {
+	if m != nil {
+		return m.FeeRebateSat
+	}
+	return 0
+}
+
+func (m *OrderMatchPrepare) GetBatchId() []byte {
+	if m != nil {
+		return m.BatchId
+	}
+	return nil
+}
+
+type OrderMatchFinalize struct {
+	//*
+	//The unique identifier of the finalized batch.
+	BatchId []byte `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	//*
+	//The final transaction ID of the published batch transaction.
+	BatchTxid []byte `protobuf:"bytes,2,opt,name=batch_txid,json=batchTxid,proto3" json:"batch_txid,omitempty"`
+	//*
+	//The current block height at the time the batch transaction was published to
+	//the network.
+	HeightHint           uint32   `protobuf:"varint,3,opt,name=height_hint,json=heightHint,proto3" json:"height_hint,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *OrderMatchFinalize) Reset()         { *m = OrderMatchFinalize{} }
+func (m *OrderMatchFinalize) String() string { return proto.CompactTextString(m) }
+func (*OrderMatchFinalize) ProtoMessage()    {}
+func (*OrderMatchFinalize) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{18}
+}
+
+func (m *OrderMatchFinalize) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_OrderMatchFinalize.Unmarshal(m, b)
+}
+func (m *OrderMatchFinalize) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_OrderMatchFinalize.Marshal(b, m, deterministic)
+}
+func (m *OrderMatchFinalize) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OrderMatchFinalize.Merge(m, src)
+}
+func (m *OrderMatchFinalize) XXX_Size() int {
+	return xxx_messageInfo_OrderMatchFinalize.Size(m)
+}
+func (m *OrderMatchFinalize) XXX_DiscardUnknown() {
+	xxx_messageInfo_OrderMatchFinalize.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_OrderMatchFinalize proto.InternalMessageInfo
+
+func (m *OrderMatchFinalize) GetBatchId() []byte {
+	if m != nil {
+		return m.BatchId
+	}
+	return nil
+}
+
+func (m *OrderMatchFinalize) GetBatchTxid() []byte {
+	if m != nil {
+		return m.BatchTxid
+	}
+	return nil
+}
+
+func (m *OrderMatchFinalize) GetHeightHint() uint32 {
+	if m != nil {
+		return m.HeightHint
+	}
+	return 0
+}
+
+type ServerShutdown struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ServerShutdown) Reset()         { *m = ServerShutdown{} }
+func (m *ServerShutdown) String() string { return proto.CompactTextString(m) }
+func (*ServerShutdown) ProtoMessage()    {}
+func (*ServerShutdown) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{19}
+}
+
+func (m *ServerShutdown) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ServerShutdown.Unmarshal(m, b)
+}
+func (m *ServerShutdown) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ServerShutdown.Marshal(b, m, deterministic)
+}
+func (m *ServerShutdown) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ServerShutdown.Merge(m, src)
+}
+func (m *ServerShutdown) XXX_Size() int {
+	return xxx_messageInfo_ServerShutdown.Size(m)
+}
+func (m *ServerShutdown) XXX_DiscardUnknown() {
+	xxx_messageInfo_ServerShutdown.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ServerShutdown proto.InternalMessageInfo
+
+type MatchedOrder struct {
+	//*
+	//The bids the trader's own order was matched against. This list is empty if
+	//the trader's order was a bid order itself.
+	MatchedBid []*MatchedBid `protobuf:"bytes,1,rep,name=matched_bid,json=matchedBid,proto3" json:"matched_bid,omitempty"`
+	//*
+	//The asks the trader's own order was matched against. This list is empty if
+	//the trader's order was an ask order itself.
+	MatchedAsk           []*MatchedAsk `protobuf:"bytes,2,rep,name=matched_ask,json=matchedAsk,proto3" json:"matched_ask,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
+}
+
+func (m *MatchedOrder) Reset()         { *m = MatchedOrder{} }
+func (m *MatchedOrder) String() string { return proto.CompactTextString(m) }
+func (*MatchedOrder) ProtoMessage()    {}
+func (*MatchedOrder) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{20}
+}
+
+func (m *MatchedOrder) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_MatchedOrder.Unmarshal(m, b)
+}
+func (m *MatchedOrder) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_MatchedOrder.Marshal(b, m, deterministic)
+}
+func (m *MatchedOrder) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MatchedOrder.Merge(m, src)
+}
+func (m *MatchedOrder) XXX_Size() int {
+	return xxx_messageInfo_MatchedOrder.Size(m)
+}
+func (m *MatchedOrder) XXX_DiscardUnknown() {
+	xxx_messageInfo_MatchedOrder.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MatchedOrder proto.InternalMessageInfo
+
+func (m *MatchedOrder) GetMatchedBid() []*MatchedBid {
+	if m != nil {
+		return m.MatchedBid
+	}
+	return nil
+}
+
+func (m *MatchedOrder) GetMatchedAsk() []*MatchedAsk {
+	if m != nil {
+		return m.MatchedAsk
+	}
+	return nil
+}
+
+type MatchedAsk struct {
+	//*
+	//The ask order that was matched against.
+	Ask *ServerAsk `protobuf:"bytes,1,opt,name=ask,proto3" json:"ask,omitempty"`
+	//*
+	//The number of units that were filled from/by this matched order.
+	UnitsFilled          uint32   `protobuf:"varint,2,opt,name=units_filled,json=unitsFilled,proto3" json:"units_filled,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *MatchedAsk) Reset()         { *m = MatchedAsk{} }
+func (m *MatchedAsk) String() string { return proto.CompactTextString(m) }
+func (*MatchedAsk) ProtoMessage()    {}
+func (*MatchedAsk) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{21}
+}
+
+func (m *MatchedAsk) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_MatchedAsk.Unmarshal(m, b)
+}
+func (m *MatchedAsk) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_MatchedAsk.Marshal(b, m, deterministic)
+}
+func (m *MatchedAsk) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MatchedAsk.Merge(m, src)
+}
+func (m *MatchedAsk) XXX_Size() int {
+	return xxx_messageInfo_MatchedAsk.Size(m)
+}
+func (m *MatchedAsk) XXX_DiscardUnknown() {
+	xxx_messageInfo_MatchedAsk.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MatchedAsk proto.InternalMessageInfo
+
+func (m *MatchedAsk) GetAsk() *ServerAsk {
+	if m != nil {
+		return m.Ask
+	}
+	return nil
+}
+
+func (m *MatchedAsk) GetUnitsFilled() uint32 {
+	if m != nil {
+		return m.UnitsFilled
+	}
+	return 0
+}
+
+type MatchedBid struct {
+	//*
+	//The ask order that was matched against.
+	Bid *ServerBid `protobuf:"bytes,1,opt,name=bid,proto3" json:"bid,omitempty"`
+	//*
+	//The number of units that were filled from/by this matched order.
+	UnitsFilled          uint32   `protobuf:"varint,2,opt,name=units_filled,json=unitsFilled,proto3" json:"units_filled,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *MatchedBid) Reset()         { *m = MatchedBid{} }
+func (m *MatchedBid) String() string { return proto.CompactTextString(m) }
+func (*MatchedBid) ProtoMessage()    {}
+func (*MatchedBid) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{22}
+}
+
+func (m *MatchedBid) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_MatchedBid.Unmarshal(m, b)
+}
+func (m *MatchedBid) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_MatchedBid.Marshal(b, m, deterministic)
+}
+func (m *MatchedBid) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MatchedBid.Merge(m, src)
+}
+func (m *MatchedBid) XXX_Size() int {
+	return xxx_messageInfo_MatchedBid.Size(m)
+}
+func (m *MatchedBid) XXX_DiscardUnknown() {
+	xxx_messageInfo_MatchedBid.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MatchedBid proto.InternalMessageInfo
+
+func (m *MatchedBid) GetBid() *ServerBid {
+	if m != nil {
+		return m.Bid
+	}
+	return nil
+}
+
+func (m *MatchedBid) GetUnitsFilled() uint32 {
+	if m != nil {
+		return m.UnitsFilled
+	}
+	return 0
+}
+
+type AccountDiff struct {
+	//*
+	//The final balance of the account after the executed batch.
+	EndingBalance int64 `protobuf:"varint,1,opt,name=ending_balance,json=endingBalance,proto3" json:"ending_balance,omitempty"`
+	//*
+	//Depending on the amount of the final balance of the account, the remainder
+	//is either sent to a new on-chain output, extended off-chain or fully
+	//consumed by the batch and its fees.
+	EndingState AccountDiff_AccountState `protobuf:"varint,2,opt,name=ending_state,json=endingState,proto3,enum=clmrpc.AccountDiff_AccountState" json:"ending_state,omitempty"`
+	//*
+	//If the account was re-created on-chain then the new account outpoint is set
+	//here. If the account was fully spent or the remainder was extended off-chain
+	//then no new account outpoint is created.
+	Outpoint *OutPoint `protobuf:"bytes,3,opt,name=outpoint,proto3" json:"outpoint,omitempty"`
+	//*
+	//The expiry of the new account outpoint.
+	Expiry               uint32   `protobuf:"varint,4,opt,name=expiry,proto3" json:"expiry,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *AccountDiff) Reset()         { *m = AccountDiff{} }
+func (m *AccountDiff) String() string { return proto.CompactTextString(m) }
+func (*AccountDiff) ProtoMessage()    {}
+func (*AccountDiff) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f3883418d94ca37f, []int{23}
+}
+
+func (m *AccountDiff) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_AccountDiff.Unmarshal(m, b)
+}
+func (m *AccountDiff) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_AccountDiff.Marshal(b, m, deterministic)
+}
+func (m *AccountDiff) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AccountDiff.Merge(m, src)
+}
+func (m *AccountDiff) XXX_Size() int {
+	return xxx_messageInfo_AccountDiff.Size(m)
+}
+func (m *AccountDiff) XXX_DiscardUnknown() {
+	xxx_messageInfo_AccountDiff.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_AccountDiff proto.InternalMessageInfo
+
+func (m *AccountDiff) GetEndingBalance() int64 {
+	if m != nil {
+		return m.EndingBalance
+	}
+	return 0
+}
+
+func (m *AccountDiff) GetEndingState() AccountDiff_AccountState {
+	if m != nil {
+		return m.EndingState
+	}
+	return AccountDiff_OUTPUT_RECREATED
+}
+
+func (m *AccountDiff) GetOutpoint() *OutPoint {
+	if m != nil {
+		return m.Outpoint
+	}
+	return nil
+}
+
+func (m *AccountDiff) GetExpiry() uint32 {
+	if m != nil {
+		return m.Expiry
+	}
+	return 0
+}
+
 type ServerOrder struct {
 	//*
 	//The user's sub key of the account to use for the order.
@@ -795,12 +1625,12 @@ type ServerOrder struct {
 	//Order amount in satoshis.
 	Amt int64 `protobuf:"varint,3,opt,name=amt,proto3" json:"amt,omitempty"`
 	//*
-	//Order nonce, acts as unique order identifier.
+	//Order nonce of 32 byte length, acts as unique order identifier.
 	OrderNonce []byte `protobuf:"bytes,6,opt,name=order_nonce,json=orderNonce,proto3" json:"order_nonce,omitempty"`
 	//*
 	//Signature of the order's digest, signed with the user's account key. The
 	//signature must be fixed-size LN wire format encoded. Version 0 includes the
-	//fields version, rate_fixed, amt, funding_fee_rate and
+	//fields version, rate_fixed, amt, funding_fee_rate_sat_per_kw and
 	//min/max_duration_blocks in the order digest.
 	OrderSig []byte `protobuf:"bytes,7,opt,name=order_sig,json=orderSig,proto3" json:"order_sig,omitempty"`
 	//*
@@ -819,17 +1649,17 @@ type ServerOrder struct {
 	//*
 	//Preferred fee rate to be used for the channel funding transaction, expressed
 	//in satoshis per 1000 weight units (sat/kW).
-	FundingFeeRate       int64    `protobuf:"varint,13,opt,name=funding_fee_rate,json=fundingFeeRate,proto3" json:"funding_fee_rate,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	FundingFeeRateSatPerKw int64    `protobuf:"varint,13,opt,name=funding_fee_rate_sat_per_kw,json=fundingFeeRateSatPerKw,proto3" json:"funding_fee_rate_sat_per_kw,omitempty"`
+	XXX_NoUnkeyedLiteral   struct{} `json:"-"`
+	XXX_unrecognized       []byte   `json:"-"`
+	XXX_sizecache          int32    `json:"-"`
 }
 
 func (m *ServerOrder) Reset()         { *m = ServerOrder{} }
 func (m *ServerOrder) String() string { return proto.CompactTextString(m) }
 func (*ServerOrder) ProtoMessage()    {}
 func (*ServerOrder) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{14}
+	return fileDescriptor_f3883418d94ca37f, []int{24}
 }
 
 func (m *ServerOrder) XXX_Unmarshal(b []byte) error {
@@ -913,9 +1743,9 @@ func (m *ServerOrder) GetChanType() uint32 {
 	return 0
 }
 
-func (m *ServerOrder) GetFundingFeeRate() int64 {
+func (m *ServerOrder) GetFundingFeeRateSatPerKw() int64 {
 	if m != nil {
-		return m.FundingFeeRate
+		return m.FundingFeeRateSatPerKw
 	}
 	return 0
 }
@@ -941,7 +1771,7 @@ func (m *ServerBid) Reset()         { *m = ServerBid{} }
 func (m *ServerBid) String() string { return proto.CompactTextString(m) }
 func (*ServerBid) ProtoMessage()    {}
 func (*ServerBid) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{15}
+	return fileDescriptor_f3883418d94ca37f, []int{25}
 }
 
 func (m *ServerBid) XXX_Unmarshal(b []byte) error {
@@ -1004,7 +1834,7 @@ func (m *ServerAsk) Reset()         { *m = ServerAsk{} }
 func (m *ServerAsk) String() string { return proto.CompactTextString(m) }
 func (*ServerAsk) ProtoMessage()    {}
 func (*ServerAsk) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{16}
+	return fileDescriptor_f3883418d94ca37f, []int{26}
 }
 
 func (m *ServerAsk) XXX_Unmarshal(b []byte) error {
@@ -1057,7 +1887,7 @@ func (m *CancelOrder) Reset()         { *m = CancelOrder{} }
 func (m *CancelOrder) String() string { return proto.CompactTextString(m) }
 func (*CancelOrder) ProtoMessage()    {}
 func (*CancelOrder) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{17}
+	return fileDescriptor_f3883418d94ca37f, []int{27}
 }
 
 func (m *CancelOrder) XXX_Unmarshal(b []byte) error {
@@ -1098,7 +1928,7 @@ func (m *InvalidOrder) Reset()         { *m = InvalidOrder{} }
 func (m *InvalidOrder) String() string { return proto.CompactTextString(m) }
 func (*InvalidOrder) ProtoMessage()    {}
 func (*InvalidOrder) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{18}
+	return fileDescriptor_f3883418d94ca37f, []int{28}
 }
 
 func (m *InvalidOrder) XXX_Unmarshal(b []byte) error {
@@ -1152,7 +1982,7 @@ func (m *Input) Reset()         { *m = Input{} }
 func (m *Input) String() string { return proto.CompactTextString(m) }
 func (*Input) ProtoMessage()    {}
 func (*Input) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{19}
+	return fileDescriptor_f3883418d94ca37f, []int{29}
 }
 
 func (m *Input) XXX_Unmarshal(b []byte) error {
@@ -1194,7 +2024,7 @@ func (m *Output) Reset()         { *m = Output{} }
 func (m *Output) String() string { return proto.CompactTextString(m) }
 func (*Output) ProtoMessage()    {}
 func (*Output) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{20}
+	return fileDescriptor_f3883418d94ca37f, []int{30}
 }
 
 func (m *Output) XXX_Unmarshal(b []byte) error {
@@ -1255,7 +2085,7 @@ func (m *ServerModifyAccountRequest) Reset()         { *m = ServerModifyAccountR
 func (m *ServerModifyAccountRequest) String() string { return proto.CompactTextString(m) }
 func (*ServerModifyAccountRequest) ProtoMessage()    {}
 func (*ServerModifyAccountRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{21}
+	return fileDescriptor_f3883418d94ca37f, []int{31}
 }
 
 func (m *ServerModifyAccountRequest) XXX_Unmarshal(b []byte) error {
@@ -1318,7 +2148,7 @@ func (m *ServerModifyAccountResponse) Reset()         { *m = ServerModifyAccount
 func (m *ServerModifyAccountResponse) String() string { return proto.CompactTextString(m) }
 func (*ServerModifyAccountResponse) ProtoMessage()    {}
 func (*ServerModifyAccountResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{22}
+	return fileDescriptor_f3883418d94ca37f, []int{32}
 }
 
 func (m *ServerModifyAccountResponse) XXX_Unmarshal(b []byte) error {
@@ -1357,7 +2187,7 @@ func (m *ServerOrderStateRequest) Reset()         { *m = ServerOrderStateRequest
 func (m *ServerOrderStateRequest) String() string { return proto.CompactTextString(m) }
 func (*ServerOrderStateRequest) ProtoMessage()    {}
 func (*ServerOrderStateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{23}
+	return fileDescriptor_f3883418d94ca37f, []int{33}
 }
 
 func (m *ServerOrderStateRequest) XXX_Unmarshal(b []byte) error {
@@ -1388,7 +2218,7 @@ func (m *ServerOrderStateRequest) GetOrderNonce() []byte {
 type ServerOrderStateResponse struct {
 	//*
 	//The state the order currently is in.
-	State ServerOrderStateResponse_OrderState `protobuf:"varint,1,opt,name=state,proto3,enum=clmrpc.ServerOrderStateResponse_OrderState" json:"state,omitempty"`
+	State OrderState `protobuf:"varint,1,opt,name=state,proto3,enum=clmrpc.OrderState" json:"state,omitempty"`
 	//*
 	//The number of currently unfilled units of this order. This will be equal to
 	//the total amount of units until the order has reached the state PARTIAL_FILL
@@ -1403,7 +2233,7 @@ func (m *ServerOrderStateResponse) Reset()         { *m = ServerOrderStateRespon
 func (m *ServerOrderStateResponse) String() string { return proto.CompactTextString(m) }
 func (*ServerOrderStateResponse) ProtoMessage()    {}
 func (*ServerOrderStateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{24}
+	return fileDescriptor_f3883418d94ca37f, []int{34}
 }
 
 func (m *ServerOrderStateResponse) XXX_Unmarshal(b []byte) error {
@@ -1424,11 +2254,11 @@ func (m *ServerOrderStateResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ServerOrderStateResponse proto.InternalMessageInfo
 
-func (m *ServerOrderStateResponse) GetState() ServerOrderStateResponse_OrderState {
+func (m *ServerOrderStateResponse) GetState() OrderState {
 	if m != nil {
 		return m.State
 	}
-	return ServerOrderStateResponse_SUBMITTED
+	return OrderState_ORDER_SUBMITTED
 }
 
 func (m *ServerOrderStateResponse) GetUnitsUnfulfilled() uint32 {
@@ -1450,7 +2280,7 @@ func (m *NodeAddress) Reset()         { *m = NodeAddress{} }
 func (m *NodeAddress) String() string { return proto.CompactTextString(m) }
 func (*NodeAddress) ProtoMessage()    {}
 func (*NodeAddress) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{25}
+	return fileDescriptor_f3883418d94ca37f, []int{35}
 }
 
 func (m *NodeAddress) XXX_Unmarshal(b []byte) error {
@@ -1501,7 +2331,7 @@ func (m *OutPoint) Reset()         { *m = OutPoint{} }
 func (m *OutPoint) String() string { return proto.CompactTextString(m) }
 func (*OutPoint) ProtoMessage()    {}
 func (*OutPoint) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f3883418d94ca37f, []int{26}
+	return fileDescriptor_f3883418d94ca37f, []int{36}
 }
 
 func (m *OutPoint) XXX_Unmarshal(b []byte) error {
@@ -1537,8 +2367,10 @@ func (m *OutPoint) GetOutputIndex() uint32 {
 }
 
 func init() {
+	proto.RegisterEnum("clmrpc.OrderState", OrderState_name, OrderState_value)
+	proto.RegisterEnum("clmrpc.OrderMatchReject_RejectReason", OrderMatchReject_RejectReason_name, OrderMatchReject_RejectReason_value)
+	proto.RegisterEnum("clmrpc.AccountDiff_AccountState", AccountDiff_AccountState_name, AccountDiff_AccountState_value)
 	proto.RegisterEnum("clmrpc.InvalidOrder_FailReason", InvalidOrder_FailReason_name, InvalidOrder_FailReason_value)
-	proto.RegisterEnum("clmrpc.ServerOrderStateResponse_OrderState", ServerOrderStateResponse_OrderState_name, ServerOrderStateResponse_OrderState_value)
 	proto.RegisterType((*ReserveAccountRequest)(nil), "clmrpc.ReserveAccountRequest")
 	proto.RegisterType((*ReserveAccountResponse)(nil), "clmrpc.ReserveAccountResponse")
 	proto.RegisterType((*ServerInitAccountRequest)(nil), "clmrpc.ServerInitAccountRequest")
@@ -1548,11 +2380,23 @@ func init() {
 	proto.RegisterType((*ServerCancelOrderRequest)(nil), "clmrpc.ServerCancelOrderRequest")
 	proto.RegisterType((*ServerCancelOrderResponse)(nil), "clmrpc.ServerCancelOrderResponse")
 	proto.RegisterType((*ClientAuctionMessage)(nil), "clmrpc.ClientAuctionMessage")
-	proto.RegisterType((*OrderMatchPrepare)(nil), "clmrpc.OrderMatchPrepare")
+	proto.RegisterType((*AccountCommitment)(nil), "clmrpc.AccountCommitment")
+	proto.RegisterType((*AccountSubscription)(nil), "clmrpc.AccountSubscription")
 	proto.RegisterType((*OrderMatchAccept)(nil), "clmrpc.OrderMatchAccept")
+	proto.RegisterType((*OrderMatchReject)(nil), "clmrpc.OrderMatchReject")
 	proto.RegisterType((*OrderMatchSign)(nil), "clmrpc.OrderMatchSign")
-	proto.RegisterType((*OrderMatchFinalize)(nil), "clmrpc.OrderMatchFinalize")
+	proto.RegisterMapType((map[string]*AccountWitness)(nil), "clmrpc.OrderMatchSign.AccountWitnessEntry")
+	proto.RegisterType((*AccountWitness)(nil), "clmrpc.AccountWitness")
 	proto.RegisterType((*ServerAuctionMessage)(nil), "clmrpc.ServerAuctionMessage")
+	proto.RegisterType((*ServerChallenge)(nil), "clmrpc.ServerChallenge")
+	proto.RegisterType((*OrderMatchPrepare)(nil), "clmrpc.OrderMatchPrepare")
+	proto.RegisterMapType((map[string]*MatchedOrder)(nil), "clmrpc.OrderMatchPrepare.MatchedOrdersEntry")
+	proto.RegisterType((*OrderMatchFinalize)(nil), "clmrpc.OrderMatchFinalize")
+	proto.RegisterType((*ServerShutdown)(nil), "clmrpc.ServerShutdown")
+	proto.RegisterType((*MatchedOrder)(nil), "clmrpc.MatchedOrder")
+	proto.RegisterType((*MatchedAsk)(nil), "clmrpc.MatchedAsk")
+	proto.RegisterType((*MatchedBid)(nil), "clmrpc.MatchedBid")
+	proto.RegisterType((*AccountDiff)(nil), "clmrpc.AccountDiff")
 	proto.RegisterType((*ServerOrder)(nil), "clmrpc.ServerOrder")
 	proto.RegisterType((*ServerBid)(nil), "clmrpc.ServerBid")
 	proto.RegisterType((*ServerAsk)(nil), "clmrpc.ServerAsk")
@@ -1571,97 +2415,148 @@ func init() {
 func init() { proto.RegisterFile("auctioneer.proto", fileDescriptor_f3883418d94ca37f) }
 
 var fileDescriptor_f3883418d94ca37f = []byte{
-	// 1428 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x57, 0x4f, 0x6f, 0xdb, 0xc6,
-	0x12, 0x97, 0xac, 0x3f, 0xa6, 0x86, 0x92, 0x43, 0xaf, 0x1d, 0x47, 0x71, 0x9c, 0x67, 0x3f, 0x06,
-	0x01, 0x8c, 0x97, 0x3c, 0x27, 0x50, 0x91, 0xa2, 0x68, 0x80, 0xa2, 0xb4, 0x2d, 0xc3, 0x72, 0xfc,
-	0x0f, 0x94, 0x93, 0xe6, 0x46, 0xac, 0xc4, 0x95, 0xb2, 0x30, 0xbd, 0x64, 0xb9, 0x4b, 0xc7, 0xee,
-	0xad, 0x40, 0x4f, 0xfd, 0x36, 0xfd, 0x46, 0x3d, 0x14, 0x45, 0x8f, 0xbd, 0xf7, 0x52, 0xec, 0x72,
-	0x29, 0x89, 0x92, 0x12, 0x17, 0xbd, 0x71, 0x7f, 0xf3, 0x9b, 0xd9, 0x99, 0xd9, 0xd9, 0xd9, 0x21,
-	0x58, 0x38, 0xe9, 0x0b, 0x1a, 0x32, 0x42, 0xe2, 0x9d, 0x28, 0x0e, 0x45, 0x88, 0xaa, 0xfd, 0xe0,
-	0x2a, 0x8e, 0xfa, 0xeb, 0x1b, 0xc3, 0x30, 0x1c, 0x06, 0xe4, 0x05, 0x8e, 0xe8, 0x0b, 0xcc, 0x58,
-	0x28, 0xb0, 0xe4, 0xf1, 0x94, 0x65, 0x3f, 0x80, 0xfb, 0x2e, 0xe1, 0x24, 0xbe, 0x26, 0x4e, 0xbf,
-	0x1f, 0x26, 0x4c, 0xb8, 0xe4, 0xfb, 0x84, 0x70, 0x61, 0x5f, 0xc2, 0xda, 0xb4, 0x80, 0x47, 0x21,
-	0xe3, 0x04, 0x3d, 0x85, 0xa5, 0xf1, 0x66, 0xde, 0x25, 0xb9, 0x6d, 0x16, 0xb7, 0x8a, 0xdb, 0x75,
-	0xb7, 0x31, 0x46, 0xdf, 0x90, 0x5b, 0xf4, 0x3f, 0x58, 0xa6, 0x8c, 0x0a, 0x8a, 0x03, 0xaf, 0x87,
-	0x45, 0xff, 0x83, 0x62, 0x2e, 0x28, 0xe6, 0x3d, 0x2d, 0xd8, 0x95, 0xf8, 0x1b, 0x72, 0x6b, 0xff,
-	0x5e, 0x84, 0x66, 0x57, 0xee, 0x15, 0x77, 0x18, 0x15, 0x79, 0x4f, 0xd0, 0x2b, 0x68, 0xe0, 0x14,
-	0xf1, 0xa2, 0x90, 0x32, 0xa1, 0xb6, 0x33, 0x5b, 0xd6, 0x4e, 0x1a, 0xe0, 0xce, 0x59, 0x22, 0xce,
-	0x25, 0xee, 0xd6, 0x35, 0x4d, 0xad, 0x94, 0x9b, 0x5a, 0x8d, 0xf7, 0x63, 0x1a, 0x09, 0xbd, 0x79,
-	0x66, 0xac, 0xab, 0x40, 0xf4, 0x64, 0x6c, 0xfd, 0x1a, 0x07, 0x09, 0x69, 0x96, 0xb6, 0x8a, 0xdb,
-	0x8d, 0x91, 0xad, 0x77, 0x12, 0x9b, 0xb4, 0x45, 0x6e, 0x22, 0x1a, 0xdf, 0x36, 0xcb, 0x8a, 0x95,
-	0xa9, 0xb6, 0x15, 0x88, 0xb6, 0xa0, 0x9e, 0x70, 0x12, 0x7b, 0x3c, 0xe9, 0xa9, 0x68, 0x2b, 0x6a,
-	0x43, 0x90, 0x58, 0x37, 0xe9, 0xc9, 0x40, 0x1f, 0xc1, 0xc3, 0x39, 0x71, 0xa6, 0x89, 0xb5, 0x79,
-	0x96, 0x84, 0x6e, 0xd2, 0xbb, 0xa2, 0xe2, 0x2c, 0xf6, 0x49, 0x9c, 0x25, 0xe1, 0x29, 0x94, 0x30,
-	0xbf, 0xd4, 0xa1, 0x2f, 0x67, 0xa1, 0xa7, 0x74, 0x87, 0x5f, 0x1e, 0x16, 0x5c, 0x29, 0x97, 0xb4,
-	0x1e, 0xf5, 0x55, 0xa4, 0x33, 0xb4, 0x5d, 0xea, 0x4b, 0x5a, 0x8f, 0xfa, 0xbb, 0x35, 0x58, 0xf4,
-	0x89, 0xc0, 0x34, 0xe0, 0xf6, 0x8f, 0xc5, 0xcc, 0xa5, 0xdc, 0xae, 0xfa, 0xac, 0x5f, 0x43, 0x83,
-	0xb2, 0x6b, 0x1c, 0x50, 0xdf, 0x0b, 0xa5, 0x40, 0x3b, 0xb0, 0x9a, 0x59, 0xee, 0xa4, 0x42, 0xa5,
-	0x74, 0x58, 0x70, 0xeb, 0x74, 0x62, 0x8d, 0x36, 0xc0, 0xc0, 0xfd, 0x3e, 0x89, 0x04, 0x49, 0x3d,
-	0x32, 0x0e, 0x0b, 0xee, 0x08, 0x99, 0xf4, 0xe1, 0x75, 0x16, 0xf8, 0x1e, 0x66, 0x7d, 0x12, 0xe4,
-	0x02, 0xdf, 0x04, 0x53, 0xed, 0xec, 0xb1, 0x90, 0xf5, 0x89, 0x2e, 0x35, 0x50, 0xd0, 0xa9, 0x44,
-	0xc6, 0x29, 0xcd, 0x29, 0xeb, 0x94, 0xfe, 0x59, 0x84, 0xd5, 0xbd, 0x80, 0x12, 0x26, 0x9c, 0xb4,
-	0x38, 0x4f, 0x08, 0xe7, 0x78, 0x48, 0xd0, 0x2b, 0x58, 0x8c, 0x62, 0x12, 0xe1, 0x98, 0xe8, 0x90,
-	0x1e, 0x8e, 0xca, 0x49, 0x1a, 0x38, 0x91, 0x95, 0x79, 0x9e, 0x12, 0x0e, 0x0b, 0x6e, 0xc6, 0x45,
-	0x2d, 0xa8, 0xa6, 0x01, 0xe8, 0x14, 0x37, 0x67, 0xb5, 0x1c, 0x25, 0x3f, 0x2c, 0xb8, 0x9a, 0x89,
-	0x9e, 0x43, 0x99, 0xd3, 0x21, 0x53, 0x85, 0x65, 0xb6, 0xd6, 0x66, 0x35, 0xba, 0x74, 0xc8, 0x0e,
-	0x0b, 0xae, 0x62, 0xa1, 0xaf, 0xc0, 0x18, 0x50, 0x86, 0x03, 0xfa, 0x03, 0x51, 0x45, 0x66, 0xb6,
-	0xd6, 0x67, 0x35, 0x0e, 0x34, 0x43, 0x26, 0x34, 0x63, 0xef, 0x56, 0xa0, 0x74, 0xc5, 0x87, 0xf6,
-	0x0a, 0x2c, 0xcf, 0x84, 0x60, 0x23, 0xb0, 0xa6, 0x3d, 0xb4, 0x2d, 0x58, 0xca, 0xfb, 0x60, 0xaf,
-	0x02, 0x9a, 0xdd, 0xc3, 0x5e, 0x83, 0x55, 0x5d, 0x67, 0xb9, 0x14, 0xda, 0x7f, 0x2c, 0x80, 0x99,
-	0x0a, 0xd2, 0xe3, 0x9e, 0xae, 0xfe, 0xe2, 0x74, 0xf5, 0xa3, 0xc7, 0x00, 0x31, 0x16, 0xc4, 0x1b,
-	0xd0, 0x1b, 0x5d, 0x12, 0x25, 0xb7, 0x26, 0x91, 0x03, 0x09, 0x20, 0x0b, 0x4a, 0xf8, 0x4a, 0xa8,
-	0x3c, 0x95, 0x5c, 0xf9, 0x39, 0x7d, 0xf8, 0xd5, 0xe9, 0xc3, 0x47, 0x8f, 0xa0, 0x96, 0x12, 0x38,
-	0x1d, 0x36, 0x17, 0x95, 0xd8, 0x50, 0x40, 0x97, 0x0e, 0x91, 0x0d, 0x8d, 0xab, 0x24, 0x10, 0x54,
-	0x0a, 0x95, 0x47, 0x86, 0x22, 0x98, 0x0a, 0xec, 0xd2, 0xa1, 0x74, 0xe9, 0x21, 0x18, 0x2c, 0xf4,
-	0x89, 0x17, 0x25, 0xbd, 0x66, 0x4d, 0x89, 0x17, 0xe5, 0xfa, 0x3c, 0xe9, 0xa1, 0x97, 0x50, 0x53,
-	0x22, 0xec, 0xfb, 0x71, 0x13, 0xb6, 0x4a, 0xdb, 0x66, 0x6b, 0x25, 0x3b, 0x8a, 0xd3, 0xd0, 0x27,
-	0x8e, 0xef, 0xc7, 0x84, 0x73, 0x57, 0x19, 0x90, 0x0b, 0xe9, 0x4d, 0xff, 0x03, 0x66, 0x9e, 0xb8,
-	0x8d, 0x48, 0xb3, 0xae, 0x3a, 0x84, 0x21, 0x81, 0x8b, 0xdb, 0x88, 0xa0, 0x6d, 0xb0, 0x06, 0x09,
-	0xf3, 0x29, 0x1b, 0x7a, 0x03, 0x42, 0x3c, 0x19, 0x76, 0xb3, 0xa1, 0x42, 0x5d, 0xd2, 0xf8, 0x01,
-	0x21, 0x2e, 0x16, 0xe4, 0xa8, 0x6c, 0x94, 0xad, 0xca, 0x51, 0xd9, 0xa8, 0x58, 0xd5, 0xa3, 0xb2,
-	0x61, 0x5a, 0x75, 0xfb, 0xe7, 0x22, 0xd4, 0x46, 0x97, 0x18, 0xfd, 0x7f, 0x74, 0x73, 0x74, 0xed,
-	0xae, 0xe4, 0x2f, 0x7a, 0x7a, 0x05, 0x32, 0x0e, 0xda, 0x81, 0x95, 0x2b, 0xca, 0x3c, 0x3f, 0x89,
-	0x55, 0xe7, 0xf7, 0x7a, 0x41, 0xd8, 0xbf, 0xe4, 0x3a, 0xfd, 0xcb, 0x57, 0x94, 0xed, 0x6b, 0xc9,
-	0xae, 0x12, 0xa0, 0x26, 0x2c, 0x5e, 0x93, 0x98, 0xd3, 0x90, 0xe9, 0x2e, 0x97, 0x2d, 0x8f, 0xca,
-	0x46, 0xc9, 0x2a, 0xdb, 0x3f, 0x8d, 0x9c, 0x71, 0xf8, 0xe5, 0xbf, 0x71, 0x06, 0xdf, 0xcc, 0x38,
-	0x53, 0xd6, 0xce, 0xe0, 0x9b, 0x4f, 0x3b, 0x53, 0xc9, 0x39, 0x63, 0xef, 0x80, 0x39, 0x71, 0xe3,
-	0xef, 0xee, 0x13, 0xbf, 0x14, 0xa1, 0x3e, 0xd9, 0xae, 0xee, 0xd4, 0x40, 0xdf, 0x82, 0x39, 0xc0,
-	0x34, 0xf0, 0x62, 0x82, 0x79, 0xc8, 0x54, 0xc2, 0x96, 0x5a, 0x9b, 0xf3, 0x5a, 0xdf, 0xce, 0x01,
-	0xa6, 0x81, 0xab, 0x68, 0x2e, 0x0c, 0x46, 0xdf, 0x72, 0x0b, 0x65, 0x81, 0x8b, 0x98, 0xb2, 0xa1,
-	0xaa, 0xec, 0x5a, 0x4a, 0xe8, 0x2a, 0xc4, 0x7e, 0x0c, 0x30, 0x56, 0x45, 0xf7, 0xc0, 0xec, 0x9c,
-	0xbe, 0x73, 0x8e, 0x3b, 0xfb, 0x9e, 0x73, 0x72, 0x61, 0x15, 0xec, 0x57, 0x50, 0xe9, 0xb0, 0x28,
-	0x91, 0x3d, 0xc4, 0x08, 0x13, 0xf1, 0xf9, 0xe7, 0x6f, 0xc4, 0xb0, 0xbf, 0x84, 0xea, 0x59, 0x22,
-	0xa4, 0xde, 0x2a, 0x54, 0xd2, 0x57, 0xad, 0xa8, 0x92, 0x97, 0x2e, 0xd0, 0x1a, 0x54, 0x73, 0x4f,
-	0xa2, 0x5e, 0xd9, 0xbf, 0x16, 0x61, 0x3d, 0x3d, 0xb5, 0x93, 0xd0, 0xa7, 0x83, 0xdb, 0xa9, 0x87,
-	0xf8, 0xee, 0x0b, 0xfe, 0x1c, 0x80, 0x91, 0x8f, 0x1e, 0x95, 0x3e, 0xcb, 0x0a, 0x93, 0x77, 0xa6,
-	0x31, 0x4e, 0x58, 0x94, 0x08, 0xb7, 0xc6, 0xc8, 0x47, 0xf5, 0xc5, 0xd1, 0x0b, 0x30, 0x25, 0x3b,
-	0x54, 0xae, 0xf2, 0x66, 0x49, 0xd1, 0x97, 0x26, 0xe2, 0x92, 0x7c, 0x69, 0x30, 0xfd, 0xe4, 0xc8,
-	0x49, 0x15, 0xf4, 0xa3, 0xab, 0x0a, 0xc2, 0x6c, 0x6d, 0xe5, 0xeb, 0x6d, 0x76, 0x80, 0x50, 0x26,
-	0x34, 0x64, 0x7f, 0x03, 0x8f, 0xe6, 0x46, 0xa8, 0xdf, 0xbb, 0x4d, 0x30, 0x47, 0x43, 0x03, 0x1d,
-	0x66, 0x11, 0x66, 0x13, 0x03, 0x1d, 0xda, 0x5f, 0xc3, 0x83, 0x89, 0xba, 0xee, 0x0a, 0x2c, 0xc8,
-	0x3f, 0x7e, 0xa9, 0xfe, 0x1a, 0x4d, 0x39, 0x93, 0xca, 0x7a, 0x67, 0x07, 0x2a, 0x5c, 0x02, 0x4a,
-	0x6f, 0xa9, 0xf5, 0x6c, 0xce, 0x2d, 0xca, 0x29, 0xec, 0x4c, 0x40, 0xa9, 0x26, 0x7a, 0x06, 0xcb,
-	0x09, 0xa3, 0x82, 0x7b, 0x09, 0x1b, 0x24, 0xc1, 0x80, 0x06, 0x81, 0xee, 0xb2, 0x0d, 0xd7, 0x52,
-	0x82, 0xb7, 0x63, 0xdc, 0x0e, 0x01, 0xc6, 0x16, 0x50, 0x03, 0x6a, 0xdd, 0xb7, 0xbb, 0x27, 0x9d,
-	0x8b, 0x8b, 0xf6, 0xbe, 0x55, 0x40, 0x26, 0x2c, 0xee, 0x1d, 0xb7, 0x1d, 0xb7, 0xbd, 0x6f, 0x15,
-	0x91, 0x05, 0xf5, 0x73, 0xc7, 0xbd, 0xe8, 0x38, 0xc7, 0xde, 0x41, 0xe7, 0xf8, 0xd8, 0x5a, 0x40,
-	0x75, 0x30, 0xda, 0xef, 0xdb, 0x7b, 0x6f, 0x25, 0xb9, 0x24, 0x57, 0x7b, 0xce, 0xe9, 0x5e, 0xfb,
-	0xb8, 0xbd, 0x6f, 0x95, 0xa5, 0x6a, 0xfb, 0xfd, 0x79, 0x47, 0xaa, 0x56, 0x10, 0x40, 0xf5, 0xc0,
-	0xe9, 0x48, 0x41, 0xd5, 0x7e, 0x0d, 0xe6, 0x44, 0xd7, 0x94, 0x17, 0x9b, 0x11, 0xf1, 0x31, 0x8c,
-	0xd3, 0xa1, 0xa6, 0xe6, 0x66, 0x4b, 0x84, 0xa0, 0xac, 0x5a, 0xee, 0x82, 0x82, 0xd5, 0xb7, 0xbd,
-	0x0b, 0x46, 0x56, 0xe7, 0x52, 0x2e, 0x6e, 0xa8, 0xaf, 0x13, 0xac, 0xbe, 0x91, 0x0d, 0xf5, 0xb4,
-	0x8c, 0x3c, 0xca, 0x7c, 0x72, 0xa3, 0xa3, 0xce, 0x61, 0xad, 0xdf, 0xca, 0xb0, 0xbc, 0xf7, 0x01,
-	0x33, 0x46, 0x02, 0x67, 0x34, 0xa9, 0xa2, 0x33, 0x58, 0xca, 0xcf, 0xb9, 0xe8, 0x71, 0x96, 0xfa,
-	0xb9, 0x83, 0xf1, 0xfa, 0x7f, 0x3e, 0x25, 0xd6, 0x07, 0xe9, 0x82, 0x39, 0x51, 0x83, 0xe8, 0xce,
-	0xf2, 0x5c, 0xff, 0xef, 0x67, 0x18, 0xda, 0xe6, 0x7b, 0x68, 0xe4, 0xea, 0x15, 0xd9, 0x79, 0x9d,
-	0x79, 0xd7, 0x75, 0xfd, 0xc9, 0x67, 0x39, 0x63, 0x6f, 0x27, 0xe6, 0xbe, 0x69, 0x6f, 0x67, 0x07,
-	0xd1, 0x69, 0x6f, 0xe7, 0x0d, 0x8d, 0x6e, 0xbe, 0x33, 0x4f, 0xd9, 0x9c, 0x9d, 0xf1, 0xa6, 0x6d,
-	0xce, 0x19, 0xe4, 0xd0, 0x59, 0xae, 0x5c, 0x37, 0x3f, 0x7d, 0x3b, 0x52, 0x8b, 0x5b, 0x77, 0x5d,
-	0x1f, 0xf4, 0x1d, 0xdc, 0xef, 0x26, 0x3d, 0xd9, 0xf8, 0x7a, 0x44, 0xfd, 0x87, 0xe8, 0x9a, 0x40,
-	0x1b, 0x99, 0xea, 0xbc, 0xb9, 0x71, 0x7d, 0x63, 0x6a, 0xf4, 0xce, 0x49, 0xb7, 0x8b, 0x2f, 0x8b,
-	0xbd, 0xaa, 0xfa, 0xb1, 0xfa, 0xe2, 0xef, 0x00, 0x00, 0x00, 0xff, 0xff, 0x7c, 0x29, 0x6c, 0xa0,
-	0x92, 0x0d, 0x00, 0x00,
+	// 2245 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x58, 0x5f, 0x6f, 0x22, 0xc9,
+	0x11, 0xf7, 0x18, 0x6c, 0x43, 0x0d, 0xe0, 0x71, 0x7b, 0xcf, 0x87, 0xd9, 0x75, 0xd6, 0x3b, 0x9b,
+	0x93, 0xac, 0x8d, 0xcf, 0x77, 0x62, 0x6f, 0x93, 0xd3, 0xad, 0x74, 0x0a, 0x86, 0x41, 0x66, 0xd7,
+	0x06, 0xab, 0x07, 0xef, 0xee, 0x3d, 0x8d, 0x06, 0xa6, 0x81, 0x8e, 0x61, 0x86, 0x9b, 0x3f, 0x6b,
+	0x3b, 0x0f, 0x91, 0x22, 0xe5, 0x29, 0xdf, 0x21, 0x8f, 0xf9, 0x00, 0xf9, 0x04, 0x91, 0xf2, 0x9a,
+	0x8f, 0x90, 0x97, 0x3c, 0x44, 0xf9, 0x12, 0x51, 0xa4, 0xa8, 0xff, 0x0c, 0xcc, 0x00, 0x5e, 0x9f,
+	0xf2, 0x04, 0x5d, 0xf5, 0xab, 0xea, 0xaa, 0xea, 0xaa, 0xea, 0x9a, 0x06, 0xcd, 0x8e, 0xfa, 0x21,
+	0xf5, 0x5c, 0x42, 0xfc, 0x93, 0xa9, 0xef, 0x85, 0x1e, 0xda, 0xec, 0x8f, 0x27, 0xfe, 0xb4, 0x5f,
+	0x79, 0x32, 0xf4, 0xbc, 0xe1, 0x98, 0x7c, 0x65, 0x4f, 0xe9, 0x57, 0xb6, 0xeb, 0x7a, 0xa1, 0xcd,
+	0x70, 0x81, 0x40, 0xe9, 0x9f, 0xc3, 0x67, 0x98, 0x04, 0xc4, 0xff, 0x48, 0x6a, 0xfd, 0xbe, 0x17,
+	0xb9, 0x21, 0x26, 0x3f, 0x46, 0x24, 0x08, 0xf5, 0x6b, 0xd8, 0x5b, 0x64, 0x04, 0x53, 0xcf, 0x0d,
+	0x08, 0xfa, 0x02, 0x4a, 0xf3, 0xcd, 0xac, 0x6b, 0x72, 0x57, 0x56, 0x0e, 0x95, 0xa3, 0x02, 0x2e,
+	0xce, 0xa9, 0x6f, 0xc9, 0x1d, 0x7a, 0x01, 0x3b, 0xd4, 0xa5, 0x21, 0xb5, 0xc7, 0x56, 0xcf, 0x0e,
+	0xfb, 0x23, 0x8e, 0x5c, 0xe7, 0xc8, 0x6d, 0xc9, 0x38, 0x65, 0xf4, 0xb7, 0xe4, 0x4e, 0xff, 0xb7,
+	0x02, 0x65, 0x93, 0xed, 0xe5, 0xb7, 0x5c, 0x1a, 0xa6, 0x2d, 0x41, 0xaf, 0xa0, 0x68, 0x0b, 0x8a,
+	0x35, 0xf5, 0xa8, 0x1b, 0xf2, 0xed, 0xd4, 0xaa, 0x76, 0x22, 0x1c, 0x3c, 0xe9, 0x44, 0xe1, 0x25,
+	0xa3, 0xe3, 0x82, 0x84, 0xf1, 0x15, 0x37, 0x53, 0x8a, 0x05, 0x7d, 0x9f, 0x4e, 0x43, 0xb9, 0x79,
+	0xac, 0xcc, 0xe4, 0x44, 0xf4, 0x7c, 0xae, 0xfd, 0xa3, 0x3d, 0x8e, 0x48, 0x39, 0x73, 0xa8, 0x1c,
+	0x15, 0x67, 0xba, 0xde, 0x31, 0x5a, 0x52, 0x17, 0xb9, 0x9d, 0x52, 0xff, 0xae, 0x9c, 0xe5, 0xa8,
+	0x58, 0xd4, 0xe0, 0x44, 0x74, 0x08, 0x85, 0x28, 0x20, 0xbe, 0x15, 0x44, 0x3d, 0xee, 0xed, 0x06,
+	0xdf, 0x10, 0x18, 0xcd, 0x8c, 0x7a, 0xcc, 0xd1, 0xc7, 0xb0, 0xbf, 0xc2, 0x4f, 0x11, 0x58, 0x3d,
+	0x88, 0x83, 0x60, 0x46, 0xbd, 0x09, 0x0d, 0x3b, 0xbe, 0x43, 0xfc, 0x38, 0x08, 0x5f, 0x40, 0xc6,
+	0x0e, 0xae, 0xa5, 0xeb, 0x3b, 0xb1, 0xeb, 0x02, 0x5e, 0x0b, 0xae, 0xcf, 0xd6, 0x30, 0xe3, 0x33,
+	0x58, 0x8f, 0x3a, 0xdc, 0xd3, 0x25, 0xd8, 0x29, 0x75, 0x18, 0xac, 0x47, 0x9d, 0xd3, 0x3c, 0x6c,
+	0x39, 0x24, 0xb4, 0xe9, 0x38, 0xd0, 0x7f, 0xaf, 0xc4, 0x26, 0xa5, 0x76, 0x95, 0x67, 0xfd, 0x1a,
+	0x8a, 0xd4, 0xfd, 0x68, 0x8f, 0xa9, 0x63, 0x79, 0x8c, 0x21, 0x0d, 0x78, 0x14, 0x6b, 0x6e, 0x09,
+	0x26, 0x17, 0x3a, 0x5b, 0xc3, 0x05, 0x9a, 0x58, 0xa3, 0x27, 0x90, 0xb3, 0xfb, 0x7d, 0x32, 0x0d,
+	0x89, 0xb0, 0x28, 0x77, 0xb6, 0x86, 0x67, 0x94, 0xa4, 0x0d, 0xaf, 0x63, 0xc7, 0xeb, 0xb6, 0xdb,
+	0x27, 0xe3, 0x94, 0xe3, 0x4f, 0x41, 0xe5, 0x3b, 0x5b, 0xae, 0xe7, 0xf6, 0x89, 0x4c, 0x35, 0xe0,
+	0xa4, 0x36, 0xa3, 0xcc, 0x43, 0x9a, 0x12, 0x96, 0x21, 0xfd, 0xf3, 0x3a, 0x3c, 0xaa, 0x8f, 0x29,
+	0x71, 0xc3, 0x9a, 0x48, 0xce, 0x0b, 0x12, 0x04, 0xf6, 0x90, 0xa0, 0x97, 0xb0, 0xd9, 0xf7, 0x26,
+	0x13, 0x1a, 0x67, 0xd3, 0x7e, 0xec, 0x91, 0x3c, 0x94, 0x3a, 0x67, 0x4e, 0x88, 0x1b, 0x9e, 0xad,
+	0x61, 0x09, 0x45, 0xaf, 0x21, 0x1f, 0x44, 0x3d, 0x96, 0x4d, 0x3d, 0x22, 0x63, 0xfc, 0x78, 0x41,
+	0xce, 0x14, 0xfc, 0x29, 0xdb, 0xeb, 0x6c, 0x0d, 0xcf, 0xf1, 0xa8, 0x0a, 0x9b, 0xc2, 0x77, 0x9e,
+	0x61, 0x6a, 0xb5, 0x3c, 0xcb, 0x5f, 0x66, 0xf1, 0x05, 0x2b, 0x85, 0x1a, 0xe7, 0xb3, 0x0d, 0x05,
+	0x92, 0xc9, 0xf8, 0xe4, 0x37, 0xa4, 0x1f, 0xf2, 0x7c, 0x5b, 0x29, 0x83, 0x39, 0x9f, 0xc9, 0x08,
+	0x24, 0x3a, 0x86, 0x6c, 0x40, 0x87, 0x2e, 0x4f, 0x3e, 0xb5, 0xba, 0xb7, 0x2c, 0x61, 0xd2, 0x21,
+	0x33, 0x8d, 0xa3, 0x4e, 0x37, 0x20, 0x33, 0x09, 0x86, 0xfa, 0x37, 0xb0, 0xb3, 0xe4, 0x38, 0x0b,
+	0xbd, 0x70, 0xdc, 0x1a, 0xd9, 0xc1, 0x28, 0x0e, 0xbd, 0x20, 0x9d, 0xd9, 0xc1, 0x48, 0x8f, 0x60,
+	0x77, 0x85, 0xdb, 0x4b, 0x65, 0xa0, 0x2c, 0x96, 0x01, 0x7a, 0x06, 0x05, 0xa9, 0x59, 0x9c, 0xaa,
+	0xa8, 0x4c, 0xb9, 0x1b, 0x3f, 0x56, 0xb4, 0x0f, 0x39, 0x3b, 0x0a, 0x47, 0x56, 0x40, 0x87, 0x3c,
+	0x60, 0x05, 0xbc, 0xc5, 0xd6, 0x26, 0x1d, 0xea, 0x6d, 0xd0, 0x16, 0x63, 0xb6, 0x9c, 0x26, 0x99,
+	0x74, 0x9a, 0x30, 0x7d, 0xa2, 0x0d, 0xc9, 0xf2, 0x28, 0xe0, 0x2d, 0xbe, 0x6e, 0x39, 0xfa, 0xdf,
+	0x94, 0xa4, 0x42, 0x11, 0xd0, 0x14, 0x5e, 0x49, 0xe1, 0xd1, 0x1e, 0x3b, 0x15, 0x3b, 0xf0, 0x5c,
+	0xae, 0x28, 0x8f, 0xe5, 0x0a, 0x35, 0x41, 0x15, 0xff, 0xac, 0xbe, 0xe7, 0x88, 0x46, 0x52, 0xaa,
+	0x7e, 0x71, 0xdf, 0x91, 0x9d, 0x88, 0x1f, 0xcc, 0x25, 0x30, 0x08, 0xc9, 0xba, 0xe7, 0x10, 0xfd,
+	0x25, 0x14, 0x92, 0x3c, 0xa4, 0xc2, 0xd6, 0x55, 0xfb, 0x6d, 0xbb, 0xf3, 0xbe, 0xad, 0xad, 0xa1,
+	0x3d, 0x40, 0xa6, 0x81, 0xdf, 0x19, 0xd8, 0xba, 0x68, 0x99, 0xa7, 0xc6, 0x59, 0xed, 0x5d, 0xab,
+	0x83, 0x35, 0x45, 0xff, 0x87, 0x02, 0xa5, 0xf4, 0x19, 0x7f, 0xca, 0x05, 0x13, 0xb6, 0xe3, 0x86,
+	0x76, 0x43, 0x43, 0x97, 0x04, 0x41, 0x79, 0xfd, 0x30, 0x73, 0xa4, 0x56, 0x5f, 0xac, 0xce, 0x97,
+	0x38, 0xbd, 0xdf, 0x0b, 0xb0, 0xe1, 0x86, 0xfe, 0x1d, 0x8e, 0x7b, 0xa2, 0x24, 0x56, 0x7e, 0x98,
+	0xa5, 0x43, 0x12, 0x86, 0x34, 0xc8, 0xc4, 0x59, 0x90, 0xc7, 0xec, 0x2f, 0x3a, 0x86, 0x0d, 0xd1,
+	0x6b, 0xd7, 0xd3, 0x39, 0x9a, 0x96, 0xc6, 0x02, 0xf4, 0xdd, 0xfa, 0xb7, 0x8a, 0xfe, 0x02, 0x4a,
+	0x69, 0x26, 0x2a, 0xc3, 0x56, 0x6c, 0xb9, 0x38, 0xec, 0x78, 0xa9, 0xff, 0x57, 0x81, 0x47, 0xb2,
+	0x31, 0xa6, 0x6b, 0xfe, 0x57, 0x90, 0xef, 0x8f, 0xec, 0xf1, 0x98, 0xb8, 0x43, 0x22, 0xcb, 0xfe,
+	0xf3, 0x74, 0x8b, 0xac, 0xc7, 0x6c, 0x56, 0xba, 0x33, 0x2c, 0x7a, 0x05, 0x5b, 0x53, 0x9f, 0x4c,
+	0x6d, 0x3f, 0xb6, 0x78, 0x7f, 0x39, 0x4a, 0x97, 0x02, 0x70, 0xb6, 0x86, 0x63, 0x2c, 0xfa, 0x16,
+	0x72, 0x03, 0xea, 0xda, 0x63, 0xfa, 0x5b, 0x22, 0x6b, 0xbe, 0xb2, 0x2c, 0xd7, 0x94, 0x08, 0xd6,
+	0x1b, 0x63, 0x34, 0xfa, 0x06, 0x72, 0xc1, 0x28, 0x0a, 0x1d, 0xef, 0xc6, 0x95, 0x95, 0xbf, 0x97,
+	0x36, 0xd4, 0x94, 0x5c, 0x26, 0x15, 0x23, 0xe3, 0x5a, 0xbe, 0x84, 0xed, 0x05, 0x6f, 0xd0, 0x93,
+	0x45, 0xcf, 0x0b, 0x49, 0xf7, 0x16, 0xea, 0x7c, 0x7d, 0xa9, 0xce, 0xff, 0x9e, 0x81, 0x9d, 0x25,
+	0x4f, 0x91, 0x09, 0xa5, 0x09, 0x5b, 0x13, 0x79, 0x37, 0x88, 0x83, 0x50, 0xab, 0xc7, 0xf7, 0x06,
+	0xe7, 0xe4, 0x42, 0xe0, 0x39, 0x43, 0x26, 0x51, 0x71, 0x92, 0xa4, 0xa1, 0xef, 0x41, 0xeb, 0x8f,
+	0x6c, 0x7f, 0x48, 0x1c, 0x4b, 0x66, 0x57, 0x9c, 0x99, 0xbb, 0x0b, 0x59, 0xd2, 0xa0, 0x83, 0x01,
+	0xde, 0x96, 0x60, 0x49, 0x0b, 0xd0, 0x97, 0xb0, 0xeb, 0x92, 0x1b, 0xab, 0x3f, 0xb2, 0x5d, 0x2b,
+	0xbc, 0xb5, 0xa8, 0xeb, 0xd0, 0x3e, 0x09, 0xca, 0x99, 0xc3, 0xcc, 0x51, 0x11, 0x6b, 0x2e, 0xb9,
+	0xa9, 0x8f, 0x6c, 0xb7, 0x7b, 0xdb, 0x12, 0x74, 0xf4, 0x0b, 0xd8, 0x11, 0x25, 0x12, 0xfa, 0xb6,
+	0x1b, 0xd8, 0x3c, 0x5d, 0x78, 0xc4, 0x0b, 0x58, 0xe3, 0x8c, 0xee, 0x9c, 0x8e, 0x8e, 0x61, 0x77,
+	0x40, 0x88, 0xe5, 0xdb, 0x21, 0xb1, 0x02, 0x3b, 0xb4, 0xa6, 0x6c, 0xfc, 0xb9, 0xe1, 0x8d, 0x36,
+	0x83, 0xb7, 0x07, 0x84, 0x60, 0x3b, 0x24, 0xa6, 0x1d, 0x5e, 0x12, 0xff, 0xed, 0x0d, 0xfa, 0x39,
+	0x94, 0x38, 0x9a, 0xf4, 0x24, 0xbe, 0xbc, 0xc9, 0x81, 0x05, 0x06, 0xe4, 0x44, 0xd3, 0x4e, 0xb7,
+	0x99, 0xad, 0x54, 0x8d, 0x56, 0xde, 0x01, 0x5a, 0x8e, 0xd7, 0x8a, 0x6a, 0x7a, 0x91, 0xae, 0xa6,
+	0xd9, 0xdd, 0x9c, 0x14, 0x4e, 0xd6, 0x92, 0x07, 0x68, 0x39, 0xfd, 0x3e, 0xd5, 0x2c, 0x0e, 0x00,
+	0x64, 0x90, 0x6e, 0x67, 0xcd, 0x33, 0x2f, 0xa2, 0x73, 0x4b, 0x1d, 0x96, 0x3e, 0x23, 0x42, 0x87,
+	0xa3, 0xd0, 0x1a, 0xb1, 0xe9, 0x4c, 0xcc, 0x4f, 0x20, 0x48, 0x67, 0xd4, 0x0d, 0x75, 0x0d, 0x4a,
+	0xe9, 0xac, 0xd5, 0x6f, 0xa1, 0x90, 0xb4, 0x0e, 0xbd, 0x04, 0x35, 0x4e, 0xa5, 0x1e, 0xdf, 0x9f,
+	0x1d, 0x38, 0x5a, 0x70, 0xe4, 0x94, 0x3a, 0x18, 0x26, 0xb3, 0xff, 0x49, 0x21, 0x36, 0x1a, 0xad,
+	0xaf, 0x14, 0xaa, 0x05, 0xd7, 0x33, 0xa1, 0x5a, 0x70, 0xad, 0x77, 0x01, 0xe6, 0x1c, 0xf4, 0xfc,
+	0xd3, 0x53, 0x95, 0x98, 0xa9, 0x9e, 0x41, 0x21, 0x72, 0x69, 0x18, 0x58, 0x03, 0x3a, 0x1e, 0xcb,
+	0x51, 0xa6, 0x88, 0x55, 0x4e, 0x6b, 0x72, 0x52, 0x42, 0x2b, 0x33, 0xec, 0xb9, 0x18, 0xc2, 0x94,
+	0x7b, 0x86, 0x30, 0x3e, 0x82, 0xfd, 0x14, 0xad, 0x7f, 0x5d, 0x07, 0x35, 0x91, 0xec, 0x6c, 0x0a,
+	0x25, 0xae, 0x43, 0xdd, 0xa1, 0xd5, 0xb3, 0xc7, 0x76, 0x3c, 0x0d, 0x65, 0x70, 0x51, 0x50, 0x4f,
+	0x05, 0x11, 0xd5, 0xa1, 0x20, 0x61, 0x41, 0x68, 0x87, 0x22, 0x2d, 0x4a, 0xd5, 0xc3, 0x15, 0xe5,
+	0x33, 0x1b, 0x5a, 0x18, 0x0e, 0xab, 0x42, 0x8a, 0x2f, 0xd0, 0x31, 0xe4, 0xbc, 0x28, 0x14, 0xf3,
+	0x76, 0xe6, 0x9e, 0x79, 0x7b, 0x86, 0x60, 0x37, 0x62, 0x6a, 0x2e, 0x96, 0x2b, 0xfd, 0x77, 0x50,
+	0x48, 0x6e, 0x81, 0x1e, 0x81, 0xd6, 0xb9, 0xea, 0x5e, 0x5e, 0x75, 0x2d, 0x6c, 0xd4, 0xb1, 0x51,
+	0xeb, 0x1a, 0x0d, 0x6d, 0x0d, 0x3d, 0x83, 0x03, 0x49, 0x6d, 0x5c, 0x99, 0x5d, 0xcb, 0xf8, 0xd0,
+	0x35, 0xda, 0x0d, 0xa3, 0x61, 0x75, 0x9a, 0xcd, 0xfa, 0x59, 0xad, 0xd5, 0xd6, 0x14, 0x74, 0x00,
+	0xfb, 0x49, 0x48, 0xad, 0xc1, 0xf8, 0xdd, 0x8e, 0xd5, 0x34, 0x0c, 0x53, 0x5b, 0x67, 0x97, 0xa2,
+	0x64, 0x37, 0xaf, 0xce, 0xcf, 0x7f, 0xb0, 0xcc, 0x4b, 0xa3, 0xdd, 0xd5, 0x32, 0xfa, 0x7f, 0xd6,
+	0x41, 0x15, 0x71, 0x17, 0x79, 0xf6, 0xf0, 0x64, 0x72, 0x00, 0xc0, 0xeb, 0x7b, 0x40, 0x6f, 0xe5,
+	0xa1, 0x64, 0x70, 0x9e, 0x51, 0x9a, 0x8c, 0xc0, 0xaa, 0xcf, 0x9e, 0x88, 0x88, 0x64, 0x30, 0xfb,
+	0xbb, 0x38, 0x78, 0x6c, 0x2e, 0xce, 0xa7, 0xe8, 0x31, 0xe4, 0x05, 0x80, 0x4d, 0x32, 0xa2, 0xc4,
+	0x73, 0x9c, 0x60, 0xd2, 0x21, 0xd2, 0xa1, 0x38, 0x89, 0xc6, 0x21, 0x65, 0x4c, 0x6e, 0x51, 0x4e,
+	0x4c, 0x42, 0x9c, 0x68, 0xd2, 0x21, 0x33, 0x69, 0x1f, 0x72, 0xae, 0xe7, 0x10, 0x6b, 0x1a, 0xf5,
+	0xca, 0x79, 0x51, 0x99, 0x6c, 0x7d, 0x19, 0xf5, 0xd0, 0xd7, 0x90, 0xe7, 0x2c, 0xdb, 0x71, 0xfc,
+	0x32, 0xa4, 0xdb, 0x64, 0xdb, 0x73, 0x48, 0xcd, 0x71, 0x7c, 0x76, 0x93, 0x72, 0x05, 0x6c, 0xc1,
+	0xac, 0x11, 0xbd, 0xf1, 0x6e, 0x4a, 0xca, 0x05, 0x7e, 0x58, 0x39, 0x46, 0xe8, 0xde, 0x4d, 0xd9,
+	0xb4, 0xff, 0x78, 0x10, 0x89, 0xd4, 0x59, 0xd5, 0xe8, 0x8a, 0xdc, 0xeb, 0x3d, 0x09, 0x69, 0xa6,
+	0xfb, 0xdd, 0x9b, 0x6c, 0x2e, 0xab, 0x6d, 0xbc, 0xc9, 0xe6, 0x36, 0xb4, 0xcd, 0x37, 0xd9, 0x9c,
+	0xaa, 0x15, 0xf4, 0x3f, 0x2a, 0x90, 0x9f, 0x65, 0x3d, 0xfa, 0x72, 0x36, 0xef, 0xcb, 0xca, 0xd8,
+	0x4d, 0x57, 0x86, 0xe8, 0x53, 0x31, 0x06, 0x9d, 0xc0, 0xee, 0x84, 0xba, 0x96, 0x13, 0xf9, 0xfc,
+	0x7b, 0xd5, 0xea, 0x8d, 0xbd, 0xfe, 0x75, 0x20, 0x4f, 0x64, 0x67, 0x42, 0xdd, 0x86, 0xe4, 0x9c,
+	0x72, 0x06, 0x9b, 0x07, 0x3e, 0x12, 0x3f, 0x88, 0xfb, 0x77, 0x11, 0xc7, 0xcb, 0x37, 0xd9, 0x5c,
+	0x46, 0xcb, 0xea, 0x7f, 0x98, 0x19, 0xc3, 0x0a, 0xff, 0xff, 0x30, 0xc6, 0xbe, 0x5d, 0x32, 0x26,
+	0x2b, 0x8d, 0xb1, 0x6f, 0xef, 0x37, 0x66, 0x23, 0x65, 0x8c, 0x7e, 0x02, 0x6a, 0xe2, 0x3b, 0xe5,
+	0xe1, 0xaf, 0x9b, 0xbf, 0x28, 0x50, 0x48, 0x7e, 0x64, 0x3d, 0x28, 0x81, 0x7e, 0x0d, 0xea, 0xc0,
+	0xa6, 0x63, 0x2b, 0x31, 0xa2, 0x96, 0xaa, 0x4f, 0x57, 0x7d, 0xb0, 0x9d, 0x34, 0x6d, 0x3a, 0x8e,
+	0xe7, 0xcf, 0xc1, 0xec, 0x3f, 0xdb, 0x82, 0x6b, 0x08, 0x42, 0x9f, 0xba, 0x62, 0xfa, 0xce, 0x0b,
+	0x80, 0xc9, 0x29, 0xfa, 0x01, 0xc0, 0x5c, 0x14, 0x6d, 0x83, 0xda, 0x6a, 0xbf, 0xab, 0x9d, 0xb7,
+	0x1a, 0x56, 0xed, 0xa2, 0xab, 0xad, 0xe9, 0xaf, 0x60, 0xa3, 0xe5, 0x4e, 0xa3, 0x30, 0xd5, 0x44,
+	0x94, 0x87, 0x9a, 0x88, 0xfe, 0x4b, 0xd8, 0xec, 0x44, 0x21, 0x93, 0x7b, 0x14, 0xdf, 0x68, 0x0a,
+	0x0f, 0x9e, 0x58, 0xb0, 0x26, 0x93, 0xfa, 0x90, 0x97, 0x2b, 0xfd, 0x9f, 0x0a, 0x54, 0xc4, 0xa9,
+	0x5d, 0x78, 0x0e, 0x1d, 0xdc, 0x2d, 0x3c, 0x1f, 0x3c, 0x5c, 0xf3, 0xc7, 0x00, 0x6c, 0x66, 0xa0,
+	0xcc, 0xe6, 0x78, 0xda, 0x28, 0xce, 0x03, 0x36, 0x8d, 0x42, 0x9c, 0x77, 0xc9, 0x0d, 0xff, 0x17,
+	0xa0, 0xaf, 0x40, 0x65, 0x68, 0x8f, 0x9b, 0x2a, 0x26, 0x0b, 0xb5, 0x5a, 0x4a, 0xf8, 0xc5, 0xf0,
+	0x4c, 0xa1, 0xf8, 0x1b, 0xa0, 0x9a, 0x10, 0x90, 0xe3, 0x8c, 0xfc, 0x2e, 0x3b, 0x4c, 0xe7, 0xdb,
+	0xf2, 0xb3, 0x07, 0x57, 0x21, 0x49, 0xfa, 0xf7, 0xf0, 0x78, 0xa5, 0x87, 0xf2, 0x2b, 0xfd, 0x29,
+	0xa8, 0xb3, 0xa7, 0x0e, 0x3a, 0x8c, 0x3d, 0x8c, 0xdf, 0x39, 0xe8, 0x50, 0xff, 0x0e, 0x3e, 0x4f,
+	0xe4, 0xb5, 0x68, 0xf7, 0x3f, 0xf5, 0xfb, 0xfa, 0xc7, 0xf8, 0xe3, 0x3c, 0x29, 0x2b, 0x37, 0x3e,
+	0x82, 0x0d, 0x71, 0xc7, 0x28, 0x3c, 0xcb, 0x50, 0x6a, 0xf2, 0x13, 0x50, 0x01, 0x60, 0x83, 0x96,
+	0xb8, 0xee, 0x22, 0x77, 0x10, 0x8d, 0x53, 0x77, 0x9e, 0xc6, 0x19, 0x57, 0x73, 0xba, 0xfe, 0x1a,
+	0xd4, 0x44, 0xf7, 0x62, 0xd5, 0xe4, 0x92, 0xf0, 0xc6, 0xf3, 0xaf, 0xe5, 0xd8, 0x13, 0x2f, 0x11,
+	0x82, 0x2c, 0x6f, 0x7d, 0xe2, 0x3b, 0x8c, 0xff, 0xd7, 0x4f, 0x21, 0x17, 0x27, 0x17, 0xe3, 0xf3,
+	0x99, 0x45, 0x78, 0xc5, 0xff, 0x23, 0x1d, 0x0a, 0xe2, 0xec, 0xd8, 0x70, 0x48, 0x6e, 0xa5, 0x11,
+	0x29, 0xda, 0x8b, 0x3f, 0x29, 0x00, 0x73, 0x1f, 0xd0, 0x2e, 0x6c, 0x77, 0x70, 0xc3, 0xc0, 0x96,
+	0x79, 0x75, 0x7a, 0xd1, 0xea, 0x8a, 0x5b, 0x6b, 0x07, 0x8a, 0x82, 0x58, 0x3f, 0x37, 0x6a, 0xd8,
+	0x68, 0x68, 0x0a, 0xaa, 0xc0, 0x9e, 0x20, 0x5d, 0xd6, 0x70, 0xb7, 0x55, 0x63, 0x37, 0x51, 0xb3,
+	0x75, 0x7e, 0x6e, 0x34, 0xb4, 0x75, 0x84, 0xa0, 0x24, 0x78, 0xc6, 0x07, 0xa3, 0x7e, 0xc5, 0x54,
+	0x64, 0xe6, 0xb4, 0x7a, 0xad, 0x5d, 0x37, 0x18, 0x2e, 0x3b, 0x57, 0x6b, 0x7c, 0xb8, 0x6c, 0x31,
+	0xb5, 0x1b, 0x48, 0x83, 0x82, 0x20, 0x35, 0x6b, 0x2d, 0x06, 0xda, 0xac, 0xfe, 0x2b, 0x0b, 0x3b,
+	0x6c, 0x90, 0x75, 0xc9, 0xb8, 0x36, 0x7b, 0x74, 0x43, 0x1d, 0x28, 0xa5, 0x9f, 0xec, 0xd0, 0x41,
+	0x7c, 0x20, 0x2b, 0xdf, 0xf8, 0x2a, 0x3f, 0xbb, 0x8f, 0x2d, 0x8f, 0x17, 0x83, 0x9a, 0x48, 0x4c,
+	0xf4, 0x60, 0xce, 0x56, 0x9e, 0x7d, 0x02, 0x21, 0x75, 0x7e, 0x80, 0x62, 0x2a, 0x89, 0x91, 0x9e,
+	0x96, 0x59, 0x55, 0xc3, 0x95, 0xe7, 0x9f, 0xc4, 0xcc, 0xad, 0x4d, 0x3c, 0x61, 0x2d, 0x5a, 0xbb,
+	0xfc, 0xa6, 0xb6, 0x68, 0xed, 0xaa, 0xf7, 0x2f, 0x9c, 0x6e, 0xd7, 0x0b, 0x3a, 0x97, 0x9f, 0xab,
+	0x16, 0x75, 0xae, 0x78, 0x93, 0x42, 0x9d, 0x54, 0x6e, 0x3d, 0x5d, 0x71, 0xf1, 0x24, 0x0b, 0xb4,
+	0x72, 0x78, 0x3f, 0x40, 0x2a, 0x7c, 0x0f, 0x9f, 0x99, 0xf1, 0x33, 0x13, 0x7f, 0x52, 0x95, 0x39,
+	0x81, 0x9e, 0xc4, 0xa2, 0xab, 0x9e, 0xc0, 0x2a, 0x4f, 0x16, 0xe6, 0xdd, 0x14, 0xf7, 0x48, 0xf9,
+	0x5a, 0xe9, 0x6d, 0xf2, 0x37, 0xe2, 0x97, 0xff, 0x0b, 0x00, 0x00, 0xff, 0xff, 0x6f, 0x10, 0x14,
+	0xf5, 0x5d, 0x16, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
