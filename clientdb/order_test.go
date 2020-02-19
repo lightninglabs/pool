@@ -93,7 +93,7 @@ func TestUpdateOrders(t *testing.T) {
 
 	// Update the state of the first order and check that it is persisted.
 	err = store.UpdateOrder(
-		o1.Nonce(), order.StateModifier(order.StatePartialFill),
+		o1.Nonce(), order.StateModifier(order.StatePartiallyFilled),
 	)
 	if err != nil {
 		t.Fatalf("unable to update order: %v", err)
@@ -102,9 +102,9 @@ func TestUpdateOrders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to retrieve order: %v", err)
 	}
-	if storedOrder.Details().State != order.StatePartialFill {
+	if storedOrder.Details().State != order.StatePartiallyFilled {
 		t.Fatalf("unexpected order state. got %d expected %d",
-			storedOrder.Details().State, order.StatePartialFill)
+			storedOrder.Details().State, order.StatePartiallyFilled)
 	}
 
 	// Bulk update the state of both orders and check that they are

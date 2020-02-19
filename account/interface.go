@@ -225,6 +225,15 @@ type Auctioneer interface {
 	// allowing us to broadcast a transaction sweeping the account.
 	CloseAccount(context.Context, *btcec.PublicKey,
 		[]*wire.TxOut) ([]byte, error)
+
+	// SubscribeAccountUpdates opens a stream to the server and subscribes
+	// to all updates that concern the given account, including all orders
+	// that spend from that account. Only a single stream is ever open to
+	// the server, so a second call to this method will send a second
+	// subscription over the same stream, multiplexing all messages into the
+	// same connection. A stream can be long-lived, so this can be called
+	// for every account as soon as it's confirmed open.
+	SubscribeAccountUpdates(context.Context, *Account) error
 }
 
 // TxSource is a source that provides us with transactions previously broadcast

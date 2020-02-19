@@ -8,6 +8,7 @@ import (
 	"github.com/lightninglabs/agora/client/auctioneer"
 	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightninglabs/loop/lndclient"
+	"github.com/lightninglabs/loop/lsat"
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/signal"
 )
@@ -30,6 +31,7 @@ func init() {
 	addSubLogger("LNDC", lndclient.UseLogger)
 	addSubLogger("SGNL", signal.UseLogger)
 	addSubLogger(account.Subsystem, account.UseLogger)
+	addSubLogger(lsat.Subsystem, lsat.UseLogger)
 }
 
 // addSubLogger is a helper method to conveniently create and register the

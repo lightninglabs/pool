@@ -130,6 +130,12 @@ func (a *mockAuctioneer) CloseAccount(context.Context, *btcec.PublicKey,
 	return []byte("auctioneer sig"), nil
 }
 
+func (a *mockAuctioneer) SubscribeAccountUpdates(context.Context,
+	*Account) error {
+
+	return nil
+}
+
 type mockWallet struct {
 	TxSource
 	lndclient.WalletKitClient

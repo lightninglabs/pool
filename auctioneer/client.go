@@ -3,10 +3,15 @@ package auctioneer
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"io"
+	"sync"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/agora/client/order"
@@ -15,36 +20,108 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+const (
+	initialConnectRetries = 3
+	reconnectRetries      = 10
+)
+
+var (
+	// ErrServerShutdown is the error that is returned if the auction server
+	// signals it's going to shut down.
+	ErrServerShutdown = errors.New("server shutting down")
+
+	// ErrClientShutdown is the error that is returned if the trader client
+	// itself is shutting down.
+	ErrClientShutdown = errors.New("client shutting down")
+)
+
+// Config holds the configuration options for the auctioneer client.
+type Config struct {
+	// ServerAddress is the domain:port of the auctioneer server.
+	ServerAddress string
+
+	// Insecure signals that no TLS should be used if set to true.
+	Insecure bool
+
+	// TLSPathServer is the path to a local file that holds the auction
+	// server's TLS certificate. This is only needed if the server is using
+	// a self signed cert.
+	TLSPathServer string
+
+	// DialOpts is a list of additional options that should be used when
+	// dialing the gRPC connection.
+	DialOpts []grpc.DialOption
+
+	// Signer is the signing interface that is used to sign messages during
+	// the authentication handshake with the auctioneer server.
+	Signer lndclient.SignerClient
+
+	// MinBackoff is the minimum time that is waited before the next re-
+	// connect attempt is made. After each try the backoff is doubled until
+	// MaxBackoff is reached.
+	MinBackoff time.Duration
+
+	// MaxBackoff is the maximum time that is waited between connection
+	// attempts.
+	MaxBackoff time.Duration
+}
+
 // Client performs the client side part of auctions. This interface exists to be
 // able to implement a stub.
 type Client struct {
+	cfg *Config
+
+	StreamErrChan  chan error
+	FromServerChan chan *clmrpc.ServerAuctionMessage
+
 	serverConn *grpc.ClientConn
 	client     clmrpc.ChannelAuctioneerClient
-	wallet     lndclient.WalletKitClient
+
+	quit            chan struct{}
+	wg              sync.WaitGroup
+	serverStream    clmrpc.ChannelAuctioneer_SubscribeBatchAuctionClient
+	streamMutex     sync.Mutex
+	streamCancel    func()
+	subscribedAccts map[[33]byte]*acctSubscription
 }
 
 // NewClient returns a new instance to initiate auctions with.
-func NewClient(serverAddress string, insecure bool, tlsPathServer string,
-	wallet lndclient.WalletKitClient, dialOpts ...grpc.DialOption) (
-	*Client, error) {
-
-	serverConn, err := getAuctionServerConn(
-		serverAddress, insecure, tlsPathServer, dialOpts...,
+func NewClient(cfg *Config) (*Client, error) {
+	var err error
+	cfg.DialOpts, err = getAuctionServerDialOpts(
+		cfg.Insecure, cfg.TLSPathServer, cfg.DialOpts...,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		serverConn: serverConn,
-		client:     clmrpc.NewChannelAuctioneerClient(serverConn),
-		wallet:     wallet,
+		cfg:             cfg,
+		FromServerChan:  make(chan *clmrpc.ServerAuctionMessage),
+		StreamErrChan:   make(chan error),
+		quit:            make(chan struct{}),
+		subscribedAccts: make(map[[33]byte]*acctSubscription),
 	}, nil
 }
 
-// getAuctionServerConn returns a connection to the auction server.
-func getAuctionServerConn(address string, insecure bool, tlsPath string,
-	dialOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
+// Start starts the client, establishing the connection to the server.
+func (c *Client) Start() error {
+	serverConn, err := grpc.Dial(c.cfg.ServerAddress, c.cfg.DialOpts...)
+	if err != nil {
+		return fmt.Errorf("unable to connect to RPC server: %v",
+			err)
+	}
+
+	c.serverConn = serverConn
+	c.client = clmrpc.NewChannelAuctioneerClient(serverConn)
+
+	return nil
+}
+
+// getAuctionServerDialOpts returns the dial options to connect to the auction
+// server.
+func getAuctionServerDialOpts(insecure bool, tlsPath string,
+	dialOpts ...grpc.DialOption) ([]grpc.DialOption, error) {
 
 	// Create a copy of the dial options array.
 	opts := dialOpts
@@ -70,18 +147,34 @@ func getAuctionServerConn(address string, insecure bool, tlsPath string,
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	}
 
-	conn, err := grpc.Dial(address, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to RPC server: %v",
-			err)
-	}
-
-	return conn, nil
+	return opts, nil
 }
 
 // Stop shuts down the client connection to the auction server.
 func (c *Client) Stop() error {
+	log.Infof("Shutting down auctioneer client")
+	close(c.quit)
+	err := c.closeStream()
+	if err != nil {
+		log.Errorf("Unable to close stream: %v", err)
+	}
+	c.wg.Wait()
+	close(c.FromServerChan)
 	return c.serverConn.Close()
+}
+
+// closeStream closes the long-lived stream connection to the server.
+func (c *Client) closeStream() error {
+	c.streamMutex.Lock()
+	defer c.streamMutex.Unlock()
+
+	if c.serverStream == nil {
+		return nil
+	}
+	log.Debugf("Closing server stream")
+	err := c.serverStream.CloseSend()
+	c.streamCancel()
+	return err
 }
 
 // ReserveAccount reserves an account with the auctioneer. It returns the base
@@ -178,15 +271,15 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		})
 	}
 	details := &clmrpc.ServerOrder{
-		UserSubKey:     o.Details().AcctKey.SerializeCompressed(),
-		RateFixed:      int64(o.Details().FixedRate),
-		Amt:            int64(o.Details().Amt),
-		OrderNonce:     nonce[:],
-		OrderSig:       serverParams.RawSig,
-		MultiSigKey:    serverParams.MultiSigKey[:],
-		NodePub:        serverParams.NodePubkey[:],
-		NodeAddr:       nodeAddrs,
-		FundingFeeRate: int64(o.Details().FundingFeeRate),
+		UserSubKey:             o.Details().AcctKey.SerializeCompressed(),
+		RateFixed:              int64(o.Details().FixedRate),
+		Amt:                    int64(o.Details().Amt),
+		OrderNonce:             nonce[:],
+		OrderSig:               serverParams.RawSig,
+		MultiSigKey:            serverParams.MultiSigKey[:],
+		NodePub:                serverParams.NodePubkey[:],
+		NodeAddr:               nodeAddrs,
+		FundingFeeRateSatPerKw: int64(o.Details().FundingFeeRate),
 	}
 
 	// Split into server message which is type specific.
@@ -258,28 +351,280 @@ func (c *Client) OrderState(ctx context.Context, nonce order.Nonce) (
 
 	// Map RPC state to internal state.
 	switch resp.State {
-	case clmrpc.ServerOrderStateResponse_SUBMITTED:
+	case clmrpc.OrderState_ORDER_SUBMITTED:
 		return order.StateSubmitted, resp.UnitsUnfulfilled, nil
 
-	case clmrpc.ServerOrderStateResponse_CLEARED:
+	case clmrpc.OrderState_ORDER_CLEARED:
 		return order.StateCleared, resp.UnitsUnfulfilled, nil
 
-	case clmrpc.ServerOrderStateResponse_PARTIAL_FILL:
-		return order.StatePartialFill, resp.UnitsUnfulfilled, nil
+	case clmrpc.OrderState_ORDER_PARTIALLY_FILLED:
+		return order.StatePartiallyFilled, resp.UnitsUnfulfilled, nil
 
-	case clmrpc.ServerOrderStateResponse_EXECUTED:
+	case clmrpc.OrderState_ORDER_EXECUTED:
 		return order.StateExecuted, resp.UnitsUnfulfilled, nil
 
-	case clmrpc.ServerOrderStateResponse_CANCELED:
+	case clmrpc.OrderState_ORDER_CANCELED:
 		return order.StateCanceled, resp.UnitsUnfulfilled, nil
 
-	case clmrpc.ServerOrderStateResponse_EXPIRED:
+	case clmrpc.OrderState_ORDER_EXPIRED:
 		return order.StateExpired, resp.UnitsUnfulfilled, nil
 
-	case clmrpc.ServerOrderStateResponse_FAILED:
+	case clmrpc.OrderState_ORDER_FAILED:
 		return order.StateFailed, resp.UnitsUnfulfilled, nil
 
 	default:
 		return 0, 0, fmt.Errorf("invalid order state: %v", resp.State)
 	}
+}
+
+// SubscribeAccountUpdates opens a stream to the server and subscribes
+// to all updates that concern the given account, including all orders
+// that spend from that account. Only a single stream is ever open to
+// the server, so a second call to this method will send a second
+// subscription over the same stream, multiplexing all messages into the
+// same connection. A stream can be long-lived, so this can be called
+// for every account as soon as it's confirmed open.
+func (c *Client) SubscribeAccountUpdates(ctx context.Context,
+	acct *account.Account) error {
+
+	c.streamMutex.Lock()
+	defer c.streamMutex.Unlock()
+
+	if c.serverStream == nil {
+		err := c.connectServerStream(0, initialConnectRetries)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Before we can expect to receive any updates, we need to perform the
+	// 3-way authentication handshake.
+	var acctPubKey [33]byte
+	copy(acctPubKey[:], acct.TraderKey.PubKey.SerializeCompressed())
+	sub := &acctSubscription{
+		acct:          acct,
+		sendMsg:       c.SendAuctionMessage,
+		signer:        c.cfg.Signer,
+		challengeChan: make(chan [32]byte),
+	}
+	c.subscribedAccts[acctPubKey] = sub
+	return sub.authenticate(ctx)
+}
+
+// SendAuctionMessage sends an auction message through the long-lived stream to
+// the auction server. A message can only be sent as a response to a server
+// message, therefore the stream must already be open.
+func (c *Client) SendAuctionMessage(msg *clmrpc.ClientAuctionMessage) error {
+	if c.serverStream == nil {
+		return fmt.Errorf("cannot send message, stream not open")
+	}
+
+	return c.serverStream.Send(msg)
+}
+
+// wait blocks for a given amount of time but returns immediately if the client
+// is shutting down.
+func (c *Client) wait(backoff time.Duration) error {
+	if backoff > 0 {
+		select {
+		case <-time.After(backoff):
+		case <-c.quit:
+			return ErrClientShutdown
+		}
+	}
+	return nil
+}
+
+// connectServerStream opens the initial connection to the server for the stream
+// of account updates and handles reconnect trials with incremental backoff.
+func (c *Client) connectServerStream(initialBackoff time.Duration,
+	numRetries int) error {
+
+	var (
+		backoff = initialBackoff
+		ctx     context.Context
+		err     error
+	)
+	for i := 0; i < numRetries; i++ {
+		// Wait before connecting in case this is a reconnect trial.
+		err = c.wait(backoff)
+		if err != nil {
+			return err
+		}
+		ctx, c.streamCancel = context.WithCancel(context.Background())
+		c.serverStream, err = c.client.SubscribeBatchAuction(ctx)
+		if err == nil {
+			log.Debugf("Connected successfully to server after "+
+				"%d tries", i+1)
+			break
+		}
+
+		// Connect wasn't successful, cancel the context and increase
+		// the time we'll wait until the next try.
+		backoff *= 2
+		if backoff == 0 {
+			backoff = c.cfg.MinBackoff
+		}
+		if backoff > c.cfg.MaxBackoff {
+			backoff = c.cfg.MaxBackoff
+		}
+		log.Debugf("Connect failed with error, canceling and backing "+
+			"off for %s: %v", backoff, err)
+		c.streamCancel()
+		log.Infof("Connection to server failed, will try again in %v",
+			backoff)
+	}
+	if err != nil {
+		log.Errorf("Connection to server failed after %d retries",
+			numRetries)
+		return err
+	}
+
+	// Read incoming messages and send them to the channel where
+	// the order manager is listening on. We can only send our first message
+	// to the server after we've received the challenge, which we'll track
+	// with its own wait group.
+	log.Infof("Successfully connected to auction server")
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.readIncomingStream()
+	}()
+
+	return nil
+}
+
+// readIncomingStream reads incoming messages on a server update stream.
+// Messages read from the stream are placed in the FromServerChan channel.
+//
+// NOTE: This method must be called as a subroutine because it blocks as long as
+// the stream is open.
+func (c *Client) readIncomingStream() {
+	for {
+		// Cancel the stream on client shutdown.
+		select {
+		case <-c.quit:
+			return
+
+		default:
+		}
+
+		// Read next message from server.
+		msg, err := c.serverStream.Recv()
+		log.Tracef("Received msg=%s, err=%v from server",
+			spew.Sdump(msg), err)
+		switch {
+		// EOF is the "normal" close signal, meaning the server has
+		// cut its side of the connection. We will only get this during
+		// the proper shutdown of the server where we already have a
+		// reconnect scheduled. On an improper shutdown, we'll get an
+		// error, usually "transport is closing".
+		case err == io.EOF:
+			select {
+			case c.StreamErrChan <- ErrServerShutdown:
+			case <-c.quit:
+			}
+			return
+
+		// Any other error is likely on a connection level and leaves
+		// us no choice but to abort.
+		case err != nil:
+			select {
+			case c.StreamErrChan <- err:
+			case <-c.quit:
+			}
+			return
+		}
+
+		// We only handle two messages here, the initial challenge and
+		// the shutdown. Everything else is passed into the channel to
+		// be handled by a manager.
+		switch t := msg.Msg.(type) {
+		case *clmrpc.ServerAuctionMessage_Challenge:
+			var (
+				commitHash      [32]byte
+				serverChallenge [32]byte
+			)
+			copy(commitHash[:], t.Challenge.CommitHash)
+			var acctSub *acctSubscription
+			for traderKey, sub := range c.subscribedAccts {
+				if sub.commitHash == commitHash {
+					acctSub = c.subscribedAccts[traderKey]
+				}
+			}
+			if acctSub == nil {
+				c.StreamErrChan <- fmt.Errorf("no sub"+
+					"scription found for commit hash %x",
+					commitHash)
+				return
+			}
+
+			// Inform the subscription about the arrived challenge.
+			copy(serverChallenge[:], t.Challenge.Challenge)
+			select {
+			case acctSub.challengeChan <- serverChallenge:
+			case <-c.quit:
+			}
+
+		case *clmrpc.ServerAuctionMessage_Shutdown:
+			err := c.HandleServerShutdown(nil)
+			if err != nil {
+				select {
+				case c.StreamErrChan <- err:
+				case <-c.quit:
+				}
+			}
+			return
+
+		// A valid message from the server. Forward it to the handler.
+		default:
+			select {
+			case c.FromServerChan <- msg:
+			case <-c.quit:
+			}
+		}
+	}
+}
+
+// HandleServerShutdown handles the signal from the server that it is going to
+// shut down. In that case, we try to reconnect a number of times with an
+// incremental backoff time we wait between trials. If the connection succeeds,
+// all previous subscriptions are sent again.
+func (c *Client) HandleServerShutdown(err error) error {
+	if err == nil {
+		log.Infof("Server is shutting down, will reconnect in %v",
+			c.cfg.MinBackoff)
+	} else {
+		log.Errorf("Error in stream, trying to reconnect: %v", err)
+	}
+	err = c.closeStream()
+	if err != nil {
+		log.Errorf("Error closing stream connection: %v", err)
+	}
+
+	// Guard the server stream from concurrent access. We can't use defer
+	// to unlock here because SubscribeAccountUpdates is called later on
+	// which requires access to the lock as well.
+	c.streamMutex.Lock()
+	err = c.connectServerStream(c.cfg.MinBackoff, reconnectRetries)
+	if err != nil {
+		c.streamMutex.Unlock()
+		return err
+	}
+	c.streamMutex.Unlock()
+
+	// Subscribe to all accounts again. Remove the old subscriptions in the
+	// same move as new ones will be created.
+	accounts := make([]*account.Account, 0, len(c.subscribedAccts))
+	for key, subscription := range c.subscribedAccts {
+		accounts = append(accounts, subscription.acct)
+		delete(c.subscribedAccts, key)
+	}
+	for _, acct := range accounts {
+		err := c.SubscribeAccountUpdates(context.Background(), acct)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

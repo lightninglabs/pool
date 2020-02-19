@@ -59,9 +59,9 @@ const (
 	// part of a batch but has not been executed yet.
 	StateCleared State = 1
 
-	// StatePartialFill is the state an order has after some but not all
+	// StatePartiallyFilled is the state an order has after some but not all
 	// parts of it have been filled.
-	StatePartialFill State = 2
+	StatePartiallyFilled State = 2
 
 	// StateExecuted is the state an order has after it has been matched
 	// with another order in the order book and fully processed.
@@ -89,7 +89,7 @@ func (s State) String() string {
 	case StateCleared:
 		return "cleared"
 
-	case StatePartialFill:
+	case StatePartiallyFilled:
 		return "partial fill"
 
 	case StateExecuted:

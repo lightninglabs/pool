@@ -376,6 +376,19 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account,
 				err)
 		}
 
+		// Now that we have an open account, subscribe for updates to it
+		// to the server. We subscribe for the account instead of the
+		// individual orders because all signing operations will need to
+		// be executed on an account level anyway. And we might end up
+		// executing multiple orders for the same account in one batch.
+		// The messages from the server are received and dispatched to
+		// the correct manager by the rpcServer.
+		err = m.cfg.Auctioneer.SubscribeAccountUpdates(ctx, account)
+		if err != nil {
+			return fmt.Errorf("error subscribing to account "+
+				"updates: %v", err)
+		}
+
 	// In StateExpired, we'll wait for the account to be spent such that it
 	// can be marked as closed if we decide to close it.
 	case StateExpired:

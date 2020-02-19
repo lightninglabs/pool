@@ -20,15 +20,20 @@ import (
 
 // Server is the main agora trader server.
 type Server struct {
-	cfg              *Config
-	lndServices      *lndclient.GrpcLndServices
-	auctioneerClient *auctioneer.Client
-	traderServer     *rpcServer
-	grpcServer       *grpc.Server
-	restProxy        *http.Server
-	grpcListener     net.Listener
-	restListener     net.Listener
-	wg               sync.WaitGroup
+	// AuctioneerClient is the wrapper around the connection from the trader
+	// client to the auctioneer server. It is exported so we can replace
+	// the connection with a new one in the itest, if the server is
+	// restarted.
+	AuctioneerClient *auctioneer.Client
+
+	cfg          *Config
+	lndServices  *lndclient.GrpcLndServices
+	traderServer *rpcServer
+	grpcServer   *grpc.Server
+	restProxy    *http.Server
+	grpcListener net.Listener
+	restListener net.Listener
+	wg           sync.WaitGroup
 }
 
 // NewServer creates a new trader server.
@@ -91,10 +96,16 @@ func NewServer(cfg *Config) (*Server, error) {
 	)
 
 	// Create an instance of the auctioneer client library.
-	auctioneerClient, err := auctioneer.NewClient(
-		cfg.AuctionServer, cfg.Insecure, cfg.TLSPathAuctSrv,
-		lndServices.WalletKit, cfg.AuctioneerDialOpts...,
-	)
+	clientCfg := &auctioneer.Config{
+		ServerAddress: cfg.AuctionServer,
+		Insecure:      cfg.Insecure,
+		TLSPathServer: cfg.TLSPathAuctSrv,
+		DialOpts:      cfg.AuctioneerDialOpts,
+		Signer:        lndServices.Signer,
+		MinBackoff:    cfg.MinBackoff,
+		MaxBackoff:    cfg.MaxBackoff,
+	}
+	auctioneerClient, err := auctioneer.NewClient(clientCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +113,7 @@ func NewServer(cfg *Config) (*Server, error) {
 	return &Server{
 		cfg:              cfg,
 		lndServices:      lndServices,
-		auctioneerClient: auctioneerClient,
+		AuctioneerClient: auctioneerClient,
 	}, nil
 }
 
@@ -113,9 +124,7 @@ func (s *Server) Start() error {
 
 	// Instantiate the agorad gRPC server.
 	networkDir := filepath.Join(s.cfg.BaseDir, s.cfg.Network)
-	s.traderServer, err = newRPCServer(
-		&s.lndServices.LndServices, s.auctioneerClient, networkDir,
-	)
+	s.traderServer, err = newRPCServer(s, networkDir)
 	if err != nil {
 		return err
 	}
@@ -165,7 +174,7 @@ func (s *Server) Start() error {
 
 			err := s.restProxy.Serve(s.restListener)
 			if err != nil && err != http.ErrServerClosed {
-				log.Errorf("could not start rest listener: %v",
+				log.Errorf("Could not start rest listener: %v",
 					err)
 			}
 		}()
@@ -190,7 +199,7 @@ func (s *Server) Start() error {
 
 		err = s.grpcServer.Serve(s.grpcListener)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("Unable to server gRPC: %v", err)
 		}
 	}()
 
@@ -201,30 +210,23 @@ func (s *Server) Start() error {
 // client connections and network listeners.
 func (s *Server) Stop() error {
 	log.Info("Received shutdown signal, stopping server")
+
+	// Don't return any errors yet, give everything else a chance to shut
+	// down first.
 	err := s.traderServer.Stop()
-	if err != nil {
-		return fmt.Errorf("error shutting down server: %v", err)
-	}
 	s.grpcServer.GracefulStop()
-	err = s.grpcListener.Close()
-	if err != nil {
-		return fmt.Errorf("error closing gRPC listener: %v", err)
-	}
 	if s.restProxy != nil {
 		err := s.restProxy.Shutdown(context.Background())
 		if err != nil {
-			return fmt.Errorf("error shutting down REST proxy: %v",
-				err)
-		}
-		err = s.restListener.Close()
-		if err != nil {
-			return fmt.Errorf("error shutting down REST listener: "+
-				"%v", err)
+			log.Errorf("Error shutting down REST proxy: %v", err)
 		}
 	}
 	s.lndServices.Close()
-
 	s.wg.Wait()
+
+	if err != nil {
+		return fmt.Errorf("error shutting down server: %v", err)
+	}
 	return nil
 }
 

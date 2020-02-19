@@ -14,6 +14,7 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/auctioneer"
 	"github.com/lightninglabs/agora/client/clientdb"
@@ -40,6 +41,7 @@ type rpcServer struct {
 	// used atomically.
 	bestHeight uint32
 
+	server         *Server
 	lndServices    *lndclient.LndServices
 	auctioneer     *auctioneer.Client
 	db             *clientdb.DB
@@ -53,21 +55,22 @@ type rpcServer struct {
 // newRPCServer creates a new client-side RPC server that uses the given
 // connection to the trader's lnd node and the auction server. A client side
 // database is created in `serverDir` if it does not yet exist.
-func newRPCServer(lnd *lndclient.LndServices, auctioneer *auctioneer.Client,
-	serverDir string) (*rpcServer, error) {
+func newRPCServer(server *Server, serverDir string) (*rpcServer, error) {
 
 	db, err := clientdb.New(serverDir)
 	if err != nil {
 		return nil, err
 	}
 
+	lnd := &server.lndServices.LndServices
 	return &rpcServer{
+		server:      server,
 		lndServices: lnd,
-		auctioneer:  auctioneer,
+		auctioneer:  server.AuctioneerClient,
 		db:          db,
 		accountManager: account.NewManager(&account.ManagerConfig{
 			Store:         db,
-			Auctioneer:    auctioneer,
+			Auctioneer:    server.AuctioneerClient,
 			Wallet:        lnd.WalletKit,
 			Signer:        lnd.Signer,
 			ChainNotifier: lnd.ChainNotifier,
@@ -121,6 +124,11 @@ func (s *rpcServer) Start() error {
 
 	s.updateHeight(height)
 
+	// Start the auctioneer client first to establish a connection.
+	if err := s.auctioneer.Start(); err != nil {
+		return fmt.Errorf("unable to start auctioneer client: %v", err)
+	}
+
 	// Start managers.
 	if err := s.accountManager.Start(); err != nil {
 		return fmt.Errorf("unable to start account manager: %v", err)
@@ -148,11 +156,11 @@ func (s *rpcServer) Stop() error {
 	s.orderManager.Stop()
 	err := s.db.Close()
 	if err != nil {
-		log.Errorf("error closing DB: %v")
+		log.Errorf("Error closing DB: %v")
 	}
 	err = s.auctioneer.Stop()
 	if err != nil {
-		log.Errorf("error closing server stream: %v")
+		log.Errorf("Error closing server stream: %v")
 	}
 
 	close(s.quit)
@@ -168,6 +176,37 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 
 	for {
 		select {
+		case msg := <-s.auctioneer.FromServerChan:
+			// An empty message means the client is shutting down.
+			if msg == nil {
+				continue
+			}
+
+			log.Debugf("Received message from the server: %v", msg)
+			err := s.handleServerMessage(msg)
+			if err != nil {
+				log.Errorf("Error handling server message: %v",
+					err)
+				err := s.server.Stop()
+				if err != nil {
+					log.Errorf("Error shutting down: %v",
+						err)
+				}
+			}
+
+		case err := <-s.auctioneer.StreamErrChan:
+			// If the server is shutting down, then the client has
+			// already scheduled a restart. We only need to handle
+			// other errors here.
+			if err != nil && err != auctioneer.ErrServerShutdown {
+				log.Errorf("Error in server stream: %v", err)
+				err := s.auctioneer.HandleServerShutdown(err)
+				if err != nil {
+					log.Errorf("Error closing stream: %v",
+						err)
+				}
+			}
+
 		case height := <-blockChan:
 			log.Infof("Received new block notification: height=%v",
 				height)
@@ -177,6 +216,11 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 			if err != nil {
 				log.Errorf("Unable to receive block "+
 					"notification: %v", err)
+				err := s.server.Stop()
+				if err != nil {
+					log.Errorf("Error shutting down: %v",
+						err)
+				}
 			}
 
 		// In case the server is shutting down.
@@ -190,6 +234,52 @@ func (s *rpcServer) updateHeight(height int32) {
 	// Store height atomically so the incoming request handler can access it
 	// without locking.
 	atomic.StoreUint32(&s.bestHeight, uint32(height))
+}
+
+// handleServerMessage reads a gRPC message received in the stream from the
+// auctioneer server and passes it to the correct manager.
+func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) error {
+	switch msg := rpcMsg.Msg.(type) {
+	// A new batch has been assembled with some of our orders.
+	case *clmrpc.ServerAuctionMessage_Prepare:
+		log.Tracef("Received prepare msg from server, batch_id=%x: %v",
+			msg.Prepare.BatchId, spew.Sdump(msg))
+
+		// TODO(guggero): Add real batch validation here.
+		// For now, we just send the accept back.
+		err := s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
+			Msg: &clmrpc.ClientAuctionMessage_Accept{
+				Accept: &clmrpc.OrderMatchAccept{
+					BatchId: msg.Prepare.BatchId,
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// TODO(guggero): Initiate channel opening negotiation with
+		// remote peer here.
+		err = s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
+			Msg: &clmrpc.ClientAuctionMessage_Sign{
+				Sign: &clmrpc.OrderMatchSign{
+					BatchId: msg.Prepare.BatchId,
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+	case *clmrpc.ServerAuctionMessage_Finalize:
+		log.Tracef("Received finalize msg from server, batch_id=%x: %v",
+			msg.Finalize.BatchId, spew.Sdump(msg))
+
+	default:
+		return fmt.Errorf("unknown server message: %v", msg)
+	}
+
+	return nil
 }
 
 func (s *rpcServer) InitAccount(ctx context.Context,
@@ -367,7 +457,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	if err != nil {
 		// TODO(guggero): Put in state failed instead of removing?
 		if err2 := s.db.DelOrder(o.Nonce()); err2 != nil {
-			log.Errorf("could not delete failed order: %v", err2)
+			log.Errorf("Could not delete failed order: %v", err2)
 		}
 
 		// If there was something wrong with the information the user
