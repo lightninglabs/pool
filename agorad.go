@@ -17,6 +17,7 @@ import (
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/agora/client/trader"
 	"github.com/lightninglabs/loop/lndclient"
+	"github.com/lightninglabs/loop/lsat"
 	"github.com/lightningnetwork/lnd/build"
 	"google.golang.org/grpc"
 )
@@ -80,6 +81,22 @@ func Start(config *Config) error {
 
 	log.Infof("Auction server address: %v", config.AuctionServer)
 
+	// Setup the LSAT interceptor for the client.
+	networkDir := filepath.Join(config.BaseDir, config.Network)
+	fileStore, err := lsat.NewFileStore(networkDir)
+	if err != nil {
+		return err
+	}
+	interceptor := lsat.NewInterceptor(
+		&lnd.LndServices, fileStore, defaultRPCTimeout,
+		defaultLsatMaxCost, defaultLsatMaxFee,
+	)
+	config.AuctioneerDialOpts = append(
+		config.AuctioneerDialOpts,
+		grpc.WithUnaryInterceptor(interceptor.UnaryInterceptor),
+		grpc.WithStreamInterceptor(interceptor.StreamInterceptor),
+	)
+
 	// Create an instance of the auctioneer client library.
 	auctioneerClient, cleanup, err := auctioneer.NewClient(
 		config.AuctionServer, config.Insecure, config.TLSPathAuctSrv,
@@ -91,7 +108,6 @@ func Start(config *Config) error {
 	defer cleanup()
 
 	// Instantiate the agorad gRPC server.
-	networkDir := filepath.Join(config.BaseDir, config.Network)
 	traderServer, err := trader.NewServer(
 		&lnd.LndServices, auctioneerClient, networkDir,
 	)

@@ -3,6 +3,7 @@ package client
 import (
 	"net"
 	"path/filepath"
+	"time"
 
 	"github.com/btcsuite/btcutil"
 	"google.golang.org/grpc"
@@ -69,6 +70,10 @@ type Config struct {
 const (
 	MainnetServer = "auction.lightning.today:12009"
 	TestnetServer = "test.auction.lightning.today:12009"
+
+	defaultRPCTimeout  = 30 * time.Second
+	defaultLsatMaxCost = btcutil.Amount(1000)
+	defaultLsatMaxFee  = btcutil.Amount(10)
 )
 
 var DefaultConfig = Config{
