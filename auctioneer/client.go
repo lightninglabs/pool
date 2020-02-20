@@ -18,30 +18,28 @@ import (
 // Client performs the client side part of auctions. This interface exists to be
 // able to implement a stub.
 type Client struct {
-	client clmrpc.ChannelAuctioneerClient
-	wallet lndclient.WalletKitClient
+	serverConn *grpc.ClientConn
+	client     clmrpc.ChannelAuctioneerClient
+	wallet     lndclient.WalletKitClient
 }
 
 // NewClient returns a new instance to initiate auctions with.
 func NewClient(serverAddress string, insecure bool, tlsPathServer string,
 	wallet lndclient.WalletKitClient, dialOpts ...grpc.DialOption) (
-	*Client, func(), error) {
+	*Client, error) {
 
 	serverConn, err := getAuctionServerConn(
 		serverAddress, insecure, tlsPathServer, dialOpts...,
 	)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	cleanup := func() {
-		_ = serverConn.Close()
+		return nil, err
 	}
 
 	return &Client{
-		client: clmrpc.NewChannelAuctioneerClient(serverConn),
-		wallet: wallet,
-	}, cleanup, nil
+		serverConn: serverConn,
+		client:     clmrpc.NewChannelAuctioneerClient(serverConn),
+		wallet:     wallet,
+	}, nil
 }
 
 // getAuctionServerConn returns a connection to the auction server.
@@ -79,6 +77,11 @@ func getAuctionServerConn(address string, insecure bool, tlsPath string,
 	}
 
 	return conn, nil
+}
+
+// Stop shuts down the client connection to the auction server.
+func (c *Client) Stop() error {
+	return c.serverConn.Close()
 }
 
 // ReserveAccount reserves an account with the auctioneer. It returns the base

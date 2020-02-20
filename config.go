@@ -61,10 +61,6 @@ type Config struct {
 	// AuctioneerDialOpts is a list of dial options that should be used when
 	// dialing the auctioneer server.
 	AuctioneerDialOpts []grpc.DialOption
-
-	// ShutdownChannel is the channel that must be provided where agorad
-	// listens for a shutdown signal.
-	ShutdownChannel <-chan struct{}
 }
 
 const (

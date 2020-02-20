@@ -1,4 +1,4 @@
-package trader
+package client
 
 import (
 	"context"
@@ -30,9 +30,9 @@ const (
 	getInfoTimeout = 5 * time.Second
 )
 
-// Server implements the gRPC server on the client side and answers RPC calls
+// rpcServer implements the gRPC server on the client side and answers RPC calls
 // from an end user client program like the command line interface.
-type Server struct {
+type rpcServer struct {
 	started uint32 // To be used atomically.
 	stopped uint32 // To be used atomically.
 
@@ -50,18 +50,18 @@ type Server struct {
 	wg   sync.WaitGroup
 }
 
-// NewServer creates a new client-side RPC server that uses the given connection
-// to the trader's lnd node and the auction server. A client side database is
-// created in `serverDir` if it does not yet exist.
-func NewServer(lnd *lndclient.LndServices, auctioneer *auctioneer.Client,
-	serverDir string) (*Server, error) {
+// newRPCServer creates a new client-side RPC server that uses the given
+// connection to the trader's lnd node and the auction server. A client side
+// database is created in `serverDir` if it does not yet exist.
+func newRPCServer(lnd *lndclient.LndServices, auctioneer *auctioneer.Client,
+	serverDir string) (*rpcServer, error) {
 
 	db, err := clientdb.New(serverDir)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Server{
+	return &rpcServer{
 		lndServices: lnd,
 		auctioneer:  auctioneer,
 		db:          db,
@@ -83,8 +83,8 @@ func NewServer(lnd *lndclient.LndServices, auctioneer *auctioneer.Client,
 	}, nil
 }
 
-// Start starts the Server, making it ready to accept incoming requests.
-func (s *Server) Start() error {
+// Start starts the rpcServer, making it ready to accept incoming requests.
+func (s *rpcServer) Start() error {
 	if !atomic.CompareAndSwapUint32(&s.started, 0, 1) {
 		return nil
 	}
@@ -138,7 +138,7 @@ func (s *Server) Start() error {
 }
 
 // Stop stops the server.
-func (s *Server) Stop() error {
+func (s *rpcServer) Stop() error {
 	if !atomic.CompareAndSwapUint32(&s.stopped, 0, 1) {
 		return nil
 	}
@@ -146,7 +146,14 @@ func (s *Server) Stop() error {
 	log.Info("Trader server stopping")
 	s.accountManager.Stop()
 	s.orderManager.Stop()
-	_ = s.db.Close()
+	err := s.db.Close()
+	if err != nil {
+		log.Errorf("error closing DB: %v")
+	}
+	err = s.auctioneer.Stop()
+	if err != nil {
+		log.Errorf("error closing server stream: %v")
+	}
 
 	close(s.quit)
 	s.wg.Wait()
@@ -156,7 +163,7 @@ func (s *Server) Stop() error {
 }
 
 // serverHandler is the main event loop of the server.
-func (s *Server) serverHandler(blockChan chan int32, blockErrChan chan error) {
+func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error) {
 	defer s.wg.Done()
 
 	for {
@@ -179,13 +186,13 @@ func (s *Server) serverHandler(blockChan chan int32, blockErrChan chan error) {
 	}
 }
 
-func (s *Server) updateHeight(height int32) {
+func (s *rpcServer) updateHeight(height int32) {
 	// Store height atomically so the incoming request handler can access it
 	// without locking.
 	atomic.StoreUint32(&s.bestHeight, uint32(height))
 }
 
-func (s *Server) InitAccount(ctx context.Context,
+func (s *rpcServer) InitAccount(ctx context.Context,
 	req *clmrpc.InitAccountRequest) (*clmrpc.Account, error) {
 
 	account, err := s.accountManager.InitAccount(
@@ -199,7 +206,7 @@ func (s *Server) InitAccount(ctx context.Context,
 	return marshallAccount(account)
 }
 
-func (s *Server) ListAccounts(ctx context.Context,
+func (s *rpcServer) ListAccounts(ctx context.Context,
 	req *clmrpc.ListAccountsRequest) (*clmrpc.ListAccountsResponse, error) {
 
 	accounts, err := s.db.Accounts()
@@ -261,7 +268,7 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 	}, nil
 }
 
-func (s *Server) CloseAccount(ctx context.Context,
+func (s *rpcServer) CloseAccount(ctx context.Context,
 	req *clmrpc.CloseAccountRequest) (*clmrpc.CloseAccountResponse, error) {
 
 	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
@@ -299,7 +306,7 @@ func (s *Server) CloseAccount(ctx context.Context,
 	}, nil
 }
 
-func (s *Server) ModifyAccount(ctx context.Context,
+func (s *rpcServer) ModifyAccount(ctx context.Context,
 	req *clmrpc.ModifyAccountRequest) (
 	*clmrpc.ModifyAccountResponse, error) {
 
@@ -309,7 +316,7 @@ func (s *Server) ModifyAccount(ctx context.Context,
 // SubmitOrder assembles all the information that is required to submit an order
 // from the trader's lnd node, signs it and then sends the order to the server
 // to be included in the auctioneer's order book.
-func (s *Server) SubmitOrder(ctx context.Context,
+func (s *rpcServer) SubmitOrder(ctx context.Context,
 	req *clmrpc.SubmitOrderRequest) (*clmrpc.SubmitOrderResponse, error) {
 
 	var o order.Order
@@ -391,7 +398,7 @@ func (s *Server) SubmitOrder(ctx context.Context,
 // ListOrders returns a list of all orders that is currently known to the trader
 // client's local store. The state of each order is queried on the auction
 // server and returned as well.
-func (s *Server) ListOrders(ctx context.Context, _ *clmrpc.ListOrdersRequest) (
+func (s *rpcServer) ListOrders(ctx context.Context, _ *clmrpc.ListOrdersRequest) (
 	*clmrpc.ListOrdersResponse, error) {
 
 	// Get all orders from our local store first.
@@ -457,7 +464,7 @@ func (s *Server) ListOrders(ctx context.Context, _ *clmrpc.ListOrdersRequest) (
 
 // CancelOrder cancels the order on the server and updates the state of the
 // local order accordingly.
-func (s *Server) CancelOrder(ctx context.Context,
+func (s *rpcServer) CancelOrder(ctx context.Context,
 	req *clmrpc.CancelOrderRequest) (*clmrpc.CancelOrderResponse, error) {
 
 	var nonce order.Nonce

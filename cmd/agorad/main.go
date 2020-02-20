@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/lightninglabs/agora/client"
@@ -61,9 +62,32 @@ func start() error {
 
 	// Execute command.
 	if parser.Active == nil {
+		// Show the version and exit if the version flag was specified.
+		appName := filepath.Base(os.Args[0])
+		appName = strings.TrimSuffix(appName, filepath.Ext(appName))
+		if config.ShowVersion {
+			fmt.Println(appName, "version", client.Version())
+			os.Exit(0)
+		}
+
+		// Special show command to list supported subsystems and exit.
+		if config.DebugLevel == "show" {
+			fmt.Printf("Supported subsystems: %v\n",
+				client.SupportedSubsystems())
+			os.Exit(0)
+		}
+
 		signal.Intercept()
-		config.ShutdownChannel = signal.ShutdownChannel()
-		return client.Start(&config)
+		trader, err := client.NewServer(&config)
+		if err != nil {
+			return fmt.Errorf("unable to create server: %v", err)
+		}
+		err = trader.Start()
+		if err != nil {
+			return fmt.Errorf("unable to start server: %v", err)
+		}
+		<-signal.ShutdownChannel()
+		return trader.Stop()
 	}
 
 	return fmt.Errorf("unimplemented command %v", parser.Active.Name)

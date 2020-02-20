@@ -7,7 +7,6 @@ import (
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/auctioneer"
 	"github.com/lightninglabs/agora/client/order"
-	"github.com/lightninglabs/agora/client/trader"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/signal"
@@ -18,11 +17,14 @@ const Subsystem = "AGOD"
 var (
 	logWriter = build.NewRotatingLogWriter()
 	log       = build.NewSubLogger(Subsystem, logWriter.GenSubLogger)
+
+	// SupportedSubsystems is a function that returns a list of all
+	// supported logging sub systems.
+	SupportedSubsystems = logWriter.SupportedSubsystems
 )
 
 func init() {
 	setSubLogger(Subsystem, log, nil)
-	addSubLogger(trader.Subsystem, trader.UseLogger)
 	addSubLogger(auctioneer.Subsystem, auctioneer.UseLogger)
 	addSubLogger(order.Subsystem, order.UseLogger)
 	addSubLogger("LNDC", lndclient.UseLogger)
