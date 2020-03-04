@@ -55,8 +55,9 @@ type Watcher struct {
 
 	expiryReqs chan *expiryReq
 
-	wg   sync.WaitGroup
-	quit chan struct{}
+	wg         sync.WaitGroup
+	quit       chan struct{}
+	ctxCancels []func()
 }
 
 // New instantiates a new chain watcher backed by the given config.
@@ -79,12 +80,15 @@ func (w *Watcher) Start() error {
 
 // start allows the Watcher to begin accepting watch requests.
 func (w *Watcher) start() error {
+	ctxc, cancel := context.WithCancel(context.Background())
 	blockChan, errChan, err := w.cfg.ChainNotifier.RegisterBlockEpochNtfn(
-		context.Background(),
+		ctxc,
 	)
 	if err != nil {
+		cancel()
 		return err
 	}
+	w.ctxCancels = append(w.ctxCancels, cancel)
 
 	w.wg.Add(1)
 	go w.expiryHandler(blockChan, errChan)
@@ -97,6 +101,9 @@ func (w *Watcher) Stop() {
 	w.stopped.Do(func() {
 		close(w.quit)
 		w.wg.Wait()
+		for _, cancel := range w.ctxCancels {
+			cancel()
+		}
 	})
 }
 
@@ -180,13 +187,15 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 func (w *Watcher) WatchAccountConf(traderKey *btcec.PublicKey,
 	txHash chainhash.Hash, script []byte, numConfs, heightHint uint32) error {
 
-	ctx := context.Background()
+	ctxc, cancel := context.WithCancel(context.Background())
 	confChan, errChan, err := w.cfg.ChainNotifier.RegisterConfirmationsNtfn(
-		ctx, &txHash, script, int32(numConfs), int32(heightHint),
+		ctxc, &txHash, script, int32(numConfs), int32(heightHint),
 	)
 	if err != nil {
+		cancel()
 		return err
 	}
+	w.ctxCancels = append(w.ctxCancels, cancel)
 
 	w.wg.Add(1)
 	go w.waitForAccountConf(traderKey, confChan, errChan)
@@ -226,13 +235,15 @@ func (w *Watcher) waitForAccountConf(traderKey *btcec.PublicKey,
 func (w *Watcher) WatchAccountSpend(traderKey *btcec.PublicKey,
 	accountPoint wire.OutPoint, script []byte, heightHint uint32) error {
 
-	ctx := context.Background()
+	ctxc, cancel := context.WithCancel(context.Background())
 	spendChan, errChan, err := w.cfg.ChainNotifier.RegisterSpendNtfn(
-		ctx, &accountPoint, script, int32(heightHint),
+		ctxc, &accountPoint, script, int32(heightHint),
 	)
 	if err != nil {
+		cancel()
 		return err
 	}
+	w.ctxCancels = append(w.ctxCancels, cancel)
 
 	w.wg.Add(1)
 	go w.waitForAccountSpend(traderKey, spendChan, errChan)
