@@ -34,19 +34,22 @@ const (
 	AccountWitnessScriptSize = 1 + 33 + 1 + 1 + 33 + 1 + 1 + 1 + 1 + 4 + 1 + 1
 
 	// MultiSigWitnessSize: 227 bytes
-	//	- OP_DATA: 1 byte (trader_sig length)
+	//      - num_witness_elements: 1 byte
+	//	- trader_sig_varint_len: 1 byte
 	//	- <trader_sig>: 73 bytes
-	//	- OP_DATA: 1 byte (auctioneer_sig length)
+	//	- auctioneer_sig_varint_len: 1 byte
 	//	- <auctioneer_sig>: 73 bytes
+	//	- witness_script_varint_len: 1 byte
 	//	- <witness_script>: 79 bytes
-	MultiSigWitnessSize = 1 + 73 + 1 + 73 + AccountWitnessScriptSize
+	MultiSigWitnessSize = 1 + 1 + 73 + 1 + 73 + 1 + AccountWitnessScriptSize
 
 	// ExpiryWitnessSize: 154 bytes
-	//	- OP_DATA: 1 byte (trader_sig length)
+	//      - num_witness_elements: 1 byte
+	//	- trader_sig_varint_len: 1 byte (trader_sig length)
 	//	- <trader_sig>: 73 bytes
-	//	- OP_DATA: 1 byte (nil length)
+	//	- witness_script_varint_len: 1 byte (nil length)
 	//	- <witness_script>: 79 bytes
-	ExpiryWitnessSize = 1 + 73 + 1 + AccountWitnessScriptSize
+	ExpiryWitnessSize = 1 + 1 + 73 + 1 + AccountWitnessScriptSize
 )
 
 // TraderKeyTweak computes the tweak based on the current per-batch key and
