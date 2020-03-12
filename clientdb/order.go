@@ -41,52 +41,44 @@ type orderCallback func(nonce order.Nonce, rawOrder []byte) error
 //
 // NOTE: This is part of the Store interface.
 func (db *DB) SubmitOrder(order order.Order) error {
-	err := db.fetchOrder(ordersBucketKey, order.Nonce(), nil)
-	switch err {
-	// No error means there is an order with that nonce in the DB already.
-	case nil:
-		return ErrOrderExists
+	return db.Update(func(tx *bbolt.Tx) error {
+		err := fetchOrderTX(tx, ordersBucketKey, order.Nonce(), nil)
+		switch err {
+		// No error means there is an order with that nonce in the DB
+		// already.
+		case nil:
+			return ErrOrderExists
 
-	// This is what we want, no order with that nonce should be known.
-	case ErrNoOrder:
+		// This is what we want, no order with that nonce should be
+		// known.
+		case ErrNoOrder:
 
-	// Surface any other error.
-	default:
-		return err
-	}
+		// Surface any other error.
+		default:
+			return err
+		}
 
-	// Serialize and store the order now that we know it doesn't exist yet.
-	var w bytes.Buffer
-	err = SerializeOrder(order, &w)
-	if err != nil {
-		return err
-	}
-	return db.storeOrder(ordersBucketKey, order.Nonce(), w.Bytes())
+		// Serialize and store the order now that we know it doesn't
+		// exist yet.
+		var w bytes.Buffer
+		err = SerializeOrder(order, &w)
+		if err != nil {
+			return err
+		}
+		return storeOrderTX(
+			tx, ordersBucketKey, order.Nonce(), w.Bytes(),
+		)
+	})
 }
 
 // UpdateOrder updates an order in the database according to the given
 // modifiers.
 //
 // NOTE: This is part of the Store interface.
-func (db *DB) UpdateOrder(nonce order.Nonce,
-	modifiers ...order.Modifier) error {
-
-	// Retrieve the order stored in the database.
-	dbOrder, err := db.GetOrder(nonce)
-	if err != nil {
-		return err
-	}
-
-	// Apply the given modifications to it and store it back.
-	for _, modifier := range modifiers {
-		modifier(dbOrder.Details())
-	}
-	var w bytes.Buffer
-	err = SerializeOrder(dbOrder, &w)
-	if err != nil {
-		return err
-	}
-	return db.storeOrder(ordersBucketKey, nonce, w.Bytes())
+func (db *DB) UpdateOrder(nonce order.Nonce, modifiers ...order.Modifier) error {
+	return db.Update(func(tx *bbolt.Tx) error {
+		return updateOrderTX(tx, ordersBucketKey, nonce, modifiers)
+	})
 }
 
 // UpdateOrders atomically updates a list of orders in the database according to
@@ -100,30 +92,19 @@ func (db *DB) UpdateOrders(nonces []order.Nonce,
 		return fmt.Errorf("invalid number of modifiers")
 	}
 
-	dbOrders := make([][]byte, len(nonces))
-	for idx, nonce := range nonces {
-		// Read the current version from the DB and apply the
-		// modifications to it.
-		dbOrder, err := db.GetOrder(nonce)
-		if err != nil {
-			return err
+	// Read and update the orders in one single transaction that they are
+	// updated atomically.
+	return db.Update(func(tx *bbolt.Tx) error {
+		for idx, nonce := range nonces {
+			err := updateOrderTX(
+				tx, ordersBucketKey, nonce, modifiers[idx],
+			)
+			if err != nil {
+				return err
+			}
 		}
-		for _, modifier := range modifiers[idx] {
-			modifier(dbOrder.Details())
-		}
-
-		// Serialize it back into binary form.
-		var w bytes.Buffer
-		err = SerializeOrder(dbOrder, &w)
-		if err != nil {
-			return err
-		}
-		dbOrders[idx] = w.Bytes()
-	}
-
-	// Write the orders in one single transaction that they are updated
-	// atomically.
-	return db.storeOrders(ordersBucketKey, nonces, dbOrders)
+		return nil
+	})
 }
 
 // GetOrder returns an order by looking up the nonce. If no order with that
@@ -140,7 +121,9 @@ func (db *DB) GetOrder(nonce order.Nonce) (order.Order, error) {
 			return err
 		}
 	)
-	err = db.fetchOrder(ordersBucketKey, nonce, callback)
+	err = db.View(func(tx *bbolt.Tx) error {
+		return fetchOrderTX(tx, ordersBucketKey, nonce, callback)
+	})
 	return o, err
 }
 
@@ -160,127 +143,12 @@ func (db *DB) GetOrders() ([]order.Order, error) {
 			return nil
 		}
 	)
-	err := db.fetchOrders(ordersBucketKey, callback)
-	if err != nil {
-		return nil, err
-	}
-	return orders, nil
-}
-
-// DelOrder removes the order with the given nonce from the local store.
-//
-// NOTE: This is part of the Store interface.
-func (db *DB) DelOrder(nonce order.Nonce) error {
-	return db.removeOrder(ordersBucketKey, nonce)
-}
-
-// storeOrder saves a byte serialized order in its specific sub bucket.
-// Depending on the type, the path is:
-// askBucket/bidBucket -> orderBucket[nonce] -> orderKey -> order
-func (db *DB) storeOrder(bucketKey []byte, nonce order.Nonce,
-	orderBytes []byte) error {
-
-	return db.Update(func(tx *bbolt.Tx) error {
-		// First, we'll grab the root bucket that houses all of our
-		// main orders.
-		rootBucket, err := tx.CreateBucketIfNotExists(
-			bucketKey,
-		)
-		if err != nil {
-			return err
-		}
-
-		// From the root bucket, we'll make a new sub order bucket using
-		// the order nonce.
-		orderBucket, err := rootBucket.CreateBucketIfNotExists(nonce[:])
-		if err != nil {
-			return err
-		}
-
-		// With the order bucket created, we'll store the order itself.
-		return orderBucket.Put(orderKey, orderBytes)
-	})
-}
-
-// storeOrders saves multiple byte serialized orders in their specific sub
-// bucket. It does so atomically, meaning that either all orders are updated or
-// none are (in case of an error) by rolling back the transaction.
-// Depending on the type, the storage path for the individual orders is:
-// askBucket/bidBucket -> orderBucket[nonce] -> orderKey -> order
-func (db *DB) storeOrders(bucketKey []byte, nonces []order.Nonce,
-	orderBytes [][]byte) error {
-
-	return db.Update(func(tx *bbolt.Tx) error {
-		// First, we'll grab the root bucket that houses all of our
-		// main orders.
-		rootBucket, err := tx.CreateBucketIfNotExists(
-			bucketKey,
-		)
-		if err != nil {
-			return err
-		}
-
-		for idx, nonce := range nonces {
-			// From the root bucket, we'll make a new sub order
-			// bucket using the order nonce.
-			orderBucket, err := rootBucket.CreateBucketIfNotExists(
-				nonce[:],
-			)
-			if err != nil {
-				return err
-			}
-
-			// With the order bucket created, we'll store the order
-			// itself.
-			err = orderBucket.Put(orderKey, orderBytes[idx])
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-// fetchOrder fetches the binary data of one order specified by its order type
-// bucket key and nonce.
-func (db *DB) fetchOrder(bucketKey []byte, nonce order.Nonce,
-	callback orderCallback) error {
-
-	return db.View(func(tx *bbolt.Tx) error {
+	err := db.View(func(tx *bbolt.Tx) error {
 		// First, we'll grab our main order bucket key.
-		rootBucket := tx.Bucket(bucketKey)
+		rootBucket := tx.Bucket(ordersBucketKey)
 		if rootBucket == nil {
-			return fmt.Errorf("bucket %v does not exist", bucketKey)
-		}
-
-		// Get the main order bucket next.
-		orderBucket := rootBucket.Bucket(nonce[:])
-		if orderBucket == nil {
-			return ErrNoOrder
-		}
-
-		// With the main order bucket obtained, we'll grab the raw order
-		// bytes and pass them back to the caller.
-		orderBytes := orderBucket.Get(orderKey)
-		if orderBytes == nil {
-			return fmt.Errorf("order bucket not found")
-		}
-		if callback == nil {
-			return nil
-		}
-		return callback(nonce, orderBytes)
-	})
-}
-
-// fetchOrders retrieves all orders in a specific order type bucket.
-func (db *DB) fetchOrders(bucketKey []byte,
-	callback orderCallback) error {
-
-	return db.View(func(tx *bbolt.Tx) error {
-		// First, we'll grab our main order bucket key.
-		rootBucket := tx.Bucket(bucketKey)
-		if rootBucket == nil {
-			return fmt.Errorf("bucket %v does not exist", bucketKey)
+			return fmt.Errorf("bucket %v does not exist",
+				ordersBucketKey)
 		}
 
 		// We'll now traverse the root bucket for all orders. The
@@ -291,34 +159,29 @@ func (db *DB) fetchOrders(bucketKey []byte,
 				return nil
 			}
 
-			// Get the main order bucket next.
-			orderBucket := rootBucket.Bucket(nonceBytes)
-			if orderBucket == nil {
-				return fmt.Errorf("bucket for order %v does "+
-					"not exist", nonceBytes)
-			}
-
-			// With the main order bucket obtained, we'll grab the
-			// raw order bytes and pass them back to the caller.
-			orderBytes := orderBucket.Get(orderKey)
-			if orderBytes == nil {
-				return fmt.Errorf("order bucket not found")
-			}
+			// Get the order from the bucket and pass it to the
+			// caller.
 			var nonce order.Nonce
 			copy(nonce[:], nonceBytes)
-			return callback(nonce, orderBytes)
+			return fetchOrderTX(
+				tx, ordersBucketKey, nonce, callback,
+			)
 		})
 	})
+	if err != nil {
+		return nil, err
+	}
+	return orders, nil
 }
 
-// removeOrder deletes the whole order bucket of an order specified by the order
-// type bucket key and the nonce. If the order does not exist, ErrNoOrder is
-// returned.
-func (db *DB) removeOrder(bucketKey []byte, nonce order.Nonce) error {
+// DelOrder removes the order with the given nonce from the local store.
+//
+// NOTE: This is part of the Store interface.
+func (db *DB) DelOrder(nonce order.Nonce) error {
 	return db.Update(func(tx *bbolt.Tx) error {
 		// First, we'll grab the root bucket that houses all of our
 		// main orders.
-		rootBucket := tx.Bucket(bucketKey)
+		rootBucket := tx.Bucket(ordersBucketKey)
 		if rootBucket == nil {
 			return fmt.Errorf("root bucket not found")
 		}
@@ -332,6 +195,95 @@ func (db *DB) removeOrder(bucketKey []byte, nonce order.Nonce) error {
 		// Delete the whole order bucket with all of its sub buckets.
 		return rootBucket.DeleteBucket(nonce[:])
 	})
+}
+
+// storeOrderTX saves a byte serialized order in its specific sub bucket. The
+// store operation is added to the given transaction, which must be an update
+// transaction to succeed. Depending on the type, the storage path is:
+// askBucket/bidBucket -> orderBucket[nonce] -> orderKey -> order
+func storeOrderTX(tx *bbolt.Tx, bucketKey []byte, nonce order.Nonce,
+	orderBytes []byte) error {
+
+	// First, we'll grab the root bucket that houses all of our
+	// main orders.
+	rootBucket, err := tx.CreateBucketIfNotExists(
+		bucketKey,
+	)
+	if err != nil {
+		return err
+	}
+
+	// From the root bucket, we'll make a new sub order bucket using
+	// the order nonce.
+	orderBucket, err := rootBucket.CreateBucketIfNotExists(nonce[:])
+	if err != nil {
+		return err
+	}
+
+	// With the order bucket created, we'll store the order itself.
+	return orderBucket.Put(orderKey, orderBytes)
+}
+
+// fetchOrderTX fetches the binary data of one order specified by its order type
+// bucket key and nonce in the given transaction.
+func fetchOrderTX(tx *bbolt.Tx, bucketKey []byte, nonce order.Nonce,
+	callback orderCallback) error {
+
+	// First, we'll grab our main order bucket key.
+	rootBucket := tx.Bucket(bucketKey)
+	if rootBucket == nil {
+		return fmt.Errorf("bucket %v does not exist", bucketKey)
+	}
+
+	// Get the main order bucket next.
+	orderBucket := rootBucket.Bucket(nonce[:])
+	if orderBucket == nil {
+		return ErrNoOrder
+	}
+
+	// With the main order bucket obtained, we'll grab the raw order
+	// bytes and pass them back to the caller.
+	orderBytes := orderBucket.Get(orderKey)
+	if orderBytes == nil {
+		return fmt.Errorf("order bucket not found")
+	}
+	if callback == nil {
+		return nil
+	}
+	return callback(nonce, orderBytes)
+}
+
+// updateOrderTX fetches the binary data of one order specified by its order
+// type bucket key and nonce, applies the modifiers then stores it back, all in
+// the given transaction.
+func updateOrderTX(tx *bbolt.Tx, bucketKey []byte, nonce order.Nonce,
+	modifiers []order.Modifier) error {
+
+	var (
+		o        order.Order
+		err      error
+		callback = func(nonce order.Nonce, rawOrder []byte) error {
+			r := bytes.NewReader(rawOrder)
+			o, err = DeserializeOrder(nonce, r)
+			return err
+		}
+	)
+	// Retrieve the order stored in the database.
+	err = fetchOrderTX(tx, bucketKey, nonce, callback)
+	if err != nil {
+		return err
+	}
+
+	// Apply the given modifications to it and store it back.
+	for _, modifier := range modifiers {
+		modifier(o.Details())
+	}
+	var w bytes.Buffer
+	err = SerializeOrder(o, &w)
+	if err != nil {
+		return err
+	}
+	return storeOrderTX(tx, ordersBucketKey, nonce, w.Bytes())
 }
 
 // SerializeOrder binary serializes an order to a writer using the common LN
