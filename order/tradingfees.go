@@ -9,10 +9,9 @@ var (
 	FeeRateTotalParts = 1e6
 )
 
-// CalcFee calculates the absolute fee in satoshis from the amount, the
-// specified fee rate in parts per million and the minimum duration.
-func CalcFee(amt btcutil.Amount, fixedRate, minDuration uint32) btcutil.Amount {
-	// TODO(guggero): take into account the min duration
+// PerBlockPremium calculates the absolute premium in satoshis for a one block
+// duration from the amount and the specified fee rate in parts per million.
+func PerBlockPremium(amt btcutil.Amount, fixedRate uint32) btcutil.Amount {
 	return amt * btcutil.Amount(fixedRate) /
 		btcutil.Amount(FeeRateTotalParts)
 }
