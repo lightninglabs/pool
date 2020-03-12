@@ -45,51 +45,60 @@ func (db *DB) AddAccount(account *account.Account) error {
 
 // UpdateAccount updates an account in the database according to the given
 // modifiers.
-func (db *DB) UpdateAccount(account *account.Account,
+func (db *DB) UpdateAccount(acct *account.Account,
 	modifiers ...account.Modifier) error {
 
-	accountKey := getAccountKey(account)
 	err := db.Update(func(tx *bbolt.Tx) error {
-		accounts, err := getBucket(tx, accountBucketKey)
-		if err != nil {
-			return err
-		}
-		accountBytes := accounts.Get(accountKey)
-		if accountBytes == nil {
-			return ErrAccountNotFound
-		}
-		dbAccount, err := deserializeAccount(
-			bytes.NewReader(accountBytes),
-		)
-		if err != nil {
-			return err
-		}
-
-		for _, modifier := range modifiers {
-			modifier(dbAccount)
-		}
-
-		var accountBuf bytes.Buffer
-		if err := serializeAccount(&accountBuf, dbAccount); err != nil {
-			return err
-		}
-		return accounts.Put(accountKey, accountBuf.Bytes())
+		return updateAccountTX(tx, acct, modifiers)
 	})
 	if err != nil {
 		return err
 	}
 
 	for _, modifier := range modifiers {
-		modifier(account)
+		modifier(acct)
 	}
 
 	return nil
 }
 
+// updateAccountTX reads an account, applies the given modifiers to it and then
+// stores it back again, all in the given database transaction. The transaction
+// must be an update transaction, otherwise this call will fail.
+func updateAccountTX(tx *bbolt.Tx, acct *account.Account,
+	modifiers []account.Modifier) error {
+
+	accountKey := getAccountKey(acct)
+	accounts, err := getBucket(tx, accountBucketKey)
+	if err != nil {
+		return err
+	}
+	accountBytes := accounts.Get(accountKey)
+	if accountBytes == nil {
+		return ErrAccountNotFound
+	}
+	dbAccount, err := deserializeAccount(
+		bytes.NewReader(accountBytes),
+	)
+	if err != nil {
+		return err
+	}
+
+	for _, modifier := range modifiers {
+		modifier(dbAccount)
+	}
+
+	var accountBuf bytes.Buffer
+	if err := serializeAccount(&accountBuf, dbAccount); err != nil {
+		return err
+	}
+	return accounts.Put(accountKey, accountBuf.Bytes())
+}
+
 // Account retrieves a specific account by trader key or returns
 // ErrAccountNotFound if it's not found.
 func (db *DB) Account(traderKey *btcec.PublicKey) (*account.Account, error) {
-	var account *account.Account
+	var acct *account.Account
 	err := db.View(func(tx *bbolt.Tx) error {
 		accounts, err := getBucket(tx, accountBucketKey)
 		if err != nil {
@@ -101,14 +110,14 @@ func (db *DB) Account(traderKey *btcec.PublicKey) (*account.Account, error) {
 			return ErrAccountNotFound
 		}
 
-		account, err = deserializeAccount(bytes.NewReader(accountBytes))
+		acct, err = deserializeAccount(bytes.NewReader(accountBytes))
 		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return account, nil
+	return acct, nil
 }
 
 // Accounts retrieves all known accounts from the database.
@@ -121,11 +130,11 @@ func (db *DB) Accounts() ([]*account.Account, error) {
 		}
 
 		return accounts.ForEach(func(k, v []byte) error {
-			account, err := deserializeAccount(bytes.NewReader(v))
+			acct, err := deserializeAccount(bytes.NewReader(v))
 			if err != nil {
 				return err
 			}
-			res = append(res, account)
+			res = append(res, acct)
 			return nil
 		})
 	})
