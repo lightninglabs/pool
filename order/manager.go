@@ -154,8 +154,9 @@ func (m *Manager) validateOrder(order Order, acct *account.Account) error {
 
 		// We don't know the server fee of the order yet so we can only
 		// make sure we have enough to pay for the fee rate we are
-		// willing pay up to.
-		orderFee := PerBlockPremium(o.Amt, o.FixedRate)
+		// willing to pay up to.
+		rate := FixedRatePremium(o.FixedRate)
+		orderFee := rate.LumpSumPremium(o.Amt, o.MinDuration)
 		if acct.Value < orderFee {
 			return ErrInsufficientBalance
 		}
