@@ -48,8 +48,9 @@ type rpcServer struct {
 	accountManager *account.Manager
 	orderManager   *order.Manager
 
-	quit chan struct{}
-	wg   sync.WaitGroup
+	quit            chan struct{}
+	wg              sync.WaitGroup
+	blockNtfnCancel func()
 }
 
 // newRPCServer creates a new client-side RPC server that uses the given
@@ -106,8 +107,12 @@ func (s *rpcServer) Start() error {
 	log.Infof("Connected to lnd node %v with pubkey %v", info.Alias,
 		hex.EncodeToString(info.IdentityPubkey[:]))
 
+	var blockCtx context.Context
+	blockCtx, s.blockNtfnCancel = context.WithCancel(ctx)
 	chainNotifier := s.lndServices.ChainNotifier
-	blockChan, blockErrChan, err := chainNotifier.RegisterBlockEpochNtfn(ctx)
+	blockChan, blockErrChan, err := chainNotifier.RegisterBlockEpochNtfn(
+		blockCtx,
+	)
 	if err != nil {
 		return err
 	}
@@ -165,6 +170,7 @@ func (s *rpcServer) Stop() error {
 
 	close(s.quit)
 	s.wg.Wait()
+	s.blockNtfnCancel()
 
 	log.Info("Stopped trader server")
 	return nil
