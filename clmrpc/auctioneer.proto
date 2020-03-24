@@ -12,6 +12,7 @@ service ChannelAuctioneer {
     rpc CancelOrder (ServerCancelOrderRequest) returns (ServerCancelOrderResponse);
     rpc OrderState (ServerOrderStateRequest) returns (ServerOrderStateResponse);
     rpc SubscribeBatchAuction (stream ClientAuctionMessage) returns (stream ServerAuctionMessage);
+    rpc FeeQuote (FeeQuoteRequest) returns (FeeQuoteResponse);
 }
 
 message ReserveAccountRequest {
@@ -296,26 +297,31 @@ message OrderMatchPrepare {
     repeated uint32 new_chan_tx_indices = 3;
 
     /**
+    The fee parameters used to calculate the execution fees.
+    */
+    ExecutionFee execution_fee = 4;
+
+    /**
     The batch transaction with all non-witness data.
     */
-    bytes batch_transaction = 4;
+    bytes batch_transaction = 5;
 
     /**
     Fee rate of the batch transaction, expressed in satoshis per 1000 weight
     units (sat/kW).
     */
-    int64 fee_rate_sat_per_kw = 5;
+    int64 fee_rate_sat_per_kw = 6;
 
     /**
     Fee rebate in satoshis, offered if another batch participant wants to pay
     more fees for a faster confirmation.
     */
-    int64 fee_rebate_sat = 6;
+    int64 fee_rebate_sat = 7;
 
     /**
     The 32 byte unique identifier of this batch.
     */
-    bytes batch_id = 7;
+    bytes batch_id = 8;
 }
 
 message OrderMatchFinalize {
@@ -606,6 +612,28 @@ message ServerOrderStateResponse {
     or EXECUTED.
     */
     uint32 units_unfulfilled = 2;
+}
+
+message FeeQuoteRequest {
+}
+
+message FeeQuoteResponse {
+    /**
+    The execution fee charged per matched order.
+    */
+    ExecutionFee execution_fee = 1;
+}
+
+message ExecutionFee {
+    /**
+    The base fee in satoshis charged per order, regardless of the matched size.
+    */
+    int64 base_fee = 1;
+
+    /**
+    The fee rate in parts per million 
+    */
+    int64 fee_rate = 2;
 }
 
 message NodeAddress {
