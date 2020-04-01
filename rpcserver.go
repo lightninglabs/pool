@@ -2,8 +2,8 @@ package client
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -21,8 +21,6 @@ import (
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightninglabs/loop/lndclient"
-	"github.com/lightningnetwork/lnd/lntypes"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 const (
@@ -79,6 +77,7 @@ func newRPCServer(server *Server, serverDir string) (*rpcServer, error) {
 		}),
 		orderManager: order.NewManager(&order.ManagerConfig{
 			Store:     db,
+			AcctStore: db,
 			Lightning: lnd.Client,
 			Wallet:    lnd.WalletKit,
 			Signer:    lnd.Signer,
@@ -248,38 +247,62 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 	switch msg := rpcMsg.Msg.(type) {
 	// A new batch has been assembled with some of our orders.
 	case *clmrpc.ServerAuctionMessage_Prepare:
+		// Parse and formally validate what we got from the server.
 		log.Tracef("Received prepare msg from server, batch_id=%x: %v",
 			msg.Prepare.BatchId, spew.Sdump(msg))
-
-		// TODO(guggero): Add real batch validation here.
-		// For now, we just send the accept back.
-		err := s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
-			Msg: &clmrpc.ClientAuctionMessage_Accept{
-				Accept: &clmrpc.OrderMatchAccept{
-					BatchId: msg.Prepare.BatchId,
-				},
-			},
-		})
+		batch, err := order.ParseRPCBatch(msg.Prepare)
 		if err != nil {
-			return err
+			return fmt.Errorf("error parsing RPC batch: %v", err)
 		}
 
-		// TODO(guggero): Initiate channel opening negotiation with
-		// remote peer here.
-		err = s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
-			Msg: &clmrpc.ClientAuctionMessage_Sign{
-				Sign: &clmrpc.OrderMatchSign{
-					BatchId: msg.Prepare.BatchId,
-				},
-			},
-		})
+		// Do an in-depth verification of the batch.
+		err = s.orderManager.OrderMatchValidate(batch)
 		if err != nil {
-			return err
+			// We can't accept the batch, something went wrong.
+			log.Errorf("Error validating batch: %v", err)
+			return s.sendRejectBatch(batch, err)
 		}
 
+		// Accept the match now.
+		//
+		// TODO(guggero): Give user the option to bail out of any order
+		// up to this point?
+		err = s.sendAcceptBatch(batch)
+		if err != nil {
+			log.Errorf("Error sending accept msg: %v", err)
+			return s.sendRejectBatch(batch, err)
+		}
+
+		// We were able to accept the batch. Inform the auctioneer, then
+		// start negotiating with the remote peers. We'll sign once all
+		// channel partners have responded.
+		err = s.server.BatchChannelSetup(batch)
+		if err != nil {
+			log.Errorf("Error setting up channels: %v", err)
+			return s.sendRejectBatch(batch, err)
+		}
+
+		// Sign for the accounts in the batch.
+		sigs, err := s.orderManager.BatchSign()
+		if err != nil {
+			log.Errorf("Error signing batch: %v", err)
+			return s.sendRejectBatch(batch, err)
+		}
+		err = s.sendSignBatch(batch, sigs)
+		if err != nil {
+			log.Errorf("Error sending sign msg: %v", err)
+			return s.sendRejectBatch(batch, err)
+		}
+
+	// The previously prepared batch has been executed and we can finalize
+	// it by opening the channel and persisting the account and order diffs.
 	case *clmrpc.ServerAuctionMessage_Finalize:
 		log.Tracef("Received finalize msg from server, batch_id=%x: %v",
 			msg.Finalize.BatchId, spew.Sdump(msg))
+
+		var batchID order.BatchID
+		copy(batchID[:], msg.Finalize.BatchId)
+		return s.orderManager.BatchFinalize(batchID)
 
 	default:
 		return fmt.Errorf("unknown server message: %v", msg)
@@ -419,7 +442,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	switch requestOrder := req.Details.(type) {
 	case *clmrpc.SubmitOrderRequest_Ask:
 		a := requestOrder.Ask
-		kit, err := parseRPCOrder(a.Version, a.Details)
+		kit, err := order.ParseRPCOrder(a.Version, a.Details)
 		if err != nil {
 			return nil, err
 		}
@@ -430,7 +453,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 
 	case *clmrpc.SubmitOrderRequest_Bid:
 		b := requestOrder.Bid
-		kit, err := parseRPCOrder(b.Version, b.Details)
+		kit, err := order.ParseRPCOrder(b.Version, b.Details)
 		if err != nil {
 			return nil, err
 		}
@@ -572,45 +595,86 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 	return &clmrpc.CancelOrderResponse{}, nil
 }
 
-// parseRPCOrder parses the incoming raw RPC order into the go native data
-// types used in the order struct.
-func parseRPCOrder(version uint32, details *clmrpc.Order) (*order.Kit, error) {
-	var nonce order.Nonce
-	copy(nonce[:], details.OrderNonce)
-	kit := order.NewKit(nonce)
-
-	// If the user didn't provide a nonce, we generate one.
-	if nonce == order.ZeroNonce {
-		preimageBytes, err := randomPreimage()
-		if err != nil {
-			return nil, fmt.Errorf("cannot generate nonce: %v", err)
-		}
-		var preimage lntypes.Preimage
-		copy(preimage[:], preimageBytes)
-		kit = order.NewKitWithPreimage(preimage)
+// sendRejectBatch sends a reject message to the server with the properly
+// decoded reason code and the full reason message as a string.
+func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
+	msg := &clmrpc.ClientAuctionMessage_Reject{
+		Reject: &clmrpc.OrderMatchReject{
+			BatchId: batch.ID[:],
+			Reason:  failure.Error(),
+		},
 	}
 
-	pubKey, err := btcec.ParsePubKey(details.UserSubKey, btcec.S256())
+	// Attach the status code to the message to give a bit more context.
+	switch {
+	case errors.Is(failure, order.ErrVersionMismatch):
+		msg.Reject.ReasonCode = clmrpc.OrderMatchReject_BATCH_VERSION_MISMATCH
+
+	case errors.Is(failure, order.ErrMismatchErr):
+		msg.Reject.ReasonCode = clmrpc.OrderMatchReject_SERVER_MISBEHAVIOR
+
+	default:
+		msg.Reject.ReasonCode = clmrpc.OrderMatchReject_UNKNOWN
+	}
+	log.Infof("Sending batch rejection message for batch %x with "+
+		"code %v and message: %v", batch.ID, msg.Reject.ReasonCode,
+		failure)
+
+	// Send the message to the server. If a new error happens we return that
+	// one because we know the causing error has at least been logged at
+	// some point before.
+	err := s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
+		Msg: msg,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("error parsing account key: %v", err)
+		return fmt.Errorf("error sending reject message: %v", err)
 	}
-
-	kit.AcctKey = pubKey
-	kit.Version = order.Version(version)
-	kit.FixedRate = uint32(details.RateFixed)
-	kit.Amt = btcutil.Amount(details.Amt)
-	kit.FundingFeeRate = chainfee.SatPerKWeight(details.FundingFeeRate)
-	kit.Units = order.NewSupplyFromSats(kit.Amt)
-	kit.UnitsUnfulfilled = kit.Units
-	return kit, nil
+	return failure
 }
 
-// randomPreimage creates a new preimage from a random number generator.
-func randomPreimage() ([]byte, error) {
-	var nonce order.Nonce
-	_, err := rand.Read(nonce[:])
-	if err != nil {
-		return nil, err
+// sendAcceptBatch sends an accept message to the server with the list of order
+// nonces that we accept in the batch.
+func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
+	// Prepare the list of nonces we accept by serializing them to a slice
+	// of byte slices.
+	nonces := make([][]byte, 0, len(batch.MatchedOrders))
+	idx := 0
+	for nonce := range batch.MatchedOrders {
+		nonces[idx] = nonce[:]
+		idx++
 	}
-	return nonce[:], nil
+
+	// Send the message to the server.
+	return s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
+		Msg: &clmrpc.ClientAuctionMessage_Accept{
+			Accept: &clmrpc.OrderMatchAccept{
+				BatchId:    batch.ID[:],
+				OrderNonce: nonces,
+			},
+		},
+	})
+}
+
+// sendSignBatch sends a sign message to the server with the witness stacks of
+// all accounts that are involved in the batch.
+func (s *rpcServer) sendSignBatch(batch *order.Batch,
+	sigs order.BatchSignature) error {
+
+	// Prepare the list of witness stack messages and send them to the
+	// server.
+	rpcSigs := make(map[string]*clmrpc.AccountWitness)
+	for acctKey, witness := range sigs {
+		key := hex.EncodeToString(acctKey[:])
+		rpcSigs[key] = &clmrpc.AccountWitness{
+			Witness: witness,
+		}
+	}
+	return s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
+		Msg: &clmrpc.ClientAuctionMessage_Sign{
+			Sign: &clmrpc.OrderMatchSign{
+				BatchId:        batch.ID[:],
+				AccountWitness: rpcSigs,
+			},
+		},
+	})
 }

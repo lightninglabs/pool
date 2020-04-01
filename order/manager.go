@@ -6,10 +6,17 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
+)
+
+const (
+	// defaultLndTimeout is the default number of seconds we are willing to
+	// wait for our lnd node to respond.
+	defaultLndTimeout = time.Second * 30
 )
 
 var (
@@ -24,6 +31,8 @@ var (
 type ManagerConfig struct {
 	// Store is responsible for storing and retrieving order information.
 	Store Store
+
+	AcctStore account.Store
 
 	// Lightning is used to access the main RPC to get information about the
 	// lnd node that agora is connected to.
@@ -45,6 +54,10 @@ type Manager struct {
 
 	wg   sync.WaitGroup
 	quit chan struct{}
+
+	batchVerifier BatchVerifier
+	batchSigner   BatchSigner
+	pendingBatch  *Batch
 }
 
 // NewManager instantiates a new Manager backed by the given config.
@@ -58,7 +71,30 @@ func NewManager(cfg *ManagerConfig) *Manager {
 // Start starts all concurrent tasks the manager is responsible for.
 func (m *Manager) Start() error {
 	var err error
-	m.started.Do(func() {})
+	m.started.Do(func() {
+		// We'll need our node's identity public key for a bunch of
+		// different validations so we might as well cache it on
+		// startup as it cannot change.
+		var info *lndclient.Info
+		ctxt, cancel := context.WithTimeout(
+			context.Background(), defaultLndTimeout,
+		)
+		defer cancel()
+		info, err = m.cfg.Lightning.GetInfo(ctxt)
+		if err != nil {
+			return
+		}
+		m.batchVerifier = &batchVerifier{
+			orderStore:    m.cfg.Store,
+			getAccount:    m.cfg.AcctStore.Account,
+			wallet:        m.cfg.Wallet,
+			ourNodePubkey: info.IdentityPubkey,
+		}
+		m.batchSigner = &batchSigner{
+			getAccount: m.cfg.AcctStore.Account,
+			signer:     m.cfg.Signer,
+		}
+	})
 	return err
 }
 
@@ -74,7 +110,7 @@ func (m *Manager) Stop() {
 func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 	acct *account.Account) (*ServerOrderParams, error) {
 
-	// Validate incoming request for formal validity.
+	// Verify incoming request for formal validity.
 	err := m.validateOrder(order, acct)
 	if err != nil {
 		return nil, err
@@ -172,6 +208,36 @@ func (m *Manager) validateOrder(order Order, acct *account.Account) error {
 		return fmt.Errorf("invalid order type: %v", o)
 	}
 
+	return nil
+}
+
+// OrderMatchValidate...
+func (m *Manager) OrderMatchValidate(batch *Batch) error {
+	// Make sure we have no objection to the current batch. Then store
+	// it in case it ends up being the final version.
+	err := m.batchVerifier.Verify(batch)
+	if err != nil {
+		return fmt.Errorf("error validating batch: %v", err)
+	}
+	m.pendingBatch = batch
+
+	// TODO:
+	//  - cancel funding shim of previous pending batch if not nil
+
+	return nil
+}
+
+// BatchSign...
+func (m *Manager) BatchSign() (BatchSignature, error) {
+	return m.batchSigner.Sign(m.pendingBatch)
+}
+
+func (m *Manager) BatchFinalize(batchID BatchID) error {
+	// TODO:
+	//  - update order DB
+	//  - update account DB
+	//  - call lnrpc.OpenChannel
+	m.pendingBatch = nil
 	return nil
 }
 
