@@ -174,6 +174,28 @@ func StateModifier(state State) Modifier {
 	}
 }
 
+// ValueModifier is a functional option that modifies the value of an account.
+func ValueModifier(value btcutil.Amount) Modifier {
+	return func(account *Account) {
+		account.Value = value
+	}
+}
+
+// ExpiryModifier is a functional option that modifies the expiry of an account.
+func ExpiryModifier(expiry uint32) Modifier {
+	return func(account *Account) {
+		account.Expiry = expiry
+	}
+}
+
+// BatchKeyModifier is a functional option that modifies the batch key of an
+// account.
+func BatchKeyModifier(batchKey *btcec.PublicKey) Modifier {
+	return func(account *Account) {
+		account.BatchKey = batchKey
+	}
+}
+
 // OutPointModifier is a functional option that modifies the outpoint of an
 // account.
 func OutPointModifier(op wire.OutPoint) Modifier {

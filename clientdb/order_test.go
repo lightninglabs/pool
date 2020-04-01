@@ -15,6 +15,8 @@ import (
 
 // TestSubmitOrder tests that orders can be stored and retrieved correctly.
 func TestSubmitOrder(t *testing.T) {
+	t.Parallel()
+
 	store, cleanup := newTestDB(t)
 	defer cleanup()
 
@@ -70,6 +72,8 @@ func TestSubmitOrder(t *testing.T) {
 
 // TestUpdateOrders tests that orders can be updated correctly.
 func TestUpdateOrders(t *testing.T) {
+	t.Parallel()
+
 	store, cleanup := newTestDB(t)
 	defer cleanup()
 
@@ -149,5 +153,6 @@ func dummyOrder(t *testing.T, amt btcutil.Amount) *order.Kit {
 	}
 	kit.FundingFeeRate = chainfee.FeePerKwFloor
 	kit.AcctKey = testTraderKey
+	kit.UnitsUnfulfilled = 741
 	return kit
 }

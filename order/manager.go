@@ -57,6 +57,7 @@ type Manager struct {
 
 	batchVerifier BatchVerifier
 	batchSigner   BatchSigner
+	batchStorer   BatchStorer
 	pendingBatch  *Batch
 }
 
@@ -93,6 +94,10 @@ func (m *Manager) Start() error {
 		m.batchSigner = &batchSigner{
 			getAccount: m.cfg.AcctStore.Account,
 			signer:     m.cfg.Signer,
+		}
+		m.batchStorer = &batchStorer{
+			orderStore: m.cfg.Store,
+			getAccount: m.cfg.AcctStore.Account,
 		}
 	})
 	return err
@@ -221,9 +226,7 @@ func (m *Manager) OrderMatchValidate(batch *Batch) error {
 	}
 	m.pendingBatch = batch
 
-	// TODO:
-	//  - cancel funding shim of previous pending batch if not nil
-
+	// TODO: cancel funding shim of previous pending batch if not nil
 	return nil
 }
 
@@ -232,12 +235,24 @@ func (m *Manager) BatchSign() (BatchSignature, error) {
 	return m.batchSigner.Sign(m.pendingBatch)
 }
 
+// BatchFinalize...
 func (m *Manager) BatchFinalize(batchID BatchID) error {
-	// TODO:
-	//  - update order DB
-	//  - update account DB
-	//  - call lnrpc.OpenChannel
+	// Only accept the last batch we verified to make sure we didn't miss
+	// a message somewhere in the process.
+	if batchID != m.pendingBatch.ID {
+		return fmt.Errorf("unexpected batch ID %x, doesn't match last "+
+			"validated batch %x", batchID, m.pendingBatch.ID)
+	}
+
+	// Create a diff and then persist that. Finally signal that we are ready
+	// for the next batch by removing the current pending batch.
+	err := m.batchStorer.Store(m.pendingBatch)
+	if err != nil {
+		return fmt.Errorf("error storing batch: %v", err)
+	}
 	m.pendingBatch = nil
+
+	// TODO: call lnrpc.OpenChannel to finalize channel creation
 	return nil
 }
 

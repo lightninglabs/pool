@@ -10,6 +10,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil"
+	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
@@ -322,10 +323,18 @@ var _ Order = (*Bid)(nil)
 // Modifier abstracts the modification of an account through a function.
 type Modifier func(*Kit)
 
-// StateModifier is a functional option that modifies the state of an account.
+// StateModifier is a functional option that modifies the state of an order.
 func StateModifier(state State) Modifier {
 	return func(order *Kit) {
 		order.State = state
+	}
+}
+
+// UnitsFulfilledModifier is a functional option that modifies the number of
+// unfulfilled units of an order.
+func UnitsFulfilledModifier(newUnfulfilledUnits SupplyUnit) Modifier {
+	return func(order *Kit) {
+		order.UnitsUnfulfilled = newUnfulfilledUnits
 	}
 }
 
@@ -353,6 +362,13 @@ type Store interface {
 
 	// DelOrder removes the order with the given nonce from the local store.
 	DelOrder(Nonce) error
+
+	// PersistBatchResult atomically updates all modified orders/accounts.
+	// If any single operation fails, the whole set of changes is rolled
+	// back.
+	PersistBatchResult(orders []Nonce, orderModifiers [][]Modifier,
+		accounts []*account.Account,
+		accountModifiers [][]account.Modifier) error
 }
 
 // UserError is an error type that is returned if an action fails because of
