@@ -12,6 +12,13 @@ import (
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
+var (
+	// ErrVersionMismatch is the error that is returned if we don't
+	// implement the same batch verification version as the server.
+	ErrVersionMismatch = fmt.Errorf("version %d mismatches server version",
+		CurrentVersion)
+)
+
 // ManagerConfig contains all of the required dependencies for the Manager to
 // carry out its duties.
 type ManagerConfig struct {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
+	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightninglabs/loop/lndclient"
 )
 
@@ -45,7 +46,8 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 	err = s.sendMsg(&clmrpc.ClientAuctionMessage{
 		Msg: &clmrpc.ClientAuctionMessage_Commit{
 			Commit: &clmrpc.AccountCommitment{
-				CommitHash: s.commitHash[:],
+				CommitHash:   s.commitHash[:],
+				BatchVersion: uint32(order.CurrentVersion),
 			},
 		},
 	})
