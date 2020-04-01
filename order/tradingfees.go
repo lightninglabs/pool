@@ -3,6 +3,7 @@ package order
 import (
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/lightninglabs/agora/client/clmscript"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -13,6 +14,18 @@ var (
 	// Throughout the codebase, we'll use fix based arithmetic to compute
 	// fees.
 	FeeRateTotalParts = 1e6
+
+	// dustLimitP2WPKH is the minimum size of a P2WPKH output to not be
+	// considered dust.
+	dustLimitP2WPKH = txrules.GetDustThreshold(
+		input.P2WPKHSize, txrules.DefaultRelayFeePerKb,
+	)
+
+	// MinNoDustAccountSize is the minimum number of satoshis an account
+	// output value needs to be to not be considered a dust output. This is
+	// the cost of a spend TX at 1 sat/byte plus the minimum non-dust output
+	// size.
+	MinNoDustAccountSize = minNoDustAccountSize()
 )
 
 // FixedRatePremium is the unit that we'll use to express the "lease" rate of
@@ -210,6 +223,24 @@ func (t *AccountTally) CalcTakerDelta(feeSchedule FeeSchedule,
 func (t *AccountTally) ChainFees(feeRate chainfee.SatPerKWeight) {
 	chainFeesDue := EstimateTraderFee(t.NumChansCreated, feeRate)
 	t.EndingBalance -= chainFeesDue
+}
+
+// minNoDustAccountSize returns the minimum number of satoshis an account output
+// value needs to be to not be considered a dust output. This is the cost of a
+// spend TX at 1 sat/byte plus the minimum non-dust output size.
+func minNoDustAccountSize() btcutil.Amount {
+	// Calculate the minimum fee we would need to pay to coop close the
+	// account to a P2WKH output.
+	var weightEstimator input.TxWeightEstimator
+	weightEstimator.AddWitnessInput(clmscript.MultiSigWitnessSize)
+	weightEstimator.AddP2WKHOutput()
+	minimumFee := chainfee.FeePerKwFloor.FeeForWeight(
+		int64(weightEstimator.Weight()),
+	)
+
+	// After paying the fee, more than dust needs to remain, otherwise it
+	// doesn't make sense to sweep the account.
+	return minimumFee + dustLimitP2WPKH
 }
 
 // executionFee calculates the execution fee which is the base fee plus the
