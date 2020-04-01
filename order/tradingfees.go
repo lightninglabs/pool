@@ -45,13 +45,14 @@ func (f FixedRatePremium) LumpSumPremium(amt btcutil.Amount,
 	durationBlocks uint32) btcutil.Amount {
 
 	// First, we'll compute the premium that will be paid each block over
-	// the lifetime of the asset.
+	// the lifetime of the asset. This can be a fraction of a satoshi as one
+	// block is a very short period.
 	premiumPerBlock := PerBlockPremium(amt, uint32(f))
 
 	// Once we have this value, we can then multiply the premium paid per
 	// block times the number of compounding periods, or the total lease
 	// duration.
-	return premiumPerBlock * btcutil.Amount(durationBlocks)
+	return btcutil.Amount(premiumPerBlock * float32(durationBlocks))
 }
 
 // FeeSchedule is an interface that represents the configuration source that
@@ -92,7 +93,7 @@ func (s *LinearFeeSchedule) FeeRate() btcutil.Amount {
 //
 // NOTE: This method is part of the orderT.FeeSchedule interface.
 func (s *LinearFeeSchedule) ExecutionFee(amt btcutil.Amount) btcutil.Amount {
-	return amt * 1_000_000 / s.feeRate
+	return amt * s.feeRate / 1_000_000
 }
 
 // NewLinearFeeSchedule creates a new linear fee schedule based upon a static
@@ -108,11 +109,11 @@ func NewLinearFeeSchedule(baseFee, feeRate btcutil.Amount) *LinearFeeSchedule {
 // implements the orderT.FeeSchedule interface.
 var _ FeeSchedule = (*LinearFeeSchedule)(nil)
 
-// PerBlockPremium calculates the absolute premium in satoshis for a one block
-// duration from the amount and the specified fee rate in parts per million.
-func PerBlockPremium(amt btcutil.Amount, fixedRate uint32) btcutil.Amount {
-	return amt * btcutil.Amount(fixedRate) /
-		btcutil.Amount(FeeRateTotalParts)
+// PerBlockPremium calculates the absolute premium in fractions of satoshis for
+// a one block duration from the amount and the specified fee rate in parts per
+// million.
+func PerBlockPremium(amt btcutil.Amount, fixedRate uint32) float32 {
+	return float32(amt) * float32(fixedRate) / float32(FeeRateTotalParts)
 }
 
 // EstimateTraderFee calculates the chain fees a trader has to pay for their
