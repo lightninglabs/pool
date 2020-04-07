@@ -91,7 +91,7 @@ func (s State) String() string {
 		return "cleared"
 
 	case StatePartiallyFilled:
-		return "partial fill"
+		return "partially_filled"
 
 	case StateExecuted:
 		return "executed"
@@ -106,7 +106,19 @@ func (s State) String() string {
 		return "failed"
 
 	default:
-		return "unknown"
+		return fmt.Sprintf("unknown<%d>", s)
+	}
+}
+
+// Archived returns true if the order is in a state that is considered to be
+// fully executed and no more modifications will be done to it.
+func (s State) Archived() bool {
+	switch s {
+	case StateExecuted, StateCanceled, StateFailed:
+		return true
+
+	default:
+		return false
 	}
 }
 
