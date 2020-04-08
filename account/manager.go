@@ -60,6 +60,20 @@ const (
 	multiSigWitness
 )
 
+// spendPackage tracks useful information regarding an account spend.
+type spendPackage struct {
+	// tx is the spending transaction of the account.
+	tx *wire.MsgTx
+
+	// witnessScript is the witness script of the account input being spent.
+	witnessScript []byte
+
+	// ourSig is our signature of the spending transaction above. If the
+	// spend is taking the multi-sig path, then the auctioneer's signature
+	// will be required as well for a valid spend.
+	ourSig []byte
+}
+
 // ManagerConfig contains all of the required dependencies for the Manager to
 // carry out its duties.
 type ManagerConfig struct {
@@ -611,22 +625,22 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 
 	// TODO(wilmer): Reject if account has pending orders.
 
-	var closeTx *wire.MsgTx
+	var spendPkg *spendPackage
 	if account.State == StateExpired || bestHeight >= account.Expiry {
-		closeTx, err = m.closeAccountExpiry(
+		spendPkg, err = m.closeAccountExpiry(
 			ctx, account, closeOutputs, bestHeight,
 		)
 	} else {
 		// Craft a spending transaction that takes the multi-sig script
 		// path. This requires a signature from the auctioneer, so we'll
 		// obtain one along the way.
-		closeTx, err = m.closeAccountMultiSig(ctx, account, closeOutputs)
+		spendPkg, err = m.closeAccountMultiSig(ctx, account, closeOutputs)
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	err = blockchain.CheckTransactionSanity(btcutil.NewTx(closeTx))
+	err = blockchain.CheckTransactionSanity(btcutil.NewTx(spendPkg.tx))
 	if err != nil {
 		return nil, err
 	}
@@ -634,21 +648,22 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 	// With the transaction crafted, update our on-disk state and broadcast
 	// the transaction.
 	log.Infof("Closing account %x with transaction %v",
-		account.TraderKey.PubKey.SerializeCompressed(), closeTx.TxHash())
+		account.TraderKey.PubKey.SerializeCompressed(),
+		spendPkg.tx.TxHash())
 
 	err = m.cfg.Store.UpdateAccount(
 		account, StateModifier(StatePendingClosed),
-		CloseTxModifier(closeTx),
+		CloseTxModifier(spendPkg.tx),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := m.cfg.Wallet.PublishTransaction(ctx, closeTx); err != nil {
+	if err := m.cfg.Wallet.PublishTransaction(ctx, spendPkg.tx); err != nil {
 		return nil, err
 	}
 
-	return closeTx, nil
+	return spendPkg.tx, nil
 }
 
 // closeAccountExpiry creates the closing transaction of an account based on the
@@ -656,18 +671,20 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 // from its weight and the provided fee rate. bestHeight is used as the lock
 // time of the transaction in order to satisfy the output's CHECKLOCKTIMEVERIFY.
 func (m *Manager) closeAccountExpiry(ctx context.Context, account *Account,
-	closeOutputs []*wire.TxOut, bestHeight uint32) (*wire.MsgTx, error) {
+	closeOutputs []*wire.TxOut, bestHeight uint32) (*spendPackage, error) {
 
-	closeTx, witnessScript, traderSig, err := m.createCloseTx(
+	spendPkg, err := m.createSpendTx(
 		ctx, account, expiryWitness, closeOutputs, bestHeight,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	closeTx.TxIn[0].Witness = clmscript.SpendExpiry(witnessScript, traderSig)
+	spendPkg.tx.TxIn[0].Witness = clmscript.SpendExpiry(
+		spendPkg.witnessScript, spendPkg.ourSig,
+	)
 
-	return closeTx, nil
+	return spendPkg, nil
 }
 
 // closeAccountMultiSig creates the closing transaction of an account based on
@@ -675,9 +692,9 @@ func (m *Manager) closeAccountExpiry(ctx context.Context, account *Account,
 // also required, which is requested within. The fee of the transaction is
 // computed from its weight and the provided fee rate.
 func (m *Manager) closeAccountMultiSig(ctx context.Context, account *Account,
-	closeOutputs []*wire.TxOut) (*wire.MsgTx, error) {
+	closeOutputs []*wire.TxOut) (*spendPackage, error) {
 
-	closeTx, witnessScript, traderSig, err := m.createCloseTx(
+	spendPkg, err := m.createSpendTx(
 		ctx, account, multiSigWitness, closeOutputs, 0,
 	)
 	if err != nil {
@@ -685,43 +702,42 @@ func (m *Manager) closeAccountMultiSig(ctx context.Context, account *Account,
 	}
 
 	auctioneerSig, err := m.cfg.Auctioneer.CloseAccount(
-		ctx, account.TraderKey.PubKey, closeTx.TxOut,
+		ctx, account.TraderKey.PubKey, spendPkg.tx.TxOut,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	closeTx.TxIn[0].Witness = clmscript.SpendMultiSig(
-		witnessScript, traderSig, auctioneerSig,
+	spendPkg.tx.TxIn[0].Witness = clmscript.SpendMultiSig(
+		spendPkg.witnessScript, spendPkg.ourSig, auctioneerSig,
 	)
 
-	return closeTx, nil
+	return spendPkg, nil
 }
 
-// createCloseTx creates the closing transaction of an account based on the
-// provided witness type and signs it. The fee of the transaction is computed
-// from its weight and the provided fee rate. If the closing transaction takes
+// createSpendTx creates a spending transaction of an account based on the
+// provided witness type and signs it. If the spending transaction takes
 // the expiration path, bestHeight is used as the lock time of the transaction,
 // otherwise it is 0.
-func (m *Manager) createCloseTx(ctx context.Context, account *Account,
-	witnessType witnessType, closeOutputs []*wire.TxOut,
-	bestHeight uint32) (*wire.MsgTx, []byte, []byte, error) {
+func (m *Manager) createSpendTx(ctx context.Context, account *Account,
+	witnessType witnessType, outputs []*wire.TxOut,
+	bestHeight uint32) (*spendPackage, error) {
 
 	// If no close outputs were provided, we'll close the account to an
 	// output under the backing lnd node's control.
-	if len(closeOutputs) == 0 {
+	if len(outputs) == 0 {
 		output, err := m.toWalletOutput(ctx, account.Value, witnessType)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
-		closeOutputs = append(closeOutputs, output)
+		outputs = append(outputs, output)
 	}
 
 	// Construct the closing transaction that we'll sign.
 	tx := wire.NewMsgTx(2)
 	tx.LockTime = bestHeight
 	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: account.OutPoint})
-	for _, output := range closeOutputs {
+	for _, output := range outputs {
 		tx.AddTxOut(output)
 	}
 
@@ -735,11 +751,11 @@ func (m *Manager) createCloseTx(ctx context.Context, account *Account,
 		account.BatchKey, account.Secret,
 	)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	accountOutput, err := account.Output()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	signDesc := &input.SignDescriptor{
 		KeyDesc: keychain.KeyDescriptor{
@@ -757,14 +773,18 @@ func (m *Manager) createCloseTx(ctx context.Context, account *Account,
 		ctx, tx, []*input.SignDescriptor{signDesc},
 	)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	// We'll need to re-append the sighash flag since SignOutputRaw strips
 	// it.
-	traderSig := append(sigs[0], byte(signDesc.HashType))
+	ourSig := append(sigs[0], byte(signDesc.HashType))
 
-	return tx, witnessScript, traderSig, nil
+	return &spendPackage{
+		tx:            tx,
+		witnessScript: witnessScript,
+		ourSig:        ourSig,
+	}, nil
 }
 
 // toWalletOutput returns an output under the backing lnd node's control to
