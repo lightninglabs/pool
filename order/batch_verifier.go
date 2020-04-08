@@ -83,7 +83,8 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 
 	// First go through all orders that were matched for us. We'll make sure
 	// we know of the order and that the numbers check out on a high level.
-	accounts := make(map[[33]byte]*AccountTally)
+	tallies := make(map[[33]byte]*AccountTally)
+	accounts := make(map[[33]byte]*account.Account)
 	for nonce, theirOrders := range batch.MatchedOrders {
 		// Find our order in the database.
 		ourOrder, err := v.orderStore.GetOrder(nonce)
@@ -104,7 +105,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 
 		// Find the account the order spends from, if it isn't already
 		// in the cache because another order spends from it.
-		tally, ok := accounts[acctKeyRaw]
+		tally, ok := tallies[acctKeyRaw]
 		if !ok {
 			acct, err := v.getAccount(acctKey)
 			if err != nil {
@@ -112,10 +113,10 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 					acctKeyRaw, err)
 			}
 			tally = &AccountTally{
-				Account:       acct,
 				EndingBalance: acct.Value,
 			}
-			accounts[acctKeyRaw] = tally
+			tallies[acctKeyRaw] = tally
+			accounts[acctKeyRaw] = acct
 		}
 
 		// Now that we know which of our orders were involved in the
@@ -175,13 +176,14 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 	for _, diff := range batch.AccountDiffs {
 		// We only should get diffs for accounts that have orders in the
 		// batch. If not, something's messed up.
-		tally, ok := accounts[diff.AccountKeyRaw]
+		tally, ok := tallies[diff.AccountKeyRaw]
 		if !ok {
 			return &MismatchErr{
 				msg: fmt.Sprintf("got diff for uninvolved "+
 					"account %x", diff.AccountKeyRaw),
 			}
 		}
+		acct := accounts[diff.AccountKeyRaw]
 
 		// Now that we know how many channels were created from the
 		// given account, let's also account for the chain fees.
@@ -198,7 +200,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 		}
 
 		// Make sure the ending state of the account is correct.
-		err := diff.validateEndingState(batch.BatchTX, tally.Account)
+		err := diff.validateEndingState(batch.BatchTX, acct)
 		if err != nil {
 			return newMismatchErr(
 				err, "account %x diff is incorrect",
@@ -210,7 +212,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 		// output has been recreated (which means the expiry has been
 		// reset as the CSV starts counting again in the new output).
 		if diff.EndingState == clmrpc.AccountDiff_OUTPUT_RECREATED &&
-			diff.Expiry != tally.Expiry {
+			diff.Expiry != acct.Expiry {
 
 			return &MismatchErr{
 				msg: fmt.Sprintf("account %x has invalid "+

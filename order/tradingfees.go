@@ -4,7 +4,6 @@ import (
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wallet/txrules"
-	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmscript"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -152,9 +151,6 @@ func EstimateTraderFee(numTraderChans uint32,
 // AccountTally keeps track of an account's balance and fees for all orders in
 // a batch that spend from/use that account.
 type AccountTally struct {
-	// Account is the embedded account this tally is related to.
-	*account.Account
-
 	// EndingBalance is the ending balance for a trader's account.
 	EndingBalance btcutil.Amount
 
