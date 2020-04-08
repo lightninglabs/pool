@@ -12,6 +12,7 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcutil/txsort"
 	"github.com/lightninglabs/agora/client/account/watcher"
 	"github.com/lightninglabs/agora/client/clmscript"
 	"github.com/lightninglabs/loop/lndclient"
@@ -737,7 +738,8 @@ func (m *Manager) closeAccountMultiSig(ctx context.Context, account *Account,
 // createSpendTx creates a spending transaction of an account based on the
 // provided witness type and signs it. If the spending transaction takes
 // the expiration path, bestHeight is used as the lock time of the transaction,
-// otherwise it is 0.
+// otherwise it is 0. The transaction has its inputs and outputs sorted
+// according to BIP-69.
 func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 	outputs []*wire.TxOut, bestHeight uint32) (*spendPackage, error) {
 
@@ -748,6 +750,10 @@ func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 	for _, output := range outputs {
 		tx.AddTxOut(output)
 	}
+
+	// The transaction should have its inputs and outputs sorted according
+	// to BIP-69.
+	txsort.InPlaceSort(tx)
 
 	// Ensure the transaction crafted passes some basic sanity checks before
 	// we attempt to sign it.
