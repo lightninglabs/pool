@@ -46,6 +46,12 @@ func WriteElement(w io.Writer, element interface{}) error {
 	case order.SupplyUnit:
 		return lnwire.WriteElement(w, uint64(e))
 
+	case order.FixedRatePremium:
+		return lnwire.WriteElement(w, uint32(e))
+
+	case order.Nonce:
+		return lnwire.WriteElement(w, e[:])
+
 	case chainfee.SatPerKWeight:
 		return lnwire.WriteElement(w, uint64(e))
 
@@ -131,6 +137,18 @@ func ReadElement(r io.Reader, element interface{}) error {
 		}
 		*e = order.SupplyUnit(s)
 
+	case *order.FixedRatePremium:
+		var s uint32
+		if err := lnwire.ReadElement(r, &s); err != nil {
+			return err
+		}
+		*e = order.FixedRatePremium(s)
+
+	case *order.Nonce:
+		if err := lnwire.ReadElement(r, e[:]); err != nil {
+			return err
+		}
+
 	case *chainfee.SatPerKWeight:
 		var v uint64
 		if err := lnwire.ReadElement(r, &v); err != nil {
@@ -155,18 +173,14 @@ func ReadElement(r io.Reader, element interface{}) error {
 		}
 
 	case *lntypes.Preimage:
-		var preimage lntypes.Preimage
-		if err := lnwire.ReadElement(r, preimage[:]); err != nil {
+		if err := lnwire.ReadElement(r, e[:]); err != nil {
 			return err
 		}
-		*e = preimage
 
 	case *[32]byte:
-		var b [32]byte
-		if err := lnwire.ReadElement(r, b[:]); err != nil {
+		if err := lnwire.ReadElement(r, e[:]); err != nil {
 			return err
 		}
-		*e = b
 
 	case **wire.MsgTx:
 		var tx wire.MsgTx
