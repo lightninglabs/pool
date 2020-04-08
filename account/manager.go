@@ -751,8 +751,7 @@ func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 
 	// Ensure the transaction crafted passes some basic sanity checks before
 	// we attempt to sign it.
-	err := blockchain.CheckTransactionSanity(btcutil.NewTx(tx))
-	if err != nil {
+	if err := sanityCheckAccountSpendTx(tx, account); err != nil {
 		return nil, err
 	}
 
@@ -775,6 +774,33 @@ func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 		witnessScript: witnessScript,
 		ourSig:        ourSig,
 	}, nil
+}
+
+// sanityCheckAccountSpendTx ensures that the spending transaction of an account
+// is well-formed by performing various sanity checks on its inputs and outputs.
+func sanityCheckAccountSpendTx(tx *wire.MsgTx, account *Account) error {
+	err := blockchain.CheckTransactionSanity(btcutil.NewTx(tx))
+	if err != nil {
+		return err
+	}
+
+	// CheckTransactionSanity doesn't have enough context to attempt fee
+	// calculation, but we do.
+	//
+	// TODO(wilmer): Calculate the fee for this transaction and assert that
+	// it is greater than the lowest possible fee for it?
+	inputTotal := account.Value
+	var outputTotal btcutil.Amount
+	for _, output := range tx.TxOut {
+		outputTotal += btcutil.Amount(output.Value)
+	}
+
+	if inputTotal < outputTotal {
+		return fmt.Errorf("output value of %v exceeds input value of %v",
+			outputTotal, inputTotal)
+	}
+
+	return nil
 }
 
 // signAccountInput signs the account input in the spending transaction of an
