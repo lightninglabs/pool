@@ -625,22 +625,37 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 
 	// TODO(wilmer): Reject if account has pending orders.
 
+	// TODO(wilmer): Expose fee rate or allow fee bump.
+	feeRate := chainfee.FeePerKwFloor
+	witnessType := determineWitnessType(account, bestHeight)
+
+	// If no outputs were provided, we'll close the account to an output
+	// under the backing lnd node's control.
+	if len(closeOutputs) == 0 {
+		output, err := m.toWalletOutput(
+			ctx, account.Value, feeRate, witnessType,
+		)
+		if err != nil {
+			return nil, err
+		}
+		closeOutputs = append(closeOutputs, output)
+	}
+
 	var spendPkg *spendPackage
-	if account.State == StateExpired || bestHeight >= account.Expiry {
+	switch witnessType {
+	case expiryWitness:
 		spendPkg, err = m.closeAccountExpiry(
 			ctx, account, closeOutputs, bestHeight,
 		)
-	} else {
+
+	case multiSigWitness:
 		// Craft a spending transaction that takes the multi-sig script
 		// path. This requires a signature from the auctioneer, so we'll
 		// obtain one along the way.
-		spendPkg, err = m.closeAccountMultiSig(ctx, account, closeOutputs)
+		spendPkg, err = m.closeAccountMultiSig(
+			ctx, account, closeOutputs,
+		)
 	}
-	if err != nil {
-		return nil, err
-	}
-
-	err = blockchain.CheckTransactionSanity(btcutil.NewTx(spendPkg.tx))
 	if err != nil {
 		return nil, err
 	}
@@ -666,6 +681,15 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 	return spendPkg.tx, nil
 }
 
+// determineWitnessType determines the appropriate witness type to use for the
+// spending transaction for an account based on whether it has expired or not.
+func determineWitnessType(account *Account, bestHeight uint32) witnessType {
+	if account.State == StateExpired || bestHeight >= account.Expiry {
+		return expiryWitness
+	}
+	return multiSigWitness
+}
+
 // closeAccountExpiry creates the closing transaction of an account based on the
 // expiration script path and signs it. The fee of the transaction is computed
 // from its weight and the provided fee rate. bestHeight is used as the lock
@@ -673,9 +697,7 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 func (m *Manager) closeAccountExpiry(ctx context.Context, account *Account,
 	closeOutputs []*wire.TxOut, bestHeight uint32) (*spendPackage, error) {
 
-	spendPkg, err := m.createSpendTx(
-		ctx, account, expiryWitness, closeOutputs, bestHeight,
-	)
+	spendPkg, err := m.createSpendTx(ctx, account, closeOutputs, bestHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -689,14 +711,11 @@ func (m *Manager) closeAccountExpiry(ctx context.Context, account *Account,
 
 // closeAccountMultiSig creates the closing transaction of an account based on
 // the multi-sig script path and signs it. A signature from the auctioneer is
-// also required, which is requested within. The fee of the transaction is
-// computed from its weight and the provided fee rate.
+// also required, which is requested within.
 func (m *Manager) closeAccountMultiSig(ctx context.Context, account *Account,
-	closeOutputs []*wire.TxOut) (*spendPackage, error) {
+	outputs []*wire.TxOut) (*spendPackage, error) {
 
-	spendPkg, err := m.createSpendTx(
-		ctx, account, multiSigWitness, closeOutputs, 0,
-	)
+	spendPkg, err := m.createSpendTx(ctx, account, outputs, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -720,20 +739,9 @@ func (m *Manager) closeAccountMultiSig(ctx context.Context, account *Account,
 // the expiration path, bestHeight is used as the lock time of the transaction,
 // otherwise it is 0.
 func (m *Manager) createSpendTx(ctx context.Context, account *Account,
-	witnessType witnessType, outputs []*wire.TxOut,
-	bestHeight uint32) (*spendPackage, error) {
+	outputs []*wire.TxOut, bestHeight uint32) (*spendPackage, error) {
 
-	// If no close outputs were provided, we'll close the account to an
-	// output under the backing lnd node's control.
-	if len(outputs) == 0 {
-		output, err := m.toWalletOutput(ctx, account.Value, witnessType)
-		if err != nil {
-			return nil, err
-		}
-		outputs = append(outputs, output)
-	}
-
-	// Construct the closing transaction that we'll sign.
+	// Construct the transaction that we'll sign.
 	tx := wire.NewMsgTx(2)
 	tx.LockTime = bestHeight
 	tx.AddTxIn(&wire.TxIn{PreviousOutPoint: account.OutPoint})
@@ -741,44 +749,26 @@ func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 		tx.AddTxOut(output)
 	}
 
-	// Gather the remaining components required to sign the transaction and
-	// sign it.
-	traderKeyTweak := clmscript.TraderKeyTweak(
-		account.BatchKey, account.Secret, account.TraderKey.PubKey,
-	)
-	witnessScript, err := clmscript.AccountWitnessScript(
-		account.Expiry, account.TraderKey.PubKey, account.AuctioneerKey,
-		account.BatchKey, account.Secret,
-	)
-	if err != nil {
-		return nil, err
-	}
-	accountOutput, err := account.Output()
-	if err != nil {
-		return nil, err
-	}
-	signDesc := &input.SignDescriptor{
-		KeyDesc: keychain.KeyDescriptor{
-			KeyLocator: account.TraderKey.KeyLocator,
-		},
-		SingleTweak:   traderKeyTweak,
-		WitnessScript: witnessScript,
-		Output:        accountOutput,
-		HashType:      txscript.SigHashAll,
-		InputIndex:    0,
-		SigHashes:     txscript.NewTxSigHashes(tx),
-	}
-
-	sigs, err := m.cfg.Signer.SignOutputRaw(
-		ctx, tx, []*input.SignDescriptor{signDesc},
-	)
+	// Ensure the transaction crafted passes some basic sanity checks before
+	// we attempt to sign it.
+	err := blockchain.CheckTransactionSanity(btcutil.NewTx(tx))
 	if err != nil {
 		return nil, err
 	}
 
-	// We'll need to re-append the sighash flag since SignOutputRaw strips
-	// it.
-	ourSig := append(sigs[0], byte(signDesc.HashType))
+	// Gather the remaining components required to sign the transaction
+	// fully.
+	sigHashes := txscript.NewTxSigHashes(tx)
+	sigHashType := txscript.SigHashAll
+
+	// TODO(wilmer): Should sign proper input once multiple inputs are
+	// supported.
+	witnessScript, ourSig, err := m.signAccountInput(
+		ctx, tx, account, sigHashType, sigHashes,
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	return &spendPackage{
 		tx:            tx,
@@ -787,12 +777,58 @@ func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 	}, nil
 }
 
+// signAccountInput signs the account input in the spending transaction of an
+// account. If the account is being spent with cooperation of the auctioneer,
+// their signature will be required as well.
+func (m *Manager) signAccountInput(ctx context.Context, tx *wire.MsgTx,
+	account *Account, sigHashType txscript.SigHashType,
+	sigHashes *txscript.TxSigHashes) ([]byte, []byte, error) {
+
+	traderKeyTweak := clmscript.TraderKeyTweak(
+		account.BatchKey, account.Secret, account.TraderKey.PubKey,
+	)
+	witnessScript, err := clmscript.AccountWitnessScript(
+		account.Expiry, account.TraderKey.PubKey, account.AuctioneerKey,
+		account.BatchKey, account.Secret,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	accountOutput, err := account.Output()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	signDesc := &input.SignDescriptor{
+		KeyDesc: keychain.KeyDescriptor{
+			KeyLocator: account.TraderKey.KeyLocator,
+		},
+		SingleTweak:   traderKeyTweak,
+		WitnessScript: witnessScript,
+		Output:        accountOutput,
+		HashType:      sigHashType,
+		InputIndex:    0,
+		SigHashes:     sigHashes,
+	}
+	sigs, err := m.cfg.Signer.SignOutputRaw(
+		ctx, tx, []*input.SignDescriptor{signDesc},
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// We'll need to re-append the sighash flag since SignOutputRaw strips
+	// it.
+	ourSig := append(sigs[0], byte(signDesc.HashType))
+
+	return witnessScript, ourSig, nil
+}
+
 // toWalletOutput returns an output under the backing lnd node's control to
 // sweep the funds of an account to.
-//
-// TODO(wilmer): Expose fee rate or allow fee bump.
 func (m *Manager) toWalletOutput(ctx context.Context,
-	accountValue btcutil.Amount,
+	accountValue btcutil.Amount, feeRate chainfee.SatPerKWeight,
 	witnessType witnessType) (*wire.TxOut, error) {
 
 	// Determine the appropriate witness size based on the type.
@@ -809,10 +845,12 @@ func (m *Manager) toWalletOutput(ctx context.Context,
 	// Calculate the transaction's weight to determine its fee along with
 	// the provided fee rate. The transaction will contain one P2WSH input,
 	// the account output, and one P2WPKH output.
+	//
+	// TODO(wilmer): Check dust.
 	var weightEstimator input.TxWeightEstimator
 	weightEstimator.AddWitnessInput(witnessSize)
 	weightEstimator.AddP2WKHOutput()
-	fee := chainfee.FeePerKwFloor.FeeForWeight(int64(weightEstimator.Weight()))
+	fee := feeRate.FeeForWeight(int64(weightEstimator.Weight()))
 	outputValue := accountValue - fee
 
 	// With the fee calculated, compute the accompanying output script.
