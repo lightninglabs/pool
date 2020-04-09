@@ -88,7 +88,7 @@ func (s *batchStorer) Store(batch *Batch) error {
 		case clmrpc.AccountDiff_OUTPUT_RECREATED:
 			modifiers = append(
 				modifiers,
-				account.StateModifier(account.StatePendingOpen),
+				account.StateModifier(account.StatePendingUpdate),
 				account.OutPointModifier(wire.OutPoint{
 					Index: uint32(diff.OutpointIndex),
 					Hash:  batch.BatchTX.TxHash(),

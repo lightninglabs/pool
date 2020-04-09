@@ -169,9 +169,9 @@ func TestBatchStorer(t *testing.T) {
 			smallAcct.Value, 144)
 	}
 
-	if bigAcct.State != account.StatePendingOpen {
+	if bigAcct.State != account.StatePendingUpdate {
 		t.Fatalf("invalid account state, got %d wanted %d",
-			bigAcct.State, account.StatePendingOpen)
+			bigAcct.State, account.StatePendingUpdate)
 	}
 	if bigAcct.Value != 600_000 {
 		t.Fatalf("invalid account balance, got %d wanted %d",
