@@ -387,6 +387,14 @@ func (c *Client) OrderState(ctx context.Context, nonce order.Nonce) (
 func (c *Client) SubscribeAccountUpdates(ctx context.Context,
 	acct *account.Account) error {
 
+	var acctPubKey [33]byte
+	copy(acctPubKey[:], acct.TraderKey.PubKey.SerializeCompressed())
+
+	// Don't subscribe more than once.
+	if _, ok := c.subscribedAccts[acctPubKey]; ok {
+		return nil
+	}
+
 	c.streamMutex.Lock()
 	defer c.streamMutex.Unlock()
 
@@ -399,8 +407,6 @@ func (c *Client) SubscribeAccountUpdates(ctx context.Context,
 
 	// Before we can expect to receive any updates, we need to perform the
 	// 3-way authentication handshake.
-	var acctPubKey [33]byte
-	copy(acctPubKey[:], acct.TraderKey.PubKey.SerializeCompressed())
 	sub := &acctSubscription{
 		acct:          acct,
 		sendMsg:       c.SendAuctionMessage,
