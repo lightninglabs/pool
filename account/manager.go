@@ -369,8 +369,6 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account,
 				"%v", err)
 		}
 
-		fallthrough
-
 	// In StateOpen, the funding transaction for the account has already
 	// confirmed, so we only need to watch for its spend and expiration and
 	// register for account updates.
@@ -515,13 +513,6 @@ func (m *Manager) handleAccountConf(traderKey *btcec.PublicKey,
 		return err
 	}
 
-	// To not rely on the order of confirmation and block notifications, if
-	// the account confirms at the same height as it expires, we can exit
-	// now and let the account be marked as expired by the watcher.
-	if confDetails.BlockHeight == account.Expiry {
-		return nil
-	}
-
 	// Ensure we don't transition an account that's been closed back to open
 	// if the account was closed before it was open.
 	if account.State != StatePendingOpen {
@@ -531,7 +522,13 @@ func (m *Manager) handleAccountConf(traderKey *btcec.PublicKey,
 	log.Infof("Account %x is now confirmed at height %v!",
 		traderKey.SerializeCompressed(), confDetails.BlockHeight)
 
-	return m.cfg.Store.UpdateAccount(account, StateModifier(StateOpen))
+	// Mark the account as open and proceed with the rest of the flow.
+	err = m.cfg.Store.UpdateAccount(account, StateModifier(StateOpen))
+	if err != nil {
+		return err
+	}
+
+	return m.handleStateOpen(context.Background(), account)
 }
 
 // handleAccountSpend handles the different spend paths of an account. If an
