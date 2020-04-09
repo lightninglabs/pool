@@ -91,23 +91,30 @@ enum AccountState {
     // The state of an account when it is pending its confirmation on-chain.
     PENDING_OPEN = 0;
 
+    /*
+    The state of an account when it has undergone an update on-chain either as
+    part of a matched order or a trader modification and it is pending its
+    confirmation on-chain.
+    */
+    PENDING_UPDATE = 1;
+
     // The state of an account once it has confirmed on-chain.
-    OPEN = 1;
+    OPEN = 2;
 
     /*
     The state of an account once its expiration has been reached and its closing
     transaction has confirmed.
     */
-    EXPIRED = 2;
+    EXPIRED = 3;
 
     /*
     The state of an account when we're waiting for the closing transaction of
     an account to confirm that required cooperation with the auctioneer.
     */
-    PENDING_CLOSED = 3;
+    PENDING_CLOSED = 4;
 
     // The state of an account once its closing transaction has confirmed.
-    CLOSED = 4;
+    CLOSED = 5;
 }
 
 message Account {

@@ -353,6 +353,9 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 	case account.StateInitiated, account.StatePendingOpen:
 		rpcState = clmrpc.AccountState_PENDING_OPEN
 
+	case account.StatePendingUpdate:
+		rpcState = clmrpc.AccountState_PENDING_UPDATE
+
 	case account.StateOpen:
 		rpcState = clmrpc.AccountState_OPEN
 

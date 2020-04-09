@@ -39,23 +39,28 @@ const (
 	// transaction and are currently waiting for its confirmation.
 	StatePendingOpen State = 1
 
+	// StatePendingUpdate denotes that the account has undergone an update
+	// on-chain either as part of a matched order or a trader modification
+	// and we are currently waiting for its confirmation.
+	StatePendingUpdate State = 2
+
 	// StateOpen denotes that the account's funding transaction has been
 	// included in the chain with sufficient depth.
-	StateOpen State = 2
+	StateOpen State = 3
 
 	// StateExpired denotes that the chain has reached an account's
 	// expiration height. An account in this state can still be used if
 	// renewed.
-	StateExpired = 4
+	StateExpired State = 4
 
 	// StatePendingClosed denotes that an account was fully spent by a
 	// transaction broadcast by the trader and is pending its confirmation.
-	StatePendingClosed = 5
+	StatePendingClosed State = 5
 
 	// StateClosed denotes that an account was closed by a transaction
 	// broadcast by the trader that fully spent the account. An account in
 	// this state can no longer be used.
-	StateClosed = 6
+	StateClosed State = 6
 )
 
 // String returns a human-readable description of an account's state.
@@ -65,6 +70,8 @@ func (s State) String() string {
 		return "StateInitiated"
 	case StatePendingOpen:
 		return "StatePendingOpen"
+	case StatePendingUpdate:
+		return "StatePendingUpdate"
 	case StateOpen:
 		return "StateOpen"
 	case StateExpired:

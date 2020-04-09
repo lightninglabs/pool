@@ -369,6 +369,23 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account,
 				"%v", err)
 		}
 
+	// In StatePendingUpdate, we've processed an account update due to
+	// either a matched order or trader modification, so we'll need to wait
+	// for its confirmation. Once it confirms, handleAccountConf will take
+	// care of the rest of the flow.
+	case StatePendingUpdate:
+		numConfs := numConfsForValue(account.Value)
+		log.Infof("Waiting for %v confirmation(s) of account %x",
+			numConfs, account.TraderKey.PubKey.SerializeCompressed())
+		err = m.watcher.WatchAccountConf(
+			account.TraderKey.PubKey, account.OutPoint.Hash,
+			accountOutput.PkScript, numConfs, account.HeightHint,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to watch for confirmation: "+
+				"%v", err)
+		}
+
 	// In StateOpen, the funding transaction for the account has already
 	// confirmed, so we only need to watch for its spend and expiration and
 	// register for account updates.
