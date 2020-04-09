@@ -108,7 +108,6 @@ func (s *batchStorer) Store(batch *Batch) error {
 		// Finally update the account value and expiry.
 		accountModifiers[idx] = append(
 			modifiers, account.ValueModifier(diff.EndingBalance),
-			account.ExpiryModifier(diff.Expiry),
 		)
 	}
 

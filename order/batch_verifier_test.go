@@ -347,7 +347,6 @@ func TestBatchVerifier(t *testing.T) {
 				AccountKey:    acctKeyBig,
 				EndingState:   stateRecreated,
 				OutpointIndex: 2,
-				Expiry:        bigAcct.Expiry,
 				EndingBalance: 494_594,
 			},
 			{
@@ -355,7 +354,6 @@ func TestBatchVerifier(t *testing.T) {
 				AccountKey:    acctKeySmall,
 				EndingState:   stateExtendedOffchain,
 				OutpointIndex: -1,
-				Expiry:        smallAcct.Expiry,
 				EndingBalance: 594,
 			},
 		}

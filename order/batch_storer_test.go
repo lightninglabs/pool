@@ -69,7 +69,6 @@ func TestBatchStorer(t *testing.T) {
 			AccountKey:    acctKeyBig,
 			EndingState:   clmrpc.AccountDiff_OUTPUT_RECREATED,
 			OutpointIndex: 0,
-			Expiry:        bigAcct.Expiry,
 			EndingBalance: 600_000,
 		},
 		{
@@ -77,7 +76,6 @@ func TestBatchStorer(t *testing.T) {
 			AccountKey:    acctKeySmall,
 			EndingState:   clmrpc.AccountDiff_OUTPUT_FULLY_SPENT,
 			OutpointIndex: -1,
-			Expiry:        smallAcct.Expiry,
 			EndingBalance: 0,
 		},
 	}

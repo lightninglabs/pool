@@ -56,9 +56,6 @@ type AccountDiff struct {
 	// batch transaction. This is set to -1 if no account output has been
 	// created because the leftover value was considered to be dust.
 	OutpointIndex int32
-
-	// Expiry is the on-chain CSV expiry for the re-created account output.
-	Expiry uint32
 }
 
 // validateEndingState validates that the ending state of an account as

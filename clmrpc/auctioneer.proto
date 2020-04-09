@@ -433,14 +433,9 @@ message AccountDiff {
     int32 outpoint_index = 3;
 
     /**
-    The expiry of the new account outpoint.
-    */
-    uint32 expiry = 4;
-
-    /**
     The user's sub account key this diff is referring to.
     */
-    bytes user_sub_key = 5;
+    bytes user_sub_key = 4;
 }
 
 message ServerOrder {

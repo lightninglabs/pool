@@ -10,7 +10,6 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 )
@@ -206,19 +205,6 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 				err, "account %x diff is incorrect",
 				diff.AccountKeyRaw,
 			)
-		}
-
-		// The expiry should be the same as it was before if the account
-		// output has been recreated (which means the expiry has been
-		// reset as the CSV starts counting again in the new output).
-		if diff.EndingState == clmrpc.AccountDiff_OUTPUT_RECREATED &&
-			diff.Expiry != acct.Expiry {
-
-			return &MismatchErr{
-				msg: fmt.Sprintf("account %x has invalid "+
-					"expiry: %d", diff.AccountKeyRaw,
-					diff.Expiry),
-			}
 		}
 	}
 

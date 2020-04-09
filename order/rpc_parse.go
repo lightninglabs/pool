@@ -206,7 +206,6 @@ func ParseRPCBatch(prepareMsg *clmrpc.OrderMatchPrepare) (*Batch,
 				EndingState:   diff.EndingState,
 				EndingBalance: btcutil.Amount(diff.EndingBalance),
 				OutpointIndex: diff.OutpointIndex,
-				Expiry:        diff.Expiry,
 			},
 		)
 	}
