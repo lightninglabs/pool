@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -24,26 +25,29 @@ const (
 )
 
 type testHarness struct {
-	t        *testing.T
-	store    *mockStore
-	notifier *mockChainNotifier
-	wallet   *mockWallet
-	manager  *Manager
+	t          *testing.T
+	store      *mockStore
+	notifier   *mockChainNotifier
+	wallet     *mockWallet
+	auctioneer *mockAuctioneer
+	manager    *Manager
 }
 
 func newTestHarness(t *testing.T) *testHarness {
 	store := newMockStore()
 	wallet := newMockWallet()
 	notifier := newMockChainNotifier()
+	auctioneer := newMockAuctioneer()
 
 	return &testHarness{
-		t:        t,
-		store:    store,
-		wallet:   wallet,
-		notifier: notifier,
+		t:          t,
+		store:      store,
+		wallet:     wallet,
+		notifier:   notifier,
+		auctioneer: auctioneer,
 		manager: NewManager(&ManagerConfig{
 			Store:         store,
-			Auctioneer:    &mockAuctioneer{},
+			Auctioneer:    auctioneer,
 			Wallet:        wallet,
 			Signer:        wallet,
 			ChainNotifier: notifier,
@@ -60,6 +64,34 @@ func (h *testHarness) start() {
 
 func (h *testHarness) stop() {
 	h.manager.Stop()
+}
+
+func (h *testHarness) assertAccountSubscribed(traderKey *btcec.PublicKey) {
+	h.t.Helper()
+
+	var rawTraderKey [33]byte
+	copy(rawTraderKey[:], traderKey.SerializeCompressed())
+
+	h.auctioneer.mu.Lock()
+	defer h.auctioneer.mu.Unlock()
+
+	if _, ok := h.auctioneer.subscribed[rawTraderKey]; !ok {
+		h.t.Fatalf("account %x not subscribed", traderKey)
+	}
+}
+
+func (h *testHarness) assertAccountNotSubscribed(traderKey *btcec.PublicKey) {
+	h.t.Helper()
+
+	var rawTraderKey [33]byte
+	copy(rawTraderKey[:], traderKey.SerializeCompressed())
+
+	h.auctioneer.mu.Lock()
+	defer h.auctioneer.mu.Unlock()
+
+	if _, ok := h.auctioneer.subscribed[rawTraderKey]; ok {
+		h.t.Fatalf("account %x is subscribed", traderKey)
+	}
 }
 
 func (h *testHarness) assertAcccountExists(expected *Account) {
@@ -98,12 +130,18 @@ func (h *testHarness) openAccount(value btcutil.Amount, expiry uint32,
 	// The same account should be found in the store.
 	h.assertAcccountExists(account)
 
+	// Since the account is still pending confirmation, it should not be
+	// subscribed to updates from the auctioneer yet.
+	h.assertAccountNotSubscribed(account.TraderKey.PubKey)
+
 	// Notify the confirmation of the account.
 	h.notifier.confChan <- &chainntnfs.TxConfirmation{}
 
-	// This should prompt the account to now be in a StateOpen state.
+	// This should prompt the account to now be in a StateOpen state and
+	// the subscription for updates should now be realized.
 	account.State = StateOpen
 	h.assertAcccountExists(account)
+	h.assertAccountSubscribed(account.TraderKey.PubKey)
 
 	return account
 }

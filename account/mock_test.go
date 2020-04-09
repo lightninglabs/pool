@@ -111,6 +111,15 @@ func (s *mockStore) Accounts() ([]*Account, error) {
 
 type mockAuctioneer struct {
 	Auctioneer
+
+	mu         sync.Mutex
+	subscribed map[[33]byte]struct{}
+}
+
+func newMockAuctioneer() *mockAuctioneer {
+	return &mockAuctioneer{
+		subscribed: make(map[[33]byte]struct{}),
+	}
 }
 
 func (a *mockAuctioneer) ReserveAccount(context.Context) (*Reservation, error) {
@@ -130,9 +139,20 @@ func (a *mockAuctioneer) CloseAccount(context.Context, *btcec.PublicKey,
 	return []byte("auctioneer sig"), nil
 }
 
-func (a *mockAuctioneer) SubscribeAccountUpdates(context.Context,
-	*Account) error {
+func (a *mockAuctioneer) SubscribeAccountUpdates(_ context.Context,
+	account *Account) error {
 
+	var traderKey [33]byte
+	copy(traderKey[:], account.TraderKey.PubKey.SerializeCompressed())
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if _, ok := a.subscribed[traderKey]; ok {
+		return nil
+	}
+
+	a.subscribed[traderKey] = struct{}{}
 	return nil
 }
 
