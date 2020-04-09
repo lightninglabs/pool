@@ -372,36 +372,11 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account,
 		fallthrough
 
 	// In StateOpen, the funding transaction for the account has already
-	// confirmed, so we only need to watch for its spend and expiration.
+	// confirmed, so we only need to watch for its spend and expiration and
+	// register for account updates.
 	case StateOpen:
-		log.Infof("Watching account %x for spend and expiration",
-			account.TraderKey.PubKey.SerializeCompressed())
-		err := m.watcher.WatchAccountSpend(
-			account.TraderKey.PubKey, account.OutPoint,
-			accountOutput.PkScript, account.HeightHint,
-		)
-		if err != nil {
-			return fmt.Errorf("unable to watch for spend: %v", err)
-		}
-		err = m.watcher.WatchAccountExpiration(
-			account.TraderKey.PubKey, account.Expiry,
-		)
-		if err != nil {
-			return fmt.Errorf("unable to watch for expiration: %v",
-				err)
-		}
-
-		// Now that we have an open account, subscribe for updates to it
-		// to the server. We subscribe for the account instead of the
-		// individual orders because all signing operations will need to
-		// be executed on an account level anyway. And we might end up
-		// executing multiple orders for the same account in one batch.
-		// The messages from the server are received and dispatched to
-		// the correct manager by the rpcServer.
-		err = m.cfg.Auctioneer.SubscribeAccountUpdates(ctx, account)
-		if err != nil {
-			return fmt.Errorf("error subscribing to account "+
-				"updates: %v", err)
+		if err := m.handleStateOpen(ctx, account); err != nil {
+			return err
 		}
 
 	// In StateExpired, we'll wait for the account to be spent such that it
@@ -488,6 +463,46 @@ func (m *Manager) locateTxByHash(ctx context.Context,
 	}
 
 	return nil, errTxNotFound
+}
+
+// handleStateOpen performs the necessary operations for accounts found in
+// StateOpen.
+func (m *Manager) handleStateOpen(ctx context.Context, account *Account) error {
+	log.Infof("Watching account %x for spend and expiration",
+		account.TraderKey.PubKey.SerializeCompressed())
+
+	accountOutput, err := account.Output()
+	if err != nil {
+		return err
+	}
+
+	err = m.watcher.WatchAccountSpend(
+		account.TraderKey.PubKey, account.OutPoint,
+		accountOutput.PkScript, account.HeightHint,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to watch for spend: %v", err)
+	}
+	err = m.watcher.WatchAccountExpiration(
+		account.TraderKey.PubKey, account.Expiry,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to watch for expiration: %v", err)
+	}
+
+	// Now that we have an open account, subscribe for updates to it to the
+	// server. We subscribe for the account instead of the individual orders
+	// because all signing operations will need to be executed on an account
+	// level anyway. And we might end up executing multiple orders for the
+	// same account in one batch. The messages from the server are received
+	// and dispatched to the correct manager by the rpcServer.
+	err = m.cfg.Auctioneer.SubscribeAccountUpdates(ctx, account)
+	if err != nil {
+		return fmt.Errorf("unable to subscribe for account updates: %v",
+			err)
+	}
+
+	return nil
 }
 
 // handleAccountConf takes the necessary steps after detecting the confirmation
