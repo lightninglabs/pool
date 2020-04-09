@@ -195,11 +195,11 @@ func ExpiryModifier(expiry uint32) Modifier {
 	}
 }
 
-// BatchKeyModifier is a functional option that modifies the batch key of an
-// account.
-func BatchKeyModifier(batchKey *btcec.PublicKey) Modifier {
+// IncrementBatchKey is a functional option that increments the batch key of an
+// account by adding the curve's base point.
+func IncrementBatchKey() Modifier {
 	return func(account *Account) {
-		account.BatchKey = batchKey
+		account.BatchKey = clmscript.IncrementKey(account.BatchKey)
 	}
 }
 
