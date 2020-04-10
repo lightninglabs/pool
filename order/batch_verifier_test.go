@@ -32,11 +32,7 @@ func TestBatchVerifier(t *testing.T) {
 	t.Parallel()
 
 	var (
-		lnd      = test.NewMockLnd()
-		verifier = &batchVerifier{
-			wallet:        lnd.WalletKit,
-			ourNodePubkey: nodePubkey,
-		}
+		lnd         = test.NewMockLnd()
 		batchID     BatchID
 		acctIDBig   [33]byte
 		acctIDSmall [33]byte
@@ -52,156 +48,191 @@ func TestBatchVerifier(t *testing.T) {
 	testCases := []struct {
 		name        string
 		expectedErr string
-		doVerify    func(*Ask, *Bid, *Bid, *Batch) error
+		doVerify    func(BatchVerifier, *Ask, *Bid, *Bid, *Batch) error
 	}{
 		{
 			name:        "version mismatch",
 			expectedErr: ErrVersionMismatch.Error(),
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
-				return verifier.Verify(&Batch{Version: 999})
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
+				return v.Verify(&Batch{Version: 999})
 			},
 		},
 		{
 			name:        "invalid order",
 			expectedErr: "not found",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				arr := make([]*MatchedOrder, 0)
 				b.MatchedOrders[Nonce{99, 99}] = arr
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "invalid order type",
 			expectedErr: "matched same type orders",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				b.MatchedOrders[a.nonce] = append(
 					b.MatchedOrders[a.nonce],
 					&MatchedOrder{
 						Order: a,
 					},
 				)
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "invalid node pubkey",
 			expectedErr: "other order is an order from our node",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				b.MatchedOrders[a.nonce][0].NodeKey = nodePubkey
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "ask max duration larger than bid",
-			expectedErr: "duration not overlapping for our ask",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			expectedErr: "duration not overlapping",
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				a.MaxDuration = 100
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "ask fixed rate larger than bid",
 			expectedErr: "ask price greater than bid price",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				a.FixedRate = 20
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "bid min duration larger than ask",
-			expectedErr: "duration not overlapping for our bid",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			expectedErr: "duration not overlapping",
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				delete(b.MatchedOrders, a.nonce)
 				b2.MinDuration = 5000
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "bid fixed rate smaller than ask",
 			expectedErr: "ask price greater than bid price",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				delete(b.MatchedOrders, a.nonce)
 				b1.FixedRate = 5
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "channel output not found, wrong value",
 			expectedErr: "no channel output found in batch tx for",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				b.BatchTX.TxOut[0].Value = 123
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "channel output not found, wrong script",
 			expectedErr: "no channel output found in batch tx for",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				b.BatchTX.TxOut[0].PkScript = []byte{99, 88}
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "invalid units filled",
 			expectedErr: "invalid units to be filled for order",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				b.BatchTX.TxOut[0].Value = 900_000
 				b.MatchedOrders[a.nonce][0].UnitsFilled = 9
-				return verifier.Verify(b)
+				b.MatchedOrders[b1.nonce][0].UnitsFilled = 9
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "invalid funding TX fee rate",
 			expectedErr: "server sent unexpected ending balance",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				b.BatchTxFeeRate *= 2
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "invalid clearing price",
 			expectedErr: "server sent unexpected ending balance",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				b.ClearingPrice *= 2
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "invalid execution fee rate",
 			expectedErr: "server sent unexpected ending balance",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				b.ExecutionFee = NewLinearFeeSchedule(1, 1)
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "invalid ending state",
 			expectedErr: "diff is incorrect: unexpected state",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				b.ExecutionFee = NewLinearFeeSchedule(0, 0)
 				b.BatchTX.TxOut[2].Value += 2220
 				b.AccountDiffs[0].EndingBalance += 2220
 				b.AccountDiffs[1].EndingBalance += 2220
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "invalid ending output",
 			expectedErr: "diff is incorrect: outpoint index",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
 				b.ExecutionFee = NewLinearFeeSchedule(0, 0)
 				b.BatchTX.TxOut[2].Value += 2220
 				b.AccountDiffs[0].EndingBalance += 2220
 				b.AccountDiffs[1].EndingBalance += 2220
 				b.AccountDiffs[1].EndingState = stateRecreated
-				return verifier.Verify(b)
+				return v.Verify(b)
 			},
 		},
 		{
 			name:        "happy path",
 			expectedErr: "",
-			doVerify: func(a *Ask, b1, b2 *Bid, b *Batch) error {
-				return verifier.Verify(b)
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
+				return v.Verify(b)
 			},
 		},
 	}
@@ -375,8 +406,12 @@ func TestBatchVerifier(t *testing.T) {
 
 		// Create the starting database state now.
 		storeMock := newMockStore()
-		verifier.orderStore = storeMock
-		verifier.getAccount = storeMock.getAccount
+		verifier := &batchVerifier{
+			wallet:        lnd.WalletKit,
+			orderStore:    storeMock,
+			ourNodePubkey: nodePubkey,
+			getAccount:    storeMock.getAccount,
+		}
 		storeMock.accounts = map[*btcec.PublicKey]*account.Account{
 			acctKeyBig:   bigAcct,
 			acctKeySmall: smallAcct,
@@ -389,7 +424,7 @@ func TestBatchVerifier(t *testing.T) {
 
 		// Finally run the test case itself.
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.doVerify(ask, bid1, bid2, batch)
+			err := tc.doVerify(verifier, ask, bid1, bid2, batch)
 			if (err == nil && tc.expectedErr != "") ||
 				(err != nil && !strings.Contains(
 					err.Error(), tc.expectedErr,

@@ -88,7 +88,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 		// Find our order in the database.
 		ourOrder, err := v.orderStore.GetOrder(nonce)
 		if err != nil {
-			return fmt.Errorf("order %x not found: %v", nonce, err)
+			return fmt.Errorf("order %v not found: %v", nonce, err)
 		}
 
 		// We'll index our account tallies by the serialized form of
@@ -98,7 +98,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 			acctKeyRaw [33]byte
 		)
 		if acctKey == nil {
-			return fmt.Errorf("account for order %x invalid", nonce)
+			return fmt.Errorf("account for order %v invalid", nonce)
 		}
 		copy(acctKeyRaw[:], acctKey.SerializeCompressed())
 
@@ -130,7 +130,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 			)
 			if err != nil {
 				return newMismatchErr(
-					err, "error matching against order %x",
+					err, "error matching against order %v",
 					theirOrder.Order.Nonce(),
 				)
 			}
@@ -144,7 +144,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 			if err != nil {
 				return newMismatchErr(
 					err, "error finding channel output "+
-						"for matched order %x",
+						"for matched order %v",
 					theirOrder.Order.Nonce(),
 				)
 			}
@@ -160,7 +160,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 		if unitsFilled > ourOrder.Details().UnitsUnfulfilled {
 			return &MismatchErr{
 				msg: fmt.Sprintf("invalid units to be filled "+
-					"for order %x. currently unfulfilled "+
+					"for order %v. currently unfulfilled "+
 					"%d, matched with %d in total",
 					ourOrder.Nonce(),
 					ourOrder.Details().UnitsUnfulfilled,
@@ -233,7 +233,7 @@ func (v *batchVerifier) validateMatchedOrder(tally *AccountTally,
 
 	// Order type must be opposite.
 	if otherOrder.Order.Type() == ourOrder.Type() {
-		return fmt.Errorf("order %x matched same type "+
+		return fmt.Errorf("order %v matched same type "+
 			"orders", ourOrder.Nonce())
 	}
 
@@ -327,7 +327,7 @@ func (v *batchVerifier) validateChannelOutput(batchTx *wire.MsgTx,
 	}
 
 	return fmt.Errorf("no channel output found in batch tx for matched "+
-		"order %x", otherOrder.Order.Nonce())
+		"order %v", otherOrder.Order.Nonce())
 }
 
 // A compile-time constraint to ensure batchVerifier implements BatchVerifier.
