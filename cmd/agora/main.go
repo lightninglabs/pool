@@ -31,6 +31,7 @@ func printJSON(resp interface{}) {
 func printRespJSON(resp proto.Message) { // nolint
 	jsonMarshaler := &jsonpb.Marshaler{
 		EmitDefaults: true,
+		OrigName:     true,
 		Indent:       "\t", // Matches indentation of printJSON.
 	}
 
