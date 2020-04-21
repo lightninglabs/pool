@@ -83,7 +83,10 @@ func (s *batchSigner) Sign(batch *Batch) (BatchSignature, error) {
 		if err != nil {
 			return nil, err
 		}
-		ourSigs[acctKey] = sigs
+		ourSigs[acctKey], err = btcec.ParseDERSignature(sigs[0], btcec.S256())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return ourSigs, nil

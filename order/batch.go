@@ -187,9 +187,9 @@ type MatchedOrder struct {
 }
 
 // BatchSignature is a map type that is keyed by a trader's account key and
-// contains the witness stack (slice of slice of bytes) for the input that
+// contains the multi-sig signature for the input that
 // spends from the current account in a batch.
-type BatchSignature map[[33]byte][][]byte
+type BatchSignature map[[33]byte]*btcec.Signature
 
 // BatchVerifier is an interface that can verify a batch from the point of view
 // of the trader.

@@ -229,19 +229,12 @@ message OrderMatchSign {
     bytes batch_id = 1;
 
     /**
-    A map with the witnesses to spend the accounts being spent in a batch
-    transaction. The map key corresponds to the user's sub key of the account in
-    the batch transaction. The account key/ID has to be hex encoded into a
+    A map with the signatures to spend the accounts being spent in a batch
+    transaction. The map key corresponds to the user's sub key of the account
+    in the batch transaction. The account key/ID has to be hex encoded into a
     string because protobuf doesn't allow bytes as a map key data type.
     */
-    map<string, AccountWitness> account_witness = 2;
-}
-
-message AccountWitness {
-    /**
-    The full witness stack that is needed to spend an account input.
-    */
-    repeated bytes witness = 1;
+    map<string, bytes> account_sigs = 2;
 }
 
 message ServerAuctionMessage {
@@ -263,16 +256,23 @@ message ServerAuctionMessage {
         OrderMatchPrepare prepare = 2;
 
         /**
+        This message is sent after all traders send back an OrderMatchAccept
+        method. It signals that the traders should execute their local funding
+        protocol, then send signatures for their accout inputs.
+        */
+        OrderMatchSignBegin sign = 3;
+
+        /**
         All traders have accepted and signed the batch and the final transaction
         was broadcast.
         */
-        OrderMatchFinalize finalize = 3;
+        OrderMatchFinalize finalize = 4;
 
         /**
         The server is shutting down for maintenance. Traders should close the
         long-lived stream/connection and try to connect again after some time.
         */
-        ServerShutdown shutdown = 4;
+        ServerShutdown shutdown = 5;
     }
 }
 
@@ -344,6 +344,13 @@ message OrderMatchPrepare {
     informed that a software update is required.
     */
     uint32 batch_version = 9;
+}
+
+message OrderMatchSignBegin {
+    /**
+    The 32 byte unique identifier of this batch.
+    */
+    bytes batch_id = 1;
 }
 
 message OrderMatchFinalize {

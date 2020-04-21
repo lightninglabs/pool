@@ -665,18 +665,16 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch,
 
 	// Prepare the list of witness stack messages and send them to the
 	// server.
-	rpcSigs := make(map[string]*clmrpc.AccountWitness)
-	for acctKey, witness := range sigs {
+	rpcSigs := make(map[string][]byte)
+	for acctKey, sig := range sigs {
 		key := hex.EncodeToString(acctKey[:])
-		rpcSigs[key] = &clmrpc.AccountWitness{
-			Witness: witness,
-		}
+		rpcSigs[key] = sig.Serialize()
 	}
 	return s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
 		Msg: &clmrpc.ClientAuctionMessage_Sign{
 			Sign: &clmrpc.OrderMatchSign{
-				BatchId:        batch.ID[:],
-				AccountWitness: rpcSigs,
+				BatchId:     batch.ID[:],
+				AccountSigs: rpcSigs,
 			},
 		},
 	})
