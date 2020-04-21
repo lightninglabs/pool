@@ -34,6 +34,13 @@ const (
 // execution transaction.
 type BatchID [33]byte
 
+// NewBatchID returns a new batch ID for the given public key.
+func NewBatchID(pub *btcec.PublicKey) BatchID {
+	var b BatchID
+	copy(b[:], pub.SerializeCompressed())
+	return b
+}
+
 // AccountDiff represents a matching+clearing event for a trader's account.
 // This diff shows the total balance delta along with a breakdown for each item
 // for a trader's account.
