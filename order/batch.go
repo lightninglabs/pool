@@ -210,7 +210,11 @@ type BatchSigner interface {
 // BatchStorer is an interface that can store a batch to the local database by
 // applying all the diffs to the orders and accounts.
 type BatchStorer interface {
-	// Store makes sure all changes executed by a batch are correctly and
-	// atomically stored to the database.
-	Store(*Batch) error
+	// StorePendingBatch makes sure all changes executed by a pending batch
+	// are correctly and atomically stored to the database.
+	StorePendingBatch(*Batch) error
+
+	// MarkBatchComplete marks a pending batch as complete, allowing a
+	// trader to participate in a new batch.
+	MarkBatchComplete(BatchID) error
 }

@@ -216,7 +216,7 @@ func (m *Manager) validateOrder(order Order, acct *account.Account) error {
 	return nil
 }
 
-// OrderMatchValidate...
+// OrderMatchValidate verifies an incoming batch is sane before accepting it.
 func (m *Manager) OrderMatchValidate(batch *Batch) error {
 	// Make sure we have no objection to the current batch. Then store
 	// it in case it ends up being the final version.
@@ -230,12 +230,25 @@ func (m *Manager) OrderMatchValidate(batch *Batch) error {
 	return nil
 }
 
-// BatchSign...
+// BatchSign returns the witness stack of all account inputs in a batch that
+// belong to the trader. Before sending off the signature to the auctioneer,
+// we'll also persist the batch to disk as pending to ensure we can recover
+// after a crash.
 func (m *Manager) BatchSign() (BatchSignature, error) {
-	return m.batchSigner.Sign(m.pendingBatch)
+	sig, err := m.batchSigner.Sign(m.pendingBatch)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := m.batchStorer.StorePendingBatch(m.pendingBatch); err != nil {
+		return nil, fmt.Errorf("unable to store batch: %v", err)
+	}
+
+	return sig, nil
 }
 
-// BatchFinalize...
+// BatchFinalize marks a batch as complete upon receiving the finalize message
+// from the auctioneer.
 func (m *Manager) BatchFinalize(batchID BatchID) error {
 	// Only accept the last batch we verified to make sure we didn't miss
 	// a message somewhere in the process.
@@ -246,9 +259,8 @@ func (m *Manager) BatchFinalize(batchID BatchID) error {
 
 	// Create a diff and then persist that. Finally signal that we are ready
 	// for the next batch by removing the current pending batch.
-	err := m.batchStorer.Store(m.pendingBatch)
-	if err != nil {
-		return fmt.Errorf("error storing batch: %v", err)
+	if err := m.batchStorer.MarkBatchComplete(batchID); err != nil {
+		return fmt.Errorf("unable to mark batch as complete: %v", err)
 	}
 	m.pendingBatch = nil
 

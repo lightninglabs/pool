@@ -21,7 +21,7 @@ type batchStorer struct {
 // fully validated and that all diffs contained are consistent!
 //
 // NOTE: This method is part of the BatchStorer interface.
-func (s *batchStorer) Store(batch *Batch) error {
+func (s *batchStorer) StorePendingBatch(batch *Batch) error {
 	// Prepare the order modifications first.
 	orders := make([]Nonce, len(batch.MatchedOrders))
 	orderModifiers := make([][]Modifier, len(orders))
@@ -115,6 +115,12 @@ func (s *batchStorer) Store(batch *Batch) error {
 	return s.orderStore.StorePendingBatch(
 		batch.ID, orders, orderModifiers, accounts, accountModifiers,
 	)
+}
+
+// MarkBatchComplete marks a pending batch as complete, allowing a trader to
+// participate in a new batch.
+func (s *batchStorer) MarkBatchComplete(id BatchID) error {
+	return s.orderStore.MarkBatchComplete(id)
 }
 
 // A compile-time constraint to ensure batchStorer implements BatchStorer.

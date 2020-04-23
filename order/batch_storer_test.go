@@ -120,7 +120,7 @@ func TestBatchStorer(t *testing.T) {
 	}
 
 	// Pass the assembled batch to the storer now.
-	err := storer.Store(batch)
+	err := storer.StorePendingBatch(batch)
 	if err != nil {
 		t.Fatalf("error storing batch: %v", err)
 	}
