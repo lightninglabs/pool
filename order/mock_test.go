@@ -9,8 +9,9 @@ import (
 )
 
 type mockStore struct {
-	orders   map[Nonce]Order
-	accounts map[*btcec.PublicKey]*account.Account
+	orders         map[Nonce]Order
+	accounts       map[*btcec.PublicKey]*account.Account
+	pendingBatchID *BatchID
 }
 
 func newMockStore() *mockStore {
@@ -88,10 +89,10 @@ func (s *mockStore) DelOrder(nonce Nonce) error {
 	return nil
 }
 
-// PersistBatchResult atomically updates all modified orders/accounts.
-// If any single operation fails, the whole set of changes is rolled
-// back.
-func (s *mockStore) PersistBatchResult(orders []Nonce,
+// StorePendingBatch atomically updates all modified orders/accounts as a result
+// of a pending batch. If any single operation fails, the whole set of changes
+// is rolled back.
+func (s *mockStore) StorePendingBatch(id BatchID, orders []Nonce,
 	orderModifiers [][]Modifier, accts []*account.Account,
 	acctModifiers [][]account.Modifier) error {
 
@@ -100,7 +101,36 @@ func (s *mockStore) PersistBatchResult(orders []Nonce,
 		return err
 	}
 
-	return s.updateAccounts(accts, acctModifiers)
+	if err := s.updateAccounts(accts, acctModifiers); err != nil {
+		return err
+	}
+
+	s.pendingBatchID = &id
+	return nil
+}
+
+// PendingBatchID retrieves the ID of the currently pending batch. If there
+// isn't one, ErrNoPendingBatch is returned.
+func (s *mockStore) PendingBatchID() (BatchID, error) {
+	if s.pendingBatchID == nil {
+		return BatchID{}, ErrNoPendingBatch
+	}
+	return *s.pendingBatchID, nil
+}
+
+// MarkBatchComplete marks a pending batch as complete, allowing a trader to
+// participate in a new batch. If there isn't one, ErrNoPendingBatch is
+// returned.
+func (s *mockStore) MarkBatchComplete(id BatchID) error {
+	if s.pendingBatchID == nil {
+		return ErrNoPendingBatch
+	}
+	if id != *s.pendingBatchID {
+		return fmt.Errorf("expected pending batch id %x, got %x",
+			s.pendingBatchID[:], id[:])
+	}
+
+	return nil
 }
 
 func (s *mockStore) getAccount(acctKey *btcec.PublicKey) (

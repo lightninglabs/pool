@@ -112,8 +112,8 @@ func (s *batchStorer) Store(batch *Batch) error {
 	}
 
 	// Everything is ready to be persisted now.
-	return s.orderStore.PersistBatchResult(
-		orders, orderModifiers, accounts, accountModifiers,
+	return s.orderStore.StorePendingBatch(
+		batch.ID, orders, orderModifiers, accounts, accountModifiers,
 	)
 }
 

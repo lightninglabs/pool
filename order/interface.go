@@ -18,6 +18,12 @@ import (
 	"github.com/lightningnetwork/lnd/lnwire"
 )
 
+var (
+	// ErrNoPendingBatch is an error returned when we attempt to retrieve
+	// the ID of a pending batch, but one does not exist.
+	ErrNoPendingBatch = errors.New("no pending batch found")
+)
+
 // Nonce is a 32 byte pseudo randomly generated unique order ID.
 type Nonce [32]byte
 
@@ -375,12 +381,20 @@ type Store interface {
 	// DelOrder removes the order with the given nonce from the local store.
 	DelOrder(Nonce) error
 
-	// PersistBatchResult atomically updates all modified orders/accounts.
-	// If any single operation fails, the whole set of changes is rolled
-	// back.
-	PersistBatchResult(orders []Nonce, orderModifiers [][]Modifier,
-		accounts []*account.Account,
+	// StorePendingBatch atomically updates all modified orders/accounts as
+	// a result of a pending batch. If any single operation fails, the whole
+	// set of changes is rolled back.
+	StorePendingBatch(_ BatchID, orders []Nonce,
+		orderModifiers [][]Modifier, accounts []*account.Account,
 		accountModifiers [][]account.Modifier) error
+
+	// PendingBatchID retrieves the ID of the currently pending batch. If
+	// there isn't one, ErrNoPendingBatch is returned.
+	PendingBatchID() (BatchID, error)
+
+	// MarkBatchComplete marks a pending batch as complete, allowing a
+	// trader to participate in a new batch.
+	MarkBatchComplete(BatchID) error
 }
 
 // UserError is an error type that is returned if an action fails because of

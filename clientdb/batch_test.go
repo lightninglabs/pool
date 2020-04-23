@@ -2,6 +2,7 @@ package clientdb
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/btcsuite/btcutil"
@@ -13,6 +14,8 @@ import (
 // TestPersistBatchResult tests that a batch result can be persisted correctly.
 func TestPersistBatchResult(t *testing.T) {
 	t.Parallel()
+
+	batchID := order.BatchID{0x01, 0x02, 0x03}
 
 	testCases := []struct {
 		name        string
@@ -26,8 +29,9 @@ func TestPersistBatchResult(t *testing.T) {
 			runTest: func(db *DB, a *order.Ask, _ *order.Bid,
 				_ *account.Account) error {
 
-				return db.PersistBatchResult(
-					[]order.Nonce{a.Nonce()}, nil, nil, nil,
+				return db.StorePendingBatch(
+					batchID, []order.Nonce{a.Nonce()}, nil,
+					nil, nil,
 				)
 			},
 		},
@@ -37,8 +41,9 @@ func TestPersistBatchResult(t *testing.T) {
 			runTest: func(db *DB, a *order.Ask, _ *order.Bid,
 				acct *account.Account) error {
 
-				return db.PersistBatchResult(
-					nil, nil, []*account.Account{acct}, nil,
+				return db.StorePendingBatch(
+					batchID, nil, nil,
+					[]*account.Account{acct}, nil,
 				)
 			},
 		},
@@ -51,9 +56,9 @@ func TestPersistBatchResult(t *testing.T) {
 				modifiers := [][]order.Modifier{{
 					order.StateModifier(order.StateExecuted),
 				}}
-				return db.PersistBatchResult(
-					[]order.Nonce{{0, 1, 2}}, modifiers,
-					nil, nil,
+				return db.StorePendingBatch(
+					batchID, []order.Nonce{{0, 1, 2}},
+					modifiers, nil, nil,
 				)
 			},
 		},
@@ -69,10 +74,47 @@ func TestPersistBatchResult(t *testing.T) {
 				modifiers := [][]account.Modifier{{
 					account.StateModifier(account.StateClosed),
 				}}
-				return db.PersistBatchResult(
-					nil, nil, []*account.Account{acct},
-					modifiers,
+				return db.StorePendingBatch(
+					batchID, nil, nil,
+					[]*account.Account{acct}, modifiers,
 				)
+			},
+		},
+		{
+			name:        "no pending batch",
+			expectedErr: order.ErrNoPendingBatch.Error(),
+			runTest: func(db *DB, a *order.Ask, b *order.Bid,
+				acct *account.Account) error {
+
+				_, err := db.PendingBatchID()
+				return err
+			},
+		},
+		{
+			name:        "mark batch complete without pending",
+			expectedErr: order.ErrNoPendingBatch.Error(),
+			runTest: func(db *DB, a *order.Ask, b *order.Bid,
+				acct *account.Account) error {
+
+				return db.MarkBatchComplete(batchID)
+			},
+		},
+		{
+			name:        "mark batch complete mismatch",
+			expectedErr: "batch id mismatch",
+			runTest: func(db *DB, a *order.Ask, b *order.Bid,
+				acct *account.Account) error {
+
+				err := db.StorePendingBatch(
+					batchID, nil, nil, nil, nil,
+				)
+				if err != nil {
+					return err
+				}
+
+				wrongBatchID := batchID
+				wrongBatchID[0] ^= 1
+				return db.MarkBatchComplete(wrongBatchID)
 			},
 		},
 		{
@@ -93,8 +135,8 @@ func TestPersistBatchResult(t *testing.T) {
 						account.StatePendingOpen,
 					),
 				}}
-				err := db.PersistBatchResult(
-					orders, orderModifiers,
+				err := db.StorePendingBatch(
+					batchID, orders, orderModifiers,
 					accounts, acctModifiers,
 				)
 				if err != nil {
@@ -134,7 +176,18 @@ func TestPersistBatchResult(t *testing.T) {
 						a2.State,
 						account.StatePendingOpen)
 				}
-				return nil
+
+				dbBatchID, err := db.PendingBatchID()
+				if err != nil {
+					return err
+				}
+				if dbBatchID != batchID {
+					return fmt.Errorf("expected pending "+
+						"batch id %x, got %x", batchID,
+						dbBatchID)
+				}
+
+				return db.MarkBatchComplete(batchID)
 			},
 		},
 	}
@@ -189,7 +242,7 @@ func TestPersistBatchResult(t *testing.T) {
 			// Run the test case and verify the result.
 			err = tc.runTest(store, ask, bid, acct)
 			if (err == nil && tc.expectedErr != "") ||
-				(err != nil && err.Error() != tc.expectedErr) {
+				(err != nil && !strings.Contains(err.Error(), tc.expectedErr)) {
 
 				t.Fatalf("unexpected error '%s', expected '%s'",
 					err.Error(), tc.expectedErr)
