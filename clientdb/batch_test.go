@@ -11,13 +11,10 @@ import (
 	"github.com/lightninglabs/agora/client/order"
 )
 
-// TestPersistBatchResult tests that a batch result can be persisted correctly.
-func TestPersistBatchResult(t *testing.T) {
-	t.Parallel()
+var (
+	testBatchID = order.BatchID{0x01, 0x02, 0x03}
 
-	batchID := order.BatchID{0x01, 0x02, 0x03}
-
-	testCases := []struct {
+	testCases = []struct {
 		name        string
 		expectedErr string
 		runTest     func(db *DB, a *order.Ask, b *order.Bid,
@@ -30,7 +27,7 @@ func TestPersistBatchResult(t *testing.T) {
 				_ *account.Account) error {
 
 				return db.StorePendingBatch(
-					batchID, []order.Nonce{a.Nonce()}, nil,
+					testBatchID, []order.Nonce{a.Nonce()}, nil,
 					nil, nil,
 				)
 			},
@@ -42,7 +39,7 @@ func TestPersistBatchResult(t *testing.T) {
 				acct *account.Account) error {
 
 				return db.StorePendingBatch(
-					batchID, nil, nil,
+					testBatchID, nil, nil,
 					[]*account.Account{acct}, nil,
 				)
 			},
@@ -57,7 +54,7 @@ func TestPersistBatchResult(t *testing.T) {
 					order.StateModifier(order.StateExecuted),
 				}}
 				return db.StorePendingBatch(
-					batchID, []order.Nonce{{0, 1, 2}},
+					testBatchID, []order.Nonce{{0, 1, 2}},
 					modifiers, nil, nil,
 				)
 			},
@@ -75,7 +72,7 @@ func TestPersistBatchResult(t *testing.T) {
 					account.StateModifier(account.StateClosed),
 				}}
 				return db.StorePendingBatch(
-					batchID, nil, nil,
+					testBatchID, nil, nil,
 					[]*account.Account{acct}, modifiers,
 				)
 			},
@@ -96,7 +93,7 @@ func TestPersistBatchResult(t *testing.T) {
 			runTest: func(db *DB, a *order.Ask, b *order.Bid,
 				acct *account.Account) error {
 
-				return db.MarkBatchComplete(batchID)
+				return db.MarkBatchComplete(testBatchID)
 			},
 		},
 		{
@@ -106,13 +103,13 @@ func TestPersistBatchResult(t *testing.T) {
 				acct *account.Account) error {
 
 				err := db.StorePendingBatch(
-					batchID, nil, nil, nil, nil,
+					testBatchID, nil, nil, nil, nil,
 				)
 				if err != nil {
 					return err
 				}
 
-				wrongBatchID := batchID
+				wrongBatchID := testBatchID
 				wrongBatchID[0] ^= 1
 				return db.MarkBatchComplete(wrongBatchID)
 			},
@@ -136,7 +133,7 @@ func TestPersistBatchResult(t *testing.T) {
 					),
 				}}
 				err := db.StorePendingBatch(
-					batchID, orders, orderModifiers,
+					testBatchID, orders, orderModifiers,
 					accounts, acctModifiers,
 				)
 				if err != nil {
@@ -181,16 +178,21 @@ func TestPersistBatchResult(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if dbBatchID != batchID {
+				if dbBatchID != testBatchID {
 					return fmt.Errorf("expected pending "+
-						"batch id %x, got %x", batchID,
-						dbBatchID)
+						"batch id %x, got %x",
+						testBatchID, dbBatchID)
 				}
 
-				return db.MarkBatchComplete(batchID)
+				return db.MarkBatchComplete(testBatchID)
 			},
 		},
 	}
+)
+
+// TestPersistBatchResult tests that a batch result can be persisted correctly.
+func TestPersistBatchResult(t *testing.T) {
+	t.Parallel()
 
 	for _, tc := range testCases {
 		tc := tc
