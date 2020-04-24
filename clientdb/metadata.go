@@ -60,6 +60,23 @@ func getBucket(tx *bbolt.Tx, key []byte) (*bbolt.Bucket, error) {
 	return bucket, nil
 }
 
+// getNestedBucket retrieves the nested bucket with the given key found within
+// the given bucket. If the bucket does not exist and `create` is true, then the
+// bucket is created.
+func getNestedBucket(bucket *bbolt.Bucket, key []byte,
+	create bool) (*bbolt.Bucket, error) {
+
+	nestedBucket := bucket.Bucket(key)
+	if nestedBucket == nil && create {
+		return bucket.CreateBucketIfNotExists(key)
+	}
+	if nestedBucket == nil {
+		return nil, fmt.Errorf("nested bucket \"%v\" does not exist",
+			string(key))
+	}
+	return nestedBucket, nil
+}
+
 // syncVersions function is used for safe db version synchronization. It
 // applies migration functions to the current database and recovers the
 // previous state of db if at least one error/panic appeared during migration.

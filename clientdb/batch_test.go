@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmscript"
@@ -121,7 +122,8 @@ var (
 				acct *account.Account) error {
 
 				// Store some changes to the orders and account.
-				orders := []order.Nonce{a.Nonce(), b.Nonce()}
+				orders := []order.Order{a, b}
+				orderNonces := []order.Nonce{a.Nonce(), b.Nonce()}
 				orderModifiers := [][]order.Modifier{
 					{order.UnitsFulfilledModifier(42)},
 					{order.UnitsFulfilledModifier(21)},
@@ -133,47 +135,15 @@ var (
 					),
 				}}
 				err := db.StorePendingBatch(
-					testBatchID, orders, orderModifiers,
+					testBatchID, orderNonces, orderModifiers,
 					accounts, acctModifiers,
 				)
 				if err != nil {
 					return err
 				}
 
-				// Verify get the right result.
-				o1, err := db.GetOrder(a.Nonce())
-				if err != nil {
-					return err
-				}
-				if o1.Details().UnitsUnfulfilled != 42 {
-					return fmt.Errorf("unexpected number "+
-						"of unfulfilled units, got %d "+
-						"wanted %d",
-						o1.Details().UnitsUnfulfilled,
-						42)
-				}
-				o2, err := db.GetOrder(b.Nonce())
-				if err != nil {
-					return err
-				}
-				if o2.Details().UnitsUnfulfilled != 21 {
-					return fmt.Errorf("unexpected number "+
-						"of unfulfilled units, got %d "+
-						"wanted %d",
-						o2.Details().UnitsUnfulfilled,
-						21)
-				}
-				a2, err := db.Account(acct.TraderKey.PubKey)
-				if err != nil {
-					return err
-				}
-				if a2.State != account.StatePendingOpen {
-					return fmt.Errorf("unexpected state "+
-						"of account, got %d wanted %d",
-						a2.State,
-						account.StatePendingOpen)
-				}
-
+				// The pending batch ID should reflect
+				// correctly.
 				dbBatchID, err := db.PendingBatchID()
 				if err != nil {
 					return err
@@ -184,11 +154,135 @@ var (
 						testBatchID, dbBatchID)
 				}
 
-				return db.MarkBatchComplete(testBatchID)
+				// Verify the updates have not been applied to
+				// disk yet.
+				err = checkUpdate(
+					db, a.Nonce(), b.Nonce(),
+					a.Details().UnitsUnfulfilled,
+					b.Details().UnitsUnfulfilled,
+					acct.TraderKey.PubKey, acct.State,
+				)
+				if err != nil {
+					return err
+				}
+
+				// Mark the batch as complete.
+				err = db.MarkBatchComplete(testBatchID)
+				if err != nil {
+					return err
+				}
+
+				// Verify the updates have been applied to disk
+				// properly.
+				for i, a := range accounts {
+					for _, modifier := range acctModifiers[i] {
+						modifier(a)
+					}
+				}
+				for i, o := range orders {
+					for _, modifier := range orderModifiers[i] {
+						modifier(o.Details())
+					}
+				}
+				return checkUpdate(
+					db, a.Nonce(), b.Nonce(),
+					a.Details().UnitsUnfulfilled,
+					b.Details().UnitsUnfulfilled,
+					acct.TraderKey.PubKey, acct.State,
+				)
+			},
+		},
+		{
+			name:        "overwrite pending batch",
+			expectedErr: "",
+			runTest: func(db *DB, a *order.Ask, b *order.Bid,
+				acct *account.Account) error {
+
+				// First, we'll store a version of the batch
+				// that updates all order and accounts.
+				orderModifier := order.UnitsFulfilledModifier(42)
+				err := db.StorePendingBatch(
+					testBatchID,
+					[]order.Nonce{a.Nonce(), b.Nonce()},
+					[][]order.Modifier{
+						{orderModifier}, {orderModifier},
+					},
+					[]*account.Account{acct},
+					[][]account.Modifier{{account.StateModifier(
+						account.StatePendingUpdate,
+					)}},
+				)
+				if err != nil {
+					return err
+				}
+
+				// Then, we'll assume the batch was overwritten,
+				// and now only the ask order is part of it.
+				err = db.StorePendingBatch(
+					testBatchID,
+					[]order.Nonce{a.Nonce()},
+					[][]order.Modifier{{orderModifier}},
+					nil, nil,
+				)
+				if err != nil {
+					return err
+				}
+
+				// Mark the batch as complete. We should only
+				// see the update for our ask order applied, but
+				// not the rest.
+				err = db.MarkBatchComplete(testBatchID)
+				if err != nil {
+					return err
+				}
+
+				return checkUpdate(
+					db, a.Nonce(), b.Nonce(), 42,
+					b.UnitsUnfulfilled,
+					acct.TraderKey.PubKey, acct.State,
+				)
 			},
 		},
 	}
 )
+
+// checkUpdate is a helper closure we'll use to check whether the account and
+// order updates of a batch have been applied.
+func checkUpdate(db *DB, askNonce, bidNonce order.Nonce,
+	askUnitsUnfulfilled, bidUnitsUnfulfilled order.SupplyUnit,
+	accountKey *btcec.PublicKey, accountState account.State) error {
+
+	o1, err := db.GetOrder(askNonce)
+	if err != nil {
+		return err
+	}
+	if o1.Details().UnitsUnfulfilled != askUnitsUnfulfilled {
+		return fmt.Errorf("unexpected number of unfulfilled "+
+			"units, got %d wanted %d",
+			o1.Details().UnitsUnfulfilled, askUnitsUnfulfilled)
+	}
+
+	o2, err := db.GetOrder(bidNonce)
+	if err != nil {
+		return err
+	}
+	if o2.Details().UnitsUnfulfilled != bidUnitsUnfulfilled {
+		return fmt.Errorf("unexpected number of unfulfilled "+
+			"units, got %d "+"wanted %d",
+			o2.Details().UnitsUnfulfilled, bidUnitsUnfulfilled)
+	}
+
+	a2, err := db.Account(accountKey)
+	if err != nil {
+		return err
+	}
+	if a2.State != accountState {
+		return fmt.Errorf("unexpected state of account, got "+
+			"%v wanted %v", a2.State, accountState)
+	}
+
+	return nil
+}
 
 // TestPersistBatchResult tests that a batch result can be persisted correctly.
 func TestPersistBatchResult(t *testing.T) {
@@ -243,12 +337,19 @@ func TestPersistBatchResult(t *testing.T) {
 
 			// Run the test case and verify the result.
 			err = tc.runTest(store, ask, bid, acct)
-			if (err == nil && tc.expectedErr != "") ||
-				(err != nil && !strings.Contains(err.Error(), tc.expectedErr)) {
-
-				t.Fatalf("unexpected error '%s', expected '%s'",
-					err.Error(), tc.expectedErr)
+			switch {
+			case err == nil && tc.expectedErr != "":
+			case err != nil && tc.expectedErr != "":
+				if strings.Contains(err.Error(), tc.expectedErr) {
+					return
+				}
+			case err != nil && tc.expectedErr == "":
+			default:
+				return
 			}
+
+			t.Fatalf("unexpected error '%s', expected '%s'",
+				err.Error(), tc.expectedErr)
 		})
 	}
 }
