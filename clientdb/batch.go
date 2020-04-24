@@ -53,8 +53,16 @@ func (db *DB) StorePendingBatch(batchID order.BatchID, orders []order.Nonce,
 		}
 
 		// Then update the accounts.
+		accountsBucket, err := getBucket(tx, accountBucketKey)
+		if err != nil {
+			return err
+		}
 		for idx, acct := range accounts {
-			err := updateAccountTX(tx, acct, accountModifiers[idx])
+			accountKey := getAccountKey(acct)
+			err := updateAccount(
+				accountsBucket, accountsBucket, accountKey,
+				accountModifiers[idx],
+			)
 			if err != nil {
 				return err
 			}

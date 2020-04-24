@@ -49,7 +49,12 @@ func (db *DB) UpdateAccount(acct *account.Account,
 	modifiers ...account.Modifier) error {
 
 	err := db.Update(func(tx *bbolt.Tx) error {
-		return updateAccountTX(tx, acct, modifiers)
+		accounts, err := getBucket(tx, accountBucketKey)
+		if err != nil {
+			return err
+		}
+		accountKey := getAccountKey(acct)
+		return updateAccount(accounts, accounts, accountKey, modifiers)
 	})
 	if err != nil {
 		return err
@@ -62,21 +67,16 @@ func (db *DB) UpdateAccount(acct *account.Account,
 	return nil
 }
 
-// updateAccountTX reads an account, applies the given modifiers to it and then
-// stores it back again, all in the given database transaction. The transaction
-// must be an update transaction, otherwise this call will fail.
-func updateAccountTX(tx *bbolt.Tx, acct *account.Account,
+// updateAccount reads an account from the src bucket, applies the given
+// modifiers to it, and store it back into dst bucket.
+func updateAccount(src, dst *bbolt.Bucket, accountKey []byte,
 	modifiers []account.Modifier) error {
 
-	accountKey := getAccountKey(acct)
-	accounts, err := getBucket(tx, accountBucketKey)
-	if err != nil {
-		return err
-	}
-	accountBytes := accounts.Get(accountKey)
+	accountBytes := src.Get(accountKey)
 	if accountBytes == nil {
 		return ErrAccountNotFound
 	}
+
 	dbAccount, err := deserializeAccount(
 		bytes.NewReader(accountBytes),
 	)
@@ -92,7 +92,8 @@ func updateAccountTX(tx *bbolt.Tx, acct *account.Account,
 	if err := serializeAccount(&accountBuf, dbAccount); err != nil {
 		return err
 	}
-	return accounts.Put(accountKey, accountBuf.Bytes())
+
+	return dst.Put(accountKey, accountBuf.Bytes())
 }
 
 // Account retrieves a specific account by trader key or returns
