@@ -42,7 +42,11 @@ type orderCallback func(nonce order.Nonce, rawOrder []byte) error
 // NOTE: This is part of the Store interface.
 func (db *DB) SubmitOrder(order order.Order) error {
 	return db.Update(func(tx *bbolt.Tx) error {
-		err := fetchOrderTX(tx, ordersBucketKey, order.Nonce(), nil)
+		rootBucket, err := getBucket(tx, ordersBucketKey)
+		if err != nil {
+			return err
+		}
+		err = fetchOrderTX(rootBucket, order.Nonce(), nil)
 		switch err {
 		// No error means there is an order with that nonce in the DB
 		// already.
@@ -65,9 +69,7 @@ func (db *DB) SubmitOrder(order order.Order) error {
 		if err != nil {
 			return err
 		}
-		return storeOrderTX(
-			tx, ordersBucketKey, order.Nonce(), w.Bytes(),
-		)
+		return storeOrderTX(rootBucket, order.Nonce(), w.Bytes())
 	})
 }
 
@@ -77,7 +79,11 @@ func (db *DB) SubmitOrder(order order.Order) error {
 // NOTE: This is part of the Store interface.
 func (db *DB) UpdateOrder(nonce order.Nonce, modifiers ...order.Modifier) error {
 	return db.Update(func(tx *bbolt.Tx) error {
-		return updateOrderTX(tx, ordersBucketKey, nonce, modifiers)
+		rootBucket, err := getBucket(tx, ordersBucketKey)
+		if err != nil {
+			return err
+		}
+		return updateOrder(rootBucket, rootBucket, nonce, modifiers)
 	})
 }
 
@@ -95,9 +101,13 @@ func (db *DB) UpdateOrders(nonces []order.Nonce,
 	// Read and update the orders in one single transaction that they are
 	// updated atomically.
 	return db.Update(func(tx *bbolt.Tx) error {
+		rootBucket, err := getBucket(tx, ordersBucketKey)
+		if err != nil {
+			return err
+		}
 		for idx, nonce := range nonces {
-			err := updateOrderTX(
-				tx, ordersBucketKey, nonce, modifiers[idx],
+			err := updateOrder(
+				rootBucket, rootBucket, nonce, modifiers[idx],
 			)
 			if err != nil {
 				return err
@@ -122,7 +132,11 @@ func (db *DB) GetOrder(nonce order.Nonce) (order.Order, error) {
 		}
 	)
 	err = db.View(func(tx *bbolt.Tx) error {
-		return fetchOrderTX(tx, ordersBucketKey, nonce, callback)
+		rootBucket, err := getBucket(tx, ordersBucketKey)
+		if err != nil {
+			return err
+		}
+		return fetchOrderTX(rootBucket, nonce, callback)
 	})
 	return o, err
 }
@@ -145,10 +159,9 @@ func (db *DB) GetOrders() ([]order.Order, error) {
 	)
 	err := db.View(func(tx *bbolt.Tx) error {
 		// First, we'll grab our main order bucket key.
-		rootBucket := tx.Bucket(ordersBucketKey)
-		if rootBucket == nil {
-			return fmt.Errorf("bucket %v does not exist",
-				ordersBucketKey)
+		rootBucket, err := getBucket(tx, ordersBucketKey)
+		if err != nil {
+			return err
 		}
 
 		// We'll now traverse the root bucket for all orders. The
@@ -163,9 +176,7 @@ func (db *DB) GetOrders() ([]order.Order, error) {
 			// caller.
 			var nonce order.Nonce
 			copy(nonce[:], nonceBytes)
-			return fetchOrderTX(
-				tx, ordersBucketKey, nonce, callback,
-			)
+			return fetchOrderTX(rootBucket, nonce, callback)
 		})
 	})
 	if err != nil {
@@ -197,21 +208,10 @@ func (db *DB) DelOrder(nonce order.Nonce) error {
 	})
 }
 
-// storeOrderTX saves a byte serialized order in its specific sub bucket. The
-// store operation is added to the given transaction, which must be an update
-// transaction to succeed. Depending on the type, the storage path is:
-// askBucket/bidBucket -> orderBucket[nonce] -> orderKey -> order
-func storeOrderTX(tx *bbolt.Tx, bucketKey []byte, nonce order.Nonce,
+// storeOrderTX saves a byte serialized order in its specific sub bucket within
+// the root orders bucket.
+func storeOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 	orderBytes []byte) error {
-
-	// First, we'll grab the root bucket that houses all of our
-	// main orders.
-	rootBucket, err := tx.CreateBucketIfNotExists(
-		bucketKey,
-	)
-	if err != nil {
-		return err
-	}
 
 	// From the root bucket, we'll make a new sub order bucket using
 	// the order nonce.
@@ -224,16 +224,10 @@ func storeOrderTX(tx *bbolt.Tx, bucketKey []byte, nonce order.Nonce,
 	return orderBucket.Put(orderKey, orderBytes)
 }
 
-// fetchOrderTX fetches the binary data of one order specified by its order type
-// bucket key and nonce in the given transaction.
-func fetchOrderTX(tx *bbolt.Tx, bucketKey []byte, nonce order.Nonce,
+// fetchOrderTX fetches the binary data of one order specified by its nonce from
+// the root orders bucket.
+func fetchOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 	callback orderCallback) error {
-
-	// First, we'll grab our main order bucket key.
-	rootBucket := tx.Bucket(bucketKey)
-	if rootBucket == nil {
-		return fmt.Errorf("bucket %v does not exist", bucketKey)
-	}
 
 	// Get the main order bucket next.
 	orderBucket := rootBucket.Bucket(nonce[:])
@@ -253,10 +247,9 @@ func fetchOrderTX(tx *bbolt.Tx, bucketKey []byte, nonce order.Nonce,
 	return callback(nonce, orderBytes)
 }
 
-// updateOrderTX fetches the binary data of one order specified by its order
-// type bucket key and nonce, applies the modifiers then stores it back, all in
-// the given transaction.
-func updateOrderTX(tx *bbolt.Tx, bucketKey []byte, nonce order.Nonce,
+// updateOrder fetches the binary data of one order specified by its nonce from
+// the src bucket, applies the modifiers, and stores it back into dst bucket.
+func updateOrder(src, dst *bbolt.Bucket, nonce order.Nonce,
 	modifiers []order.Modifier) error {
 
 	var (
@@ -269,7 +262,7 @@ func updateOrderTX(tx *bbolt.Tx, bucketKey []byte, nonce order.Nonce,
 		}
 	)
 	// Retrieve the order stored in the database.
-	err = fetchOrderTX(tx, bucketKey, nonce, callback)
+	err = fetchOrderTX(src, nonce, callback)
 	if err != nil {
 		return err
 	}
@@ -283,7 +276,8 @@ func updateOrderTX(tx *bbolt.Tx, bucketKey []byte, nonce order.Nonce,
 	if err != nil {
 		return err
 	}
-	return storeOrderTX(tx, ordersBucketKey, nonce, w.Bytes())
+
+	return storeOrderTX(dst, nonce, w.Bytes())
 }
 
 // SerializeOrder binary serializes an order to a writer using the common LN

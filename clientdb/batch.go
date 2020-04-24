@@ -38,9 +38,14 @@ func (db *DB) StorePendingBatch(batchID order.BatchID, orders []order.Nonce,
 	// Wrap the whole batch update in a single update transaction.
 	return db.Update(func(tx *bbolt.Tx) error {
 		// Update orders first.
+		ordersBucket, err := getBucket(tx, ordersBucketKey)
+		if err != nil {
+			return err
+		}
 		for idx, nonce := range orders {
-			err := updateOrderTX(
-				tx, ordersBucketKey, nonce, orderModifiers[idx],
+			err := updateOrder(
+				ordersBucket, ordersBucket, nonce,
+				orderModifiers[idx],
 			)
 			if err != nil {
 				return err
