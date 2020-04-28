@@ -426,3 +426,19 @@ type ServerOrderParams struct {
 	// trader's account key.
 	RawSig []byte
 }
+
+// PendingChanKey calculates the pending channel ID to be used for funding
+// purposes for a given bid and ask. The pending channel ID must be unique, so
+// we use the hash of the concatenation of the two nonces: sha256(askNonce ||
+// bidNonce).
+func PendingChanKey(askNonce, bidNonce Nonce) [32]byte {
+	var pid [32]byte
+
+	h := sha256.New()
+	_, _ = h.Write(askNonce[:])
+	_, _ = h.Write(bidNonce[:])
+
+	copy(pid[:], h.Sum(nil))
+
+	return pid
+}
