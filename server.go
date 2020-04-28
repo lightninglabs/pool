@@ -15,7 +15,6 @@ import (
 	"github.com/lightninglabs/agora/client/auctioneer"
 	"github.com/lightninglabs/agora/client/clientdb"
 	"github.com/lightninglabs/agora/client/clmrpc"
-	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightninglabs/kirin/auth"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightninglabs/loop/lsat"
@@ -288,14 +287,6 @@ func (s *Server) Stop() error {
 	if err != nil {
 		return fmt.Errorf("error shutting down server: %v", err)
 	}
-	return nil
-}
-
-// BatchChannelSetup...
-func (s *Server) BatchChannelSetup(batch *order.Batch) error {
-	// TODO:
-	//  - connect to peers of new channels
-	//  - register funding shim in lnd
 	return nil
 }
 

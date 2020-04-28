@@ -230,6 +230,11 @@ func (m *Manager) OrderMatchValidate(batch *Batch) error {
 	return nil
 }
 
+// PendingBatch returns the current pending batch being validated.
+func (m *Manager) PendingBatch() *Batch {
+	return m.pendingBatch
+}
+
 // BatchSign returns the witness stack of all account inputs in a batch that
 // belong to the trader. Before sending off the signature to the auctioneer,
 // we'll also persist the batch to disk as pending to ensure we can recover

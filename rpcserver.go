@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,6 +22,9 @@ import (
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightninglabs/loop/lndclient"
+	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lnrpc"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -41,6 +45,7 @@ type rpcServer struct {
 
 	server         *Server
 	lndServices    *lndclient.LndServices
+	lndClient      lnrpc.LightningClient
 	auctioneer     *auctioneer.Client
 	accountManager *account.Manager
 	orderManager   *order.Manager
@@ -242,6 +247,317 @@ func (s *rpcServer) updateHeight(height int32) {
 	atomic.StoreUint32(&s.bestHeight, uint32(height))
 }
 
+// connectToMatchedTrader attempts to connect to a trader that we've had an
+// order matched with. We'll attempt to establish a permanent connection as
+// well, so we can use the connection for any batch retries that may happen.
+//
+// TODO(roasbeef): if entire batch cancelled, then should remove these
+// connections
+func connectToMatchedTrader(lndClient lnrpc.LightningClient,
+	matchedOrder *order.MatchedOrder) error {
+
+	ctxb := context.Background()
+	nodeKey := hex.EncodeToString(matchedOrder.NodeKey[:])
+
+	for _, addr := range matchedOrder.NodeAddrs {
+		_, err := lndClient.ConnectPeer(ctxb, &lnrpc.ConnectPeerRequest{
+			Addr: &lnrpc.LightningAddress{
+				Pubkey: nodeKey,
+				Host:   addr.String(),
+			},
+			Perm: true,
+		})
+
+		if err != nil {
+			// If we're already connected, then we can stop now.
+			if strings.Contains(err.Error(), "already connected") {
+				return nil
+			}
+
+			log.Warnf("unable to connect to trader at %v@%v",
+				nodeKey, addr)
+
+			continue
+		}
+	}
+
+	// Since we specified perm, the error is async, and not fully
+	// communicated to the caller, so we return nil here. Later on, if we
+	// can't fund the channel, then we'll fail with a hard error.
+	return nil
+}
+
+// deriveFundingShim generates the proper funding shim that should be used by
+// the maker or taker to properly make a channel that stems off the main batch
+// funding transaction.
+func (s *rpcServer) deriveFundingShim(ourOrder order.Order,
+	matchedOrder *order.MatchedOrder,
+	batchTx *wire.MsgTx) (*lnrpc.FundingShim, error) {
+
+	// First, we'll compute the pending channel ID key which will be unique
+	// to this order pair.
+	var (
+		askNonce, bidNonce order.Nonce
+
+		thawHeight uint32
+	)
+	if ourOrder.Type() == order.TypeBid {
+		bidNonce = ourOrder.Nonce()
+		askNonce = matchedOrder.Order.Nonce()
+
+		thawHeight = ourOrder.(*order.Bid).MinDuration
+	} else {
+		bidNonce = matchedOrder.Order.Nonce()
+		askNonce = ourOrder.Nonce()
+
+		thawHeight = matchedOrder.Order.(*order.Bid).MinDuration
+	}
+
+	pendingChanID := order.PendingChanKey(
+		askNonce, bidNonce,
+	)
+	chanSize := matchedOrder.UnitsFilled.ToSatoshis()
+
+	// Next, we'll need to find the location of this channel output on the
+	// funding transaction, so we'll re-compute the funding script from
+	// scratch.
+	ctxb := context.Background()
+	ourKeyLocator := ourOrder.Details().MultiSigKeyLocator
+	ourMultiSigKey, err := s.lndServices.WalletKit.DeriveKey(
+		ctxb, &ourKeyLocator,
+	)
+	if err != nil {
+		return nil, err
+	}
+	_, fundingOutput, err := input.GenFundingPkScript(
+		ourMultiSigKey.PubKey.SerializeCompressed(),
+		matchedOrder.MultiSigKey[:], 0,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now that we have the funding script, we'll find the output index
+	// within the batch execution transaction. We ignore the first
+	// argument, as earlier during validation, we would've rejected the
+	// batch if it wasn't found.
+	batchTxID := batchTx.TxHash()
+	_, chanOutputIndex := input.FindScriptOutputIndex(
+		batchTx, fundingOutput.PkScript,
+	)
+	chanPoint := &lnrpc.ChannelPoint{
+		FundingTxid: &lnrpc.ChannelPoint_FundingTxidBytes{
+			FundingTxidBytes: batchTxID[:],
+		},
+		OutputIndex: chanOutputIndex,
+	}
+
+	// With all the components assembled, we'll now create the chan point
+	// shim, and register it so we use the proper funding key when we
+	// receive the marker's incoming funding request.
+	chanPointShim := &lnrpc.ChanPointShim{
+		Amt:       int64(chanSize),
+		ChanPoint: chanPoint,
+		LocalKey: &lnrpc.KeyDescriptor{
+			RawKeyBytes: ourMultiSigKey.PubKey.SerializeCompressed(),
+			KeyLoc: &lnrpc.KeyLocator{
+				KeyFamily: int32(ourKeyLocator.Family),
+				KeyIndex:  int32(ourKeyLocator.Index),
+			},
+		},
+		RemoteKey:     matchedOrder.MultiSigKey[:],
+		PendingChanId: pendingChanID[:],
+		ThawHeight:    thawHeight,
+	}
+
+	return &lnrpc.FundingShim{
+		Shim: &lnrpc.FundingShim_ChanPointShim{
+			ChanPointShim: chanPointShim,
+		},
+	}, nil
+}
+
+// registerFundingShim is used when we're on the taker (our bid was executed)
+// side of a new matched order. To prepare ourselves for their incoming funding
+// request, we'll register a shim with all the expected parameters.
+func (s *rpcServer) registerFundingShim(ourOrder order.Order,
+	matchedOrder *order.MatchedOrder, batchTx *wire.MsgTx) error {
+
+	ctxb := context.Background()
+
+	fundingShim, err := s.deriveFundingShim(ourOrder, matchedOrder, batchTx)
+	if err != nil {
+		return err
+	}
+	_, err = s.lndClient.FundingStateStep(
+		ctxb, &lnrpc.FundingTransitionMsg{
+			Trigger: &lnrpc.FundingTransitionMsg_ShimRegister{
+				ShimRegister: fundingShim,
+			},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("unable to register funding shim: %v", err)
+	}
+
+	return nil
+}
+
+// prepChannelFunding preps the backing node to either receive or initiate a
+// channel funding based on the items in the order batch.
+//
+// TODO(roasbeef): move?
+func (s *rpcServer) prepChannelFunding(batch *order.Batch) error {
+	// Now that we know this batch passes our sanity checks, we'll register
+	// all the funding shims we need to be able to respond
+	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
+		ourOrder, err := s.server.db.GetOrder(ourOrderNonce)
+		if err != nil {
+			return err
+		}
+
+		orderIsAsk := ourOrder.Type() == order.TypeAsk
+
+		// Depending on if this is a ask or not, we'll either just try
+		// to connect out, or register the full funding shim.
+		for _, matchedOrder := range matchedOrders {
+			// We only need to create a shim if we're the taker, so
+			// if we had an ask matched, then we can skip this
+			// step, as we'll be the ones creating the channel.
+			if orderIsAsk {
+				// However, if we're the one that needs to make
+				// the channel, then we'll kick off a
+				// persistent connection request here, so we
+				// know a connection should be established by
+				// the time we actually need to fund the
+				// channel.
+				//
+				// TODO(roasbeef): info leaks?
+				err := connectToMatchedTrader(
+					s.lndClient, matchedOrder,
+				)
+				if err != nil {
+					return err
+				}
+
+				continue
+			}
+
+			// At this point, one of our bids was matched with a
+			// series of asks, so we'll now register all the
+			// expected funding shims so we can execute the next
+			// phase w/o any issues.
+			err := s.registerFundingShim(
+				ourOrder, matchedOrder, batch.BatchTX,
+			)
+			if err != nil {
+				return fmt.Errorf("unable to register "+
+					"funding shim: %v", err)
+			}
+
+		}
+	}
+
+	return nil
+}
+
+// batchChannelSetup will attempt to establish new funding flows with all
+// matched takers (people buying our channels) in the passed batch. This method
+// will block until the channel is considered pending. Once this phase is
+// complete, and the batch execution transaction broadcast, the channel will be
+// finalized and locked in.
+func (s *rpcServer) batchChannelSetup(batch *order.Batch) error {
+	var eg errgroup.Group
+
+	// For each ask order of ours that's matched, we'll make a new funding
+	// flow, blocking until they all progress to the final state.
+	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
+		ourOrder, err := s.server.db.GetOrder(ourOrderNonce)
+		if err != nil {
+			return err
+		}
+
+		// If this is a bid order, then we don't need to do anything,
+		// as we should've already registered the funding shim during
+		// the prior phase.
+		orderIsBid := ourOrder.Type() == order.TypeBid
+		if orderIsBid {
+			continue
+		}
+
+		// Otherwise, we'll now initiate the funding request to
+		// establish all the channels generated by this order with the
+		// remote parties.
+		for _, matchedOrder := range matchedOrders {
+			// Before we make the funding request, we'll make sure
+			// that we're connected to the other party.
+			err := connectToMatchedTrader(
+				s.lndClient, matchedOrder,
+			)
+			if err != nil {
+				return fmt.Errorf("unable to connect to "+
+					"trader: %v", err)
+			}
+
+			fundingShim, err := s.deriveFundingShim(
+				ourOrder, matchedOrder, batch.BatchTX,
+			)
+			if err != nil {
+				return err
+			}
+
+			// Now that we know we're connected, we'll launch off
+			// the request to initiate channel funding with the
+			// remote peer.
+			//
+			// TODO(roasbeef): sat per byte from order?
+			//  * also other params to set as well
+			chanAmt := int64(matchedOrder.UnitsFilled.ToSatoshis())
+			fundingReq := &lnrpc.OpenChannelRequest{
+				NodePubkey:         matchedOrder.NodeKey[:],
+				LocalFundingAmount: chanAmt,
+				FundingShim:        fundingShim,
+			}
+			chanStream, err := s.lndClient.OpenChannel(
+				context.Background(),
+				fundingReq,
+			)
+			if err != nil {
+				return err
+			}
+
+			// We'll launch a new goroutine to wait until chan
+			// pending (funding flow finished) update has been
+			// sent.
+			eg.Go(func() error {
+				for {
+					select {
+
+					case <-s.quit:
+						return fmt.Errorf("server " +
+							"shutting down")
+					default:
+					}
+
+					msg, err := chanStream.Recv()
+					if err != nil {
+						log.Errorf("unable to read "+
+							"chan open update event: %v", err)
+						return err
+					}
+
+					_, ok := msg.Update.(*lnrpc.OpenStatusUpdate_ChanPending)
+					if ok {
+						return nil
+					}
+				}
+			})
+		}
+	}
+
+	return eg.Wait()
+}
+
 // handleServerMessage reads a gRPC message received in the stream from the
 // auctioneer server and passes it to the correct manager.
 func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) error {
@@ -264,6 +580,19 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 			return s.sendRejectBatch(batch, err)
 		}
 
+		// TODO(roasbeef): make sure able to connect out to peers
+		// before sending accept?
+		//  * also need to handle reject on the server-side
+
+		// Before we accept the batch, we'll finish preparations on our
+		// end which include connecting out to peers, and registering
+		// funding shim.
+		err = s.prepChannelFunding(batch)
+		if err != nil {
+			log.Errorf("Error preparing channel funding: %v", err)
+			return s.sendRejectBatch(batch, err)
+		}
+
 		// Accept the match now.
 		//
 		// TODO(guggero): Give user the option to bail out of any order
@@ -274,10 +603,12 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 			return s.sendRejectBatch(batch, err)
 		}
 
-		// We were able to accept the batch. Inform the auctioneer, then
-		// start negotiating with the remote peers. We'll sign once all
-		// channel partners have responded.
-		err = s.server.BatchChannelSetup(batch)
+	case *clmrpc.ServerAuctionMessage_Sign:
+		// We were able to accept the batch. Inform the auctioneer,
+		// then start negotiating with the remote peers. We'll sign
+		// once all channel partners have responded.
+		batch := s.orderManager.PendingBatch()
+		err := s.batchChannelSetup(batch)
 		if err != nil {
 			log.Errorf("Error setting up channels: %v", err)
 			return s.sendRejectBatch(batch, err)
