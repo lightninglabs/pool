@@ -20,6 +20,7 @@ import (
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightninglabs/loop/lsat"
 	"github.com/lightningnetwork/lnd/build"
+	"github.com/lightningnetwork/lnd/lnrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -39,6 +40,7 @@ type Server struct {
 	cfg          *Config
 	db           *clientdb.DB
 	lndServices  *lndclient.GrpcLndServices
+	lndClient    lnrpc.LightningClient
 	traderServer *rpcServer
 	grpcServer   *grpc.Server
 	restProxy    *http.Server
@@ -155,10 +157,23 @@ func NewServer(cfg *Config) (*Server, error) {
 		return nil, err
 	}
 
+	// As there're some other lower-level operations we may need access to,
+	// we'll also make a connection for a "basic client".
+	//
+	// TODO(roasbeef): more granular macaroons, can ask user to make just
+	// what we need
+	baseClient, err := lndclient.NewBasicClient(
+		cfg.Lnd.Host, cfg.Lnd.TLSPath, cfg.Lnd.MacaroonDir, cfg.Network,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Server{
 		cfg:              cfg,
 		db:               db,
 		lndServices:      lndServices,
+		lndClient:        baseClient,
 		AuctioneerClient: auctioneerClient,
 		GetIdentity:      getIdentity,
 	}, nil
@@ -287,7 +302,12 @@ func (s *Server) BatchChannelSetup(batch *order.Batch) error {
 // getLnd returns an instance of the lnd services proxy.
 func getLnd(network string, cfg *LndConfig) (*lndclient.GrpcLndServices, error) {
 	return lndclient.NewLndServices(
-		cfg.Host, network, cfg.MacaroonDir, cfg.TLSPath,
+		&lndclient.LndServicesConfig{
+			LndAddress:  cfg.Host,
+			Network:     network,
+			MacaroonDir: cfg.MacaroonDir,
+			TLSPath:     cfg.TLSPath,
+		},
 	)
 }
 
