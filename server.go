@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -29,6 +30,10 @@ type Server struct {
 	// the connection with a new one in the itest, if the server is
 	// restarted.
 	AuctioneerClient *auctioneer.Client
+
+	// GetIdentity returns the current LSAT identification of the trader
+	// client or an error if none has been established yet.
+	GetIdentity func() (*lsat.TokenID, error)
 
 	cfg          *Config
 	lndServices  *lndclient.GrpcLndServices
@@ -93,10 +98,32 @@ func NewServer(cfg *Config) (*Server, error) {
 		&lndServices.LndServices, fileStore, defaultRPCTimeout,
 		defaultLsatMaxCost, defaultLsatMaxFee,
 	)
+
+	// getIdentity can be used to determine the current LSAT identification
+	// of the trader.
+	getIdentity := func() (*lsat.TokenID, error) {
+		token, err := fileStore.CurrentToken()
+		if err != nil {
+			return nil, err
+		}
+		macID, err := lsat.DecodeIdentifier(
+			bytes.NewBuffer(token.BaseMacaroon().Id()),
+		)
+		if err != nil {
+			return nil, err
+		}
+		return &macID.TokenID, nil
+	}
+
+	// For regtest, we create a fixed identity now that is used for the
+	// whole runtime of the trader.
 	if cfg.Network == "regtest" {
 		var tokenID lsat.TokenID
 		_, _ = rand.Read(tokenID[:])
 		interceptor = &regtestInterceptor{id: tokenID}
+		getIdentity = func() (*lsat.TokenID, error) {
+			return &tokenID, nil
+		}
 	}
 	cfg.AuctioneerDialOpts = append(
 		cfg.AuctioneerDialOpts,
@@ -123,6 +150,7 @@ func NewServer(cfg *Config) (*Server, error) {
 		cfg:              cfg,
 		lndServices:      lndServices,
 		AuctioneerClient: auctioneerClient,
+		GetIdentity:      getIdentity,
 	}, nil
 }
 
