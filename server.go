@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net"
@@ -13,10 +14,12 @@ import (
 	"github.com/lightninglabs/agora/client/auctioneer"
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/agora/client/order"
+	"github.com/lightninglabs/kirin/auth"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightninglabs/loop/lsat"
 	"github.com/lightningnetwork/lnd/build"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 // Server is the main agora trader server.
@@ -86,10 +89,15 @@ func NewServer(cfg *Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	interceptor := lsat.NewInterceptor(
+	var interceptor Interceptor = lsat.NewInterceptor(
 		&lndServices.LndServices, fileStore, defaultRPCTimeout,
 		defaultLsatMaxCost, defaultLsatMaxFee,
 	)
+	if cfg.Network == "regtest" {
+		var tokenID lsat.TokenID
+		_, _ = rand.Read(tokenID[:])
+		interceptor = &regtestInterceptor{id: tokenID}
+	}
 	cfg.AuctioneerDialOpts = append(
 		cfg.AuctioneerDialOpts,
 		grpc.WithUnaryInterceptor(interceptor.UnaryInterceptor),
@@ -244,4 +252,51 @@ func getLnd(network string, cfg *LndConfig) (*lndclient.GrpcLndServices, error) 
 	return lndclient.NewLndServices(
 		cfg.Host, network, cfg.MacaroonDir, cfg.TLSPath,
 	)
+}
+
+// Interceptor is the interface a client side gRPC interceptor has to implement.
+type Interceptor interface {
+	// UnaryInterceptor intercepts normal, non-streaming requests from the
+	// client to the server.
+	UnaryInterceptor(context.Context, string, interface{}, interface{},
+		*grpc.ClientConn, grpc.UnaryInvoker, ...grpc.CallOption) error
+
+	// StreamInterceptor intercepts streaming requests from the client to
+	// the server.
+	StreamInterceptor(context.Context, *grpc.StreamDesc, *grpc.ClientConn,
+		string, grpc.Streamer, ...grpc.CallOption) (grpc.ClientStream,
+		error)
+}
+
+// regtestInterceptor is a dummy gRPC interceptor that can be used on regtest to
+// simulate identification through LSAT.
+type regtestInterceptor struct {
+	id lsat.TokenID
+}
+
+// UnaryInterceptor intercepts non-streaming requests and appends the dummy LSAT
+// ID.
+func (i *regtestInterceptor) UnaryInterceptor(ctx context.Context, method string,
+	req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker,
+	opts ...grpc.CallOption) error {
+
+	idStr := fmt.Sprintf("LSATID %x", i.id[:])
+	idCtx := metadata.AppendToOutgoingContext(
+		ctx, auth.HeaderAuthorization, idStr,
+	)
+	return invoker(idCtx, method, req, reply, cc, opts...)
+}
+
+// StreamingInterceptor intercepts streaming requests and appends the dummy LSAT
+// ID.
+func (i *regtestInterceptor) StreamInterceptor(ctx context.Context,
+	desc *grpc.StreamDesc, cc *grpc.ClientConn, method string,
+	streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream,
+	error) {
+
+	idStr := fmt.Sprintf("LSATID %x", i.id[:])
+	idCtx := metadata.AppendToOutgoingContext(
+		ctx, auth.HeaderAuthorization, idStr,
+	)
+	return streamer(idCtx, desc, cc, method, opts...)
 }
