@@ -148,6 +148,7 @@ func NewServer(cfg *Config) (*Server, error) {
 		Signer:        lndServices.Signer,
 		MinBackoff:    cfg.MinBackoff,
 		MaxBackoff:    cfg.MaxBackoff,
+		BatchSource:   db,
 	}
 	auctioneerClient, err := auctioneer.NewClient(clientCfg)
 	if err != nil {

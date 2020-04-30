@@ -64,6 +64,10 @@ type Config struct {
 	// MaxBackoff is the maximum time that is waited between connection
 	// attempts.
 	MaxBackoff time.Duration
+
+	// BatchSource provides information about the current pending batch, if
+	// any.
+	BatchSource BatchSource
 }
 
 // Client performs the client side part of auctions. This interface exists to be
@@ -403,6 +407,14 @@ func (c *Client) SubscribeAccountUpdates(ctx context.Context,
 		if err != nil {
 			return err
 		}
+
+		// Since this is the first time we establish our connection to
+		// the auctioneer, check whether we need to mark our pending
+		// batch as finalized, or if we need to remove it due to the
+		// batch auction no longer including us.
+		if err := c.checkPendingBatch(); err != nil {
+			return err
+		}
 	}
 
 	// Before we can expect to receive any updates, we need to perform the
@@ -618,6 +630,13 @@ func (c *Client) HandleServerShutdown(err error) error {
 		return err
 	}
 	c.streamMutex.Unlock()
+
+	// With the connection re-established, check whether we need to mark our
+	// pending batch as finalized, or if we need to remove it due to the
+	// batch auction no longer including us.
+	if err := c.checkPendingBatch(); err != nil {
+		return err
+	}
 
 	// Subscribe to all accounts again. Remove the old subscriptions in the
 	// same move as new ones will be created.
