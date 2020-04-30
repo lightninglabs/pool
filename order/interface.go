@@ -9,6 +9,7 @@ import (
 	"net"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
@@ -381,19 +382,19 @@ type Store interface {
 	// DelOrder removes the order with the given nonce from the local store.
 	DelOrder(Nonce) error
 
-	// StorePendingBatch atomically updates all modified orders/accounts as
-	// a result of a pending batch. If any single operation fails, the whole
-	// set of changes is rolled back.
-	StorePendingBatch(_ BatchID, orders []Nonce,
+	// StorePendingBatch atomically stages all modified orders/accounts as a
+	// result of a pending batch. If any single operation fails, the whole
+	// set of changes is rolled back. Once the batch has been
+	// finalized/confirmed on-chain, then the stage modifications will be
+	// applied atomically as a result of MarkBatchComplete.
+	StorePendingBatch(_ BatchID, _ *wire.MsgTx, orders []Nonce,
 		orderModifiers [][]Modifier, accounts []*account.Account,
 		accountModifiers [][]account.Modifier) error
 
-	// PendingBatchID retrieves the ID of the currently pending batch. If
-	// there isn't one, ErrNoPendingBatch is returned.
-	PendingBatchID() (BatchID, error)
-
-	// MarkBatchComplete marks a pending batch as complete, allowing a
-	// trader to participate in a new batch.
+	// MarkBatchComplete marks a pending batch as complete, applying any
+	// staged modifications necessary, and allowing a trader to participate
+	// in a new batch. If a pending batch is not found, ErrNoPendingBatch is
+	// returned.
 	MarkBatchComplete() error
 }
 

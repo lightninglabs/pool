@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmscript"
@@ -14,6 +15,13 @@ import (
 
 var (
 	testBatchID = order.BatchID{0x01, 0x02, 0x03}
+
+	testBatchTx = &wire.MsgTx{
+		Version: 2,
+		TxIn: []*wire.TxIn{
+			wire.NewTxIn(&wire.OutPoint{Index: 1}, nil, nil),
+		},
+	}
 
 	testCases = []struct {
 		name        string
@@ -28,8 +36,8 @@ var (
 				_ *account.Account) error {
 
 				return db.StorePendingBatch(
-					testBatchID, []order.Nonce{a.Nonce()}, nil,
-					nil, nil,
+					testBatchID, testBatchTx,
+					[]order.Nonce{a.Nonce()}, nil, nil, nil,
 				)
 			},
 		},
@@ -40,7 +48,7 @@ var (
 				acct *account.Account) error {
 
 				return db.StorePendingBatch(
-					testBatchID, nil, nil,
+					testBatchID, testBatchTx, nil, nil,
 					[]*account.Account{acct}, nil,
 				)
 			},
@@ -55,8 +63,9 @@ var (
 					order.StateModifier(order.StateExecuted),
 				}}
 				return db.StorePendingBatch(
-					testBatchID, []order.Nonce{{0, 1, 2}},
-					modifiers, nil, nil,
+					testBatchID, testBatchTx,
+					[]order.Nonce{{0, 1, 2}}, modifiers,
+					nil, nil,
 				)
 			},
 		},
@@ -73,7 +82,7 @@ var (
 					account.StateModifier(account.StateClosed),
 				}}
 				return db.StorePendingBatch(
-					testBatchID, nil, nil,
+					testBatchID, testBatchTx, nil, nil,
 					[]*account.Account{acct}, modifiers,
 				)
 			},
@@ -84,7 +93,7 @@ var (
 			runTest: func(db *DB, a *order.Ask, b *order.Bid,
 				acct *account.Account) error {
 
-				_, err := db.PendingBatchID()
+				_, _, err := db.PendingBatch()
 				return err
 			},
 		},
@@ -117,16 +126,16 @@ var (
 					),
 				}}
 				err := db.StorePendingBatch(
-					testBatchID, orderNonces, orderModifiers,
-					accounts, acctModifiers,
+					testBatchID, testBatchTx, orderNonces,
+					orderModifiers, accounts, acctModifiers,
 				)
 				if err != nil {
 					return err
 				}
 
-				// The pending batch ID should reflect
-				// correctly.
-				dbBatchID, err := db.PendingBatchID()
+				// The pending batch ID and transaction should
+				// reflect correctly.
+				dbBatchID, dbBatchTx, err := db.PendingBatch()
 				if err != nil {
 					return err
 				}
@@ -134,6 +143,12 @@ var (
 					return fmt.Errorf("expected pending "+
 						"batch id %x, got %x",
 						testBatchID, dbBatchID)
+				}
+				if dbBatchTx.TxHash() != testBatchTx.TxHash() {
+					return fmt.Errorf("expected pending "+
+						"batch tx %v, got %v",
+						testBatchTx.TxHash(),
+						dbBatchTx.TxHash())
 				}
 
 				// Verify the updates have not been applied to
@@ -183,7 +198,7 @@ var (
 				// that updates all order and accounts.
 				orderModifier := order.UnitsFulfilledModifier(42)
 				err := db.StorePendingBatch(
-					testBatchID,
+					testBatchID, testBatchTx,
 					[]order.Nonce{a.Nonce(), b.Nonce()},
 					[][]order.Modifier{
 						{orderModifier}, {orderModifier},
@@ -200,7 +215,7 @@ var (
 				// Then, we'll assume the batch was overwritten,
 				// and now only the ask order is part of it.
 				err = db.StorePendingBatch(
-					testBatchID,
+					testBatchID, testBatchTx,
 					[]order.Nonce{a.Nonce()},
 					[][]order.Modifier{{orderModifier}},
 					nil, nil,

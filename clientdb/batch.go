@@ -1,8 +1,10 @@
 package clientdb
 
 import (
+	"bytes"
 	"fmt"
 
+	"github.com/btcsuite/btcd/wire"
 	"github.com/coreos/bbolt"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/order"
@@ -17,6 +19,10 @@ var (
 	// currently participating in.
 	pendingBatchIDKey = []byte("pending-id")
 
+	// pendingBatchTxKey is a key we'll use to store the transaction of a
+	// batch we're currently participating in.
+	pendingBatchTxKey = []byte("pending-tx")
+
 	// pendingBatchAccountsBucketKey is the key of a bucket nested within
 	// the top level batch bucket that is responsible for storing the
 	// updates of an account that has participated in a batch.
@@ -30,12 +36,14 @@ var (
 	zeroBatchID order.BatchID
 )
 
-// StorePendingBatch atomically updates all modified orders/accounts as a result
+// StorePendingBatch atomically stages all modified orders/accounts as a result
 // of a pending batch. If any single operation fails, the whole set of changes
-// is rolled back.
-func (db *DB) StorePendingBatch(batchID order.BatchID, orders []order.Nonce,
-	orderModifiers [][]order.Modifier, accounts []*account.Account,
-	accountModifiers [][]account.Modifier) error {
+// is rolled back. Once the batch has been finalized/confirmed on-chain, then
+// the stage modifications will be applied atomically as a result of
+// MarkBatchComplete.
+func (db *DB) StorePendingBatch(batchID order.BatchID, batchTx *wire.MsgTx,
+	orders []order.Nonce, orderModifiers [][]order.Modifier,
+	accounts []*account.Account, accountModifiers [][]account.Modifier) error {
 
 	// Catch the most obvious problems first.
 	if len(orders) != len(orderModifiers) {
@@ -109,21 +117,36 @@ func (db *DB) StorePendingBatch(batchID order.BatchID, orders []order.Nonce,
 			}
 		}
 
-		// Finally, write the ID of the pending batch.
-		return bucket.Put(pendingBatchIDKey, batchID[:])
+		// Finally, write the ID and transaction of the pending batch.
+		if err := bucket.Put(pendingBatchIDKey, batchID[:]); err != nil {
+			return err
+		}
+		var buf bytes.Buffer
+		if err := WriteElement(&buf, batchTx); err != nil {
+			return err
+		}
+		return bucket.Put(pendingBatchTxKey, buf.Bytes())
 	})
 }
 
 // PendingBatchID retrieves the ID of the currently pending batch. If there
 // isn't one, order.ErrNoPendingBatch is returned.
-func (db *DB) PendingBatchID() (order.BatchID, error) {
-	var batchID order.BatchID
+func (db *DB) PendingBatch() (order.BatchID, *wire.MsgTx, error) {
+	var (
+		batchID order.BatchID
+		batchTx *wire.MsgTx
+	)
 	err := db.View(func(tx *bbolt.Tx) error {
 		var err error
 		batchID, err = pendingBatchID(tx)
+		if err != nil {
+			return err
+		}
+
+		batchTx, err = pendingBatchTx(tx)
 		return err
 	})
-	return batchID, err
+	return batchID, batchTx, err
 }
 
 // pendingBatchID retrieves the stored pending batch ID within a database
@@ -144,9 +167,30 @@ func pendingBatchID(tx *bbolt.Tx) (order.BatchID, error) {
 	return batchID, nil
 }
 
-// MarkBatchComplete marks a pending batch as complete, allowing a trader to
-// participate in a new batch. If there isn't one, ErrNoPendingBatch is
-// returned.
+// pendingBatchTx retrieves the stored pending batch transaction within a
+// database transaction.
+func pendingBatchTx(tx *bbolt.Tx) (*wire.MsgTx, error) {
+	bucket, err := getBucket(tx, batchBucketKey)
+	if err != nil {
+		return nil, err
+	}
+
+	rawBatchTx := bucket.Get(pendingBatchTxKey)
+	if rawBatchTx == nil {
+		return nil, order.ErrNoPendingBatch
+	}
+
+	var batchTx *wire.MsgTx
+	if err := ReadElement(bytes.NewReader(rawBatchTx), &batchTx); err != nil {
+		return nil, err
+	}
+
+	return batchTx, nil
+}
+
+// MarkBatchComplete marks a pending batch as complete, applying any staged
+// modifications necessary, and allowing a trader to participate in a new batch.
+// If a pending batch is not found, ErrNoPendingBatch is returned.
 func (db *DB) MarkBatchComplete() error {
 	return db.Update(func(tx *bbolt.Tx) error {
 		if _, err := pendingBatchID(tx); err != nil {
@@ -224,6 +268,10 @@ func applyBatchUpdates(tx *bbolt.Tx) error {
 		return err
 	}
 
-	// Finally, remove the reference to the pending batch ID.
-	return bucket.Delete(pendingBatchIDKey)
+	// Finally, remove the reference to the pending batch ID and
+	// transaction.
+	if err := bucket.Delete(pendingBatchIDKey); err != nil {
+		return err
+	}
+	return bucket.Delete(pendingBatchTxKey)
 }

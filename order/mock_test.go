@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/agora/client/account"
 )
 
@@ -89,11 +90,13 @@ func (s *mockStore) DelOrder(nonce Nonce) error {
 	return nil
 }
 
-// StorePendingBatch atomically updates all modified orders/accounts as a result
+// StorePendingBatch atomically stages all modified orders/accounts as a result
 // of a pending batch. If any single operation fails, the whole set of changes
-// is rolled back.
-func (s *mockStore) StorePendingBatch(id BatchID, orders []Nonce,
-	orderModifiers [][]Modifier, accts []*account.Account,
+// is rolled back. Once the batch has been finalized/confirmed on-chain, then
+// the stage modifications will be applied atomically as a result of
+// MarkBatchComplete.
+func (s *mockStore) StorePendingBatch(id BatchID, tx *wire.MsgTx,
+	orders []Nonce, orderModifiers [][]Modifier, accts []*account.Account,
 	acctModifiers [][]account.Modifier) error {
 
 	err := s.UpdateOrders(orders, orderModifiers)
@@ -109,18 +112,9 @@ func (s *mockStore) StorePendingBatch(id BatchID, orders []Nonce,
 	return nil
 }
 
-// PendingBatchID retrieves the ID of the currently pending batch. If there
-// isn't one, ErrNoPendingBatch is returned.
-func (s *mockStore) PendingBatchID() (BatchID, error) {
-	if s.pendingBatchID == nil {
-		return BatchID{}, ErrNoPendingBatch
-	}
-	return *s.pendingBatchID, nil
-}
-
-// MarkBatchComplete marks a pending batch as complete, allowing a trader to
-// participate in a new batch. If there isn't one, ErrNoPendingBatch is
-// returned.
+// MarkBatchComplete marks a pending batch as complete, applying any staged
+// modifications necessary, and allowing a trader to participate in a new batch.
+// If a pending batch is not found, ErrNoPendingBatch is returned.
 func (s *mockStore) MarkBatchComplete() error {
 	if s.pendingBatchID == nil {
 		return ErrNoPendingBatch
