@@ -94,25 +94,7 @@ var (
 			runTest: func(db *DB, a *order.Ask, b *order.Bid,
 				acct *account.Account) error {
 
-				return db.MarkBatchComplete(testBatchID)
-			},
-		},
-		{
-			name:        "mark batch complete mismatch",
-			expectedErr: "batch id mismatch",
-			runTest: func(db *DB, a *order.Ask, b *order.Bid,
-				acct *account.Account) error {
-
-				err := db.StorePendingBatch(
-					testBatchID, nil, nil, nil, nil,
-				)
-				if err != nil {
-					return err
-				}
-
-				wrongBatchID := testBatchID
-				wrongBatchID[0] ^= 1
-				return db.MarkBatchComplete(wrongBatchID)
+				return db.MarkBatchComplete()
 			},
 		},
 		{
@@ -167,8 +149,7 @@ var (
 				}
 
 				// Mark the batch as complete.
-				err = db.MarkBatchComplete(testBatchID)
-				if err != nil {
+				if err := db.MarkBatchComplete(); err != nil {
 					return err
 				}
 
@@ -231,8 +212,7 @@ var (
 				// Mark the batch as complete. We should only
 				// see the update for our ask order applied, but
 				// not the rest.
-				err = db.MarkBatchComplete(testBatchID)
-				if err != nil {
+				if err := db.MarkBatchComplete(); err != nil {
 					return err
 				}
 

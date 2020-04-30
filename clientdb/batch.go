@@ -147,15 +147,10 @@ func pendingBatchID(tx *bbolt.Tx) (order.BatchID, error) {
 // MarkBatchComplete marks a pending batch as complete, allowing a trader to
 // participate in a new batch. If there isn't one, ErrNoPendingBatch is
 // returned.
-func (db *DB) MarkBatchComplete(id order.BatchID) error {
+func (db *DB) MarkBatchComplete() error {
 	return db.Update(func(tx *bbolt.Tx) error {
-		batchID, err := pendingBatchID(tx)
-		if err != nil {
+		if _, err := pendingBatchID(tx); err != nil {
 			return err
-		}
-		if batchID != id {
-			return fmt.Errorf("batch id mismatch: pending id "+
-				"should be %x, got %x", batchID[:], id[:])
 		}
 		return applyBatchUpdates(tx)
 	})

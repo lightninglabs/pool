@@ -121,15 +121,12 @@ func (s *mockStore) PendingBatchID() (BatchID, error) {
 // MarkBatchComplete marks a pending batch as complete, allowing a trader to
 // participate in a new batch. If there isn't one, ErrNoPendingBatch is
 // returned.
-func (s *mockStore) MarkBatchComplete(id BatchID) error {
+func (s *mockStore) MarkBatchComplete() error {
 	if s.pendingBatchID == nil {
 		return ErrNoPendingBatch
 	}
-	if id != *s.pendingBatchID {
-		return fmt.Errorf("expected pending batch id %x, got %x",
-			s.pendingBatchID[:], id[:])
-	}
 
+	s.pendingBatchID = nil
 	return nil
 }
 

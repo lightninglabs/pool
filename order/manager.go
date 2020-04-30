@@ -259,7 +259,7 @@ func (m *Manager) BatchFinalize(batchID BatchID) error {
 
 	// Create a diff and then persist that. Finally signal that we are ready
 	// for the next batch by removing the current pending batch.
-	if err := m.batchStorer.MarkBatchComplete(batchID); err != nil {
+	if err := m.batchStorer.MarkBatchComplete(); err != nil {
 		return fmt.Errorf("unable to mark batch as complete: %v", err)
 	}
 	m.pendingBatch = nil

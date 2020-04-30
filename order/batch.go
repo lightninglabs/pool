@@ -223,5 +223,5 @@ type BatchStorer interface {
 
 	// MarkBatchComplete marks a pending batch as complete, allowing a
 	// trader to participate in a new batch.
-	MarkBatchComplete(BatchID) error
+	MarkBatchComplete() error
 }

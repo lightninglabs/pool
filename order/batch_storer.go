@@ -119,8 +119,8 @@ func (s *batchStorer) StorePendingBatch(batch *Batch) error {
 
 // MarkBatchComplete marks a pending batch as complete, allowing a trader to
 // participate in a new batch.
-func (s *batchStorer) MarkBatchComplete(id BatchID) error {
-	return s.orderStore.MarkBatchComplete(id)
+func (s *batchStorer) MarkBatchComplete() error {
+	return s.orderStore.MarkBatchComplete()
 }
 
 // A compile-time constraint to ensure batchStorer implements BatchStorer.

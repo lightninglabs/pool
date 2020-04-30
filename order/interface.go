@@ -394,7 +394,7 @@ type Store interface {
 
 	// MarkBatchComplete marks a pending batch as complete, allowing a
 	// trader to participate in a new batch.
-	MarkBatchComplete(BatchID) error
+	MarkBatchComplete() error
 }
 
 // UserError is an error type that is returned if an action fails because of
