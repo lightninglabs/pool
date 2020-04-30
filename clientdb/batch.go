@@ -188,6 +188,35 @@ func pendingBatchTx(tx *bbolt.Tx) (*wire.MsgTx, error) {
 	return batchTx, nil
 }
 
+// DeletePendingBatch removes all references to the current pending batch
+// without applying its staged updates to accounts and orders. If no pending
+// batch exists, this acts as a no-op.
+func (db *DB) DeletePendingBatch() error {
+	return db.Update(func(tx *bbolt.Tx) error {
+		bucket, err := getBucket(tx, batchBucketKey)
+		if err != nil {
+			return err
+		}
+
+		if err := bucket.Delete(pendingBatchIDKey); err != nil {
+			return err
+		}
+		if err := bucket.Delete(pendingBatchTxKey); err != nil {
+			return err
+		}
+		err = bucket.DeleteBucket(pendingBatchAccountsBucketKey)
+		if err != nil && err != bbolt.ErrBucketNotFound {
+			return err
+		}
+		err = bucket.DeleteBucket(pendingBatchOrdersBucketKey)
+		if err != nil && err != bbolt.ErrBucketNotFound {
+			return err
+		}
+
+		return nil
+	})
+}
+
 // MarkBatchComplete marks a pending batch as complete, applying any staged
 // modifications necessary, and allowing a trader to participate in a new batch.
 // If a pending batch is not found, account.ErrNoPendingBatch is returned.

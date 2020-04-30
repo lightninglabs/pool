@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/coreos/bbolt"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmscript"
 	"github.com/lightninglabs/agora/client/order"
@@ -347,4 +348,60 @@ func TestPersistBatchResult(t *testing.T) {
 				err.Error(), tc.expectedErr)
 		})
 	}
+}
+
+// TestDeletePendingBatch ensures that all references of a pending batch have
+// been removed after an invocation of DeletePendingBatch.
+func TestDeletePendingBatch(t *testing.T) {
+	t.Parallel()
+
+	db, cleanup := newTestDB(t)
+	defer cleanup()
+
+	// Helper closure to assert that the sub-keys and sub-buckets of the
+	// root batch bucket exist or not.
+	assertPendingBatch := func(exists bool) {
+		t.Helper()
+
+		err := db.View(func(tx *bbolt.Tx) error {
+			root := tx.Bucket(batchBucketKey)
+
+			if (root.Get(pendingBatchIDKey) != nil) != exists {
+				return fmt.Errorf("found unexpected key %v",
+					string(pendingBatchIDKey))
+			}
+			if (root.Get(pendingBatchTxKey) != nil) != exists {
+				return fmt.Errorf("found unexpected key %v",
+					string(pendingBatchTxKey))
+			}
+			if (root.Bucket(pendingBatchAccountsBucketKey) != nil) != exists {
+				return fmt.Errorf("found unexpected bucket %v",
+					string(pendingBatchAccountsBucketKey))
+			}
+			if (root.Bucket(pendingBatchOrdersBucketKey) != nil) != exists {
+				return fmt.Errorf("found unexpected bucket %v",
+					string(pendingBatchOrdersBucketKey))
+			}
+
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Store a pending batch. We should expect to find valid values for all
+	// sub-keys and sub-buckets.
+	err := db.StorePendingBatch(testBatchID, testBatchTx, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("unable to store pending batch: %v", err)
+	}
+	assertPendingBatch(true)
+
+	// Now, delete the pending batch. We should expect to _not_ find any
+	// existing sub-keys or sub-buckets.
+	if err := db.DeletePendingBatch(); err != nil {
+		t.Fatalf("unable to delete pending batch: %v", err)
+	}
+	assertPendingBatch(false)
 }
