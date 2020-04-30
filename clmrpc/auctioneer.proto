@@ -13,6 +13,7 @@ service ChannelAuctioneer {
     rpc OrderState (ServerOrderStateRequest) returns (ServerOrderStateResponse);
     rpc SubscribeBatchAuction (stream ClientAuctionMessage) returns (stream ServerAuctionMessage);
     rpc FeeQuote (FeeQuoteRequest) returns (FeeQuoteResponse);
+    rpc RelevantBatchSnapshot (RelevantBatchRequest) returns (RelevantBatch);
 }
 
 message ReserveAccountRequest {
@@ -652,6 +653,53 @@ message FeeQuoteResponse {
     The execution fee charged per matched order.
     */
     ExecutionFee execution_fee = 1;
+}
+
+
+message RelevantBatchRequest {
+    // The unique identifier of the batch.
+    bytes id = 1;
+
+    /*
+    The set of accounts the trader is interested in retrieving information
+    for within the batch. Each account is identified by its trader key.
+    */
+    repeated bytes accounts = 2;
+}
+
+message RelevantBatch {
+    // The version of the batch.
+    uint32 version = 1;
+
+    // The unique identifier of the batch.
+    bytes id = 2;
+
+    /*
+    The set of modifications that should be applied to the requested accounts as
+    a result of this batch.
+    */
+    repeated AccountDiff charged_accounts = 3;
+    
+    /*
+    The set of orders that were matched against the orders belonging to the
+    requested accounts.
+    */
+    map<string, MatchedOrder> matched_orders = 4;
+
+    // The uniform clearing price rate in parts per million of the batch.
+    uint32 clearing_price_rate = 5;
+
+    // The fee parameters used to calculate the execution fees.
+    ExecutionFee execution_fee = 6;
+
+    // The batch transaction including all witness data.
+    bytes transaction = 7;
+
+    /*
+    Fee rate of the batch transaction, expressed in satoshis per 1000 weight
+    units (sat/kW).
+    */
+    uint32 fee_rate_sat_per_kw = 8;
 }
 
 message ExecutionFee {
