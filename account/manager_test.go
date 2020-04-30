@@ -94,7 +94,7 @@ func (h *testHarness) assertAccountNotSubscribed(traderKey *btcec.PublicKey) {
 	}
 }
 
-func (h *testHarness) assertAcccountExists(expected *Account) {
+func (h *testHarness) assertAccountExists(expected *Account) {
 	h.t.Helper()
 
 	err := wait.NoError(func() error {
@@ -128,7 +128,7 @@ func (h *testHarness) openAccount(value btcutil.Amount, expiry uint32,
 	}
 
 	// The same account should be found in the store.
-	h.assertAcccountExists(account)
+	h.assertAccountExists(account)
 
 	// Since the account is still pending confirmation, it should not be
 	// subscribed to updates from the auctioneer yet.
@@ -140,7 +140,7 @@ func (h *testHarness) openAccount(value btcutil.Amount, expiry uint32,
 	// This should prompt the account to now be in a StateOpen state and
 	// the subscription for updates should now be realized.
 	account.State = StateOpen
-	h.assertAcccountExists(account)
+	h.assertAccountExists(account)
 	h.assertAccountSubscribed(account.TraderKey.PubKey)
 
 	return account
@@ -154,7 +154,7 @@ func (h *testHarness) expireAccount(account *Account) {
 
 	// This should prompt the account to now be in a StateExpired state.
 	account.State = StateExpired
-	h.assertAcccountExists(account)
+	h.assertAccountExists(account)
 }
 
 func (h *testHarness) closeAccount(account *Account, outputs []*wire.TxOut,
@@ -186,14 +186,14 @@ func (h *testHarness) closeAccount(account *Account, outputs []*wire.TxOut,
 
 	account.State = StatePendingClosed
 	account.CloseTx = closeTx
-	h.assertAcccountExists(account)
+	h.assertAccountExists(account)
 
 	// Notify the transaction as a spend of the account.
 	h.notifier.spendChan <- &chainntnfs.SpendDetail{SpendingTx: closeTx}
 
 	// This should prompt the account to now be in a StateClosed state.
 	account.State = StateClosed
-	h.assertAcccountExists(account)
+	h.assertAccountExists(account)
 
 	return closeTx
 }
@@ -327,7 +327,7 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 		HeightHint:    bestHeight,
 		State:         StateInitiated,
 	}
-	h.assertAcccountExists(account)
+	h.assertAccountExists(account)
 
 	// Then, we'll create a new interceptor to send us a signal if
 	// SendOutputs is invoked again. This shouldn't happen as the
@@ -374,14 +374,14 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 		Hash:  tx.TxHash(),
 		Index: 0,
 	}
-	h.assertAcccountExists(account)
+	h.assertAccountExists(account)
 
 	// Notify the confirmation of the account.
 	h.notifier.confChan <- &chainntnfs.TxConfirmation{}
 
 	// This should prompt the account to now be in a Confirmed state.
 	account.State = StateOpen
-	h.assertAcccountExists(account)
+	h.assertAccountExists(account)
 }
 
 // TestAccountExpiration ensures that we properly detect when an account expires
@@ -401,4 +401,66 @@ func TestAccountExpiration(t *testing.T) {
 	)
 
 	h.expireAccount(account)
+}
+
+// TestAccountSpendBatchNotFinalized ensures that if a pending batch exists at
+// the time of an account spend, then its updates are applied to the account in
+// order to properly locate the latest account output.
+func TestAccountSpendBatchNotFinalized(t *testing.T) {
+	t.Parallel()
+
+	const bestHeight = 100
+
+	h := newTestHarness(t)
+	h.start()
+	defer h.stop()
+
+	account := h.openAccount(
+		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+	)
+
+	// Create an account spend which we'll notify later. This spend should
+	// take the multi-sig path to trigger the pending batch logic.
+	const newValue = maxAccountValue / 2
+	newPkScript, err := account.NextOutputScript()
+	if err != nil {
+		t.Fatalf("unable to generate next output script: %v", err)
+	}
+	spendTx := &wire.MsgTx{
+		Version: 2,
+		TxIn: []*wire.TxIn{{
+			PreviousOutPoint: account.OutPoint,
+			Witness: wire.TxWitness{
+				{0x01}, // Use multi-sig path.
+				{},
+				{},
+			},
+		}},
+		TxOut: []*wire.TxOut{{
+			Value:    int64(newValue),
+			PkScript: newPkScript,
+		}},
+	}
+
+	// Then, we'll simulate a pending batch by staging some account updates
+	// that should be applied once the spend arrives.
+	mods := []Modifier{
+		ValueModifier(newValue),
+		StateModifier(StatePendingUpdate),
+		OutPointModifier(wire.OutPoint{Hash: spendTx.TxHash(), Index: 0}),
+		IncrementBatchKey(),
+	}
+	h.store.setPendingBatch(func() error {
+		return h.store.updateAccount(account, mods...)
+	})
+
+	// Notify the spend.
+	h.notifier.spendChan <- &chainntnfs.SpendDetail{
+		SpendingTx: spendTx,
+	}
+
+	// Assert that the account updates have been applied. Note that it may
+	// seem like our account pointer hasn't had the updates applied, but the
+	// updateAccount call above does so implicitly.
+	h.assertAccountExists(account)
 }

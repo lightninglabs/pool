@@ -2,12 +2,19 @@ package account
 
 import (
 	"context"
+	"errors"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/agora/client/clmscript"
 	"github.com/lightningnetwork/lnd/keychain"
+)
+
+var (
+	// ErrNoPendingBatch is an error returned when we attempt to retrieve
+	// the ID of a pending batch, but one does not exist.
+	ErrNoPendingBatch = errors.New("no pending batch found")
 )
 
 // Reservation contains information about the different keys required for to
@@ -234,6 +241,14 @@ type Store interface {
 
 	// Accounts retrieves all existing accounts.
 	Accounts() ([]*Account, error)
+
+	// PendingBatch determines whether we currently have a pending batch.
+	// If a batch doesn't exist, ErrNoPendingBatch is returned.
+	PendingBatch() error
+
+	// MarkBatchComplete marks the batch with the given ID as complete,
+	// indicating that the staged account updates can be applied to disk.
+	MarkBatchComplete() error
 }
 
 // Auctioneer provides us with the different ways we are able to communicate

@@ -89,7 +89,7 @@ var (
 		},
 		{
 			name:        "no pending batch",
-			expectedErr: order.ErrNoPendingBatch.Error(),
+			expectedErr: account.ErrNoPendingBatch.Error(),
 			runTest: func(db *DB, a *order.Ask, b *order.Bid,
 				acct *account.Account) error {
 
@@ -99,7 +99,7 @@ var (
 		},
 		{
 			name:        "mark batch complete without pending",
-			expectedErr: order.ErrNoPendingBatch.Error(),
+			expectedErr: account.ErrNoPendingBatch.Error(),
 			runTest: func(db *DB, a *order.Ask, b *order.Bid,
 				acct *account.Account) error {
 

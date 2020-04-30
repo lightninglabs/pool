@@ -19,12 +19,6 @@ import (
 	"github.com/lightningnetwork/lnd/lnwire"
 )
 
-var (
-	// ErrNoPendingBatch is an error returned when we attempt to retrieve
-	// the ID of a pending batch, but one does not exist.
-	ErrNoPendingBatch = errors.New("no pending batch found")
-)
-
 // Nonce is a 32 byte pseudo randomly generated unique order ID.
 type Nonce [32]byte
 

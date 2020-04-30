@@ -43,8 +43,9 @@ var (
 type mockStore struct {
 	Store
 
-	mu       sync.Mutex
-	accounts map[[33]byte]Account
+	mu               sync.Mutex
+	accounts         map[[33]byte]Account
+	onFinalizedBatch func() error
 }
 
 func newMockStore() *mockStore {
@@ -68,6 +69,10 @@ func (s *mockStore) UpdateAccount(account *Account, modifiers ...Modifier) error
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	return s.updateAccount(account, modifiers...)
+}
+
+func (s *mockStore) updateAccount(account *Account, modifiers ...Modifier) error {
 	var accountKey [33]byte
 	copy(accountKey[:], account.TraderKey.PubKey.SerializeCompressed())
 
@@ -107,6 +112,35 @@ func (s *mockStore) Accounts() ([]*Account, error) {
 		accounts = append(accounts, &account)
 	}
 	return accounts, nil
+}
+
+func (s *mockStore) setPendingBatch(onFinalizedBatch func() error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.onFinalizedBatch = onFinalizedBatch
+}
+
+func (s *mockStore) PendingBatch() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.onFinalizedBatch == nil {
+		return ErrNoPendingBatch
+	}
+	return nil
+}
+
+func (s *mockStore) MarkBatchComplete() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.onFinalizedBatch(); err != nil {
+		return err
+	}
+
+	s.onFinalizedBatch = nil
+	return nil
 }
 
 type mockAuctioneer struct {

@@ -120,6 +120,12 @@ type Manager struct {
 	// expiration of.
 	watchingExpiry map[[33]byte]struct{}
 
+	// pendingBatchMtx guards access to any database calls involving pending
+	// batches. This is mostly used to prevent race conditions when handling
+	// multiple accounts spends as part of a batch that we didn't receive a
+	// Finalize message for.
+	pendingBatchMtx sync.Mutex
+
 	wg   sync.WaitGroup
 	quit chan struct{}
 }
@@ -597,6 +603,41 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 	// trader was matched, or the account was closed. If it was closed, then
 	// the account output shouldn't have been recreated.
 	case clmscript.IsMultiSigSpend(spendWitness):
+		// If there's a pending batch which has yet to be completed,
+		// we'll mark it as so now. This can happen if the trader is not
+		// connected to the auctioneer when the auctioneer sends them
+		// the finalize message.
+		//
+		// We'll acquire the pending batch lock to ensure that there
+		// aren't multiple handleAccountSpend threads (in the case of
+		// multiple accounts participating in a batch) attempting to
+		// mark the same batch as complete and prevent entering into an
+		// erroneous state.
+		m.pendingBatchMtx.Lock()
+		err := m.cfg.Store.PendingBatch()
+		switch err {
+		// If there's no pending batch, we can proceed as normal.
+		case ErrNoPendingBatch:
+			break
+
+		// If there is, we'll commit it and refresh the account state.
+		case nil:
+			if err := m.cfg.Store.MarkBatchComplete(); err != nil {
+				m.pendingBatchMtx.Unlock()
+				return err
+			}
+			account, err = m.cfg.Store.Account(traderKey)
+			if err != nil {
+				m.pendingBatchMtx.Unlock()
+				return err
+			}
+
+		default:
+			m.pendingBatchMtx.Unlock()
+			return err
+		}
+		m.pendingBatchMtx.Unlock()
+
 		// An account cannot be spent without our knowledge, so we'll
 		// assume we always persist account updates before a broadcast
 		// of the spending transaction. Therefore, since we should

@@ -130,7 +130,7 @@ func (db *DB) StorePendingBatch(batchID order.BatchID, batchTx *wire.MsgTx,
 }
 
 // PendingBatchID retrieves the ID of the currently pending batch. If there
-// isn't one, order.ErrNoPendingBatch is returned.
+// isn't one, account.ErrNoPendingBatch is returned.
 func (db *DB) PendingBatch() (order.BatchID, *wire.MsgTx, error) {
 	var (
 		batchID order.BatchID
@@ -159,7 +159,7 @@ func pendingBatchID(tx *bbolt.Tx) (order.BatchID, error) {
 
 	pendingBatchID := bucket.Get(pendingBatchIDKey)
 	if pendingBatchID == nil {
-		return zeroBatchID, order.ErrNoPendingBatch
+		return zeroBatchID, account.ErrNoPendingBatch
 	}
 
 	var batchID order.BatchID
@@ -177,7 +177,7 @@ func pendingBatchTx(tx *bbolt.Tx) (*wire.MsgTx, error) {
 
 	rawBatchTx := bucket.Get(pendingBatchTxKey)
 	if rawBatchTx == nil {
-		return nil, order.ErrNoPendingBatch
+		return nil, account.ErrNoPendingBatch
 	}
 
 	var batchTx *wire.MsgTx
@@ -190,7 +190,7 @@ func pendingBatchTx(tx *bbolt.Tx) (*wire.MsgTx, error) {
 
 // MarkBatchComplete marks a pending batch as complete, applying any staged
 // modifications necessary, and allowing a trader to participate in a new batch.
-// If a pending batch is not found, ErrNoPendingBatch is returned.
+// If a pending batch is not found, account.ErrNoPendingBatch is returned.
 func (db *DB) MarkBatchComplete() error {
 	return db.Update(func(tx *bbolt.Tx) error {
 		if _, err := pendingBatchID(tx); err != nil {

@@ -51,15 +51,28 @@ type rpcServer struct {
 	blockNtfnCancel func()
 }
 
+// accountStore is a clientdb.DB wrapper to implement the account.Store
+// interface.
+type accountStore struct {
+	*clientdb.DB
+}
+
+var _ account.Store = (*accountStore)(nil)
+
+func (s *accountStore) PendingBatch() error {
+	_, _, err := s.DB.PendingBatch()
+	return err
+}
+
 // newRPCServer creates a new client-side RPC server that uses the given
 // connection to the trader's lnd node and the auction server. A client side
 // database is created in `serverDir` if it does not yet exist.
 func newRPCServer(server *Server, serverDir string) (*rpcServer, error) {
-
 	db, err := clientdb.New(serverDir)
 	if err != nil {
 		return nil, err
 	}
+	accountStore := &accountStore{db}
 
 	lnd := &server.lndServices.LndServices
 	return &rpcServer{
@@ -68,7 +81,7 @@ func newRPCServer(server *Server, serverDir string) (*rpcServer, error) {
 		auctioneer:  server.AuctioneerClient,
 		db:          db,
 		accountManager: account.NewManager(&account.ManagerConfig{
-			Store:         db,
+			Store:         accountStore,
 			Auctioneer:    server.AuctioneerClient,
 			Wallet:        lnd.WalletKit,
 			Signer:        lnd.Signer,
@@ -77,7 +90,7 @@ func newRPCServer(server *Server, serverDir string) (*rpcServer, error) {
 		}),
 		orderManager: order.NewManager(&order.ManagerConfig{
 			Store:     db,
-			AcctStore: db,
+			AcctStore: accountStore,
 			Lightning: lnd.Client,
 			Wallet:    lnd.WalletKit,
 			Signer:    lnd.Signer,

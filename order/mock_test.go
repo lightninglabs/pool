@@ -114,10 +114,10 @@ func (s *mockStore) StorePendingBatch(id BatchID, tx *wire.MsgTx,
 
 // MarkBatchComplete marks a pending batch as complete, applying any staged
 // modifications necessary, and allowing a trader to participate in a new batch.
-// If a pending batch is not found, ErrNoPendingBatch is returned.
+// If a pending batch is not found, account.ErrNoPendingBatch is returned.
 func (s *mockStore) MarkBatchComplete() error {
 	if s.pendingBatchID == nil {
-		return ErrNoPendingBatch
+		return account.ErrNoPendingBatch
 	}
 
 	s.pendingBatchID = nil
