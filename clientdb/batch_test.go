@@ -10,8 +10,8 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/coreos/bbolt"
 	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/clmscript"
 	"github.com/lightninglabs/agora/client/order"
+	"github.com/lightningnetwork/lnd/keychain"
 )
 
 var (
@@ -76,9 +76,10 @@ var (
 			runTest: func(db *DB, a *order.Ask, _ *order.Bid,
 				acct *account.Account) error {
 
-				acct.TraderKey.PubKey = clmscript.IncrementKey(
-					acct.TraderKey.PubKey,
-				)
+				acct.TraderKey = &keychain.KeyDescriptor{
+					KeyLocator: acct.TraderKey.KeyLocator,
+					PubKey:     testBatchKey,
+				}
 				modifiers := [][]account.Modifier{{
 					account.StateModifier(account.StateClosed),
 				}}
