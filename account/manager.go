@@ -739,12 +739,7 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		)
 
 	case multiSigWitness:
-		// Craft a spending transaction that takes the multi-sig script
-		// path. This requires a signature from the auctioneer, so we'll
-		// obtain one along the way.
-		spendPkg, err = m.spendAccountMultiSig(
-			ctx, account, closeOutputs,
-		)
+		spendPkg, err = m.createSpendTx(ctx, account, closeOutputs, 0)
 	}
 	if err != nil {
 		return nil, err
@@ -762,6 +757,19 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	// If we require the auctioneer's signature, request it now.
+	if witnessType == multiSigWitness {
+		witness, err := m.constructMultiSigWitness(
+			ctx, account, spendPkg,
+		)
+		if err != nil {
+			return nil, err
+		}
+		// TODO(wilmer): Use proper input index when multiple inputs are
+		// supported.
+		spendPkg.tx.TxIn[0].Witness = witness
 	}
 
 	if err := m.cfg.Wallet.PublishTransaction(ctx, spendPkg.tx); err != nil {
@@ -798,18 +806,11 @@ func (m *Manager) spendAccountExpiry(ctx context.Context, account *Account,
 	return spendPkg, nil
 }
 
-// spendAccountMultiSig creates a spending transaction of an account with the
-// provided outputs based on the multi-sig script path and signs it. A signature
-// from the auctioneer is also required, which is requested within.
-func (m *Manager) spendAccountMultiSig(ctx context.Context, account *Account,
-	outputs []*wire.TxOut) (*spendPackage, error) {
-
-	// Craft a transaction that spends the account output that includes the
-	// provided inputs, outputs, and account modifiers.
-	spendPkg, err := m.createSpendTx(ctx, account, outputs, 0)
-	if err != nil {
-		return nil, err
-	}
+// constructMultiSigWitness requests a signature from the auctioneer for the
+// given spending transaction of an account and returns the fully constructed
+// witness to spend the account input.
+func (m *Manager) constructMultiSigWitness(ctx context.Context,
+	account *Account, spendPkg *spendPackage) (wire.TxWitness, error) {
 
 	auctioneerSig, err := m.cfg.Auctioneer.CloseAccount(
 		ctx, account.TraderKey.PubKey, spendPkg.tx.TxOut,
@@ -818,11 +819,9 @@ func (m *Manager) spendAccountMultiSig(ctx context.Context, account *Account,
 		return nil, err
 	}
 
-	spendPkg.tx.TxIn[0].Witness = clmscript.SpendMultiSig(
+	return clmscript.SpendMultiSig(
 		spendPkg.witnessScript, spendPkg.ourSig, auctioneerSig,
-	)
-
-	return spendPkg, nil
+	), nil
 }
 
 // createSpendTx creates the spending transaction of an account and signs it.
