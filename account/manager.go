@@ -734,7 +734,7 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 	var spendPkg *spendPackage
 	switch witnessType {
 	case expiryWitness:
-		spendPkg, err = m.closeAccountExpiry(
+		spendPkg, err = m.spendAccountExpiry(
 			ctx, account, closeOutputs, bestHeight,
 		)
 
@@ -742,7 +742,7 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		// Craft a spending transaction that takes the multi-sig script
 		// path. This requires a signature from the auctioneer, so we'll
 		// obtain one along the way.
-		spendPkg, err = m.closeAccountMultiSig(
+		spendPkg, err = m.spendAccountMultiSig(
 			ctx, account, closeOutputs,
 		)
 	}
@@ -780,14 +780,13 @@ func determineWitnessType(account *Account, bestHeight uint32) witnessType {
 	return multiSigWitness
 }
 
-// closeAccountExpiry creates the closing transaction of an account based on the
-// expiration script path and signs it. The fee of the transaction is computed
-// from its weight and the provided fee rate. bestHeight is used as the lock
-// time of the transaction in order to satisfy the output's CHECKLOCKTIMEVERIFY.
-func (m *Manager) closeAccountExpiry(ctx context.Context, account *Account,
-	closeOutputs []*wire.TxOut, bestHeight uint32) (*spendPackage, error) {
+// spendAccountExpiry creates the closing transaction of an account based on the
+// expiration script path and signs it. bestHeight is used as the lock time of
+// the transaction in order to satisfy the output's CHECKLOCKTIMEVERIFY.
+func (m *Manager) spendAccountExpiry(ctx context.Context, account *Account,
+	outputs []*wire.TxOut, bestHeight uint32) (*spendPackage, error) {
 
-	spendPkg, err := m.createSpendTx(ctx, account, closeOutputs, bestHeight)
+	spendPkg, err := m.createSpendTx(ctx, account, outputs, bestHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -799,12 +798,14 @@ func (m *Manager) closeAccountExpiry(ctx context.Context, account *Account,
 	return spendPkg, nil
 }
 
-// closeAccountMultiSig creates the closing transaction of an account based on
-// the multi-sig script path and signs it. A signature from the auctioneer is
-// also required, which is requested within.
-func (m *Manager) closeAccountMultiSig(ctx context.Context, account *Account,
+// spendAccountMultiSig creates a spending transaction of an account with the
+// provided outputs based on the multi-sig script path and signs it. A signature
+// from the auctioneer is also required, which is requested within.
+func (m *Manager) spendAccountMultiSig(ctx context.Context, account *Account,
 	outputs []*wire.TxOut) (*spendPackage, error) {
 
+	// Craft a transaction that spends the account output that includes the
+	// provided inputs, outputs, and account modifiers.
 	spendPkg, err := m.createSpendTx(ctx, account, outputs, 0)
 	if err != nil {
 		return nil, err
@@ -824,11 +825,10 @@ func (m *Manager) closeAccountMultiSig(ctx context.Context, account *Account,
 	return spendPkg, nil
 }
 
-// createSpendTx creates a spending transaction of an account based on the
-// provided witness type and signs it. If the spending transaction takes
-// the expiration path, bestHeight is used as the lock time of the transaction,
-// otherwise it is 0. The transaction has its inputs and outputs sorted
-// according to BIP-69.
+// createSpendTx creates the spending transaction of an account and signs it.
+// If the spending transaction takes the expiration path, bestHeight is used as
+// the lock time of the transaction, otherwise it is 0. The transaction has its
+// inputs and outputs sorted according to BIP-69.
 func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 	outputs []*wire.TxOut, bestHeight uint32) (*spendPackage, error) {
 
@@ -868,6 +868,85 @@ func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 		tx:            tx,
 		witnessScript: witnessScript,
 		ourSig:        ourSig,
+	}, nil
+}
+
+// createNewAccountOutput creates the next account output in the sequence for a
+// an account spending transaction that spends to the provided outputs at the
+// given fee rate.
+func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
+	witnessType witnessType, feeRate chainfee.SatPerKWeight) (*wire.TxOut,
+	error) {
+
+	// To determine the new value of the account, we'll need to subtract the
+	// values of all additional outputs and the resulting fee of the
+	// transaction, which we'll need to compute based on its weight.
+	//
+	// Right off the bat, we'll add weight estimates for the existing
+	// account output that we're spending, and the new account output being
+	// created.
+	var accountInputWitnessSize int
+	switch witnessType {
+	case expiryWitness:
+		accountInputWitnessSize = clmscript.ExpiryWitnessSize
+	case multiSigWitness:
+		accountInputWitnessSize = clmscript.MultiSigWitnessSize
+	default:
+		return nil, fmt.Errorf("unknown witness type %v", witnessType)
+	}
+
+	var weightEstimator input.TxWeightEstimator
+	weightEstimator.AddWitnessInput(accountInputWitnessSize)
+	weightEstimator.AddP2WSHOutput()
+
+	inputTotal := account.Value
+
+	// We'll then add the weight estimates for any additional outputs
+	// provided, keeping track of the total output value sum as we go.
+	var outputTotal btcutil.Amount
+	for _, out := range outputs {
+		// To determine the proper weight of the output, we'll need to
+		// know its type.
+		pkScript, err := txscript.ParsePkScript(out.PkScript)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse output "+
+				"script %x: %v", out.PkScript, err)
+		}
+
+		switch pkScript.Class() {
+		case txscript.ScriptHashTy:
+			weightEstimator.AddP2SHOutput()
+		case txscript.WitnessV0PubKeyHashTy:
+			weightEstimator.AddP2WKHOutput()
+		case txscript.WitnessV0ScriptHashTy:
+			weightEstimator.AddP2WSHOutput()
+		default:
+			return nil, fmt.Errorf("unsupported output script %x",
+				out.PkScript)
+		}
+
+		outputTotal += btcutil.Amount(out.Value)
+	}
+
+	// With the weight estimated, compute the fee, which we'll then subtract
+	// from our input total and ensure our new account value isn't below our
+	// required minimum.
+	fee := feeRate.FeeForWeight(int64(weightEstimator.Weight()))
+	newAmount := inputTotal - outputTotal - fee
+	if newAmount < minAccountValue {
+		return nil, fmt.Errorf("new account value is below accepted "+
+			"minimum of %v", minAccountValue)
+	}
+
+	// Use the next output script in the sequence to avoid script reuse.
+	newPkScript, err := account.NextOutputScript()
+	if err != nil {
+		return nil, err
+	}
+
+	return &wire.TxOut{
+		Value:    int64(newAmount),
+		PkScript: newPkScript,
 	}, nil
 }
 
