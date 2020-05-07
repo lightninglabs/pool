@@ -19,6 +19,7 @@ var accountsCommands = []cli.Command{
 		Subcommands: []cli.Command{
 			newAccountCommand,
 			listAccountsCommand,
+			withdrawAccountCommand,
 			closeAccountCommand,
 		},
 	},
@@ -72,38 +73,13 @@ var newAccountCommand = cli.Command{
 }
 
 func newAccount(ctx *cli.Context) error {
-	args := ctx.Args()
+	cmd := "new"
 
-	var amtStr string
-	switch {
-	case ctx.IsSet("amt"):
-		amtStr = ctx.String("amt")
-	case args.Present():
-		amtStr = args.First()
-		args = args.Tail()
-	default:
-		// Show command help if no arguments and flags were provided.
-		return cli.ShowCommandHelp(ctx, "new")
-	}
-
-	amt, err := parseAmt(amtStr)
+	amt, err := parseUint64(ctx, 0, "amt", cmd)
 	if err != nil {
 		return err
 	}
-
-	var expiryStr string
-	switch {
-	case ctx.IsSet("expiry"):
-		expiryStr = ctx.String("expiry")
-	case args.Present():
-		expiryStr = args.First()
-		args = args.Tail()
-	default:
-		// Show command help if no arguments and flags were provided.
-		return cli.ShowCommandHelp(ctx, "new")
-	}
-
-	expiry, err := parseExpiry(expiryStr)
+	expiry, err := parseUint64(ctx, 1, "expiry", cmd)
 	if err != nil {
 		return err
 	}
@@ -117,7 +93,7 @@ func newAccount(ctx *cli.Context) error {
 	resp, err := client.InitAccount(context.Background(),
 		&clmrpc.InitAccountRequest{
 			AccountValue:  uint32(amt),
-			AccountExpiry: expiry,
+			AccountExpiry: uint32(expiry),
 		},
 	)
 	if err != nil {
@@ -166,6 +142,95 @@ func listAccounts(ctx *cli.Context) error {
 	return nil
 }
 
+var withdrawAccountCommand = cli.Command{
+	Name:      "withdraw",
+	ShortName: "w",
+	Usage:     "withdraw funds from an existing account",
+	Description: `
+	Withdraw funds from an existing account to a supported address.
+	`,
+	ArgsUsage: "addr sat_per_byte",
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name: "trader_key",
+			Usage: "the hex-encoded trader key of the account to " +
+				"withdraw funds from",
+		},
+		cli.StringFlag{
+			Name:  "addr",
+			Usage: "the address the withdrawn funds should go to",
+		},
+		cli.Uint64Flag{
+			Name: "amt",
+			Usage: "the amount that will be sent to the address " +
+				"and withdrawn from the account",
+		},
+		cli.Uint64Flag{
+			Name: "sat_per_byte",
+			Usage: "the fee rate expressed in sat/byte that " +
+				"should be used for the withdrawal",
+		},
+	},
+	Action: withdrawAccount,
+}
+
+func withdrawAccount(ctx *cli.Context) error {
+	cmd := "withdraw"
+	traderKey, err := parseHexStr(ctx, 0, "trader_key", cmd)
+	if err != nil {
+		return err
+	}
+	addr, err := parseStr(ctx, 1, "addr", cmd)
+	if err != nil {
+		return err
+	}
+	amt, err := parseUint64(ctx, 2, "amt", cmd)
+	if err != nil {
+		return err
+	}
+	satPerByte, err := parseUint64(ctx, 3, "sat_per_byte", cmd)
+	if err != nil {
+		return err
+	}
+
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.WithdrawAccount(
+		context.Background(), &clmrpc.WithdrawAccountRequest{
+			TraderKey: traderKey,
+			Outputs: []*clmrpc.Output{
+				{
+					Value:   uint32(amt),
+					Address: addr,
+				},
+			},
+			SatPerByte: uint32(satPerByte),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	var withdrawTxid chainhash.Hash
+	copy(withdrawTxid[:], resp.WithdrawTxid)
+
+	var withdrawAccountResp = struct {
+		Account      *Account `json:"account"`
+		WithdrawTxid string   `json:"withdraw_txid"`
+	}{
+		Account:      NewAccountFromProto(resp.Account),
+		WithdrawTxid: withdrawTxid.String(),
+	}
+
+	printJSON(withdrawAccountResp)
+
+	return nil
+}
+
 var closeAccountCommand = cli.Command{
 	Name:        "close",
 	ShortName:   "c",
@@ -182,21 +247,8 @@ var closeAccountCommand = cli.Command{
 }
 
 func closeAccount(ctx *cli.Context) error {
-	args := ctx.Args()
-
-	var traderKeyHex string
-	switch {
-	case ctx.IsSet("trader_key"):
-		traderKeyHex = ctx.String("trader_key")
-	case args.Present():
-		traderKeyHex = args.First()
-		args = args.Tail()
-	default:
-		// Show command help if no arguments and flags were provided.
-		return cli.ShowCommandHelp(ctx, "close")
-	}
-
-	traderKey, err := hex.DecodeString(traderKeyHex)
+	cmd := "close"
+	traderKey, err := parseHexStr(ctx, 0, "trader_key", cmd)
 	if err != nil {
 		return err
 	}

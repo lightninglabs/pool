@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -93,14 +94,6 @@ func parseAmt(text string) (btcutil.Amount, error) {
 	return btcutil.Amount(amtInt64), nil
 }
 
-func parseExpiry(text string) (uint32, error) {
-	expiry, err := strconv.ParseInt(text, 10, 32)
-	if err != nil {
-		return 0, fmt.Errorf("invalid expiry value: %v", err)
-	}
-	return uint32(expiry), nil
-}
-
 func getClientConn(address string) (*grpc.ClientConn, error) {
 	opts := []grpc.DialOption{
 		grpc.WithInsecure(),
@@ -113,4 +106,33 @@ func getClientConn(address string) (*grpc.ClientConn, error) {
 	}
 
 	return conn, nil
+}
+
+func parseStr(ctx *cli.Context, argIdx int, flag, cmd string) (string, error) {
+	var str string
+	switch {
+	case ctx.IsSet(flag):
+		str = ctx.String(flag)
+	case ctx.Args().Get(argIdx) != "":
+		str = ctx.Args().Get(argIdx)
+	default:
+		return "", cli.ShowCommandHelp(ctx, cmd)
+	}
+	return str, nil
+}
+
+func parseHexStr(ctx *cli.Context, argIdx int, flag, cmd string) ([]byte, error) {
+	hexStr, err := parseStr(ctx, argIdx, flag, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return hex.DecodeString(hexStr)
+}
+
+func parseUint64(ctx *cli.Context, argIdx int, flag, cmd string) (uint64, error) {
+	str, err := parseStr(ctx, argIdx, flag, cmd)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseUint(str, 10, 64)
 }
