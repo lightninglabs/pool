@@ -731,32 +731,53 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		closeOutputs = append(closeOutputs, output)
 	}
 
-	var spendPkg *spendPackage
+	_, spendPkg, err := m.spendAccount(
+		ctx, account, closeOutputs, witnessType, bestHeight,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return spendPkg.tx, nil
+}
+
+// spendAccount houses most of the logic required to properly spend an account
+// by creating the spending transaction, updating persisted account states,
+// requesting a signature from the auctioneer if necessary, and finally
+// broadcasting the spending transaction. These operations are performed in this
+// order to ensure trader are able to resume the spend of an account upon
+// restarts if they happen to shutdown mid-process.
+func (m *Manager) spendAccount(ctx context.Context, account *Account,
+	outputs []*wire.TxOut, witnessType witnessType,
+	bestHeight uint32) (*Account, *spendPackage, error) {
+
+	// Create the spending transaction of an account based on the provided
+	// witness type.
+	var (
+		spendPkg *spendPackage
+		err      error
+	)
 	switch witnessType {
 	case expiryWitness:
 		spendPkg, err = m.spendAccountExpiry(
-			ctx, account, closeOutputs, bestHeight,
+			ctx, account, outputs, bestHeight,
 		)
 
 	case multiSigWitness:
-		spendPkg, err = m.createSpendTx(ctx, account, closeOutputs, 0)
+		spendPkg, err = m.createSpendTx(ctx, account, outputs, 0)
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// With the transaction crafted, update our on-disk state and broadcast
 	// the transaction.
-	log.Infof("Closing account %x with transaction %v",
-		account.TraderKey.PubKey.SerializeCompressed(),
-		spendPkg.tx.TxHash())
-
-	err = m.cfg.Store.UpdateAccount(
-		account, StateModifier(StatePendingClosed),
-		CloseTxModifier(spendPkg.tx),
-	)
+	modifiers := []Modifier{
+		StateModifier(StatePendingClosed), CloseTxModifier(spendPkg.tx),
+	}
+	err = m.cfg.Store.UpdateAccount(account, modifiers...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// If we require the auctioneer's signature, request it now.
@@ -765,7 +786,7 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 			ctx, account, spendPkg,
 		)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		// TODO(wilmer): Use proper input index when multiple inputs are
 		// supported.
@@ -773,10 +794,10 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 	}
 
 	if err := m.cfg.Wallet.PublishTransaction(ctx, spendPkg.tx); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return spendPkg.tx, nil
+	return account, spendPkg, nil
 }
 
 // determineWitnessType determines the appropriate witness type to use for the
