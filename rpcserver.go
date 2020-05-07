@@ -24,6 +24,7 @@ import (
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -722,6 +723,59 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 	}, nil
 }
 
+// WithdrawAccount handles a trader's request to withdraw funds from the
+// specified account by spending the current account output to the specified
+// outputs.
+func (s *rpcServer) WithdrawAccount(ctx context.Context,
+	req *clmrpc.WithdrawAccountRequest) (*clmrpc.WithdrawAccountResponse, error) {
+
+	// Ensure the trader key is well formed.
+	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure the outputs we'll withdraw to are well formed.
+	if len(req.Outputs) == 0 {
+		return nil, errors.New("missing outputs for withdrawal")
+	}
+	outputs, err := s.parseRPCOutputs(req.Outputs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enforce a minimum fee rate of 1 sat/vbyte.
+	feeRate := chainfee.SatPerKVByte(req.SatPerByte * 1000).FeePerKWeight()
+	if feeRate < chainfee.FeePerKwFloor {
+		log.Infof("Manual fee rate input of %d sat/kw is too low, "+
+			"using %d sat/kw instead", feeRate,
+			chainfee.FeePerKwFloor)
+		feeRate = chainfee.FeePerKwFloor
+	}
+
+	// Proceed to process the withdrawal and map its response to the RPC's
+	// response.
+	modifiedAccount, tx, err := s.accountManager.WithdrawAccount(
+		ctx, traderKey, outputs, feeRate,
+		atomic.LoadUint32(&s.bestHeight),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcModifiedAccount, err := marshallAccount(modifiedAccount)
+	if err != nil {
+		return nil, err
+	}
+	txHash := tx.TxHash()
+
+	return &clmrpc.WithdrawAccountResponse{
+		Account:      rpcModifiedAccount,
+		WithdrawTxid: txHash[:],
+	}, nil
+}
+
+// CloseAccount handles a trader's request to close the specified account.
 func (s *rpcServer) CloseAccount(ctx context.Context,
 	req *clmrpc.CloseAccountRequest) (*clmrpc.CloseAccountResponse, error) {
 
@@ -732,18 +786,9 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 
 	var closeOutputs []*wire.TxOut
 	if len(req.Outputs) > 0 {
-		closeOutputs = make([]*wire.TxOut, 0, len(req.Outputs))
-		for _, output := range req.Outputs {
-			// Make sure they've provided a valid output script.
-			_, err := txscript.ParsePkScript(output.Script)
-			if err != nil {
-				return nil, err
-			}
-
-			closeOutputs = append(closeOutputs, &wire.TxOut{
-				Value:    int64(output.Value),
-				PkScript: output.Script,
-			})
+		closeOutputs, err = s.parseRPCOutputs(req.Outputs)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -760,11 +805,37 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 	}, nil
 }
 
-func (s *rpcServer) ModifyAccount(ctx context.Context,
-	req *clmrpc.ModifyAccountRequest) (
-	*clmrpc.ModifyAccountResponse, error) {
+// parseRPCOutputs maps []*clmrpc.Output -> []*wire.TxOut.
+func (s *rpcServer) parseRPCOutputs(outputs []*clmrpc.Output) ([]*wire.TxOut,
+	error) {
 
-	return nil, fmt.Errorf("unimplemented")
+	res := make([]*wire.TxOut, 0, len(outputs))
+	for _, output := range outputs {
+		// Decode each address, make sure it's valid for the current
+		// network, and derive its output script.
+		addr, err := btcutil.DecodeAddress(
+			output.Address, s.lndServices.ChainParams,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if !addr.IsForNet(s.lndServices.ChainParams) {
+			return nil, fmt.Errorf("invalid address %v for %v "+
+				"network", addr.String(),
+				s.lndServices.ChainParams.Name)
+		}
+		outputScript, err := txscript.PayToAddrScript(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		res = append(res, &wire.TxOut{
+			Value:    int64(output.Value),
+			PkScript: outputScript,
+		})
+	}
+
+	return res, nil
 }
 
 // SubmitOrder assembles all the information that is required to submit an order

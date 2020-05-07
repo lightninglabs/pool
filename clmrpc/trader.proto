@@ -25,9 +25,9 @@ service Trader {
         };
     };
 
-    rpc ModifyAccount (ModifyAccountRequest) returns (ModifyAccountResponse) {
+    rpc WithdrawAccount (WithdrawAccountRequest) returns (WithdrawAccountResponse) {
         option (google.api.http) = {
-            post: "/v1/clm/accounts/{account_sub_key_hex}"
+            post: "/v1/clm/accounts/withdraw/{trader_key}"
             body: "*"
         };
     };
@@ -67,8 +67,8 @@ message Output {
     // The value, in satoshis, of the output.
     uint32 value = 1;
 
-    // The script of the output to send the value to.
-    bytes script = 2;
+    // The address corresponding to the output.
+    string address = 2;
 }
 
 message CloseAccountRequest {
@@ -87,13 +87,28 @@ message CloseAccountResponse {
     bytes close_txid = 1 [json_name = "close_txid"];
 }
 
-message ModifyAccountRequest {
-    string account_sub_key_hex = 1;
-    int64 new_account_balance = 2;
-}
-message ModifyAccountResponse {
-}
+message WithdrawAccountRequest {
+    /*
+    The trader key associated with the account that funds will be withdrawed
+    from.
+    */
+    bytes trader_key = 1;
 
+    // The outputs we'll withdraw funds from the account into.
+    repeated Output outputs = 2;
+
+    /*
+    The fee rate, in satoshis per vbyte, to use for the withdrawal transaction.
+    */
+    uint32 sat_per_byte = 3;
+}
+message WithdrawAccountResponse {
+    // The state of the account after processing the withdrawal.
+    Account account = 1;
+
+    // The transaction used to withdraw funds from the account.
+    bytes withdraw_txid = 2;
+}
 
 enum AccountState {
     // The state of an account when it is pending its confirmation on-chain.

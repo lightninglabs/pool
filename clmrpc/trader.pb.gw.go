@@ -89,8 +89,8 @@ func request_Trader_CloseAccount_0(ctx context.Context, marshaler runtime.Marsha
 
 }
 
-func request_Trader_ModifyAccount_0(ctx context.Context, marshaler runtime.Marshaler, client TraderClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq ModifyAccountRequest
+func request_Trader_WithdrawAccount_0(ctx context.Context, marshaler runtime.Marshaler, client TraderClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq WithdrawAccountRequest
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -108,18 +108,18 @@ func request_Trader_ModifyAccount_0(ctx context.Context, marshaler runtime.Marsh
 		_   = err
 	)
 
-	val, ok = pathParams["account_sub_key_hex"]
+	val, ok = pathParams["trader_key"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "account_sub_key_hex")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "trader_key")
 	}
 
-	protoReq.AccountSubKeyHex, err = runtime.String(val)
+	protoReq.TraderKey, err = runtime.Bytes(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "account_sub_key_hex", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "trader_key", err)
 	}
 
-	msg, err := client.ModifyAccount(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.WithdrawAccount(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
@@ -275,7 +275,7 @@ func RegisterTraderHandlerClient(ctx context.Context, mux *runtime.ServeMux, cli
 
 	})
 
-	mux.Handle("POST", pattern_Trader_ModifyAccount_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_Trader_WithdrawAccount_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
@@ -284,14 +284,14 @@ func RegisterTraderHandlerClient(ctx context.Context, mux *runtime.ServeMux, cli
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_Trader_ModifyAccount_0(rctx, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_Trader_WithdrawAccount_0(rctx, inboundMarshaler, client, req, pathParams)
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_Trader_ModifyAccount_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_Trader_WithdrawAccount_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -365,7 +365,7 @@ var (
 
 	pattern_Trader_CloseAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "clm", "accounts", "trader_key"}, ""))
 
-	pattern_Trader_ModifyAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "clm", "accounts", "account_sub_key_hex"}, ""))
+	pattern_Trader_WithdrawAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "clm", "accounts", "withdraw", "trader_key"}, ""))
 
 	pattern_Trader_SubmitOrder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "clm", "orders"}, ""))
 
@@ -381,7 +381,7 @@ var (
 
 	forward_Trader_CloseAccount_0 = runtime.ForwardResponseMessage
 
-	forward_Trader_ModifyAccount_0 = runtime.ForwardResponseMessage
+	forward_Trader_WithdrawAccount_0 = runtime.ForwardResponseMessage
 
 	forward_Trader_SubmitOrder_0 = runtime.ForwardResponseMessage
 

@@ -55,30 +55,32 @@
         ]
       }
     },
-    "/v1/clm/accounts/{account_sub_key_hex}": {
+    "/v1/clm/accounts/withdraw/{trader_key}": {
       "post": {
-        "operationId": "ModifyAccount",
+        "operationId": "WithdrawAccount",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcModifyAccountResponse"
+              "$ref": "#/definitions/clmrpcWithdrawAccountResponse"
             }
           }
         },
         "parameters": [
           {
-            "name": "account_sub_key_hex",
+            "name": "trader_key",
+            "description": "The trader key associated with the account that funds will be withdrawed\nfrom.",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "byte"
           },
           {
             "name": "body",
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/clmrpcModifyAccountRequest"
+              "$ref": "#/definitions/clmrpcWithdrawAccountRequest"
             }
           }
         ],
@@ -340,21 +342,6 @@
         }
       }
     },
-    "clmrpcModifyAccountRequest": {
-      "type": "object",
-      "properties": {
-        "account_sub_key_hex": {
-          "type": "string"
-        },
-        "new_account_balance": {
-          "type": "string",
-          "format": "int64"
-        }
-      }
-    },
-    "clmrpcModifyAccountResponse": {
-      "type": "object"
-    },
     "clmrpcOrder": {
       "type": "object",
       "properties": {
@@ -422,10 +409,9 @@
           "format": "int64",
           "description": "The value, in satoshis, of the output."
         },
-        "script": {
+        "address": {
           "type": "string",
-          "format": "byte",
-          "description": "The script of the output to send the value to."
+          "description": "The address corresponding to the output."
         }
       }
     },
@@ -451,6 +437,42 @@
           "type": "boolean",
           "format": "boolean",
           "description": "*\nOrder was accepted."
+        }
+      }
+    },
+    "clmrpcWithdrawAccountRequest": {
+      "type": "object",
+      "properties": {
+        "trader_key": {
+          "type": "string",
+          "format": "byte",
+          "description": "The trader key associated with the account that funds will be withdrawed\nfrom."
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/clmrpcOutput"
+          },
+          "description": "The outputs we'll withdraw funds from the account into."
+        },
+        "sat_per_byte": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The fee rate, in satoshis per vbyte, to use for the withdrawal transaction."
+        }
+      }
+    },
+    "clmrpcWithdrawAccountResponse": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/definitions/clmrpcAccount",
+          "description": "The state of the account after processing the withdrawal."
+        },
+        "withdraw_txid": {
+          "type": "string",
+          "format": "byte",
+          "description": "The transaction used to withdraw funds from the account."
         }
       }
     }
