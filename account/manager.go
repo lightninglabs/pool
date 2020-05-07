@@ -387,6 +387,10 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account,
 	// either a matched order or trader modification, so we'll need to wait
 	// for its confirmation. Once it confirms, handleAccountConf will take
 	// care of the rest of the flow.
+	//
+	// TODO(wilmer): Handle restart case where the client shuts down after
+	// the modification has been reflected on-disk, but the auctioneer's
+	// signature hasn't been received.
 	case StatePendingUpdate:
 		numConfs := numConfsForValue(account.Value)
 		log.Infof("Waiting for %v confirmation(s) of account %x",
@@ -555,12 +559,6 @@ func (m *Manager) handleAccountConf(traderKey *btcec.PublicKey,
 		return err
 	}
 
-	// Ensure we don't transition an account that's been closed back to open
-	// if the account was closed before it was open.
-	if account.State != StatePendingOpen {
-		return nil
-	}
-
 	log.Infof("Account %x is now confirmed at height %v!",
 		traderKey.SerializeCompressed(), confDetails.BlockHeight)
 
@@ -695,6 +693,47 @@ func (m *Manager) handleAccountExpiry(traderKey *btcec.PublicKey) error {
 	return nil
 }
 
+// WithdrawAccount attempts to withdraw funds from the account associated with
+// the given trader key into the provided outputs.
+func (m *Manager) WithdrawAccount(ctx context.Context,
+	traderKey *btcec.PublicKey, outputs []*wire.TxOut,
+	feeRate chainfee.SatPerKWeight,
+	bestHeight uint32) (*Account, *wire.MsgTx, error) {
+
+	account, err := m.cfg.Store.Account(traderKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if account.State != StateOpen {
+		return nil, nil, fmt.Errorf("account must be in %v to be"+
+			"modified", StateOpen)
+	}
+
+	// TODO(wilmer): Reject if account has pending orders.
+
+	witnessType := determineWitnessType(account, bestHeight)
+	newAccountOutput, modifiers, err := createNewAccountOutput(
+		account, outputs, witnessType, feeRate,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	outputs = append(outputs, newAccountOutput)
+	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
+
+	modifiedAccount, spendPkg, err := m.spendAccount(
+		ctx, account, outputs, witnessType, modifiers, false,
+		bestHeight,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return modifiedAccount, spendPkg.tx, nil
+}
+
 // CloseAccount attempts to close the account associated with the given trader
 // key. Closing the account requires a signature of the auctioneer since the
 // account is composed of a 2-of-2 multi-sig. The account is closed to a P2WPKH
@@ -731,8 +770,10 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		closeOutputs = append(closeOutputs, output)
 	}
 
+	modifiers := []Modifier{StateModifier(StatePendingClosed)}
 	_, spendPkg, err := m.spendAccount(
-		ctx, account, closeOutputs, witnessType, bestHeight,
+		ctx, account, closeOutputs, witnessType, modifiers, true,
+		bestHeight,
 	)
 	if err != nil {
 		return nil, err
@@ -743,13 +784,14 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 
 // spendAccount houses most of the logic required to properly spend an account
 // by creating the spending transaction, updating persisted account states,
-// requesting a signature from the auctioneer if necessary, and finally
-// broadcasting the spending transaction. These operations are performed in this
-// order to ensure trader are able to resume the spend of an account upon
-// restarts if they happen to shutdown mid-process.
+// requesting a signature from the auctioneer if necessary, broadcasting the
+// spending transaction, and finally watching for the new account state
+// on-chain. These operations are performed in this order to ensure trader are
+// able to resume the spend of an account upon restarts if they happen to
+// shutdown mid-process.
 func (m *Manager) spendAccount(ctx context.Context, account *Account,
-	outputs []*wire.TxOut, witnessType witnessType,
-	bestHeight uint32) (*Account, *spendPackage, error) {
+	outputs []*wire.TxOut, witnessType witnessType, modifiers []Modifier,
+	isClose bool, bestHeight uint32) (*Account, *spendPackage, error) {
 
 	// Create the spending transaction of an account based on the provided
 	// witness type.
@@ -759,6 +801,13 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 	)
 	switch witnessType {
 	case expiryWitness:
+		// TODO(wilmer): Support modifications through the expiry path.
+		// This will require a new account expiration.
+		if !isClose {
+			return nil, nil, errors.New("modifications for expired " +
+				"accounts are not currently supported")
+		}
+
 		spendPkg, err = m.spendAccountExpiry(
 			ctx, account, outputs, bestHeight,
 		)
@@ -771,19 +820,40 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 	}
 
 	// With the transaction crafted, update our on-disk state and broadcast
-	// the transaction.
-	modifiers := []Modifier{
-		StateModifier(StatePendingClosed), CloseTxModifier(spendPkg.tx),
+	// the transaction. We'll need some additional modifiers based on
+	// whether the account is being closed or not.
+	if isClose {
+		modifiers = append(modifiers, CloseTxModifier(spendPkg.tx))
+	} else {
+		// The account output should be recreated, so we need to locate
+		// the new account outpoint.
+		newAccountOutput, err := account.Copy(modifiers...).Output()
+		if err != nil {
+			return nil, nil, err
+		}
+		idx, ok := clmscript.LocateOutputScript(
+			spendPkg.tx, newAccountOutput.PkScript,
+		)
+		if !ok {
+			return nil, nil, fmt.Errorf("new account output "+
+				"script %x not found in spending transaction",
+				newAccountOutput.PkScript)
+		}
+		modifiers = append(modifiers, OutPointModifier(wire.OutPoint{
+			Hash:  spendPkg.tx.TxHash(),
+			Index: idx,
+		}))
 	}
-	err = m.cfg.Store.UpdateAccount(account, modifiers...)
-	if err != nil {
+
+	prevAccountState := account.Copy()
+	if err := m.cfg.Store.UpdateAccount(account, modifiers...); err != nil {
 		return nil, nil, err
 	}
 
 	// If we require the auctioneer's signature, request it now.
 	if witnessType == multiSigWitness {
 		witness, err := m.constructMultiSigWitness(
-			ctx, account, spendPkg,
+			ctx, prevAccountState, spendPkg, modifiers, isClose,
 		)
 		if err != nil {
 			return nil, nil, err
@@ -831,11 +901,33 @@ func (m *Manager) spendAccountExpiry(ctx context.Context, account *Account,
 // given spending transaction of an account and returns the fully constructed
 // witness to spend the account input.
 func (m *Manager) constructMultiSigWitness(ctx context.Context,
-	account *Account, spendPkg *spendPackage) (wire.TxWitness, error) {
+	account *Account, spendPkg *spendPackage, modifiers []Modifier,
+	isClose bool) (wire.TxWitness, error) {
 
-	auctioneerSig, err := m.cfg.Auctioneer.ModifyAccount(
-		ctx, account, nil, spendPkg.tx.TxOut, nil,
+	var (
+		auctioneerSig []byte
+		err           error
 	)
+
+	if isClose {
+		// If the account is being closed, we shouldn't provide any
+		// modifiers.
+		auctioneerSig, err = m.cfg.Auctioneer.ModifyAccount(
+			ctx, account, nil, spendPkg.tx.TxOut, nil,
+		)
+	} else {
+		// Otherwise, the account output is being recreated due to a
+		// modification, so we need to filter it out from the spending
+		// transaction as the auctioneer can reconstruct it themselves.
+		idx := account.Copy(modifiers...).OutPoint.Index
+		outputs := make([]*wire.TxOut, len(spendPkg.tx.TxOut)-1)
+		copy(outputs, spendPkg.tx.TxOut[:idx])
+		copy(outputs, spendPkg.tx.TxOut[idx+1:])
+
+		auctioneerSig, err = m.cfg.Auctioneer.ModifyAccount(
+			ctx, account, nil, outputs, modifiers,
+		)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -896,7 +988,7 @@ func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 // given fee rate.
 func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
 	witnessType witnessType, feeRate chainfee.SatPerKWeight) (*wire.TxOut,
-	error) {
+	[]Modifier, error) {
 
 	// To determine the new value of the account, we'll need to subtract the
 	// values of all additional outputs and the resulting fee of the
@@ -912,7 +1004,8 @@ func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
 	case multiSigWitness:
 		accountInputWitnessSize = clmscript.MultiSigWitnessSize
 	default:
-		return nil, fmt.Errorf("unknown witness type %v", witnessType)
+		return nil, nil, fmt.Errorf("unknown witness type %v",
+			witnessType)
 	}
 
 	var weightEstimator input.TxWeightEstimator
@@ -929,7 +1022,7 @@ func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
 		// know its type.
 		pkScript, err := txscript.ParsePkScript(out.PkScript)
 		if err != nil {
-			return nil, fmt.Errorf("unable to parse output "+
+			return nil, nil, fmt.Errorf("unable to parse output "+
 				"script %x: %v", out.PkScript, err)
 		}
 
@@ -941,8 +1034,8 @@ func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
 		case txscript.WitnessV0ScriptHashTy:
 			weightEstimator.AddP2WSHOutput()
 		default:
-			return nil, fmt.Errorf("unsupported output script %x",
-				out.PkScript)
+			return nil, nil, fmt.Errorf("unsupported output "+
+				"script %x", out.PkScript)
 		}
 
 		outputTotal += btcutil.Amount(out.Value)
@@ -954,20 +1047,22 @@ func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
 	fee := feeRate.FeeForWeight(int64(weightEstimator.Weight()))
 	newAmount := inputTotal - outputTotal - fee
 	if newAmount < minAccountValue {
-		return nil, fmt.Errorf("new account value is below accepted "+
-			"minimum of %v", minAccountValue)
+		return nil, nil, fmt.Errorf("new account value is below "+
+			"accepted minimum of %v", minAccountValue)
 	}
 
 	// Use the next output script in the sequence to avoid script reuse.
 	newPkScript, err := account.NextOutputScript()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return &wire.TxOut{
+	newAccountOutput := &wire.TxOut{
 		Value:    int64(newAmount),
 		PkScript: newPkScript,
-	}, nil
+	}
+	modifiers := []Modifier{ValueModifier(newAmount), IncrementBatchKey()}
+	return newAccountOutput, modifiers, nil
 }
 
 // sanityCheckAccountSpendTx ensures that the spending transaction of an account
