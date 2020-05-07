@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"errors"
+	"math/big"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
@@ -176,6 +177,46 @@ func (a *Account) NextOutputScript() ([]byte, error) {
 		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey, nextBatchKey,
 		a.Secret,
 	)
+}
+
+// Copy returns a deep copy of the account with the given modifiers applied.
+func (a *Account) Copy(modifiers ...Modifier) *Account {
+	accountCopy := &Account{
+		Value:  a.Value,
+		Expiry: a.Expiry,
+		TraderKey: &keychain.KeyDescriptor{
+			KeyLocator: a.TraderKey.KeyLocator,
+			PubKey: &btcec.PublicKey{
+				X:     big.NewInt(0).Set(a.TraderKey.PubKey.X),
+				Y:     big.NewInt(0).Set(a.TraderKey.PubKey.Y),
+				Curve: a.TraderKey.PubKey.Curve,
+			},
+		},
+		AuctioneerKey: &btcec.PublicKey{
+			X:     big.NewInt(0).Set(a.AuctioneerKey.X),
+			Y:     big.NewInt(0).Set(a.AuctioneerKey.Y),
+			Curve: a.AuctioneerKey.Curve,
+		},
+		BatchKey: &btcec.PublicKey{
+			X:     big.NewInt(0).Set(a.BatchKey.X),
+			Y:     big.NewInt(0).Set(a.BatchKey.Y),
+			Curve: a.BatchKey.Curve,
+		},
+		Secret:     a.Secret,
+		State:      a.State,
+		HeightHint: a.HeightHint,
+		OutPoint:   a.OutPoint,
+	}
+
+	if a.CloseTx != nil {
+		accountCopy.CloseTx = a.CloseTx.Copy()
+	}
+
+	for _, modifier := range modifiers {
+		modifier(accountCopy)
+	}
+
+	return accountCopy
 }
 
 // Modifier abstracts the modification of an account through a function.
