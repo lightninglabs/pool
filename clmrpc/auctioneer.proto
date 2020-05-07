@@ -571,12 +571,12 @@ message InvalidOrder {
     string fail_string = 3;
 }
 
-message Input {
+message ServerInput {
     // The outpoint that the input corresponds to.
     OutPoint outpoint = 1;
 }
 
-message Output {
+message ServerOutput {
     // The value, in satoshis, of the output.
     uint32 value = 1 [json_name = "value"];
 
@@ -596,17 +596,22 @@ message ServerModifyAccountRequest {
     of an account. These can be used to deposit more funds into an account.
     These must be under control of the backing lnd node's wallet.
     */
-    repeated Input new_inputs = 2;
+    repeated ServerInput new_inputs = 2;
 
     /*
     An additional set of outputs that can be included in the spending
     transaction of an account. These can be used to withdraw funds from an
     account.
     */
-    repeated Output new_outputs = 3;
+    repeated ServerOutput new_outputs = 3;
+
+    message NewAccountParameters {
+        // The new value of the account.
+        uint32 value = 1;
+    }
 
     // The new parameters to apply for the account.
-    ServerInitAccountRequest new_account = 5;
+    NewAccountParameters new_params = 4;
 }
 
 message ServerModifyAccountResponse {

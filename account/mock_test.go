@@ -167,8 +167,8 @@ func (a *mockAuctioneer) InitAccount(context.Context, *Account) error {
 	return nil
 }
 
-func (a *mockAuctioneer) CloseAccount(context.Context, *btcec.PublicKey,
-	[]*wire.TxOut) ([]byte, error) {
+func (a *mockAuctioneer) ModifyAccount(context.Context, *Account, []*wire.TxIn,
+	[]*wire.TxOut, []Modifier) ([]byte, error) {
 
 	return []byte("auctioneer sig"), nil
 }

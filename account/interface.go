@@ -304,12 +304,15 @@ type Auctioneer interface {
 	// can be used once fully confirmed.
 	InitAccount(context.Context, *Account) error
 
-	// CloseAccount sends an intent to the auctioneer that we'd like to
-	// close the account with the associated trader key by withdrawing the
-	// funds to the given outputs. The auctioneer's signature is returned,
-	// allowing us to broadcast a transaction sweeping the account.
-	CloseAccount(context.Context, *btcec.PublicKey,
-		[]*wire.TxOut) ([]byte, error)
+	// ModifyAccount sends an intent to the auctioneer that we'd like to
+	// modify the account with the associated trader key. The auctioneer's
+	// signature is returned, allowing us to broadcast a transaction
+	// spending from the account allowing our modifications to take place.
+	// The inputs and outputs provided should exclude the account input
+	// being spent and the account output potentially being recreated, since
+	// the auctioneer can construct those themselves.
+	ModifyAccount(context.Context, *Account, []*wire.TxIn,
+		[]*wire.TxOut, []Modifier) ([]byte, error)
 
 	// SubscribeAccountUpdates opens a stream to the server and subscribes
 	// to all updates that concern the given account, including all orders

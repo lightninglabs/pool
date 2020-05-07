@@ -63,6 +63,14 @@ message ListAccountsResponse {
     repeated Account accounts = 1;
 }
 
+message Output {
+    // The value, in satoshis, of the output.
+    uint32 value = 1;
+
+    // The script of the output to send the value to.
+    bytes script = 2;
+}
+
 message CloseAccountRequest {
     // The trader key associated with the account that will be closed.
     bytes trader_key = 1 [json_name = "trader_key"];

@@ -230,27 +230,50 @@ func (c *Client) InitAccount(ctx context.Context, account *account.Account) erro
 	return err
 }
 
-// CloseAccount sends an intent to the auctioneer that we'd like to close the
-// account with the associated trader key by withdrawing the funds to the given
-// outputs. The auctioneer's signature is returned, allowing us to broadcast a
-// transaction sweeping the account.
-func (c *Client) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
-	outputs []*wire.TxOut) ([]byte, error) {
+// ModifyAccount sends an intent to the auctioneer that we'd like to modify the
+// account with the associated trader key. The auctioneer's signature is
+// returned, allowing us to broadcast a transaction spending from the account
+// allowing our modifications to take place. The inputs and outputs provided
+// should exclude the account input being spent and the account output
+// potentially being recreated, since the auctioneer can construct those
+// themselves. If no modifiers are present, then the auctioneer will interpret
+// the request as an account closure.
+func (c *Client) ModifyAccount(ctx context.Context, account *account.Account,
+	inputs []*wire.TxIn, outputs []*wire.TxOut,
+	modifiers []account.Modifier) ([]byte, error) {
 
-	var rpcOutputs []*clmrpc.Output
-	if len(outputs) > 0 {
-		rpcOutputs = make([]*clmrpc.Output, 0, len(outputs))
-		for _, output := range outputs {
-			rpcOutputs = append(rpcOutputs, &clmrpc.Output{
-				Value:  uint32(output.Value),
-				Script: output.PkScript,
-			})
+	rpcInputs := make([]*clmrpc.ServerInput, 0, len(inputs))
+	for _, input := range inputs {
+		op := input.PreviousOutPoint
+		rpcInputs = append(rpcInputs, &clmrpc.ServerInput{
+			Outpoint: &clmrpc.OutPoint{
+				Txid:        op.Hash[:],
+				OutputIndex: op.Index,
+			},
+		})
+	}
+
+	rpcOutputs := make([]*clmrpc.ServerOutput, 0, len(outputs))
+	for _, output := range outputs {
+		rpcOutputs = append(rpcOutputs, &clmrpc.ServerOutput{
+			Value:  uint32(output.Value),
+			Script: output.PkScript,
+		})
+	}
+
+	var rpcNewParams *clmrpc.ServerModifyAccountRequest_NewAccountParameters
+	modifiedAccount := account.Copy(modifiers...)
+	if len(modifiers) > 0 {
+		rpcNewParams = &clmrpc.ServerModifyAccountRequest_NewAccountParameters{
+			Value: uint32(modifiedAccount.Value),
 		}
 	}
 
 	resp, err := c.client.ModifyAccount(ctx, &clmrpc.ServerModifyAccountRequest{
-		UserSubKey: traderKey.SerializeCompressed(),
+		UserSubKey: account.TraderKey.PubKey.SerializeCompressed(),
+		NewInputs:  rpcInputs,
 		NewOutputs: rpcOutputs,
+		NewParams:  rpcNewParams,
 	})
 	if err != nil {
 		return nil, err

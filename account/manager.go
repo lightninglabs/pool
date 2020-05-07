@@ -833,8 +833,8 @@ func (m *Manager) spendAccountExpiry(ctx context.Context, account *Account,
 func (m *Manager) constructMultiSigWitness(ctx context.Context,
 	account *Account, spendPkg *spendPackage) (wire.TxWitness, error) {
 
-	auctioneerSig, err := m.cfg.Auctioneer.CloseAccount(
-		ctx, account.TraderKey.PubKey, spendPkg.tx.TxOut,
+	auctioneerSig, err := m.cfg.Auctioneer.ModifyAccount(
+		ctx, account, nil, spendPkg.tx.TxOut, nil,
 	)
 	if err != nil {
 		return nil, err
