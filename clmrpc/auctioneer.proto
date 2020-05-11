@@ -138,6 +138,16 @@ message ClientAuctionMessage {
         and the inputs to spend from the accounts are now signed.
         */
         OrderMatchSign sign = 5;
+
+        /*
+        The trader has lost its database and is trying to recover their
+        accounts. This message can be sent after the successful completion of
+        the 3-way authentication handshake where it will be established if the
+        account exists on the auctioneer's side. This message must only be sent
+        if the auctioneer knows of the account, otherwise it will regard it as a
+        critical error and terminate the connection.
+        */
+        AccountRecovery recover = 6;
     }
 }
 
@@ -242,6 +252,13 @@ message OrderMatchSign {
     map<string, bytes> account_sigs = 2;
 }
 
+message AccountRecovery {
+    /*
+    The trader's account key of the account to recover.
+    */
+    bytes trader_key = 1;
+}
+
 message ServerAuctionMessage {
     oneof msg {
         /*
@@ -253,31 +270,44 @@ message ServerAuctionMessage {
         ServerChallenge challenge = 1;
 
         /*
-        The auctioneer has matched a set of orders into a batch and now
-        instructs the traders to validate the batch and prepare for order
-        execution. Because traders have the possibility of backing out of a
-        batch, multiple of these messages with the SAME batch_id can be sent.
+        The trader has subscribed to account updates successfully, the 3-way
+        authentication handshake completed normally.
         */
-        OrderMatchPrepare prepare = 2;
-
-        /*
-        This message is sent after all traders send back an OrderMatchAccept
-        method. It signals that the traders should execute their local funding
-        protocol, then send signatures for their accout inputs.
-        */
-        OrderMatchSignBegin sign = 3;
-
-        /*
-        All traders have accepted and signed the batch and the final transaction
-        was broadcast.
-        */
-        OrderMatchFinalize finalize = 4;
+        SubscribeSuccess success = 2;
 
         /*
         An error occurred during any part of the communication. The trader
         should inspect the error code and act accordingly.
         */
-        SubscribeError error = 5;
+        SubscribeError error = 3;
+
+        /*
+        The auctioneer has matched a set of orders into a batch and now
+        instructs the traders to validate the batch and prepare for order
+        execution. Because traders have the possibility of backing out of a
+        batch, multiple of these messages with the SAME batch_id can be sent.
+        */
+        OrderMatchPrepare prepare = 4;
+
+        /*
+        This message is sent after all traders send back an OrderMatchAccept
+        method. It signals that the traders should execute their local funding
+        protocol, then send signatures for their account inputs.
+        */
+        OrderMatchSignBegin sign = 5;
+
+        /*
+        All traders have accepted and signed the batch and the final transaction
+        was broadcast.
+        */
+        OrderMatchFinalize finalize = 6;
+
+        /*
+        The answer to a trader's request for account recovery. This message
+        contains all information that is needed to restore the account to
+        working order on the trader side.
+        */
+        AuctionAccount account = 7;
     }
 }
 
@@ -292,6 +322,13 @@ message ServerChallenge {
     The commit hash the challenge was created for.
     */
     bytes commit_hash = 2;
+}
+
+message SubscribeSuccess {
+    /*
+    The trader's account key this message is referring to.
+    */
+    bytes trader_key = 1;
 }
 
 message OrderMatchPrepare {
@@ -388,6 +425,12 @@ message SubscribeError {
         long-lived stream/connection and try to connect again after some time.
         */
         SERVER_SHUTDOWN = 1;
+
+        /*
+        The account the trader tried to subscribe to does not exist in the
+        auctioneer's database. 
+        */
+        ACCOUNT_DOES_NOT_EXIST = 2;
     }
 
     /*
@@ -399,6 +442,95 @@ message SubscribeError {
     The error code of the subscription error.
     */
     Error error_code = 2;
+
+    /*
+    The trader's account key this error is referring to. This is not set if
+    the error code is SERVER_SHUTDOWN as that error is only sent once per
+    connection and not per individual subscription.
+    */
+    bytes trader_key = 3;
+}
+
+enum AuctionAccountState {
+    /*
+    The account's funding transaction is not yet confirmed on-chain.
+    */
+    STATE_PENDING_OPEN = 0;
+
+    /*
+    The account is fully open and confirmed on-chain.
+    */
+    STATE_OPEN = 1;
+
+    /*
+    The account is still open but the CLTV expiry has passed and the trader can
+    close it without the auctioneer's key. Orders for accounts in this state
+    won't be accepted.
+    */
+    STATE_EXPIRED = 2;
+
+    /*
+    The account was modified or recreated by a batch and is currently waiting
+    for the modifying transaction to confirm.
+    */
+    STATE_PENDING_UPDATE = 3;
+
+    /*
+    The account is closed. The auctioneer doesn't track whether the closing
+    transaction is already confirmed on-chain or not.
+    */
+    STATE_CLOSED = 4;
+}
+
+message AuctionAccount {
+    /*
+    The value of the account in satoshis. Must match the amount of the
+    account_point output.
+    */
+    uint64 value = 1;
+
+    /*
+    The block height at which the account should expire.
+    */
+    uint32 expiry = 2;
+
+    /*
+    The trader's account key.
+    */
+    bytes trader_key = 3;
+
+    /*
+    The long term auctioneer's account key.
+    */
+    bytes auctioneer_key = 4;
+
+    /*
+    The current batch key used to create the account output.
+    */
+    bytes batch_key = 5;
+
+    /*
+    The current state of the account as the auctioneer sees it.
+    */
+    AuctionAccountState state = 6;
+
+    /*
+    The block height of the last change to the account's output. Can be used to
+    scan the chain for the output's spend state more efficiently.
+    */
+    uint32 height_hint = 7;
+
+    /*
+    Transaction output of the account. Depending on the state of the account,
+    this output might have been spent.
+    */
+    OutPoint outpoint = 8;
+
+    /*
+    The closing transaction of an account. This will only be populated if the
+    account is in the STATE_CLOSED state.
+    */
+    bytes close_tx = 9;
 }
 
 message MatchedOrder {
