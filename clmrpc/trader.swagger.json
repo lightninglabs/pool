@@ -55,6 +55,32 @@
         ]
       }
     },
+    "/v1/clm/accounts/recover": {
+      "post": {
+        "operationId": "RecoverAccounts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcRecoverAccountsResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/clmrpcRecoverAccountsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/clm/accounts/withdraw/{trader_key}": {
       "post": {
         "operationId": "WithdrawAccount",
@@ -425,6 +451,19 @@
         "address": {
           "type": "string",
           "description": "The address corresponding to the output."
+        }
+      }
+    },
+    "clmrpcRecoverAccountsRequest": {
+      "type": "object"
+    },
+    "clmrpcRecoverAccountsResponse": {
+      "type": "object",
+      "properties": {
+        "num_recovered_accounts": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The number of accounts that were recovered."
         }
       }
     },

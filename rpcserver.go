@@ -850,6 +850,12 @@ func (s *rpcServer) parseRPCOutputs(outputs []*clmrpc.Output) ([]*wire.TxOut,
 	return res, nil
 }
 
+func (s *rpcServer) RecoverAccounts(_ context.Context,
+	_ *clmrpc.RecoverAccountsRequest) (*clmrpc.RecoverAccountsResponse, error) {
+
+	return nil, fmt.Errorf("unimplemented")
+}
+
 // SubmitOrder assembles all the information that is required to submit an order
 // from the trader's lnd node, signs it and then sends the order to the server
 // to be included in the auctioneer's order book.
