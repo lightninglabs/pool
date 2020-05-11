@@ -1,6 +1,7 @@
 package auctioneer
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -11,10 +12,12 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
+	"github.com/lightninglabs/agora/client/clmscript"
 	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -27,6 +30,13 @@ import (
 const (
 	initialConnectRetries = 3
 	reconnectRetries      = 10
+
+	// maxUnusedAccountKeyLookup is the number of successive account keys
+	// that we try and the server does not know of before aborting recovery.
+	// This is necessary to skip "holes" in our list of keys that can happen
+	// if the user tries to open an account but that fails. Then some keys
+	// aren't used.
+	maxUnusedAccountKeyLookup = 50
 )
 
 var (
@@ -503,6 +513,84 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 	}
 }
 
+// RecoverAccounts tries to recover all given accounts with the help of the
+// auctioneer server. Because the trader derives a new account key for each
+// attempt of opening an account, there can be "holes" in our list of keys that
+// are actually used. For example if there is insufficient balance in lnd, a key
+// gets "used up" but no account is ever created with it. We'll do a sweep to
+// ensure we generate a key only up to the point where it's required. The total
+// number of requested recoveries is returned upon completion.
+func (c *Client) RecoverAccounts(ctx context.Context,
+	accountKeys []*keychain.KeyDescriptor) ([]*account.Account, error) {
+
+	numNotFoundAccounts := 0
+	var recoveredAccounts []*account.Account
+	for _, keyDesc := range accountKeys {
+		acctKeyBytes := keyDesc.PubKey.SerializeCompressed()
+		subscription, canRecover, err := c.connectAndAuthenticate(
+			ctx, keyDesc, true,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("could not recover account %x: %v",
+				acctKeyBytes, err)
+		}
+
+		if !canRecover {
+			numNotFoundAccounts++
+
+			// Stop looking for further accounts if we've got a
+			// certain number of negative responses from the server.
+			if numNotFoundAccounts > maxUnusedAccountKeyLookup {
+				return recoveredAccounts, nil
+			}
+
+			continue
+		}
+
+		// Reset our not found counter as we've found a recoverable
+		// account here. Then ask the auctioneer to send us back the
+		// state as it knows it in its database. The response to this
+		// message will be handled outside of the client.
+		numNotFoundAccounts = 0
+		err = c.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
+			Msg: &clmrpc.ClientAuctionMessage_Recover{
+				Recover: &clmrpc.AccountRecovery{
+					TraderKey: acctKeyBytes,
+				},
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error sending recover "+
+				"request: %v", err)
+		}
+
+		// Now we wait for the server to send us the account to recover.
+		select {
+		case msg := <-subscription.msgChan:
+			acctMsg, ok := msg.Msg.(*clmrpc.ServerAuctionMessage_Account)
+			if !ok {
+				return nil, fmt.Errorf("received unexpected "+
+					"recovery message from server: %v",
+					msg)
+			}
+			acct, err := unmarshallServerAccount(acctMsg.Account)
+			if err != nil {
+				return nil, fmt.Errorf("error recovering "+
+					"account: %v", err)
+			}
+			recoveredAccounts = append(recoveredAccounts, acct)
+
+		case <-ctx.Done():
+			return nil, fmt.Errorf("user canceled operation")
+
+		case <-c.quit:
+			return nil, ErrClientShutdown
+		}
+	}
+
+	return recoveredAccounts, nil
+}
+
 // SendAuctionMessage sends an auction message through the long-lived stream to
 // the auction server. A message can only be sent as a response to a server
 // message, therefore the stream must already be open.
@@ -636,9 +724,10 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 			return
 		}
 
-		// We only handle two kinds of messages here, those related to
-		// the initial challenge and the shutdown. Everything else is
-		// passed into the channel to be handled by a manager.
+		// We only handle three kinds of messages here, those related to
+		// the initial challenge, to the account recovery and the
+		// shutdown. Everything else is passed into the channel to be
+		// handled by a manager.
 		switch t := msg.Msg.(type) {
 		// The server sends us the challenge that we need to complete
 		// the 3-way handshake.
@@ -671,6 +760,16 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		// means we can recover this account.
 		case *clmrpc.ServerAuctionMessage_Success:
 			err := c.sendToSubscription(t.Success.TraderKey, msg)
+			if err != nil {
+				c.StreamErrChan <- err
+				return
+			}
+
+		// We've requested to recover an account and the auctioneer now
+		// sent us their state of the account. We'll try to restore it
+		// in our database.
+		case *clmrpc.ServerAuctionMessage_Account:
+			err := c.sendToSubscription(t.Account.TraderKey, msg)
 			if err != nil {
 				c.StreamErrChan <- err
 				return
@@ -802,4 +901,85 @@ func (c *Client) HandleServerShutdown(err error) error {
 		}
 	}
 	return nil
+}
+
+// unmarshallServerAccount parses the account information sent from the
+// auctioneer into our local account struct.
+func unmarshallServerAccount(a *clmrpc.AuctionAccount) (*account.Account, error) {
+	// Parse all raw public keys.
+	acctKey, err := btcec.ParsePubKey(a.TraderKey, btcec.S256())
+	if err != nil {
+		return nil, fmt.Errorf("error parsing account key: %v", err)
+	}
+	auctioneerKey, err := btcec.ParsePubKey(a.AuctioneerKey, btcec.S256())
+	if err != nil {
+		return nil, fmt.Errorf("error parsing auctioneer key: %v", err)
+	}
+	batchKey, err := btcec.ParsePubKey(a.BatchKey, btcec.S256())
+	if err != nil {
+		return nil, fmt.Errorf("error parsing batch key: %v", err)
+	}
+
+	// The auctioneer doesn't track the account in the same granularity as
+	// we do in the trader. Therefore we need to map them back with caution.
+	// The auctioneer might think a state is finalized but we want to wait
+	// for the confirmation on chain in any case. That's why we always map
+	// the auctioneer's state to the corresponding pending state on our
+	// side.
+	var closeTx *wire.MsgTx
+	state := account.StateClosed
+	switch a.State {
+	case clmrpc.AuctionAccountState_STATE_OPEN,
+		clmrpc.AuctionAccountState_STATE_PENDING_OPEN:
+
+		state = account.StatePendingOpen
+
+	case clmrpc.AuctionAccountState_STATE_CLOSED:
+		state = account.StatePendingClosed
+
+		closeTx = &wire.MsgTx{}
+		err := closeTx.Deserialize(bytes.NewReader(a.CloseTx))
+		if err != nil {
+			return nil, err
+		}
+
+	case clmrpc.AuctionAccountState_STATE_PENDING_UPDATE:
+		state = account.StatePendingUpdate
+
+	case clmrpc.AuctionAccountState_STATE_EXPIRED:
+		state = account.StateExpired
+	}
+
+	// Parse the rest of the more complex values.
+	if a.Outpoint == nil {
+		return nil, fmt.Errorf("account outpoint is missing")
+	}
+	hash, err := chainhash.NewHash(a.Outpoint.Txid)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing outpoint hash: %v", err)
+	}
+
+	return &account.Account{
+		Value:  btcutil.Amount(a.Value),
+		Expiry: a.Expiry,
+		// We don't know the key index at this point. We'll need to go
+		// through all our keys to find it, which we'll do in the
+		// manager. Once we know the index, we'll also be able to derive
+		// the shared secret.
+		TraderKey: &keychain.KeyDescriptor{
+			KeyLocator: keychain.KeyLocator{
+				Family: clmscript.AccountKeyFamily,
+			},
+			PubKey: acctKey,
+		},
+		AuctioneerKey: auctioneerKey,
+		BatchKey:      batchKey,
+		State:         state,
+		HeightHint:    a.HeightHint,
+		OutPoint: wire.OutPoint{
+			Hash:  *hash,
+			Index: a.Outpoint.OutputIndex,
+		},
+		CloseTx: closeTx,
+	}, nil
 }
