@@ -13,14 +13,15 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -192,6 +193,13 @@ func (c *Client) closeStream() error {
 	log.Debugf("Closing server stream")
 	err := c.serverStream.CloseSend()
 	c.streamCancel()
+	c.serverStream = nil
+
+	// Close all pending subscriptions.
+	for _, subscription := range c.subscribedAccts {
+		close(subscription.msgChan)
+	}
+
 	return err
 }
 
@@ -402,20 +410,30 @@ func (c *Client) OrderState(ctx context.Context, nonce order.Nonce) (
 func (c *Client) SubscribeAccountUpdates(ctx context.Context,
 	acctKey *keychain.KeyDescriptor) error {
 
-	return c.connectAndAuthenticate(ctx, acctKey)
+	_, _, err := c.connectAndAuthenticate(ctx, acctKey, false)
+	return err
 }
 
 // connectAndAuthenticate opens a stream to the server and authenticates the
-// account to receive updates.
+// account to receive updates. It returns the subscription and a bool that
+// indicates if recovery can be continued. That value can safely be ignored if
+// recovery is not requested. Checking the returned error must take precedence
+// to the boolean flag.
 func (c *Client) connectAndAuthenticate(ctx context.Context,
-	acctKey *keychain.KeyDescriptor) error {
+	acctKey *keychain.KeyDescriptor, recovery bool) (*acctSubscription,
+	bool, error) {
 
 	var acctPubKey [33]byte
 	copy(acctPubKey[:], acctKey.PubKey.SerializeCompressed())
 
 	// Don't subscribe more than once.
-	if _, ok := c.subscribedAccts[acctPubKey]; ok {
-		return nil
+	sub, ok := c.subscribedAccts[acctPubKey]
+	if ok {
+		if recovery {
+			return sub, true, fmt.Errorf("account %x is already "+
+				"subscribed, cannot recover", acctPubKey[:])
+		}
+		return sub, true, nil
 	}
 
 	c.streamMutex.Lock()
@@ -424,7 +442,7 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 	if c.serverStream == nil {
 		err := c.connectServerStream(0, initialConnectRetries)
 		if err != nil {
-			return err
+			return sub, false, err
 		}
 
 		// Since this is the first time we establish our connection to
@@ -432,20 +450,57 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		// batch as finalized, or if we need to remove it due to the
 		// batch auction no longer including us.
 		if err := c.checkPendingBatch(); err != nil {
-			return err
+			return sub, false, err
 		}
 	}
 
 	// Before we can expect to receive any updates, we need to perform the
 	// 3-way authentication handshake.
-	sub := &acctSubscription{
+	sub = &acctSubscription{
 		acctKey: acctKey,
 		sendMsg: c.SendAuctionMessage,
 		signer:  c.cfg.Signer,
 		msgChan: make(chan *clmrpc.ServerAuctionMessage),
 	}
 	c.subscribedAccts[acctPubKey] = sub
-	return sub.authenticate(ctx)
+	err := sub.authenticate(ctx)
+	if err != nil {
+		return sub, false, err
+	}
+
+	// We always get a message back from the server. We can treat it
+	// differently if we're in recovery mode though.
+	select {
+	case srvMsg := <-sub.msgChan:
+		if srvMsg == nil {
+			return sub, false, fmt.Errorf("no response received")
+		}
+
+		// Did the server find the account we're interested in?
+		switch msg := srvMsg.Msg.(type) {
+		// Account exists, everything's good to continue.
+		case *clmrpc.ServerAuctionMessage_Success:
+			return sub, true, nil
+
+		// The account doesn't exist. If we're recovering accounts,
+		// that's fine. We just skip this account key and try the next
+		// one. If we're not in recovery mode, this is a hard failure.
+		case *clmrpc.ServerAuctionMessage_Error:
+			if !recovery {
+				return nil, false, fmt.Errorf("error "+
+					"subscribing to account: %v",
+					msg.Error.Error)
+			}
+			return sub, false, nil
+
+		default:
+			return nil, false, fmt.Errorf("unknown message "+
+				"received: %v", msg)
+		}
+
+	case <-c.quit:
+		return nil, false, ErrClientShutdown
+	}
 }
 
 // SendAuctionMessage sends an auction message through the long-lived stream to
@@ -536,7 +591,7 @@ func (c *Client) connectServerStream(initialBackoff time.Duration,
 //
 // NOTE: This method must be called as a subroutine because it blocks as long as
 // the stream is open.
-func (c *Client) readIncomingStream() {
+func (c *Client) readIncomingStream() { // nolint:gocyclo
 	for {
 		// Cancel the stream on client shutdown.
 		select {
@@ -548,8 +603,7 @@ func (c *Client) readIncomingStream() {
 
 		// Read next message from server.
 		msg, err := c.serverStream.Recv()
-		log.Tracef("Received msg=%s, err=%v from server",
-			spew.Sdump(msg), err)
+		log.Tracef("Received msg=%#v, err=%v from server", msg, err)
 		switch {
 		// EOF is the "normal" close signal, meaning the server has
 		// cut its side of the connection. We will only get this during
@@ -566,6 +620,15 @@ func (c *Client) readIncomingStream() {
 		// Any other error is likely on a connection level and leaves
 		// us no choice but to abort.
 		case err != nil:
+			// Context canceled is the error that signals we closed
+			// the stream, most likely because the trader is
+			// shutting down.
+			s, ok := status.FromError(err)
+			if ok && s.Code() == codes.Canceled {
+				return
+			}
+
+			// Any other error we want to report back.
 			select {
 			case c.StreamErrChan <- err:
 			case <-c.quit:
@@ -573,11 +636,15 @@ func (c *Client) readIncomingStream() {
 			return
 		}
 
-		// We only handle two messages here, the initial challenge and
-		// the shutdown. Everything else is passed into the channel to
-		// be handled by a manager.
+		// We only handle two kinds of messages here, those related to
+		// the initial challenge and the shutdown. Everything else is
+		// passed into the channel to be handled by a manager.
 		switch t := msg.Msg.(type) {
+		// The server sends us the challenge that we need to complete
+		// the 3-way handshake.
 		case *clmrpc.ServerAuctionMessage_Challenge:
+			// Try to find the subscription this message is for so
+			// we can send it over the correct chan.
 			var commitHash [32]byte
 			copy(commitHash[:], t.Challenge.CommitHash)
 			var acctSub *acctSubscription
@@ -599,11 +666,24 @@ func (c *Client) readIncomingStream() {
 			case <-c.quit:
 			}
 
-		// The shutdown message is sent as a general error message. We
-		// only handle this specific case here, the rest is forwarded to
-		// the handler.
+		// The server confirms the account subscription. We only really
+		// care about this response in the recovery case because it
+		// means we can recover this account.
+		case *clmrpc.ServerAuctionMessage_Success:
+			err := c.sendToSubscription(t.Success.TraderKey, msg)
+			if err != nil {
+				c.StreamErrChan <- err
+				return
+			}
+
+		// The shutdown message and the account not found error are sent
+		// as general error messages. We only handle these two specific
+		// cases here, the rest is forwarded to the handler.
 		case *clmrpc.ServerAuctionMessage_Error:
 			errCode := t.Error.ErrorCode
+
+			// The server is shutting down. No need to forward this,
+			// we can just shutdown the stream and try to reconnect.
 			if errCode == clmrpc.SubscribeError_SERVER_SHUTDOWN {
 				err := c.HandleServerShutdown(nil)
 				if err != nil {
@@ -613,6 +693,22 @@ func (c *Client) readIncomingStream() {
 					}
 				}
 				return
+			}
+
+			// We received an account not found error. This is not
+			// a reason to abort in case we are in recovery mode.
+			// We let the subscription decide what to do.
+			if errCode == clmrpc.SubscribeError_ACCOUNT_DOES_NOT_EXIST {
+				err := c.sendToSubscription(
+					t.Error.TraderKey, msg,
+				)
+				if err != nil {
+					c.StreamErrChan <- err
+					return
+				}
+
+				// Consider this handled, await the next message.
+				continue
 			}
 
 			// All other types of errors should be dealt with by the
@@ -630,6 +726,32 @@ func (c *Client) readIncomingStream() {
 			}
 		}
 	}
+}
+
+// sendToSubscription finds the subscription for a trader's account public key
+// and forwards the given message to it.
+func (c *Client) sendToSubscription(traderAccountKey []byte,
+	msg *clmrpc.ServerAuctionMessage) error {
+
+	// Try to find the subscription this message is for so we can send it
+	// over the correct chan. If the key isn't a valid pubkey we'll just not
+	// find it. All entries in the map are checked to be valid pubkeys when
+	// added.
+	var traderKey [33]byte
+	copy(traderKey[:], traderAccountKey)
+	acctSub, ok := c.subscribedAccts[traderKey]
+	if !ok {
+		return fmt.Errorf("no subscription found for account key %x",
+			traderAccountKey)
+	}
+
+	// Inform the subscription about the arrived message.
+	select {
+	case acctSub.msgChan <- msg:
+	case <-c.quit:
+	}
+
+	return nil
 }
 
 // HandleServerShutdown handles the signal from the server that it is going to
