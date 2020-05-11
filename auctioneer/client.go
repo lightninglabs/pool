@@ -439,10 +439,10 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 	// Before we can expect to receive any updates, we need to perform the
 	// 3-way authentication handshake.
 	sub := &acctSubscription{
-		acctKey:       acctKey,
-		sendMsg:       c.SendAuctionMessage,
-		signer:        c.cfg.Signer,
-		challengeChan: make(chan [32]byte),
+		acctKey: acctKey,
+		sendMsg: c.SendAuctionMessage,
+		signer:  c.cfg.Signer,
+		msgChan: make(chan *clmrpc.ServerAuctionMessage),
 	}
 	c.subscribedAccts[acctPubKey] = sub
 	return sub.authenticate(ctx)
@@ -578,10 +578,7 @@ func (c *Client) readIncomingStream() {
 		// be handled by a manager.
 		switch t := msg.Msg.(type) {
 		case *clmrpc.ServerAuctionMessage_Challenge:
-			var (
-				commitHash      [32]byte
-				serverChallenge [32]byte
-			)
+			var commitHash [32]byte
 			copy(commitHash[:], t.Challenge.CommitHash)
 			var acctSub *acctSubscription
 			for traderKey, sub := range c.subscribedAccts {
@@ -597,9 +594,8 @@ func (c *Client) readIncomingStream() {
 			}
 
 			// Inform the subscription about the arrived challenge.
-			copy(serverChallenge[:], t.Challenge.Challenge)
 			select {
-			case acctSub.challengeChan <- serverChallenge:
+			case acctSub.msgChan <- msg:
 			case <-c.quit:
 			}
 

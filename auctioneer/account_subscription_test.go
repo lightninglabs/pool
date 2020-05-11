@@ -32,18 +32,18 @@ var (
 // handshake is performed correctly when subscribing for account updates.
 func TestAccountSubscriptionAuthenticate(t *testing.T) {
 	var (
-		msgChan       = make(chan *clmrpc.ClientAuctionMessage)
-		challengeChan = make(chan [32]byte)
-		errChan       = make(chan error)
-		sendMsg       = func(msg *clmrpc.ClientAuctionMessage) error {
+		msgChan    = make(chan *clmrpc.ClientAuctionMessage)
+		srvMsgChan = make(chan *clmrpc.ServerAuctionMessage)
+		errChan    = make(chan error)
+		sendMsg    = func(msg *clmrpc.ClientAuctionMessage) error {
 			msgChan <- msg
 			return nil
 		}
 		sub = &acctSubscription{
-			acctKey:       testAccountDesc,
-			sendMsg:       sendMsg,
-			signer:        testSigner,
-			challengeChan: challengeChan,
+			acctKey: testAccountDesc,
+			sendMsg: sendMsg,
+			signer:  testSigner,
+			msgChan: srvMsgChan,
 		}
 	)
 
@@ -65,7 +65,13 @@ func TestAccountSubscriptionAuthenticate(t *testing.T) {
 	}
 
 	// Step 2: Simulate the server sending back the challenge.
-	challengeChan <- [32]byte{11, 99, 11}
+	srvMsgChan <- &clmrpc.ServerAuctionMessage{
+		Msg: &clmrpc.ServerAuctionMessage_Challenge{
+			Challenge: &clmrpc.ServerChallenge{
+				Challenge: []byte{11, 99, 11},
+			},
+		},
+	}
 
 	// Step 3: We expect the final message, the subscription.
 	select {
@@ -88,18 +94,18 @@ func TestAccountSubscriptionAuthenticate(t *testing.T) {
 // handshake is canceled if the channel is closed prematurely.
 func TestAccountSubscriptionAuthenticateAbort(t *testing.T) {
 	var (
-		msgChan       = make(chan *clmrpc.ClientAuctionMessage)
-		challengeChan = make(chan [32]byte)
-		errChan       = make(chan error)
-		sendMsg       = func(msg *clmrpc.ClientAuctionMessage) error {
+		msgChan    = make(chan *clmrpc.ClientAuctionMessage)
+		srvMsgChan = make(chan *clmrpc.ServerAuctionMessage)
+		errChan    = make(chan error)
+		sendMsg    = func(msg *clmrpc.ClientAuctionMessage) error {
 			msgChan <- msg
 			return nil
 		}
 		sub = &acctSubscription{
-			acctKey:       testAccountDesc,
-			sendMsg:       sendMsg,
-			signer:        testSigner,
-			challengeChan: challengeChan,
+			acctKey: testAccountDesc,
+			sendMsg: sendMsg,
+			signer:  testSigner,
+			msgChan: srvMsgChan,
 		}
 	)
 
@@ -122,7 +128,7 @@ func TestAccountSubscriptionAuthenticateAbort(t *testing.T) {
 
 	// Step 2: Simulate the trader shutting down instead of receiving the
 	// challenge.
-	close(challengeChan)
+	close(srvMsgChan)
 
 	// There should be an error in the chan now.
 	select {
@@ -140,18 +146,18 @@ func TestAccountSubscriptionAuthenticateAbort(t *testing.T) {
 // authentication handshake is canceled if the context is canceled prematurely.
 func TestAccountSubscriptionAuthenticateContextClose(t *testing.T) {
 	var (
-		msgChan       = make(chan *clmrpc.ClientAuctionMessage)
-		challengeChan = make(chan [32]byte)
-		errChan       = make(chan error)
-		sendMsg       = func(msg *clmrpc.ClientAuctionMessage) error {
+		msgChan    = make(chan *clmrpc.ClientAuctionMessage)
+		srvMsgChan = make(chan *clmrpc.ServerAuctionMessage)
+		errChan    = make(chan error)
+		sendMsg    = func(msg *clmrpc.ClientAuctionMessage) error {
 			msgChan <- msg
 			return nil
 		}
 		sub = &acctSubscription{
-			acctKey:       testAccountDesc,
-			sendMsg:       sendMsg,
-			signer:        testSigner,
-			challengeChan: challengeChan,
+			acctKey: testAccountDesc,
+			sendMsg: sendMsg,
+			signer:  testSigner,
+			msgChan: srvMsgChan,
 		}
 		ctxc, cancel = context.WithCancel(context.Background())
 	)

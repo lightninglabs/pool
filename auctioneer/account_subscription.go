@@ -16,11 +16,11 @@ import (
 // auction. It can also perform the 3-way authentication handshake that is
 // needed to authenticate a trader for a subscription.
 type acctSubscription struct {
-	acctKey       *keychain.KeyDescriptor
-	commitHash    [32]byte
-	sendMsg       func(*clmrpc.ClientAuctionMessage) error
-	signer        lndclient.SignerClient
-	challengeChan chan [32]byte
+	acctKey    *keychain.KeyDescriptor
+	commitHash [32]byte
+	sendMsg    func(*clmrpc.ClientAuctionMessage) error
+	signer     lndclient.SignerClient
+	msgChan    chan *clmrpc.ServerAuctionMessage
 }
 
 // authenticate performs the 3-way authentication handshake between the trader
@@ -59,11 +59,19 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 	// We can't sign anything if we haven't received the server's challenge
 	// yet. So we'll wait for the message to arrive.
 	select {
-	case serverChallenge, more := <-s.challengeChan:
+	case srvMsg, more := <-s.msgChan:
 		if !more {
 			return fmt.Errorf("channel closed before challenge " +
 				"was received")
 		}
+
+		msg, ok := srvMsg.Msg.(*clmrpc.ServerAuctionMessage_Challenge)
+		if !ok {
+			return fmt.Errorf("unexpected server message in auth "+
+				"process: %v", msg)
+		}
+		var serverChallenge [32]byte
+		copy(serverChallenge[:], msg.Challenge.Challenge)
 
 		// Finally sign the challenge to authenticate ourselves. We now
 		// reveal the nonce we used for the commitment so the server can
