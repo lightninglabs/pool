@@ -402,6 +402,14 @@ func (c *Client) OrderState(ctx context.Context, nonce order.Nonce) (
 func (c *Client) SubscribeAccountUpdates(ctx context.Context,
 	acctKey *keychain.KeyDescriptor) error {
 
+	return c.connectAndAuthenticate(ctx, acctKey)
+}
+
+// connectAndAuthenticate opens a stream to the server and authenticates the
+// account to receive updates.
+func (c *Client) connectAndAuthenticate(ctx context.Context,
+	acctKey *keychain.KeyDescriptor) error {
+
 	var acctPubKey [33]byte
 	copy(acctPubKey[:], acctKey.PubKey.SerializeCompressed())
 
