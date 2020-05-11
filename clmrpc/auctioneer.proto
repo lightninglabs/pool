@@ -270,10 +270,10 @@ message ServerAuctionMessage {
         OrderMatchFinalize finalize = 4;
 
         /**
-        The server is shutting down for maintenance. Traders should close the
-        long-lived stream/connection and try to connect again after some time.
+        An error occurred during any part of the communication. The trader
+        should inspect the error code and act accordingly.
         */
-        ServerShutdown shutdown = 5;
+        SubscribeError error = 5;
     }
 }
 
@@ -372,7 +372,29 @@ message OrderMatchFinalize {
     uint32 height_hint = 3;
 }
 
-message ServerShutdown {
+message SubscribeError {
+    enum Error {
+        /**
+        The error cannot be mapped to a specific code.
+        */
+        UNKNOWN = 0;
+
+        /**
+        The server is shutting down for maintenance. Traders should close the
+        long-lived stream/connection and try to connect again after some time.
+        */
+        SERVER_SHUTDOWN = 1;
+    }
+
+    /**
+    The string representation of the subscription error.
+    */
+    string error = 1;
+
+    /**
+    The error code of the subscription error.
+    */
+    Error error_code = 2;
 }
 
 message MatchedOrder {
@@ -684,7 +706,7 @@ message RelevantBatch {
     a result of this batch.
     */
     repeated AccountDiff charged_accounts = 3;
-    
+
     /*
     The set of orders that were matched against the orders belonging to the
     requested accounts.

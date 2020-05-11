@@ -607,15 +607,28 @@ func (c *Client) readIncomingStream() {
 			case <-c.quit:
 			}
 
-		case *clmrpc.ServerAuctionMessage_Shutdown:
-			err := c.HandleServerShutdown(nil)
-			if err != nil {
-				select {
-				case c.StreamErrChan <- err:
-				case <-c.quit:
+		// The shutdown message is sent as a general error message. We
+		// only handle this specific case here, the rest is forwarded to
+		// the handler.
+		case *clmrpc.ServerAuctionMessage_Error:
+			errCode := t.Error.ErrorCode
+			if errCode == clmrpc.SubscribeError_SERVER_SHUTDOWN {
+				err := c.HandleServerShutdown(nil)
+				if err != nil {
+					select {
+					case c.StreamErrChan <- err:
+					case <-c.quit:
+					}
 				}
+				return
 			}
-			return
+
+			// All other types of errors should be dealt with by the
+			// handler.
+			select {
+			case c.FromServerChan <- msg:
+			case <-c.quit:
+			}
 
 		// A valid message from the server. Forward it to the handler.
 		default:
