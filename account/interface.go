@@ -321,7 +321,7 @@ type Auctioneer interface {
 	// subscription over the same stream, multiplexing all messages into the
 	// same connection. A stream can be long-lived, so this can be called
 	// for every account as soon as it's confirmed open.
-	SubscribeAccountUpdates(context.Context, *Account) error
+	SubscribeAccountUpdates(context.Context, *keychain.KeyDescriptor) error
 }
 
 // TxSource is a source that provides us with transactions previously broadcast

@@ -174,10 +174,10 @@ func (a *mockAuctioneer) ModifyAccount(context.Context, *Account, []*wire.TxIn,
 }
 
 func (a *mockAuctioneer) SubscribeAccountUpdates(_ context.Context,
-	account *Account) error {
+	accountKey *keychain.KeyDescriptor) error {
 
 	var traderKey [33]byte
-	copy(traderKey[:], account.TraderKey.PubKey.SerializeCompressed())
+	copy(traderKey[:], accountKey.PubKey.SerializeCompressed())
 
 	a.mu.Lock()
 	defer a.mu.Unlock()

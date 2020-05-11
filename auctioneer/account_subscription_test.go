@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/loop/test"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -20,11 +19,9 @@ var (
 		"a0af58e0c9395446ba09"
 	testRawTraderKey, _ = hex.DecodeString(testTraderKeyStr)
 	testTraderKey, _    = btcec.ParsePubKey(testRawTraderKey, btcec.S256())
-	testAccount         = &account.Account{
-		TraderKey: &keychain.KeyDescriptor{
-			KeyLocator: keychain.KeyLocator{},
-			PubKey:     testTraderKey,
-		},
+	testAccountDesc     = &keychain.KeyDescriptor{
+		KeyLocator: keychain.KeyLocator{},
+		PubKey:     testTraderKey,
 	}
 	testLnd        = test.NewMockLnd()
 	testSigner     = testLnd.Signer
@@ -43,7 +40,7 @@ func TestAccountSubscriptionAuthenticate(t *testing.T) {
 			return nil
 		}
 		sub = &acctSubscription{
-			acct:          testAccount,
+			acctKey:       testAccountDesc,
 			sendMsg:       sendMsg,
 			signer:        testSigner,
 			challengeChan: challengeChan,
@@ -99,7 +96,7 @@ func TestAccountSubscriptionAuthenticateAbort(t *testing.T) {
 			return nil
 		}
 		sub = &acctSubscription{
-			acct:          testAccount,
+			acctKey:       testAccountDesc,
 			sendMsg:       sendMsg,
 			signer:        testSigner,
 			challengeChan: challengeChan,
@@ -151,7 +148,7 @@ func TestAccountSubscriptionAuthenticateContextClose(t *testing.T) {
 			return nil
 		}
 		sub = &acctSubscription{
-			acct:          testAccount,
+			acctKey:       testAccountDesc,
 			sendMsg:       sendMsg,
 			signer:        testSigner,
 			challengeChan: challengeChan,

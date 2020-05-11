@@ -9,13 +9,14 @@ import (
 	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/agora/client/order"
 	"github.com/lightninglabs/loop/lndclient"
+	"github.com/lightningnetwork/lnd/keychain"
 )
 
 // acctSubscription holds the account that is subscribed to updates from the
 // auction. It can also perform the 3-way authentication handshake that is
 // needed to authenticate a trader for a subscription.
 type acctSubscription struct {
-	acct          *account.Account
+	acctKey       *keychain.KeyDescriptor
 	commitHash    [32]byte
 	sendMsg       func(*clmrpc.ClientAuctionMessage) error
 	signer        lndclient.SignerClient
@@ -36,7 +37,7 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	copy(acctPubKey[:], s.acct.TraderKey.PubKey.SerializeCompressed())
+	copy(acctPubKey[:], s.acctKey.PubKey.SerializeCompressed())
 	s.commitHash = account.CommitAccount(acctPubKey, nonce)
 
 	// Now send the commitment to the server which should trigger it to send
@@ -69,7 +70,7 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 		// verify the information.
 		authHash := account.AuthHash(s.commitHash, serverChallenge)
 		sig, err := s.signer.SignMessage(
-			ctx, authHash[:], s.acct.TraderKey.KeyLocator,
+			ctx, authHash[:], s.acctKey.KeyLocator,
 		)
 		if err != nil {
 			return err
