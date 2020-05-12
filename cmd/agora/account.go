@@ -21,6 +21,7 @@ var accountsCommands = []cli.Command{
 			listAccountsCommand,
 			withdrawAccountCommand,
 			closeAccountCommand,
+			recoverAccountsCommand,
 		},
 	},
 }
@@ -278,6 +279,45 @@ func closeAccount(ctx *cli.Context) error {
 	}
 
 	printJSON(closeAccountResp)
+
+	return nil
+}
+
+var recoverAccountsCommand = cli.Command{
+	Name:      "recover",
+	ShortName: "r",
+	Usage: "recover accounts after data loss with the help of the " +
+		"auctioneer",
+	Description: `
+	In case the data directory of the trader was corrupted or lost, this
+	command can be used to ask the auction server to send back its view of
+	the trader's accounts. This is possible as long as the connected lnd
+	node is running with the same seed as when the accounts to recover were
+	first created.
+
+	NOTE: This command should only be used after data loss as it will fail
+	if there already are open accounts in the trader's database.
+	All open or pending orders of any recovered account will be canceled on
+	the auctioneer's side and won't be restored in the trader's database.
+	`,
+	Action: recoverAccounts,
+}
+
+func recoverAccounts(ctx *cli.Context) error {
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.RecoverAccounts(
+		context.Background(), &clmrpc.RecoverAccountsRequest{},
+	)
+	if err != nil {
+		return err
+	}
+
+	printRespJSON(resp)
 
 	return nil
 }
