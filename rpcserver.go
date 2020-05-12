@@ -54,6 +54,8 @@ type rpcServer struct {
 	quit            chan struct{}
 	wg              sync.WaitGroup
 	blockNtfnCancel func()
+	recoveryMutex   sync.Mutex
+	recoveryPending bool
 }
 
 // accountStore is a clientdb.DB wrapper to implement the account.Store
@@ -850,10 +852,58 @@ func (s *rpcServer) parseRPCOutputs(outputs []*clmrpc.Output) ([]*wire.TxOut,
 	return res, nil
 }
 
-func (s *rpcServer) RecoverAccounts(_ context.Context,
-	_ *clmrpc.RecoverAccountsRequest) (*clmrpc.RecoverAccountsResponse, error) {
+func (s *rpcServer) RecoverAccounts(ctx context.Context,
+	_ *clmrpc.RecoverAccountsRequest) (*clmrpc.RecoverAccountsResponse,
+	error) {
 
-	return nil, fmt.Errorf("unimplemented")
+	s.recoveryMutex.Lock()
+	if s.recoveryPending {
+		defer s.recoveryMutex.Unlock()
+		return nil, fmt.Errorf("recovery already in progress")
+	}
+	s.recoveryPending = true
+	s.recoveryMutex.Unlock()
+
+	// Prepare the keys we are going to try. Possibly not all of them will
+	// be used.
+	acctKeys, err := account.GenerateRecoveryKeys(
+		ctx, s.lndServices.WalletKit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error generating keys: %v", err)
+	}
+
+	// The auctioneer client will try to recover accounts for these keys as
+	// long as the auctioneer is able to find them in its database. If a
+	// certain number of keys result in an "account not found" error, the
+	// client will stop trying.
+	recoveredAccounts, err := s.auctioneer.RecoverAccounts(ctx, acctKeys)
+	if err != nil {
+		return nil, fmt.Errorf("error performing recovery: %v", err)
+	}
+
+	// Store the recovered accounts now and start watching them. If anything
+	// went wrong during recovery before, no account is stored yet. This is
+	// nice since it allows us to try recovery multiple times until it
+	// actually works.
+	numRecovered := len(recoveredAccounts)
+	for _, acct := range recoveredAccounts {
+		err = s.accountManager.RecoverAccount(ctx, acct)
+		if err != nil {
+			// If something goes wrong for one account we still want
+			// to continue with the others.
+			numRecovered--
+			log.Errorf("error storing recovered account: %v", err)
+		}
+	}
+
+	s.recoveryMutex.Lock()
+	s.recoveryPending = false
+	s.recoveryMutex.Unlock()
+
+	return &clmrpc.RecoverAccountsResponse{
+		NumRecoveredAccounts: uint32(numRecovered),
+	}, nil
 }
 
 // SubmitOrder assembles all the information that is required to submit an order

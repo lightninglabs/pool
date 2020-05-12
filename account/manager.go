@@ -874,6 +874,54 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 	return account, spendPkg, nil
 }
 
+// RecoverAccount re-introduces a recovered account into the database and starts
+// all watchers necessary depending on the account's state.
+func (m *Manager) RecoverAccount(ctx context.Context, account *Account) error {
+	if account.TraderKey == nil || account.TraderKey.PubKey == nil {
+		return fmt.Errorf("account is missing trader key")
+	}
+
+	// An account recovered with the help of the auctioneer has two missing
+	// values: The trader key locator index and the shared secret. Both of
+	// these values can be restored by going through a list of keys up to
+	// a maximum number.
+	//
+	// TODO(guggero): Remove this once the Signer.DeriveSharedKey RPC also
+	// accepts KeyDescriptors with only the pubkey and family set.
+	traderKeyIndex, err := findTraderKeyIndex(
+		ctx, m.cfg.Wallet, account.TraderKey.PubKey,
+	)
+	if err != nil {
+		return fmt.Errorf("could not find trader key index: %v", err)
+	}
+	account.TraderKey.Index = traderKeyIndex
+
+	// Now that we know the index of the key, we can finally derive the
+	// shared secret.
+	secret, err := m.cfg.Signer.DeriveSharedKey(
+		ctx, account.AuctioneerKey, &account.TraderKey.KeyLocator,
+	)
+	if err != nil {
+		return err
+	}
+	account.Secret = secret
+
+	// Now store it to the database and start our watchers according to the
+	// account's state.
+	err = m.cfg.Store.AddAccount(account)
+	if err != nil {
+		return err
+	}
+
+	// TODO(guggero): If we resume the account with onRestart=true, the
+	// manager will try to re-publish the transaction. But if lnd was also
+	// restored, it would likely not remember that transaction and the
+	// resume would fail. If we don't try to re-broadcast the transaction,
+	// what happens if it never confirmed in the first place before the
+	// trader lost its state?
+	return m.resumeAccount(ctx, account, false)
+}
+
 // determineWitnessType determines the appropriate witness type to use for the
 // spending transaction for an account based on whether it has expired or not.
 func determineWitnessType(account *Account, bestHeight uint32) witnessType {
