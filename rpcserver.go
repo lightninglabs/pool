@@ -885,7 +885,13 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	}
 
 	// Verify that the account exists.
-	acct, err := s.server.db.Account(o.Details().AcctKey)
+	acctKey, err := btcec.ParsePubKey(
+		o.Details().AcctKey[:], btcec.S256(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	acct, err := s.server.db.Account(acctKey)
 	if err != nil {
 		return nil, fmt.Errorf("cannot accept order: %v", err)
 	}
@@ -965,7 +971,7 @@ func (s *rpcServer) ListOrders(ctx context.Context, _ *clmrpc.ListOrdersRequest)
 
 		dbDetails := dbOrder.Details()
 		details := &clmrpc.Order{
-			UserSubKey:       dbDetails.AcctKey.SerializeCompressed(),
+			UserSubKey:       dbDetails.AcctKey[:],
 			RateFixed:        int64(dbDetails.FixedRate),
 			Amt:              int64(dbDetails.Amt),
 			FundingFeeRate:   int64(dbDetails.FixedRate),

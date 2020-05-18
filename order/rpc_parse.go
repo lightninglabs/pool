@@ -33,12 +33,7 @@ func ParseRPCOrder(version uint32, details *clmrpc.Order) (*Kit, error) {
 		kit = NewKitWithPreimage(preimage)
 	}
 
-	pubKey, err := btcec.ParsePubKey(details.UserSubKey, btcec.S256())
-	if err != nil {
-		return nil, fmt.Errorf("error parsing account key: %v", err)
-	}
-
-	kit.AcctKey = pubKey
+	copy(kit.AcctKey[:], details.UserSubKey[:])
 	kit.Version = Version(version)
 	kit.FixedRate = uint32(details.RateFixed)
 	kit.Amt = btcutil.Amount(details.Amt)
@@ -83,13 +78,7 @@ func ParseRPCServerOrder(version uint32, details *clmrpc.ServerOrder) (*Kit,
 		kit = NewKitWithPreimage(preimage)
 	}
 
-	pubKey, err := btcec.ParsePubKey(details.UserSubKey, btcec.S256())
-	if err != nil {
-		return nil, nodeKey, nodeAddrs, multiSigKey,
-			fmt.Errorf("error parsing account key: %v", err)
-	}
-
-	kit.AcctKey = pubKey
+	copy(kit.AcctKey[:], details.UserSubKey[:])
 
 	nodePubKey, err := btcec.ParsePubKey(details.NodePub, btcec.S256())
 	if err != nil {

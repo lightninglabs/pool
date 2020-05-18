@@ -11,14 +11,14 @@ import (
 
 type mockStore struct {
 	orders         map[Nonce]Order
-	accounts       map[*btcec.PublicKey]*account.Account
+	accounts       map[[33]byte]*account.Account
 	pendingBatchID *BatchID
 }
 
 func newMockStore() *mockStore {
 	return &mockStore{
 		orders:   make(map[Nonce]Order),
-		accounts: make(map[*btcec.PublicKey]*account.Account),
+		accounts: make(map[[33]byte]*account.Account),
 	}
 }
 
@@ -127,10 +127,14 @@ func (s *mockStore) MarkBatchComplete() error {
 func (s *mockStore) getAccount(acctKey *btcec.PublicKey) (
 	*account.Account, error) {
 
-	acct, ok := s.accounts[acctKey]
+	var k [33]byte
+	copy(k[:], acctKey.SerializeCompressed())
+
+	acct, ok := s.accounts[k]
 	if !ok {
 		return nil, fmt.Errorf("account not found")
 	}
+
 	return acct, nil
 }
 
@@ -153,7 +157,10 @@ func (s *mockStore) updateAccounts(accts []*account.Account,
 func (s *mockStore) updateAccount(acct *account.Account,
 	modifiers ...account.Modifier) error {
 
-	a, ok := s.accounts[acct.TraderKey.PubKey]
+	var k [33]byte
+	copy(k[:], acct.TraderKey.PubKey.SerializeCompressed())
+
+	a, ok := s.accounts[k]
 	if !ok {
 		return errors.New("account not found")
 	}

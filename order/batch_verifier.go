@@ -93,14 +93,12 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 
 		// We'll index our account tallies by the serialized form of
 		// the account key so some copying is necessary first.
-		var (
-			acctKey    = ourOrder.Details().AcctKey
-			acctKeyRaw [33]byte
-		)
-		if acctKey == nil {
-			return fmt.Errorf("account for order %v invalid", nonce)
+		var acctKeyRaw [33]byte
+		copy(acctKeyRaw[:], ourOrder.Details().AcctKey[:])
+		acctKey, err := btcec.ParsePubKey(acctKeyRaw[:], btcec.S256())
+		if err != nil {
+			return err
 		}
-		copy(acctKeyRaw[:], acctKey.SerializeCompressed())
 
 		// Find the account the order spends from, if it isn't already
 		// in the cache because another order spends from it.

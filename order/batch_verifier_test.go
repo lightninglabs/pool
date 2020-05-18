@@ -17,9 +17,12 @@ import (
 )
 
 var (
-	_, startBatchKey      = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x01})
-	_, acctKeyBig         = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x02})
-	_, acctKeySmall       = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x03})
+	_, startBatchKey = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x01})
+
+	_, acctKeyBig = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x02})
+
+	_, acctKeySmall = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x03})
+
 	nodePubkey            = [33]byte{03, 77, 44, 55}
 	execFeeBase           = btcutil.Amount(1_100)
 	execFeeRate           = btcutil.Amount(50)
@@ -274,7 +277,7 @@ func TestBatchVerifier(t *testing.T) {
 				},
 				Units:            4,
 				UnitsUnfulfilled: 4,
-				AcctKey:          acctKeySmall,
+				AcctKey:          acctIDSmall,
 				FixedRate:        10,
 			}),
 			MaxDuration: 2500,
@@ -286,7 +289,7 @@ func TestBatchVerifier(t *testing.T) {
 				},
 				Units:            2,
 				UnitsUnfulfilled: 2,
-				AcctKey:          acctKeyBig,
+				AcctKey:          acctIDBig,
 				FixedRate:        15,
 			}),
 			// 2000 * (200_000 * 5 / 1_000_000) = 1000 sats premium
@@ -299,7 +302,7 @@ func TestBatchVerifier(t *testing.T) {
 				},
 				Units:            8,
 				UnitsUnfulfilled: 8,
-				AcctKey:          acctKeyBig,
+				AcctKey:          acctIDBig,
 				FixedRate:        15,
 			}),
 			// 2000 * (200_000 * 5 / 1_000_000) = 2000 sats premium
@@ -410,9 +413,9 @@ func TestBatchVerifier(t *testing.T) {
 			ourNodePubkey: nodePubkey,
 			getAccount:    storeMock.getAccount,
 		}
-		storeMock.accounts = map[*btcec.PublicKey]*account.Account{
-			acctKeyBig:   bigAcct,
-			acctKeySmall: smallAcct,
+		storeMock.accounts = map[[33]byte]*account.Account{
+			acctIDBig:   bigAcct,
+			acctIDSmall: smallAcct,
 		}
 		storeMock.orders = map[Nonce]Order{
 			ask.Nonce():  ask,

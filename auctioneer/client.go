@@ -311,7 +311,7 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		})
 	}
 	details := &clmrpc.ServerOrder{
-		UserSubKey:             o.Details().AcctKey.SerializeCompressed(),
+		UserSubKey:             o.Details().AcctKey[:],
 		RateFixed:              int64(o.Details().FixedRate),
 		Amt:                    int64(o.Details().Amt),
 		OrderNonce:             nonce[:],

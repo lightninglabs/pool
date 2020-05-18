@@ -3,7 +3,6 @@ package order
 import (
 	"testing"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
@@ -109,9 +108,9 @@ func TestBatchStorer(t *testing.T) {
 	}
 
 	// Create the starting database state now.
-	storeMock.accounts = map[*btcec.PublicKey]*account.Account{
-		acctKeyBig:   bigAcct,
-		acctKeySmall: smallAcct,
+	storeMock.accounts = map[[33]byte]*account.Account{
+		acctIDBig:   bigAcct,
+		acctIDSmall: smallAcct,
 	}
 	storeMock.orders = map[Nonce]Order{
 		ask.Nonce():  ask,
