@@ -34,7 +34,7 @@ const (
 	// based on the maximum channel size plus some leeway to account for
 	// chain fees.
 	minAccountValue btcutil.Amount = 100000
-	maxAccountValue btcutil.Amount = minAccountValue + (1 << 24) - 1
+	maxAccountValue btcutil.Amount = btcutil.SatoshiPerBitcoin
 
 	// minAccountExpiry and maxAccountExpiry represent the thresholds at
 	// both extremes for valid account expirations.
