@@ -124,7 +124,9 @@ func (d *AccountDiff) validateEndingState(tx *wire.MsgTx,
 				"script: %v", err)
 		}
 		if !bytes.Equal(out.PkScript, nextScript) {
-			return fmt.Errorf("unexpected account output script")
+			return fmt.Errorf("unexpected account output "+
+				"script: want %x got %x", nextScript[:],
+				out.PkScript[:])
 		}
 	}
 
