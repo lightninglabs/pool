@@ -78,6 +78,7 @@ func newRPCServer(server *Server) *rpcServer {
 	return &rpcServer{
 		server:      server,
 		lndServices: lnd,
+		lndClient:   server.lndClient,
 		auctioneer:  server.AuctioneerClient,
 		accountManager: account.NewManager(&account.ManagerConfig{
 			Store:         accountStore,
