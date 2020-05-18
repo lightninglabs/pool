@@ -333,7 +333,7 @@ func (s *rpcServer) deriveFundingShim(ourOrder order.Order,
 	}
 	_, fundingOutput, err := input.GenFundingPkScript(
 		ourMultiSigKey.PubKey.SerializeCompressed(),
-		matchedOrder.MultiSigKey[:], 0,
+		matchedOrder.MultiSigKey[:], int64(chanSize),
 	)
 	if err != nil {
 		return nil, err
