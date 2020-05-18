@@ -1044,10 +1044,8 @@ func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
 	// Prepare the list of nonces we accept by serializing them to a slice
 	// of byte slices.
 	nonces := make([][]byte, 0, len(batch.MatchedOrders))
-	idx := 0
 	for nonce := range batch.MatchedOrders {
-		nonces[idx] = nonce[:]
-		idx++
+		nonces = append(nonces, nonce[:])
 	}
 
 	// Send the message to the server.
