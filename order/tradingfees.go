@@ -167,7 +167,7 @@ type AccountTally struct {
 	TotalMakerFeesAccrued btcutil.Amount
 
 	// NumChansCreated is the number of new channels that were created for
-	// one account in a batch. This is needed to calculate the cain fees
+	// one account in a batch. This is needed to calculate the chain fees
 	// that need to be paid from that account.
 	NumChansCreated uint32
 }

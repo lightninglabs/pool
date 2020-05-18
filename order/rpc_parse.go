@@ -263,6 +263,8 @@ func ParseRPCMatchedOrders(orders *clmrpc.MatchedOrder) ([]*MatchedOrder,
 				return nil, fmt.Errorf("error parsing server "+
 					"ask: %v", err)
 			}
+			matchedAsk.UnitsFilled = SupplyUnit(ask.UnitsFilled)
+
 			result = append(result, matchedAsk)
 		}
 
@@ -273,6 +275,8 @@ func ParseRPCMatchedOrders(orders *clmrpc.MatchedOrder) ([]*MatchedOrder,
 				return nil, fmt.Errorf("error parsing server "+
 					"bid: %v", err)
 			}
+			matchedBid.UnitsFilled = SupplyUnit(bid.UnitsFilled)
+
 			result = append(result, matchedBid)
 		}
 	}
