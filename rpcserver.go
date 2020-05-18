@@ -900,6 +900,8 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		// provided, then return this as a nice string instead of an
 		// error type.
 		if userErr, ok := err.(*order.UserError); ok {
+			log.Warnf("Invalid order details: %v", userErr)
+
 			return &clmrpc.SubmitOrderResponse{
 				Details: &clmrpc.SubmitOrderResponse_InvalidOrder{
 					InvalidOrder: userErr.Details,
@@ -912,6 +914,8 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		return nil, fmt.Errorf("error submitting order to auctioneer: "+
 			"%v", err)
 	}
+
+	log.Infof("New order submitted: nonce=%v, type=%v", o.Nonce(), o.Type())
 
 	// ServerOrder is accepted.
 	return &clmrpc.SubmitOrderResponse{
