@@ -2,13 +2,19 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/lightninglabs/agora/client"
 	"github.com/lightningnetwork/lnd/signal"
+
+	// Blank import to set up profiling HTTP handlers.
+	_ "net/http/pprof"
 )
 
 var (
@@ -58,6 +64,23 @@ func start() error {
 	_, err = parser.Parse()
 	if err != nil {
 		return err
+	}
+
+	// Enable http profiling and Validate profile port number if reqeusted.
+	if config.Profile != "" {
+		profilePort, err := strconv.Atoi(config.Profile)
+		if err != nil || profilePort < 1024 || profilePort > 65535 {
+			return fmt.Errorf("the profile port must be between " +
+				"1024 and 65535")
+		}
+
+		go func() {
+			listenAddr := net.JoinHostPort("", config.Profile)
+			profileRedirect := http.RedirectHandler("/debug/pprof",
+				http.StatusSeeOther)
+			http.Handle("/", profileRedirect)
+			fmt.Println(http.ListenAndServe(listenAddr, nil))
+		}()
 	}
 
 	// Execute command.
