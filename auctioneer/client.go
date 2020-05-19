@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
@@ -76,6 +77,9 @@ type Config struct {
 type Client struct {
 	cfg *Config
 
+	started uint32
+	stopped uint32
+
 	StreamErrChan  chan error
 	FromServerChan chan *clmrpc.ServerAuctionMessage
 
@@ -111,6 +115,10 @@ func NewClient(cfg *Config) (*Client, error) {
 
 // Start starts the client, establishing the connection to the server.
 func (c *Client) Start() error {
+	if !atomic.CompareAndSwapUint32(&c.started, 0, 1) {
+		return nil
+	}
+
 	serverConn, err := grpc.Dial(c.cfg.ServerAddress, c.cfg.DialOpts...)
 	if err != nil {
 		return fmt.Errorf("unable to connect to RPC server: %v",
@@ -157,6 +165,10 @@ func getAuctionServerDialOpts(insecure bool, tlsPath string,
 
 // Stop shuts down the client connection to the auction server.
 func (c *Client) Stop() error {
+	if !atomic.CompareAndSwapUint32(&c.stopped, 0, 1) {
+		return nil
+	}
+
 	log.Infof("Shutting down auctioneer client")
 	close(c.quit)
 	err := c.closeStream()
