@@ -124,9 +124,13 @@ func NewServer(cfg *Config) (*Server, error) {
 		return &macID.TokenID, nil
 	}
 
-	// For regtest, we create a fixed identity now that is used for the
-	// whole runtime of the trader.
-	if cfg.Network == "regtest" {
+	// For any net that isn't mainnet, we allow LSAT auth to be disabled and
+	// create a fixed identity that is used for the whole runtime of the
+	// trader instead.
+	if cfg.FakeAuth && cfg.Network == "mainnet" {
+		return nil, fmt.Errorf("cannot use fake LSAT auth for mainnet")
+	}
+	if cfg.FakeAuth {
 		var tokenID lsat.TokenID
 		_, _ = rand.Read(tokenID[:])
 		interceptor = &regtestInterceptor{id: tokenID}
