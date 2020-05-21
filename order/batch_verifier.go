@@ -93,8 +93,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 
 		// We'll index our account tallies by the serialized form of
 		// the account key so some copying is necessary first.
-		var acctKeyRaw [33]byte
-		copy(acctKeyRaw[:], ourOrder.Details().AcctKey[:])
+		acctKeyRaw := ourOrder.Details().AcctKey
 		acctKey, err := btcec.ParsePubKey(acctKeyRaw[:], btcec.S256())
 		if err != nil {
 			return err
