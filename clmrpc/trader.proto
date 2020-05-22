@@ -180,9 +180,9 @@ message SubmitOrderResponse {
         InvalidOrder invalid_order = 1;
 
         /**
-        Order was accepted.
+        The order nonce of the accepted order.
         */
-        bool accepted = 2;
+        bytes accepted_order_nonce = 2;
     }
 }
 

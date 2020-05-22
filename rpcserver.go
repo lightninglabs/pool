@@ -935,9 +935,10 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	log.Infof("New order submitted: nonce=%v, type=%v", o.Nonce(), o.Type())
 
 	// ServerOrder is accepted.
+	orderNonce := o.Nonce()
 	return &clmrpc.SubmitOrderResponse{
-		Details: &clmrpc.SubmitOrderResponse_Accepted{
-			Accepted: true,
+		Details: &clmrpc.SubmitOrderResponse_AcceptedOrderNonce{
+			AcceptedOrderNonce: orderNonce[:],
 		},
 	}, nil
 }

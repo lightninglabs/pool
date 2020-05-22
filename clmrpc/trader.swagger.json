@@ -433,10 +433,10 @@
           "$ref": "#/definitions/clmrpcInvalidOrder",
           "description": "*\nOrder failed with the given reason."
         },
-        "accepted": {
-          "type": "boolean",
-          "format": "boolean",
-          "description": "*\nOrder was accepted."
+        "accepted_order_nonce": {
+          "type": "string",
+          "format": "byte",
+          "description": "*\nThe order nonce of the accepted order."
         }
       }
     },
