@@ -241,6 +241,11 @@ func (s *Server) Start() error {
 		}()
 	}
 
+	err = s.AuctioneerClient.Start()
+	if err != nil {
+		return err
+	}
+
 	// Start the trader server itself.
 	err = s.traderServer.Start()
 	if err != nil {
@@ -272,9 +277,14 @@ func (s *Server) Start() error {
 func (s *Server) Stop() error {
 	log.Info("Received shutdown signal, stopping server")
 
+	err := s.AuctioneerClient.Stop()
+	if err != nil {
+		return err
+	}
+
 	// Don't return any errors yet, give everything else a chance to shut
 	// down first.
-	err := s.traderServer.Stop()
+	err = s.traderServer.Stop()
 	s.grpcServer.GracefulStop()
 	if s.restProxy != nil {
 		err := s.restProxy.Shutdown(context.Background())
