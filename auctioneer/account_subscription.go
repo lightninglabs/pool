@@ -78,7 +78,7 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 		return s.sendMsg(&clmrpc.ClientAuctionMessage{
 			Msg: &clmrpc.ClientAuctionMessage_Subscribe{
 				Subscribe: &clmrpc.AccountSubscription{
-					UserSubKey:  acctPubKey[:],
+					TraderKey:   acctPubKey[:],
 					CommitNonce: nonce[:],
 					AuthSig:     sig,
 				},

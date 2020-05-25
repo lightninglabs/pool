@@ -33,9 +33,9 @@ func ParseRPCOrder(version uint32, details *clmrpc.Order) (*Kit, error) {
 		kit = NewKitWithPreimage(preimage)
 	}
 
-	copy(kit.AcctKey[:], details.UserSubKey)
+	copy(kit.AcctKey[:], details.TraderKey)
 	kit.Version = Version(version)
-	kit.FixedRate = uint32(details.RateFixed)
+	kit.FixedRate = details.RateFixed
 	kit.Amt = btcutil.Amount(details.Amt)
 	kit.FundingFeeRate = chainfee.SatPerKWeight(details.FundingFeeRate)
 	kit.Units = NewSupplyFromSats(kit.Amt)
@@ -58,7 +58,7 @@ func ParseRPCServerOrder(version uint32, details *clmrpc.ServerOrder) (*Kit,
 	copy(nonce[:], details.OrderNonce)
 	kit := NewKit(nonce)
 	kit.Version = Version(version)
-	kit.FixedRate = uint32(details.RateFixed)
+	kit.FixedRate = details.RateFixed
 	kit.Amt = btcutil.Amount(details.Amt)
 	kit.Units = NewSupplyFromSats(kit.Amt)
 	kit.UnitsUnfulfilled = kit.Units
@@ -78,7 +78,7 @@ func ParseRPCServerOrder(version uint32, details *clmrpc.ServerOrder) (*Kit,
 		kit = NewKitWithPreimage(preimage)
 	}
 
-	copy(kit.AcctKey[:], details.UserSubKey)
+	copy(kit.AcctKey[:], details.TraderKey)
 
 	nodePubKey, err := btcec.ParsePubKey(details.NodePub, btcec.S256())
 	if err != nil {
@@ -126,7 +126,7 @@ func ParseRPCServerAsk(details *clmrpc.ServerAsk) (*MatchedOrder, error) {
 	}
 	o.Order = &Ask{
 		Kit:         *kit,
-		MaxDuration: uint32(details.MaxDurationBlocks),
+		MaxDuration: details.MaxDurationBlocks,
 	}
 	return o, nil
 }
@@ -146,7 +146,7 @@ func ParseRPCServerBid(details *clmrpc.ServerBid) (*MatchedOrder, error) {
 	}
 	o.Order = &Bid{
 		Kit:         *kit,
-		MinDuration: uint32(details.MinDurationBlocks),
+		MinDuration: details.MinDurationBlocks,
 	}
 	return o, nil
 }
@@ -182,7 +182,7 @@ func ParseRPCBatch(prepareMsg *clmrpc.OrderMatchPrepare) (*Batch,
 	// Parse account diff.
 	for _, diff := range prepareMsg.ChargedAccounts {
 		var acctKeyRaw [33]byte
-		acctKey, err := btcec.ParsePubKey(diff.UserSubKey, btcec.S256())
+		acctKey, err := btcec.ParsePubKey(diff.TraderKey, btcec.S256())
 		if err != nil {
 			return nil, fmt.Errorf("error parsing account key: %v",
 				err)

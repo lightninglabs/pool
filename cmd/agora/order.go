@@ -65,23 +65,23 @@ func parseCommonParams(ctx *cli.Context) (*clmrpc.Order, error) {
 
 	switch {
 	case ctx.IsSet("amt"):
-		params.Amt = int64(ctx.Uint64("amt"))
+		params.Amt = ctx.Uint64("amt")
 	case args.Present():
 		amt, err = parseAmt(args.First())
-		params.Amt = int64(amt)
+		params.Amt = uint64(amt)
 		args = args.Tail()
 	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode amount: %v", err)
 	}
 
-	params.UserSubKey, err = parseAccountKey(ctx, args)
+	params.TraderKey, err = parseAccountKey(ctx, args)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse acct_key: %v", err)
 	}
 
-	params.FundingFeeRate = int64(ctx.Uint64("funding_fee_rate"))
-	params.RateFixed = int64(ctx.Uint64("rate_fixed"))
+	params.FundingFeeRate = ctx.Uint64("funding_fee_rate")
+	params.RateFixed = uint32(ctx.Uint64("rate_fixed"))
 
 	return params, nil
 }
@@ -156,7 +156,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 	}
 	ask := &clmrpc.Ask{
 		Details:           params,
-		MaxDurationBlocks: int64(ctx.Uint64("max_duration_blocks")),
+		MaxDurationBlocks: uint32(ctx.Uint64("max_duration_blocks")),
 		Version:           uint32(order.VersionDefault),
 	}
 
@@ -230,7 +230,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 	}
 	bid := &clmrpc.Bid{
 		Details:           params,
-		MinDurationBlocks: int64(ctx.Uint64("min_duration_blocks")),
+		MinDurationBlocks: uint32(ctx.Uint64("min_duration_blocks")),
 		Version:           uint32(order.VersionDefault),
 	}
 

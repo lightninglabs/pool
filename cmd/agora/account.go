@@ -28,7 +28,7 @@ var accountsCommands = []cli.Command{
 type Account struct {
 	TraderKey        string `json:"trader_key"`
 	OutPoint         string `json:"outpoint"`
-	Value            uint32 `json:"value"`
+	Value            uint64 `json:"value"`
 	ExpirationHeight uint32 `json:"expiration_height"`
 	State            string `json:"state"`
 	CloseTxid        string `json:"close_txid"`
@@ -92,7 +92,7 @@ func newAccount(ctx *cli.Context) error {
 
 	resp, err := client.InitAccount(context.Background(),
 		&clmrpc.InitAccountRequest{
-			AccountValue:  uint32(amt),
+			AccountValue:  amt,
 			AccountExpiry: uint32(expiry),
 		},
 	)
@@ -149,7 +149,7 @@ var withdrawAccountCommand = cli.Command{
 	Description: `
 	Withdraw funds from an existing account to a supported address.
 	`,
-	ArgsUsage: "addr sat_per_byte",
+	ArgsUsage: "addr sat_per_vbyte",
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name: "trader_key",
@@ -166,8 +166,8 @@ var withdrawAccountCommand = cli.Command{
 				"and withdrawn from the account",
 		},
 		cli.Uint64Flag{
-			Name: "sat_per_byte",
-			Usage: "the fee rate expressed in sat/byte that " +
+			Name: "sat_per_vbyte",
+			Usage: "the fee rate expressed in sat/vbyte that " +
 				"should be used for the withdrawal",
 		},
 	},
@@ -188,7 +188,7 @@ func withdrawAccount(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	satPerByte, err := parseUint64(ctx, 3, "sat_per_byte", cmd)
+	satPerVByte, err := parseUint64(ctx, 3, "sat_per_vbyte", cmd)
 	if err != nil {
 		return err
 	}
@@ -204,11 +204,11 @@ func withdrawAccount(ctx *cli.Context) error {
 			TraderKey: traderKey,
 			Outputs: []*clmrpc.Output{
 				{
-					Value:   uint32(amt),
+					Value:   amt,
 					Address: addr,
 				},
 			},
-			SatPerByte: uint32(satPerByte),
+			SatPerVbyte: satPerVByte,
 		},
 	)
 	if err != nil {

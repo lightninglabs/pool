@@ -236,9 +236,9 @@ func (c *Client) InitAccount(ctx context.Context, account *account.Account) erro
 			OutputIndex: account.OutPoint.Index,
 		},
 		AccountScript: accountOutput.PkScript,
-		AccountValue:  uint32(account.Value),
+		AccountValue:  uint64(account.Value),
 		AccountExpiry: account.Expiry,
-		UserSubKey:    account.TraderKey.PubKey.SerializeCompressed(),
+		TraderKey:     account.TraderKey.PubKey.SerializeCompressed(),
 	})
 	return err
 }
@@ -269,7 +269,7 @@ func (c *Client) ModifyAccount(ctx context.Context, account *account.Account,
 	rpcOutputs := make([]*clmrpc.ServerOutput, 0, len(outputs))
 	for _, output := range outputs {
 		rpcOutputs = append(rpcOutputs, &clmrpc.ServerOutput{
-			Value:  uint32(output.Value),
+			Value:  uint64(output.Value),
 			Script: output.PkScript,
 		})
 	}
@@ -278,12 +278,12 @@ func (c *Client) ModifyAccount(ctx context.Context, account *account.Account,
 	modifiedAccount := account.Copy(modifiers...)
 	if len(modifiers) > 0 {
 		rpcNewParams = &clmrpc.ServerModifyAccountRequest_NewAccountParameters{
-			Value: uint32(modifiedAccount.Value),
+			Value: uint64(modifiedAccount.Value),
 		}
 	}
 
 	resp, err := c.client.ModifyAccount(ctx, &clmrpc.ServerModifyAccountRequest{
-		UserSubKey: account.TraderKey.PubKey.SerializeCompressed(),
+		TraderKey:  account.TraderKey.PubKey.SerializeCompressed(),
 		NewInputs:  rpcInputs,
 		NewOutputs: rpcOutputs,
 		NewParams:  rpcNewParams,
@@ -311,15 +311,15 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		})
 	}
 	details := &clmrpc.ServerOrder{
-		UserSubKey:             o.Details().AcctKey[:],
-		RateFixed:              int64(o.Details().FixedRate),
-		Amt:                    int64(o.Details().Amt),
+		TraderKey:              o.Details().AcctKey[:],
+		RateFixed:              o.Details().FixedRate,
+		Amt:                    uint64(o.Details().Amt),
 		OrderNonce:             nonce[:],
 		OrderSig:               serverParams.RawSig,
 		MultiSigKey:            serverParams.MultiSigKey[:],
 		NodePub:                serverParams.NodePubkey[:],
 		NodeAddr:               nodeAddrs,
-		FundingFeeRateSatPerKw: int64(o.Details().FundingFeeRate),
+		FundingFeeRateSatPerKw: uint64(o.Details().FundingFeeRate),
 	}
 
 	// Split into server message which is type specific.
@@ -327,7 +327,7 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 	case *order.Ask:
 		serverAsk := &clmrpc.ServerAsk{
 			Details:           details,
-			MaxDurationBlocks: int64(castOrder.MaxDuration),
+			MaxDurationBlocks: castOrder.MaxDuration,
 			Version:           uint32(castOrder.Version),
 		}
 		rpcRequest.Details = &clmrpc.ServerSubmitOrderRequest_Ask{
@@ -337,7 +337,7 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 	case *order.Bid:
 		serverBid := &clmrpc.ServerBid{
 			Details:           details,
-			MinDurationBlocks: int64(castOrder.MinDuration),
+			MinDurationBlocks: castOrder.MinDuration,
 			Version:           uint32(castOrder.Version),
 		}
 		rpcRequest.Details = &clmrpc.ServerSubmitOrderRequest_Bid{

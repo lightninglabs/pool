@@ -53,7 +53,7 @@ service Trader {
 }
 
 message InitAccountRequest {
-    uint32 account_value = 1;
+    uint64 account_value = 1;
     uint32 account_expiry = 2;
 }
 
@@ -65,7 +65,7 @@ message ListAccountsResponse {
 
 message Output {
     // The value, in satoshis, of the output.
-    uint32 value = 1;
+    uint64 value = 1;
 
     // The address corresponding to the output.
     string address = 2;
@@ -73,18 +73,18 @@ message Output {
 
 message CloseAccountRequest {
     // The trader key associated with the account that will be closed.
-    bytes trader_key = 1 [json_name = "trader_key"];
+    bytes trader_key = 1;
 
     /*
     The outputs that should be created as a result of closing the account. If
     none are specified, then the funds within the account are sent to an address
     the backing lnd node controls.
     */
-    repeated Output outputs = 2 [json_name = "outputs"];
+    repeated Output outputs = 2;
 }
 message CloseAccountResponse {
     // The hash of the closing transaction.
-    bytes close_txid = 1 [json_name = "close_txid"];
+    bytes close_txid = 1;
 }
 
 message WithdrawAccountRequest {
@@ -100,7 +100,7 @@ message WithdrawAccountRequest {
     /*
     The fee rate, in satoshis per vbyte, to use for the withdrawal transaction.
     */
-    uint32 sat_per_byte = 3;
+    uint64 sat_per_vbyte = 3;
 }
 message WithdrawAccountResponse {
     // The state of the account after processing the withdrawal.
@@ -154,7 +154,7 @@ message Account {
     OutPoint outpoint = 2;
 
     // The current value in satoshis of the account.
-    uint32 value = 3;
+    uint64 value = 3;
 
     // The height at which the account will expire.
     uint32 expiration_height = 4;
@@ -174,12 +174,12 @@ message SubmitOrderRequest {
 }
 message SubmitOrderResponse {
     oneof details {
-        /**
+        /*
         Order failed with the given reason.
         */
         InvalidOrder invalid_order = 1;
 
-        /**
+        /*
         The order nonce of the accepted order.
         */
         bytes accepted_order_nonce = 2;
@@ -200,84 +200,84 @@ message CancelOrderResponse {
 }
 
 message Order {
-    /**
-    The user's sub key of the account that is used for the order.
+    /*
+    The trader's account key of the account that is used for the order.
     */
-    bytes user_sub_key = 1 [json_name = "user_sub_key"];
+    bytes trader_key = 1;
 
-    /**
+    /*
     Fixed order rate in parts per million.
     */
-    int64 rate_fixed = 2 [json_name = "rate_fixed"];
+    uint32 rate_fixed = 2;
 
-    /**
+    /*
     Order amount in satoshis.
     */
-    int64 amt = 3 [json_name = "amt"];
+    uint64 amt = 3;
 
-    /**
+    /*
     Preferred fee rate to be used for the channel funding transaction, expressed
     in satoshis per 1000 weight units (sat/kW).
     */
-    int64 funding_fee_rate = 4 [json_name = "funding_fee_rate"];
+    uint64 funding_fee_rate = 4;
 
-    /**
+    /*
     Order nonce, acts as unique order identifier.
     */
-    bytes order_nonce = 5 [json_name = "order_nonce"];
+    bytes order_nonce = 5;
 
-    /**
+    /*
     The state the order currently is in.
     */
-    string state = 6 [json_name = "state"];
+    string state = 6;
 
-    /**
+    /*
     The number of order units the amount corresponds to.
     */
-    uint32 units = 7 [json_name = "units"];
+    uint32 units = 7;
 
-    /**
+    /*
     The number of currently unfilled units of this order. This will be equal to
     the total amount of units until the order has reached the state PARTIAL_FILL
     or EXECUTED.
     */
-    uint32 units_unfulfilled = 8 [json_name = "units_unfulfilled"];
+    uint32 units_unfulfilled = 8;
 }
 
 message Bid {
-    /**
+    /*
     The common fields shared between both ask and bid order types.
     */
-    Order details = 1 [json_name = "details"];
+    Order details = 1;
 
-    /**
+    /*
     Required minimum number of blocks that a channel opened as a result of this
     bid should be kept open.
     */
-    int64 min_duration_blocks = 2 [json_name = "min_duration_blocks"];
+    uint32 min_duration_blocks = 2;
 
-    /**
+    /*
     The version of the order format that is used. Will be increased once new
     features are added.
     */
-    uint32 version = 3 [json_name = "version"];
+    uint32 version = 3;
 }
 
 message Ask {
-    /**
+    /*
     The common fields shared between both ask and bid order types.
     */
-    Order details = 1 [json_name = "details"];
+    Order details = 1;
 
-    /**
+    /*
     The maximum number of blocks the liquidity provider is willing to provide
     the channel funds for.
     */
-    int64 max_duration_blocks = 2 [json_name = "max_duration_blocks"];
+    uint32 max_duration_blocks = 2;
 
-    /**
+    /*
     The version of the order format that is used. Will be increased once new
     features are added.
     */
-    uint32 version = 3 [json_name = "version"];
+    uint32 version = 3;
 }

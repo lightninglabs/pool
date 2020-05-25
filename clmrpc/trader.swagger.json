@@ -202,8 +202,8 @@
           "description": "The current outpoint associated with the account. This will change every\ntime the account has been updated."
         },
         "value": {
-          "type": "integer",
-          "format": "int64",
+          "type": "string",
+          "format": "uint64",
           "description": "The current value in satoshis of the account."
         },
         "expiration_height": {
@@ -240,17 +240,17 @@
       "properties": {
         "details": {
           "$ref": "#/definitions/clmrpcOrder",
-          "description": "*\nThe common fields shared between both ask and bid order types."
+          "description": "The common fields shared between both ask and bid order types."
         },
         "max_duration_blocks": {
-          "type": "string",
+          "type": "integer",
           "format": "int64",
-          "description": "*\nThe maximum number of blocks the liquidity provider is willing to provide\nthe channel funds for."
+          "description": "The maximum number of blocks the liquidity provider is willing to provide\nthe channel funds for."
         },
         "version": {
           "type": "integer",
           "format": "int64",
-          "description": "*\nThe version of the order format that is used. Will be increased once new\nfeatures are added."
+          "description": "The version of the order format that is used. Will be increased once new\nfeatures are added."
         }
       }
     },
@@ -259,17 +259,17 @@
       "properties": {
         "details": {
           "$ref": "#/definitions/clmrpcOrder",
-          "description": "*\nThe common fields shared between both ask and bid order types."
+          "description": "The common fields shared between both ask and bid order types."
         },
         "min_duration_blocks": {
-          "type": "string",
+          "type": "integer",
           "format": "int64",
-          "description": "*\nRequired minimum number of blocks that a channel opened as a result of this\nbid should be kept open."
+          "description": "Required minimum number of blocks that a channel opened as a result of this\nbid should be kept open."
         },
         "version": {
           "type": "integer",
           "format": "int64",
-          "description": "*\nThe version of the order format that is used. Will be increased once new\nfeatures are added."
+          "description": "The version of the order format that is used. Will be increased once new\nfeatures are added."
         }
       }
     },
@@ -290,8 +290,8 @@
       "type": "object",
       "properties": {
         "account_value": {
-          "type": "integer",
-          "format": "int64"
+          "type": "string",
+          "format": "uint64"
         },
         "account_expiry": {
           "type": "integer",
@@ -345,44 +345,44 @@
     "clmrpcOrder": {
       "type": "object",
       "properties": {
-        "user_sub_key": {
+        "trader_key": {
           "type": "string",
           "format": "byte",
-          "description": "*\nThe user's sub key of the account that is used for the order."
+          "description": "The trader's account key of the account that is used for the order."
         },
         "rate_fixed": {
-          "type": "string",
+          "type": "integer",
           "format": "int64",
-          "description": "*\nFixed order rate in parts per million."
+          "description": "Fixed order rate in parts per million."
         },
         "amt": {
           "type": "string",
-          "format": "int64",
-          "description": "*\nOrder amount in satoshis."
+          "format": "uint64",
+          "description": "Order amount in satoshis."
         },
         "funding_fee_rate": {
           "type": "string",
-          "format": "int64",
-          "description": "*\nPreferred fee rate to be used for the channel funding transaction, expressed\nin satoshis per 1000 weight units (sat/kW)."
+          "format": "uint64",
+          "description": "Preferred fee rate to be used for the channel funding transaction, expressed\nin satoshis per 1000 weight units (sat/kW)."
         },
         "order_nonce": {
           "type": "string",
           "format": "byte",
-          "description": "*\nOrder nonce, acts as unique order identifier."
+          "description": "Order nonce, acts as unique order identifier."
         },
         "state": {
           "type": "string",
-          "description": "*\nThe state the order currently is in."
+          "description": "The state the order currently is in."
         },
         "units": {
           "type": "integer",
           "format": "int64",
-          "description": "*\nThe number of order units the amount corresponds to."
+          "description": "The number of order units the amount corresponds to."
         },
         "units_unfulfilled": {
           "type": "integer",
           "format": "int64",
-          "description": "*\nThe number of currently unfilled units of this order. This will be equal to\nthe total amount of units until the order has reached the state PARTIAL_FILL\nor EXECUTED."
+          "description": "The number of currently unfilled units of this order. This will be equal to\nthe total amount of units until the order has reached the state PARTIAL_FILL\nor EXECUTED."
         }
       }
     },
@@ -392,12 +392,12 @@
         "txid": {
           "type": "string",
           "format": "byte",
-          "description": "*\nRaw bytes representing the transaction id."
+          "description": "Raw bytes representing the transaction id."
         },
         "output_index": {
           "type": "integer",
           "format": "int64",
-          "description": "*\nThe index of the output on the transaction."
+          "description": "The index of the output on the transaction."
         }
       }
     },
@@ -405,8 +405,8 @@
       "type": "object",
       "properties": {
         "value": {
-          "type": "integer",
-          "format": "int64",
+          "type": "string",
+          "format": "uint64",
           "description": "The value, in satoshis, of the output."
         },
         "address": {
@@ -431,12 +431,12 @@
       "properties": {
         "invalid_order": {
           "$ref": "#/definitions/clmrpcInvalidOrder",
-          "description": "*\nOrder failed with the given reason."
+          "description": "Order failed with the given reason."
         },
         "accepted_order_nonce": {
           "type": "string",
           "format": "byte",
-          "description": "*\nThe order nonce of the accepted order."
+          "description": "The order nonce of the accepted order."
         }
       }
     },
@@ -455,9 +455,9 @@
           },
           "description": "The outputs we'll withdraw funds from the account into."
         },
-        "sat_per_byte": {
-          "type": "integer",
-          "format": "int64",
+        "sat_per_vbyte": {
+          "type": "string",
+          "format": "uint64",
           "description": "The fee rate, in satoshis per vbyte, to use for the withdrawal transaction."
         }
       }
