@@ -29,12 +29,16 @@ const (
 	minConfs = 3
 	maxConfs = 6
 
-	// minAccountValue and maxAccountValue represent the thresholds at both
-	// extremes for valid account values in satoshis. The maximum value is
-	// based on the maximum channel size plus some leeway to account for
-	// chain fees.
-	minAccountValue btcutil.Amount = 100000
-	maxAccountValue btcutil.Amount = btcutil.SatoshiPerBitcoin
+	// MinAccountValue is the minimum value for an account output in
+	// satoshis.
+	MinAccountValue btcutil.Amount = 100000
+
+	// maxAccountValue is the maximum technical value for an account output
+	// in satoshis. This limit is based on the maximum number of satoshis
+	// there can ever exist and is only used to check the basic sanity of
+	// account values. The actual currently allowed maximum amount is
+	// determined by the auctioneer.
+	maxAccountValue btcutil.Amount = btcutil.MaxSatoshi
 
 	// minAccountExpiry and maxAccountExpiry represent the thresholds at
 	// both extremes for valid account expirations.
@@ -218,7 +222,7 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	// With our key obtained, we'll reserve an account with our auctioneer,
 	// who will provide us with their base key and our initial per-batch
 	// key.
-	reservation, err := m.cfg.Auctioneer.ReserveAccount(ctx)
+	reservation, err := m.cfg.Auctioneer.ReserveAccount(ctx, value)
 	if err != nil {
 		return nil, err
 	}
@@ -1046,9 +1050,9 @@ func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
 	// required minimum.
 	fee := feeRate.FeeForWeight(int64(weightEstimator.Weight()))
 	newAmount := inputTotal - outputTotal - fee
-	if newAmount < minAccountValue {
+	if newAmount < MinAccountValue {
 		return nil, nil, fmt.Errorf("new account value is below "+
-			"accepted minimum of %v", minAccountValue)
+			"accepted minimum of %v", MinAccountValue)
 	}
 
 	// Use the next output script in the sequence to avoid script reuse.
@@ -1189,9 +1193,9 @@ func (m *Manager) toWalletOutput(ctx context.Context,
 // validateAccountParams ensures that a trader has provided sane parameters for
 // the creation of a new account.
 func validateAccountParams(value btcutil.Amount, expiry, bestHeight uint32) error {
-	if value < minAccountValue {
+	if value < MinAccountValue {
 		return fmt.Errorf("minimum account value allowed is %v",
-			minAccountValue)
+			MinAccountValue)
 	}
 	if value > maxAccountValue {
 		return fmt.Errorf("maximum account value allowed is %v",

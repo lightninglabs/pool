@@ -295,10 +295,12 @@ type Store interface {
 // Auctioneer provides us with the different ways we are able to communicate
 // with our auctioneer during the process of opening/closing/modifying accounts.
 type Auctioneer interface {
-	// ReserveAccount reserves an account with the auctioneer. It returns a
-	// the public key we should use for them in our 2-of-2 multi-sig
+	// ReserveAccount reserves an account of the specified value with the
+	// auctioneer. The auctioneer checks the account value against current
+	// min/max values configured. If the value is valid, it returns the
+	// public key we should use for them in our 2-of-2 multi-sig
 	// construction.
-	ReserveAccount(context.Context) (*Reservation, error)
+	ReserveAccount(context.Context, btcutil.Amount) (*Reservation, error)
 
 	// InitAccount initializes an account with the auctioneer such that it
 	// can be used once fully confirmed.

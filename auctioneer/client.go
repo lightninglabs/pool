@@ -12,6 +12,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/agora/client/account"
 	"github.com/lightninglabs/agora/client/clmrpc"
@@ -197,8 +198,12 @@ func (c *Client) closeStream() error {
 // ReserveAccount reserves an account with the auctioneer. It returns the base
 // public key we should use for them in our 2-of-2 multi-sig construction, and
 // the initial batch key.
-func (c *Client) ReserveAccount(ctx context.Context) (*account.Reservation, error) {
-	resp, err := c.client.ReserveAccount(ctx, &clmrpc.ReserveAccountRequest{})
+func (c *Client) ReserveAccount(ctx context.Context,
+	value btcutil.Amount) (*account.Reservation, error) {
+
+	resp, err := c.client.ReserveAccount(ctx, &clmrpc.ReserveAccountRequest{
+		AccountValue: uint64(value),
+	})
 	if err != nil {
 		return nil, err
 	}
