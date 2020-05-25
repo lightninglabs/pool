@@ -156,7 +156,9 @@ func newMockAuctioneer() *mockAuctioneer {
 	}
 }
 
-func (a *mockAuctioneer) ReserveAccount(context.Context) (*Reservation, error) {
+func (a *mockAuctioneer) ReserveAccount(context.Context,
+	btcutil.Amount) (*Reservation, error) {
+
 	return &Reservation{
 		AuctioneerKey:   testAuctioneerKey,
 		InitialBatchKey: testBatchKey,
