@@ -385,41 +385,11 @@ func (c *Client) CancelOrder(ctx context.Context, nonce order.Nonce) error {
 // state as it's currently known to the server's database. For real-time updates
 // on the state, the SubscribeBatchAuction stream should be used.
 func (c *Client) OrderState(ctx context.Context, nonce order.Nonce) (
-	order.State, uint32, error) {
+	*clmrpc.ServerOrderStateResponse, error) {
 
-	resp, err := c.client.OrderState(ctx, &clmrpc.ServerOrderStateRequest{
+	return c.client.OrderState(ctx, &clmrpc.ServerOrderStateRequest{
 		OrderNonce: nonce[:],
 	})
-	if err != nil {
-		return 0, 0, err
-	}
-
-	// Map RPC state to internal state.
-	switch resp.State {
-	case clmrpc.OrderState_ORDER_SUBMITTED:
-		return order.StateSubmitted, resp.UnitsUnfulfilled, nil
-
-	case clmrpc.OrderState_ORDER_CLEARED:
-		return order.StateCleared, resp.UnitsUnfulfilled, nil
-
-	case clmrpc.OrderState_ORDER_PARTIALLY_FILLED:
-		return order.StatePartiallyFilled, resp.UnitsUnfulfilled, nil
-
-	case clmrpc.OrderState_ORDER_EXECUTED:
-		return order.StateExecuted, resp.UnitsUnfulfilled, nil
-
-	case clmrpc.OrderState_ORDER_CANCELED:
-		return order.StateCanceled, resp.UnitsUnfulfilled, nil
-
-	case clmrpc.OrderState_ORDER_EXPIRED:
-		return order.StateExpired, resp.UnitsUnfulfilled, nil
-
-	case clmrpc.OrderState_ORDER_FAILED:
-		return order.StateFailed, resp.UnitsUnfulfilled, nil
-
-	default:
-		return 0, 0, fmt.Errorf("invalid order state: %v", resp.State)
-	}
 }
 
 // SubscribeAccountUpdates opens a stream to the server and subscribes

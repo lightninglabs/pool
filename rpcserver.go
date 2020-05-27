@@ -962,9 +962,7 @@ func (s *rpcServer) ListOrders(ctx context.Context, _ *clmrpc.ListOrdersRequest)
 		nonce := dbOrder.Nonce()
 
 		// Ask the server about the order's current status.
-		state, unitsUnfullfilled, err := s.auctioneer.OrderState(
-			ctx, nonce,
-		)
+		orderStateResp, err := s.auctioneer.OrderState(ctx, nonce)
 		if err != nil {
 			return nil, fmt.Errorf("unable to query order state on"+
 				"server for order %v: %v", nonce.String(), err)
@@ -977,9 +975,9 @@ func (s *rpcServer) ListOrders(ctx context.Context, _ *clmrpc.ListOrdersRequest)
 			Amt:              uint64(dbDetails.Amt),
 			FundingFeeRate:   uint64(dbDetails.FundingFeeRate),
 			OrderNonce:       nonce[:],
-			State:            state.String(),
+			State:            orderStateResp.State,
 			Units:            uint32(dbDetails.Units),
-			UnitsUnfulfilled: unitsUnfullfilled,
+			UnitsUnfulfilled: orderStateResp.UnitsUnfulfilled,
 		}
 
 		switch o := dbOrder.(type) {

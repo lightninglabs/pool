@@ -371,7 +371,7 @@
           "description": "Order nonce, acts as unique order identifier."
         },
         "state": {
-          "type": "string",
+          "$ref": "#/definitions/clmrpcOrderState",
           "description": "The state the order currently is in."
         },
         "units": {
@@ -385,6 +385,19 @@
           "description": "The number of currently unfilled units of this order. This will be equal to\nthe total amount of units until the order has reached the state PARTIAL_FILL\nor EXECUTED."
         }
       }
+    },
+    "clmrpcOrderState": {
+      "type": "string",
+      "enum": [
+        "ORDER_SUBMITTED",
+        "ORDER_CLEARED",
+        "ORDER_PARTIALLY_FILLED",
+        "ORDER_EXECUTED",
+        "ORDER_CANCELED",
+        "ORDER_EXPIRED",
+        "ORDER_FAILED"
+      ],
+      "default": "ORDER_SUBMITTED"
     },
     "clmrpcOutPoint": {
       "type": "object",

@@ -229,7 +229,7 @@ message Order {
     /*
     The state the order currently is in.
     */
-    string state = 6;
+    OrderState state = 6;
 
     /*
     The number of order units the amount corresponds to.
