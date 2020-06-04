@@ -9,6 +9,8 @@ import (
 	proto "github.com/golang/protobuf/proto"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	math "math"
 )
 
@@ -3513,6 +3515,38 @@ type ChannelAuctioneerServer interface {
 	SubscribeBatchAuction(ChannelAuctioneer_SubscribeBatchAuctionServer) error
 	FeeQuote(context.Context, *FeeQuoteRequest) (*FeeQuoteResponse, error)
 	RelevantBatchSnapshot(context.Context, *RelevantBatchRequest) (*RelevantBatch, error)
+}
+
+// UnimplementedChannelAuctioneerServer can be embedded to have forward compatible implementations.
+type UnimplementedChannelAuctioneerServer struct {
+}
+
+func (*UnimplementedChannelAuctioneerServer) ReserveAccount(ctx context.Context, req *ReserveAccountRequest) (*ReserveAccountResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReserveAccount not implemented")
+}
+func (*UnimplementedChannelAuctioneerServer) InitAccount(ctx context.Context, req *ServerInitAccountRequest) (*ServerInitAccountResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InitAccount not implemented")
+}
+func (*UnimplementedChannelAuctioneerServer) ModifyAccount(ctx context.Context, req *ServerModifyAccountRequest) (*ServerModifyAccountResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ModifyAccount not implemented")
+}
+func (*UnimplementedChannelAuctioneerServer) SubmitOrder(ctx context.Context, req *ServerSubmitOrderRequest) (*ServerSubmitOrderResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitOrder not implemented")
+}
+func (*UnimplementedChannelAuctioneerServer) CancelOrder(ctx context.Context, req *ServerCancelOrderRequest) (*ServerCancelOrderResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelOrder not implemented")
+}
+func (*UnimplementedChannelAuctioneerServer) OrderState(ctx context.Context, req *ServerOrderStateRequest) (*ServerOrderStateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OrderState not implemented")
+}
+func (*UnimplementedChannelAuctioneerServer) SubscribeBatchAuction(srv ChannelAuctioneer_SubscribeBatchAuctionServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeBatchAuction not implemented")
+}
+func (*UnimplementedChannelAuctioneerServer) FeeQuote(ctx context.Context, req *FeeQuoteRequest) (*FeeQuoteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FeeQuote not implemented")
+}
+func (*UnimplementedChannelAuctioneerServer) RelevantBatchSnapshot(ctx context.Context, req *RelevantBatchRequest) (*RelevantBatch, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RelevantBatchSnapshot not implemented")
 }
 
 func RegisterChannelAuctioneerServer(s *grpc.Server, srv ChannelAuctioneerServer) {

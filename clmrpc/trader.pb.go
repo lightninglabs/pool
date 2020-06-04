@@ -9,6 +9,8 @@ import (
 	proto "github.com/golang/protobuf/proto"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	math "math"
 )
 
@@ -1365,6 +1367,35 @@ type TraderServer interface {
 	SubmitOrder(context.Context, *SubmitOrderRequest) (*SubmitOrderResponse, error)
 	ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error)
 	CancelOrder(context.Context, *CancelOrderRequest) (*CancelOrderResponse, error)
+}
+
+// UnimplementedTraderServer can be embedded to have forward compatible implementations.
+type UnimplementedTraderServer struct {
+}
+
+func (*UnimplementedTraderServer) InitAccount(ctx context.Context, req *InitAccountRequest) (*Account, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InitAccount not implemented")
+}
+func (*UnimplementedTraderServer) ListAccounts(ctx context.Context, req *ListAccountsRequest) (*ListAccountsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListAccounts not implemented")
+}
+func (*UnimplementedTraderServer) CloseAccount(ctx context.Context, req *CloseAccountRequest) (*CloseAccountResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CloseAccount not implemented")
+}
+func (*UnimplementedTraderServer) WithdrawAccount(ctx context.Context, req *WithdrawAccountRequest) (*WithdrawAccountResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WithdrawAccount not implemented")
+}
+func (*UnimplementedTraderServer) RecoverAccounts(ctx context.Context, req *RecoverAccountsRequest) (*RecoverAccountsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RecoverAccounts not implemented")
+}
+func (*UnimplementedTraderServer) SubmitOrder(ctx context.Context, req *SubmitOrderRequest) (*SubmitOrderResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitOrder not implemented")
+}
+func (*UnimplementedTraderServer) ListOrders(ctx context.Context, req *ListOrdersRequest) (*ListOrdersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListOrders not implemented")
+}
+func (*UnimplementedTraderServer) CancelOrder(ctx context.Context, req *CancelOrderRequest) (*CancelOrderResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelOrder not implemented")
 }
 
 func RegisterTraderServer(s *grpc.Server, srv TraderServer) {

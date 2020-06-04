@@ -4,10 +4,6 @@
     "title": "trader.proto",
     "version": "version not set"
   },
-  "schemes": [
-    "http",
-    "https"
-  ],
   "consumes": [
     "application/json"
   ],
@@ -24,6 +20,12 @@
             "schema": {
               "$ref": "#/definitions/clmrpcListAccountsResponse"
             }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
           }
         },
         "tags": [
@@ -37,6 +39,12 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/clmrpcAccount"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
             }
           }
         },
@@ -64,6 +72,12 @@
             "schema": {
               "$ref": "#/definitions/clmrpcRecoverAccountsResponse"
             }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
           }
         },
         "parameters": [
@@ -89,6 +103,12 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/clmrpcWithdrawAccountResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
             }
           }
         },
@@ -124,6 +144,12 @@
             "schema": {
               "$ref": "#/definitions/clmrpcCloseAccountResponse"
             }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
           }
         },
         "parameters": [
@@ -150,6 +176,12 @@
             "schema": {
               "$ref": "#/definitions/clmrpcListOrdersResponse"
             }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
           }
         },
         "tags": [
@@ -163,6 +195,12 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/clmrpcSubmitOrderResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
             }
           }
         },
@@ -189,6 +227,12 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/clmrpcCancelOrderResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
             }
           }
         },
@@ -525,6 +569,39 @@
           "type": "string",
           "format": "byte",
           "description": "The transaction used to withdraw funds from the account."
+        }
+      }
+    },
+    "gatewayruntimeError": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "type_url": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
         }
       }
     }
