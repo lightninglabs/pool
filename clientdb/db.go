@@ -84,6 +84,9 @@ func initDB(filepath string, firstInit bool) (*bbolt.DB, error) {
 			if err != nil {
 				return err
 			}
+			if err := storeRandomLockID(metadataBucket); err != nil {
+				return err
+			}
 		}
 
 		_, err = tx.CreateBucketIfNotExists(accountBucketKey)

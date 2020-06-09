@@ -1,9 +1,11 @@
 package clientdb
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 
+	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/coreos/bbolt"
 )
 
@@ -20,6 +22,13 @@ var (
 	// dbVersionKey is the key used for storing/retrieving the current
 	// database version.
 	dbVersionKey = []byte("version")
+
+	// lockIDKey is the daabase key used for storing/retrieving the global
+	// lock ID to use when leasing outputs from the backing lnd node's
+	// wallet. This is mostly required so that calls to LeaseOutput are
+	// idempotent when attempting to lease an output we already have a lease
+	// for.
+	lockIDKey = []byte("lock-id")
 
 	// ErrDBReversion is returned when detecting an attempt to revert to a
 	// prior database version.
@@ -136,4 +145,35 @@ func syncVersions(db *bbolt.DB) error {
 		}
 		return setDBVersion(metadata, latestDBVersion)
 	})
+}
+
+// storeRandomLockID generates a random lock ID backed by the system's CSPRNG
+// and stores it under the metadata bucket.
+func storeRandomLockID(metadata *bbolt.Bucket) error {
+	var lockID wtxmgr.LockID
+	if _, err := rand.Read(lockID[:]); err != nil {
+		return err
+	}
+	return metadata.Put(lockIDKey, lockID[:])
+}
+
+// LockID retrieves the database's global lock ID used to lease outputs from the
+// backing lnd node's wallet.
+func (db *DB) LockID() (wtxmgr.LockID, error) {
+	var lockID wtxmgr.LockID
+	err := db.View(func(tx *bbolt.Tx) error {
+		metadata, err := getBucket(tx, metadataBucketKey)
+		if err != nil {
+			return err
+		}
+
+		lockIDBytes := metadata.Get(lockIDKey)
+		if lockIDBytes == nil {
+			return errors.New("lock ID not found")
+		}
+
+		copy(lockID[:], lockIDBytes)
+		return nil
+	})
+	return lockID, err
 }
