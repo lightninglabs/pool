@@ -205,8 +205,8 @@ func withdrawAccount(ctx *cli.Context) error {
 			TraderKey: traderKey,
 			Outputs: []*clmrpc.Output{
 				{
-					Value:   amt,
-					Address: addr,
+					ValueSat: amt,
+					Address:  addr,
 				},
 			},
 			SatPerVbyte: satPerVByte,

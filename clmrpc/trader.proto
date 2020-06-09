@@ -21,13 +21,20 @@ service Trader {
 
     rpc CloseAccount (CloseAccountRequest) returns (CloseAccountResponse) {
         option (google.api.http) = {
-            delete: "/v1/clm/accounts/{trader_key}"
+            delete: "/v1/clm/accounts"
         };
     };
 
     rpc WithdrawAccount (WithdrawAccountRequest) returns (WithdrawAccountResponse) {
         option (google.api.http) = {
-            post: "/v1/clm/accounts/withdraw/{trader_key}"
+            post: "/v1/clm/accounts/withdraw"
+            body: "*"
+        };
+    };
+
+    rpc DepositAccount (DepositAccountRequest) returns (DepositAccountResponse) {
+        option (google.api.http) = {
+            post: "/v1/clm/accounts/deposit"
             body: "*"
         };
     };
@@ -72,7 +79,7 @@ message ListAccountsResponse {
 
 message Output {
     // The value, in satoshis, of the output.
-    uint64 value = 1;
+    uint64 value_sat = 1;
 
     // The address corresponding to the output.
     string address = 2;
@@ -115,6 +122,29 @@ message WithdrawAccountResponse {
 
     // The transaction used to withdraw funds from the account.
     bytes withdraw_txid = 2;
+}
+
+message DepositAccountRequest {
+    /*
+    The trader key associated with the account that funds will be deposited
+    into.
+    */
+    bytes trader_key = 1;
+
+    // The amount in satoshis to deposit into the account.
+    uint64 amount_sat = 2;
+
+    /*
+    The fee rate, in satoshis per vbyte, to use for the deposit transaction.
+    */
+    uint32 sat_per_vbyte = 3;
+}
+message DepositAccountResponse {
+    // The state of the account after processing the deposit.
+    Account account = 1;
+
+    // The transaction used to deposit funds into the account.
+    bytes deposit_txid = 2;
 }
 
 enum AccountState {

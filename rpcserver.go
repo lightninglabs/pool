@@ -737,6 +737,48 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 	}, nil
 }
 
+// DepositAccount handles a trader's request to deposit funds into the specified
+// account by spending the specified inputs.
+func (s *rpcServer) DepositAccount(ctx context.Context,
+	req *clmrpc.DepositAccountRequest) (*clmrpc.DepositAccountResponse, error) {
+
+	// Ensure the trader key is well formed.
+	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
+	if err != nil {
+		return nil, err
+	}
+
+	// Enforce a minimum fee rate of 1 sat/vbyte.
+	feeRate := chainfee.SatPerKVByte(req.SatPerVbyte * 1000).FeePerKWeight()
+	if feeRate < chainfee.FeePerKwFloor {
+		log.Debugf("Manual fee rate input of %d sat/kw is too low, "+
+			"using %d sat/kw instead", feeRate,
+			chainfee.FeePerKwFloor)
+		feeRate = chainfee.FeePerKwFloor
+	}
+
+	// Proceed to process the deposit and map its response to the RPC's
+	// response.
+	modifiedAccount, tx, err := s.accountManager.DepositAccount(
+		ctx, traderKey, btcutil.Amount(req.AmountSat), feeRate,
+		atomic.LoadUint32(&s.bestHeight),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcModifiedAccount, err := marshallAccount(modifiedAccount)
+	if err != nil {
+		return nil, err
+	}
+	txHash := tx.TxHash()
+
+	return &clmrpc.DepositAccountResponse{
+		Account:     rpcModifiedAccount,
+		DepositTxid: txHash[:],
+	}, nil
+}
+
 // WithdrawAccount handles a trader's request to withdraw funds from the
 // specified account by spending the current account output to the specified
 // outputs.
@@ -761,7 +803,7 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 	// Enforce a minimum fee rate of 1 sat/vbyte.
 	feeRate := chainfee.SatPerKVByte(req.SatPerVbyte * 1000).FeePerKWeight()
 	if feeRate < chainfee.FeePerKwFloor {
-		log.Infof("Manual fee rate input of %d sat/kw is too low, "+
+		log.Debugf("Manual fee rate input of %d sat/kw is too low, "+
 			"using %d sat/kw instead", feeRate,
 			chainfee.FeePerKwFloor)
 		feeRate = chainfee.FeePerKwFloor
@@ -844,7 +886,7 @@ func (s *rpcServer) parseRPCOutputs(outputs []*clmrpc.Output) ([]*wire.TxOut,
 		}
 
 		res = append(res, &wire.TxOut{
-			Value:    int64(output.Value),
+			Value:    int64(output.ValueSat),
 			PkScript: outputScript,
 		})
 	}

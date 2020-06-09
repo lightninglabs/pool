@@ -32,6 +32,36 @@
           "Trader"
         ]
       },
+      "delete": {
+        "operationId": "CloseAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcCloseAccountResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "trader_key",
+            "description": "The trader key associated with the account that will be closed.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      },
       "post": {
         "operationId": "InitAccount",
         "responses": {
@@ -55,6 +85,38 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/clmrpcInitAccountRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/v1/clm/accounts/deposit": {
+      "post": {
+        "operationId": "DepositAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcDepositAccountResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/clmrpcDepositAccountRequest"
             }
           }
         ],
@@ -95,7 +157,7 @@
         ]
       }
     },
-    "/v1/clm/accounts/withdraw/{trader_key}": {
+    "/v1/clm/accounts/withdraw": {
       "post": {
         "operationId": "WithdrawAccount",
         "responses": {
@@ -114,52 +176,12 @@
         },
         "parameters": [
           {
-            "name": "trader_key",
-            "description": "The trader key associated with the account that funds will be withdrawed\nfrom.",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "byte"
-          },
-          {
             "name": "body",
             "in": "body",
             "required": true,
             "schema": {
               "$ref": "#/definitions/clmrpcWithdrawAccountRequest"
             }
-          }
-        ],
-        "tags": [
-          "Trader"
-        ]
-      }
-    },
-    "/v1/clm/accounts/{trader_key}": {
-      "delete": {
-        "operationId": "CloseAccount",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/clmrpcCloseAccountResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response",
-            "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "trader_key",
-            "description": "The trader key associated with the account that will be closed.",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "byte"
           }
         ],
         "tags": [
@@ -356,6 +378,40 @@
         }
       }
     },
+    "clmrpcDepositAccountRequest": {
+      "type": "object",
+      "properties": {
+        "trader_key": {
+          "type": "string",
+          "format": "byte",
+          "description": "The trader key associated with the account that funds will be deposited\ninto."
+        },
+        "amount_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The amount in satoshis to deposit into the account."
+        },
+        "sat_per_vbyte": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The fee rate, in satoshis per vbyte, to use for the deposit transaction."
+        }
+      }
+    },
+    "clmrpcDepositAccountResponse": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/definitions/clmrpcAccount",
+          "description": "The state of the account after processing the deposit."
+        },
+        "deposit_txid": {
+          "type": "string",
+          "format": "byte",
+          "description": "The transaction used to deposit funds into the account."
+        }
+      }
+    },
     "clmrpcInitAccountRequest": {
       "type": "object",
       "properties": {
@@ -487,7 +543,7 @@
     "clmrpcOutput": {
       "type": "object",
       "properties": {
-        "value": {
+        "value_sat": {
           "type": "string",
           "format": "uint64",
           "description": "The value, in satoshis, of the output."
