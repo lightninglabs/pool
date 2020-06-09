@@ -704,11 +704,11 @@ func (m *Manager) WithdrawAccount(ctx context.Context,
 	feeRate chainfee.SatPerKWeight,
 	bestHeight uint32) (*Account, *wire.MsgTx, error) {
 
+	// The account can only be modified in `StateOpen`.
 	account, err := m.cfg.Store.Account(traderKey)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	if account.State != StateOpen {
 		return nil, nil, fmt.Errorf("account must be in %v to be"+
 			"modified", StateOpen)
@@ -716,17 +716,29 @@ func (m *Manager) WithdrawAccount(ctx context.Context,
 
 	// TODO(wilmer): Reject if account has pending orders.
 
+	// To start, we'll need to determine the new value of the account after
+	// creating the outputs specified as part of the withdrawal, which we'll
+	// then use to create the new account output.
 	witnessType := determineWitnessType(account, bestHeight)
-	newAccountOutput, modifiers, err := createNewAccountOutput(
+	newAccountValue, err := valueAfterWithdrawal(
 		account, outputs, witnessType, feeRate,
 	)
 	if err != nil {
 		return nil, nil, err
 	}
+	newAccountOutput, modifiers, err := createNewAccountOutput(
+		account, newAccountValue,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
 
+	// With the output created, we'll tack on an additional
+	// `StatePendingUpdate` modifier to our account and proceed with the
+	// rest of the flow. This should request a signature from the auctioneer
+	// and assuming it's valid, broadcast the withdrawal transaction.
 	outputs = append(outputs, newAccountOutput)
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
-
 	modifiedAccount, spendPkg, err := m.spendAccount(
 		ctx, account, outputs, witnessType, modifiers, false,
 		bestHeight,
@@ -1035,12 +1047,33 @@ func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 	}, nil
 }
 
-// createNewAccountOutput creates the next account output in the sequence for a
-// an account spending transaction that spends to the provided outputs at the
-// given fee rate.
-func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
-	witnessType witnessType, feeRate chainfee.SatPerKWeight) (*wire.TxOut,
-	[]Modifier, error) {
+// addBaseAccountModificationWeight adds the estimated weight units for a
+// transaction that modifies an account by spending the current account input
+// and creating the new account output according to the provided `witnessType`.
+func addBaseAccountModificationWeight(weightEstimator *input.TxWeightEstimator,
+	witnessType witnessType) error {
+
+	var accountInputWitnessSize int
+	switch witnessType {
+	case expiryWitness:
+		accountInputWitnessSize = clmscript.ExpiryWitnessSize
+	case multiSigWitness:
+		accountInputWitnessSize = clmscript.MultiSigWitnessSize
+	default:
+		return fmt.Errorf("unknown witness type %v", witnessType)
+	}
+
+	weightEstimator.AddWitnessInput(accountInputWitnessSize)
+	weightEstimator.AddP2WSHOutput()
+
+	return nil
+}
+
+// valueAfterWithdrawal determines the new value of an account after processing
+// a withdrawal to the specified outputs at the provided fee rate.
+func valueAfterWithdrawal(accountBeforeWithdrawl *Account,
+	withdrawalOutputs []*wire.TxOut, witnessType witnessType,
+	feeRate chainfee.SatPerKWeight) (btcutil.Amount, error) {
 
 	// To determine the new value of the account, we'll need to subtract the
 	// values of all additional outputs and the resulting fee of the
@@ -1049,33 +1082,22 @@ func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
 	// Right off the bat, we'll add weight estimates for the existing
 	// account output that we're spending, and the new account output being
 	// created.
-	var accountInputWitnessSize int
-	switch witnessType {
-	case expiryWitness:
-		accountInputWitnessSize = clmscript.ExpiryWitnessSize
-	case multiSigWitness:
-		accountInputWitnessSize = clmscript.MultiSigWitnessSize
-	default:
-		return nil, nil, fmt.Errorf("unknown witness type %v",
-			witnessType)
-	}
-
 	var weightEstimator input.TxWeightEstimator
-	weightEstimator.AddWitnessInput(accountInputWitnessSize)
-	weightEstimator.AddP2WSHOutput()
-
-	inputTotal := account.Value
+	err := addBaseAccountModificationWeight(&weightEstimator, witnessType)
+	if err != nil {
+		return 0, err
+	}
 
 	// We'll then add the weight estimates for any additional outputs
 	// provided, keeping track of the total output value sum as we go.
 	var outputTotal btcutil.Amount
-	for _, out := range outputs {
+	for _, out := range withdrawalOutputs {
 		// To determine the proper weight of the output, we'll need to
 		// know its type.
 		pkScript, err := txscript.ParsePkScript(out.PkScript)
 		if err != nil {
-			return nil, nil, fmt.Errorf("unable to parse output "+
-				"script %x: %v", out.PkScript, err)
+			return 0, fmt.Errorf("unable to parse output script "+
+				"%x: %v", out.PkScript, err)
 		}
 
 		switch pkScript.Class() {
@@ -1086,8 +1108,8 @@ func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
 		case txscript.WitnessV0ScriptHashTy:
 			weightEstimator.AddP2WSHOutput()
 		default:
-			return nil, nil, fmt.Errorf("unsupported output "+
-				"script %x", out.PkScript)
+			return 0, fmt.Errorf("unsupported output script %x",
+				out.PkScript)
 		}
 
 		outputTotal += btcutil.Amount(out.Value)
@@ -1097,11 +1119,19 @@ func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
 	// from our input total and ensure our new account value isn't below our
 	// required minimum.
 	fee := feeRate.FeeForWeight(int64(weightEstimator.Weight()))
-	newAmount := inputTotal - outputTotal - fee
-	if newAmount < MinAccountValue {
-		return nil, nil, fmt.Errorf("new account value is below "+
-			"accepted minimum of %v", MinAccountValue)
+	newAccountValue := accountBeforeWithdrawl.Value - outputTotal - fee
+	if newAccountValue < MinAccountValue {
+		return 0, fmt.Errorf("new account value is below accepted "+
+			"minimum of %v", MinAccountValue)
 	}
+
+	return newAccountValue, nil
+}
+
+// createNewAccountOutput creates the next account output in the sequence using
+// the new account value.
+func createNewAccountOutput(account *Account, newAccountValue btcutil.Amount) (
+	*wire.TxOut, []Modifier, error) {
 
 	// Use the next output script in the sequence to avoid script reuse.
 	newPkScript, err := account.NextOutputScript()
@@ -1110,10 +1140,14 @@ func createNewAccountOutput(account *Account, outputs []*wire.TxOut,
 	}
 
 	newAccountOutput := &wire.TxOut{
-		Value:    int64(newAmount),
+		Value:    int64(newAccountValue),
 		PkScript: newPkScript,
 	}
-	modifiers := []Modifier{ValueModifier(newAmount), IncrementBatchKey()}
+	modifiers := []Modifier{
+		ValueModifier(newAccountValue),
+		IncrementBatchKey(),
+	}
+
 	return newAccountOutput, modifiers, nil
 }
 
