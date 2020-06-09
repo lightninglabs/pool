@@ -5,17 +5,20 @@ import (
 	"encoding/hex"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/agora/client/clmscript"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
@@ -143,11 +146,17 @@ func (s *mockStore) MarkBatchComplete() error {
 	return nil
 }
 
+func (s *mockStore) LockID() (wtxmgr.LockID, error) {
+	return wtxmgr.LockID{1}, nil
+}
+
 type mockAuctioneer struct {
 	Auctioneer
 
-	mu         sync.Mutex
-	subscribed map[[33]byte]struct{}
+	mu              sync.Mutex
+	subscribed      map[[33]byte]struct{}
+	inputsReceived  []wire.TxIn
+	outputsReceived []wire.TxOut
 }
 
 func newMockAuctioneer() *mockAuctioneer {
@@ -169,8 +178,18 @@ func (a *mockAuctioneer) InitAccount(context.Context, *Account) error {
 	return nil
 }
 
-func (a *mockAuctioneer) ModifyAccount(context.Context, *Account, []*wire.TxIn,
-	[]*wire.TxOut, []Modifier) ([]byte, error) {
+func (a *mockAuctioneer) ModifyAccount(_ context.Context, _ *Account,
+	inputs []*wire.TxIn, outputs []*wire.TxOut, _ []Modifier) ([]byte, error) {
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for _, input := range inputs {
+		a.inputsReceived = append(a.inputsReceived, *input)
+	}
+	for _, output := range outputs {
+		a.outputsReceived = append(a.outputsReceived, *output)
+	}
 
 	return []byte("auctioneer sig"), nil
 }
@@ -199,6 +218,7 @@ type mockWallet struct {
 
 	txs         []*wire.MsgTx
 	publishChan chan *wire.MsgTx
+	utxos       []*lnwallet.Utxo
 
 	sendOutputs func(context.Context, []*wire.TxOut,
 		chainfee.SatPerKWeight) (*wire.MsgTx, error)
@@ -264,10 +284,40 @@ func (w *mockWallet) interceptSendOutputs(f func(context.Context, []*wire.TxOut,
 	w.sendOutputs = f
 }
 
+func (w *mockWallet) ListUnspent(_ context.Context, _, _ int32) (
+	[]*lnwallet.Utxo, error) {
+
+	return w.utxos, nil
+}
+
+func (w *mockWallet) LeaseOutput(_ context.Context, lockID wtxmgr.LockID,
+	op wire.OutPoint) (time.Time, error) {
+
+	return time.Now().Add(10 * time.Minute), nil
+}
+
+func (w *mockWallet) ReleaseOutput(_ context.Context, lockID wtxmgr.LockID,
+	op wire.OutPoint) error {
+
+	return nil
+}
+
 func (w *mockWallet) SignOutputRaw(context.Context, *wire.MsgTx,
 	[]*input.SignDescriptor) ([][]byte, error) {
 
 	return [][]byte{[]byte("trader sig")}, nil
+}
+
+func (w *mockWallet) ComputeInputScript(context.Context, *wire.MsgTx,
+	[]*input.SignDescriptor) ([]*input.Script, error) {
+
+	return []*input.Script{{
+		SigScript: []byte("input sig script"),
+		Witness: wire.TxWitness{
+			[]byte("input"),
+			[]byte("witness"),
+		},
+	}}, nil
 }
 
 type mockChainNotifier struct {

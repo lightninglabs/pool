@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/btcsuite/btcd/blockchain"
@@ -13,6 +14,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcutil/txsort"
+	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/lightninglabs/agora/client/account/watcher"
 	"github.com/lightninglabs/agora/client/clmscript"
 	"github.com/lightninglabs/loop/lndclient"
@@ -701,6 +703,73 @@ func (m *Manager) handleAccountExpiry(traderKey *btcec.PublicKey) error {
 	return nil
 }
 
+// DepositAccount attempts to deposit funds into the account associated with the
+// given trader key such that the new account value is met using inputs sourced
+// from the backing lnd node's wallet. If needed, a change output that does back
+// to lnd may be added to the deposit transaction.
+func (m *Manager) DepositAccount(ctx context.Context,
+	traderKey *btcec.PublicKey, depositAmount btcutil.Amount,
+	feeRate chainfee.SatPerKWeight, bestHeight uint32) (*Account,
+	*wire.MsgTx, error) {
+
+	// The account can only be modified in `StateOpen` and its new value
+	// should not exceed the maximum allowed.
+	account, err := m.cfg.Store.Account(traderKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	if account.State != StateOpen {
+		return nil, nil, fmt.Errorf("account must be in %v to be"+
+			"modified", StateOpen)
+	}
+	newAccountValue := account.Value + depositAmount
+	if newAccountValue > maxAccountValue {
+		return nil, nil, fmt.Errorf("new account value is above "+
+			"accepted maximum of %v", maxAccountValue)
+	}
+
+	// TODO(wilmer): Reject if account has pending orders.
+
+	// To start, we'll need to perform coin selection in order to meet the
+	// required new value of the account as part of the deposit. The
+	// selected inputs, along with a change output if needed, will then be
+	// included in the deposit transaction we'll broadcast.
+	witnessType := determineWitnessType(account, bestHeight)
+	inputs, releaseInputs, changeOutput, err := m.inputsForDeposit(
+		ctx, depositAmount, witnessType, feeRate,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	newAccountOutput, modifiers, err := createNewAccountOutput(
+		account, newAccountValue,
+	)
+	if err != nil {
+		releaseInputs()
+		return nil, nil, err
+	}
+
+	// We'll tack on the change output if it was needed and an additional
+	// `StatePendingUpdate` modifier to our account and proceed with the
+	// rest of the flow. This should request a signature from the auctioneer
+	// and assuming it's valid, broadcast the deposit transaction.
+	outputs := []*wire.TxOut{newAccountOutput}
+	if changeOutput != nil {
+		outputs = append(outputs, changeOutput)
+	}
+	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
+	modifiedAccount, spendPkg, err := m.spendAccount(
+		ctx, account, inputs, outputs, witnessType, modifiers, false,
+		bestHeight,
+	)
+	if err != nil {
+		releaseInputs()
+		return nil, nil, err
+	}
+
+	return modifiedAccount, spendPkg.tx, nil
+}
+
 // WithdrawAccount attempts to withdraw funds from the account associated with
 // the given trader key into the provided outputs.
 func (m *Manager) WithdrawAccount(ctx context.Context,
@@ -1171,6 +1240,111 @@ func valueAfterWithdrawal(accountBeforeWithdrawl *Account,
 	}
 
 	return newAccountValue, nil
+}
+
+// inputsForDeposit returns a list of inputs sources from the backing lnd node's
+// wallet which we can use to satisfy an account deposit. A closure to release
+// the inputs is also provided to use when coming across an unexpected failure.
+// If needed, a change output from the backing lnd node's wallet may be returned
+// as well.
+func (m *Manager) inputsForDeposit(ctx context.Context,
+	depositAmount btcutil.Amount, witnessType witnessType,
+	feeRate chainfee.SatPerKWeight) ([]chanfunding.Coin, func(),
+	*wire.TxOut, error) {
+
+	// We'll start by obtaining our global lock ID.
+	lockID, err := m.cfg.Store.LockID()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Then, we'll perform a series of coin selection attempts until we can
+	// lease every output needed.
+	var (
+		inputs    []chanfunding.Coin
+		changeAmt btcutil.Amount
+	)
+
+	// Before doing so, we'll define a helper closure to release the inputs
+	// in case we come across an unexpected failure.
+	releaseInputs := func() {
+		for _, input := range inputs {
+			_ = m.cfg.Wallet.ReleaseOutput(
+				ctx, lockID, input.OutPoint,
+			)
+		}
+	}
+
+coinSelection:
+	for {
+		utxos, err := m.cfg.Wallet.ListUnspent(ctx, 1, math.MaxInt32)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		coins := make([]chanfunding.Coin, 0, len(utxos))
+		for _, utxo := range utxos {
+			coins = append(coins, chanfunding.Coin{
+				TxOut: wire.TxOut{
+					Value:    int64(utxo.Value),
+					PkScript: utxo.PkScript,
+				},
+				OutPoint: utxo.OutPoint,
+			})
+		}
+
+		inputs, changeAmt, err = coinSelection(
+			coins, depositAmount, witnessType, feeRate,
+		)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		// Leasing outputs can fail if they were leased by another
+		// process, so we'll need to handle this carefully. Keep track
+		// of any inputs we've leased, so that we can release them if we
+		// fail at any point.
+		for i, input := range inputs {
+			_, err := m.cfg.Wallet.LeaseOutput(
+				ctx, lockID, input.OutPoint,
+			)
+			if err != nil {
+				log.Debugf("Unable to lease output %v: %v",
+					input.OutPoint, err)
+
+				// Only release those which we've leased.
+				inputs = inputs[:i]
+				releaseInputs()
+				continue coinSelection
+			}
+		}
+
+		break
+	}
+
+	// A change output will only exist as long as the remaining amount is
+	// above the network's dust limit.
+	var changeOutput *wire.TxOut
+	dustLimit := txrules.GetDustThreshold(
+		input.P2WPKHSize, txrules.DefaultRelayFeePerKb,
+	)
+	if changeAmt >= dustLimit {
+		addr, err := m.cfg.Wallet.NextAddr(context.Background())
+		if err != nil {
+			releaseInputs()
+			return nil, nil, nil, err
+		}
+		script, err := txscript.PayToAddrScript(addr)
+		if err != nil {
+			releaseInputs()
+			return nil, nil, nil, err
+		}
+		changeOutput = &wire.TxOut{
+			Value:    int64(changeAmt),
+			PkScript: script,
+		}
+	}
+
+	return inputs, releaseInputs, changeOutput, nil
 }
 
 // createNewAccountOutput creates the next account output in the sequence using

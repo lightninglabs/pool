@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/agora/client/clmscript"
 	"github.com/lightningnetwork/lnd/keychain"
 )
@@ -290,6 +291,10 @@ type Store interface {
 	// MarkBatchComplete marks the batch with the given ID as complete,
 	// indicating that the staged account updates can be applied to disk.
 	MarkBatchComplete() error
+
+	// LockID retrieves the global lock ID we'll use to lock any outputs
+	// when performing coin selection.
+	LockID() (wtxmgr.LockID, error)
 }
 
 // Auctioneer provides us with the different ways we are able to communicate

@@ -18,11 +18,18 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/lntest/wait"
+	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 const (
 	timeout = 500 * time.Millisecond
+)
+
+var (
+	p2wsh, _   = hex.DecodeString("00208c2865c87ffd33fc5d698c7df9cf2d0fb39d93103c637a06dea32c848ebc3e1d")
+	p2wpkh, _  = hex.DecodeString("0014ccdeffed4f9c91d5bf45c34e4b8f03a5025ec062")
+	np2wpkh, _ = hex.DecodeString("a91458c11505b54582ab04e96d36908f85a8b689459787")
 )
 
 type testHarness struct {
@@ -185,7 +192,7 @@ func (h *testHarness) closeAccount(account *Account, outputs []*wire.TxOut,
 
 	// This should prompt the account's closing transaction to be broadcast
 	// and its state transitioned to StatePendingClosed.
-	closeTx := h.assertSpendTxBroadcast(account, nil, nil)
+	closeTx := h.assertSpendTxBroadcast(account, nil, nil, nil)
 
 	account.State = StatePendingClosed
 	account.CloseTx = closeTx
@@ -202,7 +209,8 @@ func (h *testHarness) closeAccount(account *Account, outputs []*wire.TxOut,
 }
 
 func (h *testHarness) assertSpendTxBroadcast(accountBeforeSpend *Account,
-	outputs []*wire.TxOut, newValue *btcutil.Amount) *wire.MsgTx {
+	externalInputs []*lnwallet.Utxo, externalOutputs []*wire.TxOut,
+	newValue *btcutil.Amount) *wire.MsgTx {
 
 	h.t.Helper()
 
@@ -225,9 +233,9 @@ func (h *testHarness) assertSpendTxBroadcast(accountBeforeSpend *Account,
 			accountBeforeSpend.OutPoint)
 	}
 
-	// If no outputs were provided, we should expect to see a single wallet
-	// output.
-	if len(outputs) == 0 {
+	// If no outputs were provided and the account wasn't re-created, we
+	// should expect to see a single wallet output.
+	if len(externalOutputs) == 0 && newValue == nil {
 		if len(spendTx.TxOut) != 1 {
 			h.t.Fatalf("expected 1 output in spend transaction, "+
 				"found %d", len(spendTx.TxOut))
@@ -257,25 +265,38 @@ func (h *testHarness) assertSpendTxBroadcast(accountBeforeSpend *Account,
 	}
 
 	// Otherwise, the spending transaction should include the expected
-	// outputs. If it recreates the account output, we should also attempt
-	// to locate it.
-	if newValue != nil {
-		nextPkScript, err := accountBeforeSpend.NextOutputScript()
-		if err != nil {
-			h.t.Fatalf("unable to generate next output script: %v",
-				err)
-		}
-		outputs = append(outputs, &wire.TxOut{
-			Value:    int64(*newValue),
-			PkScript: nextPkScript,
-		})
+	// inputs and outputs. If it recreates the account output, we should
+	// also attempt to locate it.
+	if len(spendTx.TxIn) != len(externalInputs)+1 {
+		h.t.Fatalf("expected %d input(s) in spend transaction, found %d",
+			len(externalInputs)+1, len(spendTx.TxIn))
 	}
+	nextPkScript, err := accountBeforeSpend.NextOutputScript()
+	if err != nil {
+		h.t.Fatalf("unable to generate next output script: %v",
+			err)
+	}
+	outputs := append(externalOutputs, &wire.TxOut{
+		Value:    int64(*newValue),
+		PkScript: nextPkScript,
+	})
 	if len(spendTx.TxOut) != len(outputs) {
 		h.t.Fatalf("expected %d output(s) in spend transaction, found %d",
 			len(outputs), len(spendTx.TxOut))
 	}
 
-	// The output indices may not match due to BIP-69 sorting.
+	// The input and output indices may not match due to BIP-69 sorting.
+nextInput:
+	for _, input := range externalInputs {
+		for _, txIn := range spendTx.TxIn {
+			if txIn.PreviousOutPoint != input.OutPoint {
+				continue
+			}
+			continue nextInput
+		}
+		h.t.Fatalf("expected input %v in spend transaction",
+			input.OutPoint)
+	}
 nextOutput:
 	for _, output := range outputs {
 		for _, txOut := range spendTx.TxOut {
@@ -294,6 +315,107 @@ nextOutput:
 	}
 
 	return spendTx
+}
+
+// assertAuctioneerReceived asserts that auctioneer has received the correct
+// information regarding an account modification.
+func (h *testHarness) assertAuctioneerReceived(inputs []*lnwallet.Utxo,
+	outputs []*wire.TxOut) {
+
+	h.t.Helper()
+
+	h.auctioneer.mu.Lock()
+	defer h.auctioneer.mu.Unlock()
+
+	if len(inputs) != len(h.auctioneer.inputsReceived) {
+		h.t.Fatal("auctioneer input count mismatch")
+	}
+	for _, input := range inputs {
+		found := false
+		for _, inputReceived := range h.auctioneer.inputsReceived {
+			if input.OutPoint == inputReceived.PreviousOutPoint {
+				found = true
+				break
+			}
+		}
+		if !found {
+			h.t.Fatalf("expected auctioneer to receive input %v",
+				input.OutPoint)
+		}
+	}
+
+	if len(outputs) != len(h.auctioneer.outputsReceived) {
+		h.t.Fatal("auctioneer output count mismatch")
+	}
+	for _, output := range outputs {
+		found := false
+		for _, outputReceived := range h.auctioneer.outputsReceived {
+			if reflect.DeepEqual(*output, outputReceived) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			h.t.Fatalf("expected auctioneer to receive output %x",
+				output.PkScript)
+		}
+	}
+
+	h.auctioneer.inputsReceived = nil
+	h.auctioneer.outputsReceived = nil
+}
+
+// assertAccountModification provides several assertions for an account
+// modification to determine whether it was successful. The assertions ensure
+// that the account is transitioned from its StatePendingUpdate state to
+// StateOpen.
+func (h *testHarness) assertAccountModification(account *Account,
+	inputs []*lnwallet.Utxo, outputs []*wire.TxOut,
+	newAccountValue btcutil.Amount, accountInputIdx, accountOutputIdx uint32) {
+
+	h.t.Helper()
+
+	// We'll start by ensuring that the auctioneer received the intended
+	// modification parameters.
+	h.assertAuctioneerReceived(inputs, outputs)
+
+	// A proper spend transaction should have been broadcast that contains
+	// the expected inputs and outputs from above, and the recreated account
+	// output.
+	spendTx := h.assertSpendTxBroadcast(
+		account, inputs, outputs, &newAccountValue,
+	)
+
+	// The account should be found within the store with the following
+	// modifiers.
+	mods := []Modifier{
+		ValueModifier(newAccountValue),
+		StateModifier(StatePendingUpdate),
+		OutPointModifier(wire.OutPoint{
+			Hash:  spendTx.TxHash(),
+			Index: accountOutputIdx,
+		}),
+		IncrementBatchKey(),
+	}
+	for _, mod := range mods {
+		mod(account)
+	}
+	h.assertAccountExists(account)
+
+	// Notify the transaction as a spend of the account. The account should
+	// remain in StatePendingUpdate until it reaches the appropriate number
+	// of confirmations.
+	h.notifier.spendChan <- &chainntnfs.SpendDetail{
+		SpendingTx:        spendTx,
+		SpenderInputIndex: accountInputIdx,
+	}
+	h.assertAccountExists(account)
+
+	// Notify the confirmation, causing the account to transition back to
+	// StateOpen.
+	h.notifier.confChan <- &chainntnfs.TxConfirmation{Tx: spendTx}
+	StateModifier(StateOpen)(account)
+	h.assertAccountExists(account)
 }
 
 func (h *testHarness) restartManager() {
@@ -549,9 +671,6 @@ func TestAccountWithdrawal(t *testing.T) {
 	// of each supported output type. Each output will have 1/4 of the
 	// account's value.
 	valuePerOutput := account.Value / 4
-	p2wsh, _ := hex.DecodeString("00208c2865c87ffd33fc5d698c7df9cf2d0fb39d93103c637a06dea32c848ebc3e1d")
-	p2wpkh, _ := hex.DecodeString("0014ccdeffed4f9c91d5bf45c34e4b8f03a5025ec062")
-	np2wpkh, _ := hex.DecodeString("a91458c11505b54582ab04e96d36908f85a8b689459787")
 	outputs := []*wire.TxOut{
 		{
 			Value:    int64(valuePerOutput),
@@ -585,42 +704,107 @@ func TestAccountWithdrawal(t *testing.T) {
 		t.Fatalf("unable to process account withdrawal: %v", err)
 	}
 
-	// We'll start by ensuring a proper spend transaction was broadcast that
-	// contains the expected outputs from above, and the recreated account
-	// output.
+	// The value of the account after the withdrawal depends on the
+	// transaction fee and the amount of each output withdrawn to.
 	withdrawOutputSum := valuePerOutput * btcutil.Amount(len(outputs))
 	valueAfterWithdrawal := account.Value - withdrawOutputSum - expectedFee
-	withdrawalTx := h.assertSpendTxBroadcast(
-		account, outputs, &valueAfterWithdrawal,
+	h.assertAccountModification(
+		account, nil, outputs, valueAfterWithdrawal, 0, 0,
 	)
 
-	// The account should be found within the store with the following
-	// modifiers.
-	mods := []Modifier{
-		ValueModifier(valueAfterWithdrawal),
-		StateModifier(StatePendingUpdate),
-		OutPointModifier(wire.OutPoint{
-			Hash:  withdrawalTx.TxHash(),
-			Index: 0,
-		}),
-		IncrementBatchKey(),
-	}
-	for _, mod := range mods {
-		mod(account)
-	}
-	h.assertAccountExists(account)
+	// Finally, close the account to ensure we can process another spend
+	// after the withdrawal.
+	_ = h.closeAccount(account, nil, bestHeight)
+}
 
-	// Notify the transaction as a spend of the account. The account should
-	// remain in StatePendingUpdate until it reaches the appropriate number
-	// of confirmations.
-	h.notifier.spendChan <- &chainntnfs.SpendDetail{SpendingTx: withdrawalTx}
-	h.assertAccountExists(account)
+// TestAccountDeposit ensures that we can process an account deposit
+// through the happy flow.
+func TestAccountDeposit(t *testing.T) {
+	t.Parallel()
 
-	// Notify the confirmation, causing the account to transition back to
-	// StateOpen.
-	h.notifier.confChan <- &chainntnfs.TxConfirmation{Tx: withdrawalTx}
-	StateModifier(StateOpen)(account)
-	h.assertAccountExists(account)
+	h := newTestHarness(t)
+	h.start()
+	defer h.stop()
+
+	// We'll start by defining our initial account value and its value after
+	// a successful deposit.
+	const initialAccountValue = MinAccountValue
+	const valueAfterDeposit = initialAccountValue * 2
+	const depositAmount = valueAfterDeposit - initialAccountValue
+
+	const bestHeight = 100
+	account := h.openAccount(
+		initialAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+	)
+
+	// We'll provide two outputs to the mock wallet that will be consumed by
+	// the deposit and should result in a change output.
+	h.wallet.utxos = []*lnwallet.Utxo{
+		{
+			AddressType: lnwallet.NestedWitnessPubKey,
+			Value:       depositAmount,
+			OutPoint:    wire.OutPoint{Index: 1},
+			PkScript:    np2wpkh,
+		},
+		{
+			AddressType: lnwallet.WitnessPubKey,
+			Value:       depositAmount,
+			// Use an outpoint greater than the current account to
+			// test the filtering of inputs provided to the
+			// auctioneer.
+			OutPoint: wire.OutPoint{
+				Hash:  account.OutPoint.Hash,
+				Index: account.OutPoint.Index + 1,
+			},
+			PkScript: p2wpkh,
+		},
+	}
+
+	// We'll use the lowest fee rate possible, which should yield a
+	// transaction fee of 346 satoshis when taking into account the
+	// additional inputs needed to satisfy the deposit.
+	const feeRate = chainfee.FeePerKwFloor
+	const expectedFee btcutil.Amount = 346
+
+	// Attempt the deposit.
+	//
+	// If successful, we'll follow with a series of assertions to ensure it
+	// was performed correctly.
+	_, _, err := h.manager.DepositAccount(
+		context.Background(), account.TraderKey.PubKey, depositAmount,
+		feeRate, bestHeight,
+	)
+	if err != nil {
+		t.Fatalf("unable to process account deposit: %v", err)
+	}
+
+	// We should expect to see a change output with the current UTXOs
+	// available, so we'll reconstruct what we expect to see in the deposit
+	// transaction.
+	addr, err := btcutil.NewAddressWitnessPubKeyHash(
+		btcutil.Hash160(testRawTraderKey), &chaincfg.MainNetParams,
+	)
+	if err != nil {
+		t.Fatalf("unable to create address: %v", err)
+	}
+	pkScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		t.Fatalf("unable to create address script: %v", err)
+	}
+	changeOutput := &wire.TxOut{
+		Value:    int64(depositAmount - expectedFee),
+		PkScript: pkScript,
+	}
+
+	// The transaction should have find the expected account input and
+	// output at the following indices.
+	const accountInputIdx = 1
+	const accountOutputIdx = 1
+
+	h.assertAccountModification(
+		account, h.wallet.utxos, []*wire.TxOut{changeOutput},
+		valueAfterDeposit, accountInputIdx, accountOutputIdx,
+	)
 
 	// Finally, close the account to ensure we can process another spend
 	// after the withdrawal.
