@@ -19,6 +19,7 @@ var accountsCommands = []cli.Command{
 		Subcommands: []cli.Command{
 			newAccountCommand,
 			listAccountsCommand,
+			depositAccountCommand,
 			withdrawAccountCommand,
 			closeAccountCommand,
 			recoverAccountsCommand,
@@ -143,6 +144,81 @@ func listAccounts(ctx *cli.Context) error {
 	return nil
 }
 
+var depositAccountCommand = cli.Command{
+	Name:      "deposit",
+	ShortName: "d",
+	Usage:     "deposit funds into an existing account",
+	Description: `
+	Deposit funds into an existing account.
+	`,
+	ArgsUsage: "trader_key amt sat_per_vbyte",
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name: "trader_key",
+			Usage: "the hex-encoded trader key of the account to " +
+				"deposit funds into",
+		},
+		cli.Uint64Flag{
+			Name:  "amt",
+			Usage: "the amount to deposit into the account",
+		},
+		cli.Uint64Flag{
+			Name: "sat_per_vbyte",
+			Usage: "the fee rate expressed in sat/vbyte that " +
+				"should be used for the withdrawal",
+		},
+	},
+	Action: depositAccount,
+}
+
+func depositAccount(ctx *cli.Context) error {
+	cmd := "deposit"
+	traderKey, err := parseHexStr(ctx, 0, "trader_key", cmd)
+	if err != nil {
+		return err
+	}
+	amt, err := parseUint64(ctx, 1, "amt", cmd)
+	if err != nil {
+		return err
+	}
+	satPerVByte, err := parseUint64(ctx, 2, "sat_per_vbyte", cmd)
+	if err != nil {
+		return err
+	}
+
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.DepositAccount(
+		context.Background(), &clmrpc.DepositAccountRequest{
+			TraderKey:   traderKey,
+			AmountSat:   amt,
+			SatPerVbyte: uint32(satPerVByte),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	var depositTxid chainhash.Hash
+	copy(depositTxid[:], resp.DepositTxid)
+
+	var depositAccountResp = struct {
+		Account     *Account `json:"account"`
+		DepositTxid string   `json:"deposit_txid"`
+	}{
+		Account:     NewAccountFromProto(resp.Account),
+		DepositTxid: depositTxid.String(),
+	}
+
+	printJSON(depositAccountResp)
+
+	return nil
+}
+
 var withdrawAccountCommand = cli.Command{
 	Name:      "withdraw",
 	ShortName: "w",
@@ -150,7 +226,7 @@ var withdrawAccountCommand = cli.Command{
 	Description: `
 	Withdraw funds from an existing account to a supported address.
 	`,
-	ArgsUsage: "addr sat_per_vbyte",
+	ArgsUsage: "trader_key amt addr sat_per_vbyte",
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name: "trader_key",
@@ -181,11 +257,11 @@ func withdrawAccount(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	addr, err := parseStr(ctx, 1, "addr", cmd)
+	amt, err := parseUint64(ctx, 1, "amt", cmd)
 	if err != nil {
 		return err
 	}
-	amt, err := parseUint64(ctx, 2, "amt", cmd)
+	addr, err := parseStr(ctx, 2, "addr", cmd)
 	if err != nil {
 		return err
 	}
