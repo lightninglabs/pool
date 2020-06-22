@@ -11,8 +11,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/clmscript"
+	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/clmscript"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 

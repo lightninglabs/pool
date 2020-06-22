@@ -7,7 +7,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/coreos/bbolt"
-	"github.com/lightninglabs/agora/client/account"
+	"github.com/lightninglabs/llm/account"
 )
 
 var (

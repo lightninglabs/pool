@@ -8,8 +8,8 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/clmrpc"
+	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 

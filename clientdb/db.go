@@ -10,7 +10,7 @@ import (
 
 const (
 	// dbFilename is the default filename of the client database.
-	dbFilename = "agora.db"
+	dbFilename = "llm.db"
 
 	// dbFilePermission is the default permission the client database file
 	// is created with.

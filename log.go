@@ -1,12 +1,12 @@
 // As this file is very similar in every package, ignore the linter here.
 // nolint:dupl
-package client
+package llm
 
 import (
 	"github.com/btcsuite/btclog"
-	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/auctioneer"
-	"github.com/lightninglabs/agora/client/order"
+	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/auctioneer"
+	"github.com/lightninglabs/llm/order"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightninglabs/loop/lsat"
 	"github.com/lightningnetwork/lnd/build"

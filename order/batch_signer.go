@@ -6,8 +6,8 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/txscript"
-	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/clmscript"
+	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/clmscript"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 )

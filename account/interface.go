@@ -9,7 +9,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wtxmgr"
-	"github.com/lightninglabs/agora/client/clmscript"
+	"github.com/lightninglabs/llm/clmscript"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 

@@ -1,4 +1,4 @@
-package client
+package llm
 
 import (
 	"net"
@@ -10,15 +10,15 @@ import (
 )
 
 var (
-	// DefaultBaseDir is the default root data directory where agora will
+	// DefaultBaseDir is the default root data directory where llm will
 	// store all its data. On UNIX like systems this will resolve to
-	// ~/.agora. Below this directory the logs and network directory will be
+	// ~/.llm. Below this directory the logs and network directory will be
 	// created.
-	DefaultBaseDir = btcutil.AppDataDir("agora", false)
+	DefaultBaseDir = btcutil.AppDataDir("llm", false)
 
-	// DefaultLogFilename is the default name that is given to the agora log
+	// DefaultLogFilename is the default name that is given to the llm log
 	// file.
-	DefaultLogFilename = "agorad.log"
+	DefaultLogFilename = "llmd.log"
 
 	defaultLogLevel   = "info"
 	defaultLogDirname = "logs"
@@ -45,7 +45,7 @@ type Config struct {
 	TLSPathAuctSrv string `long:"tlspathauctserver" description:"Path to auction server tls certificate"`
 	RPCListen      string `long:"rpclisten" description:"Address to listen on for gRPC clients"`
 	RESTListen     string `long:"restlisten" description:"Address to listen on for REST clients"`
-	BaseDir        string `long:"basedir" description:"The base directory where agora stores all its data"`
+	BaseDir        string `long:"basedir" description:"The base directory where llm stores all its data"`
 
 	LogDir         string `long:"logdir" description:"Directory to log output."`
 	MaxLogFiles    int    `long:"maxlogfiles" description:"Maximum logfiles to keep (0 for no rotation)"`
@@ -60,7 +60,7 @@ type Config struct {
 
 	Lnd *LndConfig `group:"lnd" namespace:"lnd"`
 
-	// RPCListener is a network listener that can be set if agorad should be
+	// RPCListener is a network listener that can be set if llmd should be
 	// used as a library and listen on the given listener instead of what is
 	// configured in the --rpclisten parameter. Setting this will also
 	// disable REST.

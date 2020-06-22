@@ -1,4 +1,4 @@
-package client
+package llm
 
 import (
 	"context"
@@ -16,11 +16,11 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/auctioneer"
-	"github.com/lightninglabs/agora/client/clientdb"
-	"github.com/lightninglabs/agora/client/clmrpc"
-	"github.com/lightninglabs/agora/client/order"
+	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/auctioneer"
+	"github.com/lightninglabs/llm/clientdb"
+	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/llm/order"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"

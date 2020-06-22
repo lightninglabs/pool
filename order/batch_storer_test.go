@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/clmrpc"
+	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )

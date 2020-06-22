@@ -5,8 +5,8 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/clmrpc"
+	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/clmrpc"
 )
 
 // batchStorer is a type that implements BatchStorer and can persist a batch to

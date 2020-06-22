@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/clmrpc"
-	"github.com/lightninglabs/agora/client/order"
+	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/llm/order"
 )
 
 var (

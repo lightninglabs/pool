@@ -5,8 +5,8 @@ import (
 	"io"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/order"
+	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/order"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"

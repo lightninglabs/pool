@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lightninglabs/agora/client/account"
+	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 )
@@ -35,7 +35,7 @@ type ManagerConfig struct {
 	AcctStore account.Store
 
 	// Lightning is used to access the main RPC to get information about the
-	// lnd node that agora is connected to.
+	// lnd node that llmd is connected to.
 	Lightning lndclient.LightningClient
 
 	// Wallet is responsible for deriving new keys we need to sign orders.

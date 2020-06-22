@@ -6,8 +6,8 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/coreos/bbolt"
-	"github.com/lightninglabs/agora/client/account"
-	"github.com/lightninglabs/agora/client/order"
+	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/order"
 )
 
 var (

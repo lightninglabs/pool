@@ -1,4 +1,4 @@
-package client
+package llm
 
 import (
 	"bytes"
@@ -12,10 +12,10 @@ import (
 	"sync"
 
 	proxy "github.com/grpc-ecosystem/grpc-gateway/runtime"
-	"github.com/lightninglabs/agora/client/auctioneer"
-	"github.com/lightninglabs/agora/client/clientdb"
-	"github.com/lightninglabs/agora/client/clmrpc"
 	"github.com/lightninglabs/kirin/auth"
+	"github.com/lightninglabs/llm/auctioneer"
+	"github.com/lightninglabs/llm/clientdb"
+	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightninglabs/loop/lsat"
 	"github.com/lightningnetwork/lnd/build"
@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// Server is the main agora trader server.
+// Server is the main llmd trader server.
 type Server struct {
 	// AuctioneerClient is the wrapper around the connection from the trader
 	// client to the auctioneer server. It is exported so we can replace
@@ -182,12 +182,12 @@ func NewServer(cfg *Config) (*Server, error) {
 	}, nil
 }
 
-// Start runs agorad in daemon mode. It will listen for grpc connections,
+// Start runs llmd in daemon mode. It will listen for grpc connections,
 // execute commands and pass back auction status information.
 func (s *Server) Start() error {
 	var err error
 
-	// Instantiate the agorad gRPC server.
+	// Instantiate the llmd gRPC server.
 	s.traderServer = newRPCServer(s)
 
 	serverOpts := []grpc.ServerOption{}
@@ -195,7 +195,7 @@ func (s *Server) Start() error {
 	clmrpc.RegisterTraderServer(s.grpcServer, s.traderServer)
 
 	// Next, start the gRPC server listening for HTTP/2 connections.
-	// If the provided grpcListener is not nil, it means agorad is being
+	// If the provided grpcListener is not nil, it means llmd is being
 	// used as a library and the listener might not be a real network
 	// connection (but maybe a UNIX socket or bufconn). So we don't spin up
 	// a REST listener in that case.
