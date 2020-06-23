@@ -304,8 +304,11 @@ type Auctioneer interface {
 	// auctioneer. The auctioneer checks the account value against current
 	// min/max values configured. If the value is valid, it returns the
 	// public key we should use for them in our 2-of-2 multi-sig
-	// construction.
-	ReserveAccount(context.Context, btcutil.Amount) (*Reservation, error)
+	// construction. To address an edge case in the account recovery where
+	// the trader crashes before confirming the account with the auctioneer,
+	// we also send the trader key and expiry along with the reservation.
+	ReserveAccount(context.Context, btcutil.Amount, uint32,
+		*btcec.PublicKey) (*Reservation, error)
 
 	// InitAccount initializes an account with the auctioneer such that it
 	// can be used once fully confirmed.

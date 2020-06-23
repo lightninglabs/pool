@@ -216,8 +216,7 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	}
 
 	// We'll start by deriving a key for ourselves that we'll use in our
-	// 2-of-2 multi-sig construction. and create an
-	// output that will fund the account.
+	// 2-of-2 multi-sig construction.
 	keyDesc, err := m.cfg.Wallet.DeriveNextKey(
 		ctx, int32(clmscript.AccountKeyFamily),
 	)
@@ -228,7 +227,9 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	// With our key obtained, we'll reserve an account with our auctioneer,
 	// who will provide us with their base key and our initial per-batch
 	// key.
-	reservation, err := m.cfg.Auctioneer.ReserveAccount(ctx, value)
+	reservation, err := m.cfg.Auctioneer.ReserveAccount(
+		ctx, value, expiry, keyDesc.PubKey,
+	)
 	if err != nil {
 		return nil, err
 	}

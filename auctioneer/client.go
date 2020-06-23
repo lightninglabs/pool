@@ -216,11 +216,14 @@ func (c *Client) closeStream() error {
 // ReserveAccount reserves an account with the auctioneer. It returns the base
 // public key we should use for them in our 2-of-2 multi-sig construction, and
 // the initial batch key.
-func (c *Client) ReserveAccount(ctx context.Context,
-	value btcutil.Amount) (*account.Reservation, error) {
+func (c *Client) ReserveAccount(ctx context.Context, value btcutil.Amount,
+	expiry uint32, traderKey *btcec.PublicKey) (*account.Reservation,
+	error) {
 
 	resp, err := c.client.ReserveAccount(ctx, &clmrpc.ReserveAccountRequest{
-		AccountValue: uint64(value),
+		AccountValue:  uint64(value),
+		TraderKey:     traderKey.SerializeCompressed(),
+		AccountExpiry: expiry,
 	})
 	if err != nil {
 		return nil, err
