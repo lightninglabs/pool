@@ -441,6 +441,12 @@ message SubscribeError {
         auctioneer's database. 
         */
         ACCOUNT_DOES_NOT_EXIST = 2;
+
+        /*
+        The account the trader tried to subscribe to was never completed and a
+        reservation for it is still pending.
+        */
+        INCOMPLETE_ACCOUNT_RESERVATION = 3;
     }
 
     /*
@@ -459,6 +465,15 @@ message SubscribeError {
     connection and not per individual subscription.
     */
     bytes trader_key = 3;
+
+    /*
+    The auctioneer's partial account information as it was stored when creating
+    the reservation. This is only set if the error code is
+    INCOMPLETE_ACCOUNT_RESERVATION. Only the fields value, expiry, trader_key,
+    auctioneer_key, batch_key and height_hint will be set in that
+    case.
+    */
+    AuctionAccount account_reservation = 4;
 }
 
 enum AuctionAccountState {
