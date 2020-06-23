@@ -21,6 +21,16 @@ message ReserveAccountRequest {
     The desired value of the account in satoshis.
     */
     uint64 account_value = 1;
+
+    /*
+    The block height at which the account should expire.
+    */
+    uint32 account_expiry = 2;
+
+    /*
+    The trader's account key.
+    */
+    bytes trader_key = 3;
 }
 message ReserveAccountResponse {
     /*
