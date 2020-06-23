@@ -322,10 +322,11 @@
         "OPEN",
         "EXPIRED",
         "PENDING_CLOSED",
-        "CLOSED"
+        "CLOSED",
+        "RECOVERY_FAILED"
       ],
       "default": "PENDING_OPEN",
-      "description": " - PENDING_OPEN: The state of an account when it is pending its confirmation on-chain.\n - PENDING_UPDATE: The state of an account when it has undergone an update on-chain either as\npart of a matched order or a trader modification and it is pending its\nconfirmation on-chain.\n - OPEN: The state of an account once it has confirmed on-chain.\n - EXPIRED: The state of an account once its expiration has been reached and its closing\ntransaction has confirmed.\n - PENDING_CLOSED: The state of an account when we're waiting for the closing transaction of\nan account to confirm that required cooperation with the auctioneer.\n - CLOSED: The state of an account once its closing transaction has confirmed."
+      "description": " - PENDING_OPEN: The state of an account when it is pending its confirmation on-chain.\n - PENDING_UPDATE: The state of an account when it has undergone an update on-chain either as\npart of a matched order or a trader modification and it is pending its\nconfirmation on-chain.\n - OPEN: The state of an account once it has confirmed on-chain.\n - EXPIRED: The state of an account once its expiration has been reached and its closing\ntransaction has confirmed.\n - PENDING_CLOSED: The state of an account when we're waiting for the closing transaction of\nan account to confirm that required cooperation with the auctioneer.\n - CLOSED: The state of an account once its closing transaction has confirmed.\n - RECOVERY_FAILED: The state of an account that indicates that the account was attempted to be\nrecovered but failed because the opening transaction wasn't found by lnd.\nThis could be because it was never published or it never confirmed. Then the\nfunds are SAFU and the account can be considered to never have been opened\nin the first place."
     },
     "clmrpcAsk": {
       "type": "object",

@@ -70,6 +70,13 @@ const (
 	// broadcast by the trader that fully spent the account. An account in
 	// this state can no longer be used.
 	StateClosed State = 6
+
+	// StateCanceledAfterRecovery denotes that the account was attempted to
+	// be recovered but failed because the opening transaction wasn't found
+	// by lnd. This could be because it was never published or it never
+	// confirmed. Then the funds are SAFU and the account can be considered
+	// to never have been opened in the first place.
+	StateCanceledAfterRecovery State = 7
 )
 
 // String returns a human-readable description of an account's state.
@@ -89,6 +96,8 @@ func (s State) String() string {
 		return "StatePendingClosed"
 	case StateClosed:
 		return "StateClosed"
+	case StateCanceledAfterRecovery:
+		return "StateCanceledAfterRecovery"
 	default:
 		return "unknown"
 	}
