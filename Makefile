@@ -101,11 +101,7 @@ goveralls: $(GOVERALLS_BIN)
 	@$(call print, "Sending coverage report.")
 	$(GOVERALLS_BIN) -coverprofile=coverage.txt -service=travis-ci
 
-travis-race: lint unit-race
-
-travis-cover: lint unit-cover goveralls
-
-travis-itest: lint
+travis-cover: unit-cover goveralls
 
 # =============
 # FLAKE HUNTING

@@ -37,10 +37,11 @@ jobs:
         - GO111MODULE=on make unit pkg=... case=_NONE_
         - GO111MODULE=on make lint workers=1
     - stage: Test
-      script: GO111MODULE=on make travis-cover
-      name: Unit Cover
-    - script: GO111MODULE=on make travis-race
+      script: GO111MODULE=on make unit-race
       name: Unit Race
+    # as long as the repo is private, we can't send coverage
+    #- script: GO111MODULE=on make travis-cover
+    #  name: Unit Cover
 
 after_script:
   - LOG_FILES=./lntest/itest/*.log
