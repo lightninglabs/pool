@@ -1,0 +1,48 @@
+language: go
+cache:
+  directories:
+    - $DOWNLOAD_CACHE
+    - $GOCACHE
+    - $GOPATH/pkg/mod
+    - $GOPATH/src/github.com/btcsuite
+    - $GOPATH/src/github.com/golang
+    - $GOPATH/src/github.com/grpc-ecosystem
+    - $GOPATH/src/gopkg.in/alecthomas
+    - $GOPATH/src/google.golang.org
+
+# Remove Travis' default flag --depth=50 from the git clone command to make sure
+# we have the whole git history, including the commit we lint against.
+git:
+  depth: false
+
+go:
+  - "1.14.x"
+
+env:
+  global:
+    - GOCACHE=$HOME/.go-build
+    - DOWNLOAD_CACHE=$HOME/download_cache
+
+sudo: required
+
+addons:
+  apt:
+    packages:
+      - clang-format
+
+jobs:
+  include:
+    - stage: Build
+      script:
+        - make unit pkg=... case=_NONE_
+        - make lint workers=1
+    - stage: Test
+      script: make travis-cover
+      name: Unit Cover
+    - script: make travis-race
+      name: Unit Race
+
+after_script:
+  - LOG_FILES=./lntest/itest/*.log
+  - echo "Uploading to termbin.com..." && find $LOG_FILES | xargs -I{} sh -c "cat {} | nc termbin.com 9999 | xargs -r0 printf '{} uploaded to %s'"
+  - echo "Uploading to file.io..." && tar -zcvO $LOG_FILES | curl -s -F 'file=@-;filename=logs.tar.gz' https://file.io | xargs -r0 printf 'logs.tar.gz uploaded to %s\n'
