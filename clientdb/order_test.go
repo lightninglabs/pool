@@ -68,7 +68,7 @@ func TestSubmitOrder(t *testing.T) {
 		t.Fatalf("unexpected order type. got %d expected %d",
 			allOrders[0].Type(), order.TypeBid)
 	}
-	
+
 	// Delete the order and make sure it's gone.
 	err = store.DelOrder(o.Nonce())
 	if err != nil {

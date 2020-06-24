@@ -8,10 +8,10 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/coreos/bbolt"
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/order"
 	"github.com/lightningnetwork/lnd/keychain"
+	"go.etcd.io/bbolt"
 )
 
 var (

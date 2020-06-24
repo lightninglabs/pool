@@ -6,8 +6,8 @@ import (
 	"io"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/coreos/bbolt"
 	"github.com/lightninglabs/llm/account"
+	"go.etcd.io/bbolt"
 )
 
 var (

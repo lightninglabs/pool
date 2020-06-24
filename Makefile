@@ -29,7 +29,13 @@ XARGS := xargs -L 1
 
 include make/testing_flags.mk
 
-LINT = $(LINT_BIN) run -v
+# Linting uses a lot of memory, so keep it under control by limiting the number
+# of workers if requested.
+ifneq ($(workers),)
+LINT_WORKERS = --concurrency=$(workers)
+endif
+
+LINT = $(LINT_BIN) run -v $(LINT_WORKERS)
 
 GREEN := "\\033[0;32m"
 NC := "\\033[0m"
@@ -62,12 +68,12 @@ $(GOACC_BIN):
 # ============
 
 build:
-	@$(call print, "Building LLM.")
+	@$(call print, "Building llm.")
 	$(GOBUILD) $(PKG)/cmd/llm
 	$(GOBUILD) $(PKG)/cmd/llmd
 
 install:
-	@$(call print, "Installing LLM.")
+	@$(call print, "Installing llm.")
 	$(GOINSTALL) $(PKG)/cmd/llm
 	$(GOINSTALL) $(PKG)/cmd/llmd
 
@@ -95,11 +101,7 @@ goveralls: $(GOVERALLS_BIN)
 	@$(call print, "Sending coverage report.")
 	$(GOVERALLS_BIN) -coverprofile=coverage.txt -service=travis-ci
 
-travis-race: lint unit-race
-
-travis-cover: lint unit-cover goveralls
-
-travis-itest: lint
+travis-cover: unit-cover goveralls
 
 # =============
 # FLAKE HUNTING
