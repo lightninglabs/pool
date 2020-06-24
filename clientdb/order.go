@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/coreos/bbolt"
 	"github.com/lightninglabs/llm/order"
+	"go.etcd.io/bbolt"
 )
 
 var (

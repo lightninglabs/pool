@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/coreos/bbolt"
+	"go.etcd.io/bbolt"
 )
 
 const (
