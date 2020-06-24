@@ -68,12 +68,12 @@ $(GOACC_BIN):
 # ============
 
 build:
-	@$(call print, "Building LLM.")
+	@$(call print, "Building llm.")
 	$(GOBUILD) $(PKG)/cmd/llm
 	$(GOBUILD) $(PKG)/cmd/llmd
 
 install:
-	@$(call print, "Installing LLM.")
+	@$(call print, "Installing llm.")
 	$(GOINSTALL) $(PKG)/cmd/llm
 	$(GOINSTALL) $(PKG)/cmd/llmd
 
