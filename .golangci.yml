@@ -2,10 +2,6 @@ run:
   # timeout for analysis
   deadline: 4m
 
-  # Linting uses a lot of memory. Keep it under control by only running a single
-  # worker.
-  concurrency: 1
-
 linters-settings:
   govet:
     # Don't report about shadowed variables
