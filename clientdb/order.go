@@ -199,7 +199,7 @@ func (db *DB) DelOrder(nonce order.Nonce) error {
 
 		// If the order doesn't exist, we're probably in an inconsistent
 		// state and need to return a specific error.
-		if rootBucket.Get(nonce[:]) == nil {
+		if rootBucket.Bucket(nonce[:]) == nil {
 			return ErrNoOrder
 		}
 

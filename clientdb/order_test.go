@@ -68,6 +68,20 @@ func TestSubmitOrder(t *testing.T) {
 		t.Fatalf("unexpected order type. got %d expected %d",
 			allOrders[0].Type(), order.TypeBid)
 	}
+	
+	// Delete the order and make sure it's gone.
+	err = store.DelOrder(o.Nonce())
+	if err != nil {
+		t.Fatalf("could not delete order: %v", err)
+	}
+	allOrders, err = store.GetOrders()
+	if err != nil {
+		t.Fatalf("unable to get all asks: %v", err)
+	}
+	if len(allOrders) != 0 {
+		t.Fatalf("unexpected number of asks. got %d expected %d",
+			len(allOrders), 0)
+	}
 }
 
 // TestUpdateOrders tests that orders can be updated correctly.
