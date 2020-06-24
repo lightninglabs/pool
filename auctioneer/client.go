@@ -17,7 +17,6 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/clmscript"
 	"github.com/lightninglabs/llm/order"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -632,7 +631,27 @@ func (c *Client) RecoverAccounts(ctx context.Context,
 					"recovery message from server: %v",
 					msg)
 			}
-			acct, err := unmarshallServerAccount(acctMsg.Account)
+
+			// The trader key must match our key, otherwise
+			// something got out of order.
+			acctKey, err := btcec.ParsePubKey(
+				acctMsg.Account.TraderKey, btcec.S256(),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing account "+
+					"key: %v", err)
+			}
+			if !acctKey.IsEqual(keyDesc.PubKey) {
+				return nil, fmt.Errorf("invalid trader key, "+
+					"got %x wanted %x",
+					acctMsg.Account.TraderKey,
+					keyDesc.PubKey.SerializeCompressed())
+			}
+
+			// Account is ok, parse the rest of the fields.
+			acct, err := unmarshallServerAccount(
+				keyDesc, acctMsg.Account,
+			)
 			if err != nil {
 				return nil, fmt.Errorf("error recovering "+
 					"account: %v", err)
@@ -999,12 +1018,10 @@ func (c *Client) HandleServerShutdown(err error) error {
 
 // unmarshallServerAccount parses the account information sent from the
 // auctioneer into our local account struct.
-func unmarshallServerAccount(a *clmrpc.AuctionAccount) (*account.Account, error) {
+func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
+	a *clmrpc.AuctionAccount) (*account.Account, error) {
+
 	// Parse all raw public keys.
-	acctKey, err := btcec.ParsePubKey(a.TraderKey, btcec.S256())
-	if err != nil {
-		return nil, fmt.Errorf("error parsing account key: %v", err)
-	}
 	auctioneerKey, err := btcec.ParsePubKey(a.AuctioneerKey, btcec.S256())
 	if err != nil {
 		return nil, fmt.Errorf("error parsing auctioneer key: %v", err)
@@ -1054,18 +1071,9 @@ func unmarshallServerAccount(a *clmrpc.AuctionAccount) (*account.Account, error)
 	}
 
 	return &account.Account{
-		Value:  btcutil.Amount(a.Value),
-		Expiry: a.Expiry,
-		// We don't know the key index at this point. We'll need to go
-		// through all our keys to find it, which we'll do in the
-		// manager. Once we know the index, we'll also be able to derive
-		// the shared secret.
-		TraderKey: &keychain.KeyDescriptor{
-			KeyLocator: keychain.KeyLocator{
-				Family: clmscript.AccountKeyFamily,
-			},
-			PubKey: acctKey,
-		},
+		Value:         btcutil.Amount(a.Value),
+		Expiry:        a.Expiry,
+		TraderKey:     keyDesc,
 		AuctioneerKey: auctioneerKey,
 		BatchKey:      batchKey,
 		State:         state,

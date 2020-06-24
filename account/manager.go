@@ -990,23 +990,8 @@ func (m *Manager) RecoverAccount(ctx context.Context, account *Account) error {
 		return fmt.Errorf("account is missing trader key")
 	}
 
-	// An account recovered with the help of the auctioneer has two missing
-	// values: The trader key locator index and the shared secret. Both of
-	// these values can be restored by going through a list of keys up to
-	// a maximum number.
-	//
-	// TODO(guggero): Remove this once the Signer.DeriveSharedKey RPC also
-	// accepts KeyDescriptors with only the pubkey and family set.
-	traderKeyIndex, err := findTraderKeyIndex(
-		ctx, m.cfg.Wallet, account.TraderKey.PubKey,
-	)
-	if err != nil {
-		return fmt.Errorf("could not find trader key index: %v", err)
-	}
-	account.TraderKey.Index = traderKeyIndex
-
-	// Now that we know the index of the key, we can finally derive the
-	// shared secret.
+	// The full trader key descriptor was restored previously and we can now
+	// derive the shared secret.
 	secret, err := m.cfg.Signer.DeriveSharedKey(
 		ctx, account.AuctioneerKey, &account.TraderKey.KeyLocator,
 	)
