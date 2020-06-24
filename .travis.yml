@@ -34,12 +34,12 @@ jobs:
   include:
     - stage: Build
       script:
-        - make unit pkg=... case=_NONE_
-        - make lint workers=1
+        - GO111MODULE=on make unit pkg=... case=_NONE_
+        - GO111MODULE=on make lint workers=1
     - stage: Test
-      script: make travis-cover
+      script: GO111MODULE=on make travis-cover
       name: Unit Cover
-    - script: make travis-race
+    - script: GO111MODULE=on make travis-race
       name: Unit Race
 
 after_script:
