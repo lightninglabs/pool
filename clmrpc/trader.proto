@@ -175,6 +175,15 @@ enum AccountState {
 
     // The state of an account once its closing transaction has confirmed.
     CLOSED = 5;
+
+    /*
+    The state of an account that indicates that the account was attempted to be
+    recovered but failed because the opening transaction wasn't found by lnd.
+    This could be because it was never published or it never confirmed. Then the
+    funds are SAFU and the account can be considered to never have been opened
+    in the first place.
+    */
+    RECOVERY_FAILED = 6;
 }
 
 message Account {

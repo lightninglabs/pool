@@ -185,7 +185,7 @@ func (m *Manager) start() error {
 		return fmt.Errorf("unable to retrieve accounts: %v", err)
 	}
 	for _, account := range accounts {
-		if err := m.resumeAccount(ctx, account, true); err != nil {
+		if err := m.resumeAccount(ctx, account, true, false); err != nil {
 			return fmt.Errorf("unable to resume account %x: %v",
 				account.TraderKey.PubKey.SerializeCompressed(),
 				err)
@@ -216,8 +216,7 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	}
 
 	// We'll start by deriving a key for ourselves that we'll use in our
-	// 2-of-2 multi-sig construction. and create an
-	// output that will fund the account.
+	// 2-of-2 multi-sig construction.
 	keyDesc, err := m.cfg.Wallet.DeriveNextKey(
 		ctx, int32(clmscript.AccountKeyFamily),
 	)
@@ -228,7 +227,9 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	// With our key obtained, we'll reserve an account with our auctioneer,
 	// who will provide us with their base key and our initial per-batch
 	// key.
-	reservation, err := m.cfg.Auctioneer.ReserveAccount(ctx, value)
+	reservation, err := m.cfg.Auctioneer.ReserveAccount(
+		ctx, value, expiry, keyDesc.PubKey,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +264,7 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	log.Infof("Creating new account %x of %v that expires at height %v",
 		keyDesc.PubKey.SerializeCompressed(), value, expiry)
 
-	if err := m.resumeAccount(ctx, account, false); err != nil {
+	if err := m.resumeAccount(ctx, account, false, false); err != nil {
 		return nil, err
 	}
 
@@ -273,8 +274,8 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 // resumeAccount performs different operations based on the account's state.
 // This method serves as a way to consolidate the logic of resuming accounts on
 // startup and during normal operation.
-func (m *Manager) resumeAccount(ctx context.Context, account *Account,
-	onRestart bool) error {
+func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
+	onRestart bool, onRecovery bool) error {
 
 	accountOutput, err := account.Output()
 	if err != nil {
@@ -289,7 +290,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account,
 		// make sure we haven't created and broadcast a transaction for
 		// this account already, so we'll inspect our TxSource to do so.
 		createTx := true
-		if onRestart {
+		if onRestart || onRecovery {
 			tx, err := m.locateTxByOutput(ctx, accountOutput)
 			switch err {
 			// If we do find one, we can rebroadcast it.
@@ -299,7 +300,31 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account,
 
 			// If we don't, we'll need to create one.
 			case errTxNotFound:
-				break
+				// If lnd doesn't know a transaction that sends
+				// to the account output, it could be that it
+				// was never published or it never confirmed.
+				// In that case the funds should be SAFU and can
+				// be double spent. We don't need to try a
+				// recovery in that case. And we certainly don't
+				// want to send funds again, so we exit here.
+				if onRecovery {
+					state := StateCanceledAfterRecovery
+					err := m.cfg.Store.UpdateAccount(
+						account, StateModifier(state),
+					)
+					if err != nil {
+						return fmt.Errorf("account "+
+							"funding TX not found "+
+							"but was unable to "+
+							"update account to "+
+							"state recovery "+
+							"failed: %v", err)
+					}
+
+					return fmt.Errorf("account funding "+
+						"TX with output %x not found",
+						accountOutput.PkScript)
+				}
 
 			default:
 				return fmt.Errorf("unable to locate output "+
@@ -661,7 +686,7 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 		if ok {
 			// Proceed with the rest of the flow.
 			return m.resumeAccount(
-				context.Background(), account, false,
+				context.Background(), account, false, false,
 			)
 		}
 
@@ -965,23 +990,8 @@ func (m *Manager) RecoverAccount(ctx context.Context, account *Account) error {
 		return fmt.Errorf("account is missing trader key")
 	}
 
-	// An account recovered with the help of the auctioneer has two missing
-	// values: The trader key locator index and the shared secret. Both of
-	// these values can be restored by going through a list of keys up to
-	// a maximum number.
-	//
-	// TODO(guggero): Remove this once the Signer.DeriveSharedKey RPC also
-	// accepts KeyDescriptors with only the pubkey and family set.
-	traderKeyIndex, err := findTraderKeyIndex(
-		ctx, m.cfg.Wallet, account.TraderKey.PubKey,
-	)
-	if err != nil {
-		return fmt.Errorf("could not find trader key index: %v", err)
-	}
-	account.TraderKey.Index = traderKeyIndex
-
-	// Now that we know the index of the key, we can finally derive the
-	// shared secret.
+	// The full trader key descriptor was restored previously and we can now
+	// derive the shared secret.
 	secret, err := m.cfg.Signer.DeriveSharedKey(
 		ctx, account.AuctioneerKey, &account.TraderKey.KeyLocator,
 	)
@@ -997,13 +1007,11 @@ func (m *Manager) RecoverAccount(ctx context.Context, account *Account) error {
 		return err
 	}
 
-	// TODO(guggero): If we resume the account with onRestart=true, the
-	// manager will try to re-publish the transaction. But if lnd was also
-	// restored, it would likely not remember that transaction and the
-	// resume would fail. If we don't try to re-broadcast the transaction,
-	// what happens if it never confirmed in the first place before the
-	// trader lost its state?
-	return m.resumeAccount(ctx, account, false)
+	// Now let's try to resume the account based on the state of it. We set
+	// the `onRestart` flag to false because that would try to re-publish
+	// the opening transaction in some cases which we don't want. Instead we
+	// set the `onRecovery` flag to true.
+	return m.resumeAccount(ctx, account, false, true)
 }
 
 // determineWitnessType determines the appropriate witness type to use for the

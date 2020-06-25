@@ -715,6 +715,9 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 	case account.StateClosed:
 		rpcState = clmrpc.AccountState_CLOSED
 
+	case account.StateCanceledAfterRecovery:
+		rpcState = clmrpc.AccountState_RECOVERY_FAILED
+
 	default:
 		return nil, fmt.Errorf("unknown state %v", a.State)
 	}

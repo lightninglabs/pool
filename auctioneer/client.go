@@ -17,7 +17,6 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/clmscript"
 	"github.com/lightninglabs/llm/order"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -216,11 +215,14 @@ func (c *Client) closeStream() error {
 // ReserveAccount reserves an account with the auctioneer. It returns the base
 // public key we should use for them in our 2-of-2 multi-sig construction, and
 // the initial batch key.
-func (c *Client) ReserveAccount(ctx context.Context,
-	value btcutil.Amount) (*account.Reservation, error) {
+func (c *Client) ReserveAccount(ctx context.Context, value btcutil.Amount,
+	expiry uint32, traderKey *btcec.PublicKey) (*account.Reservation,
+	error) {
 
 	resp, err := c.client.ReserveAccount(ctx, &clmrpc.ReserveAccountRequest{
-		AccountValue: uint64(value),
+		AccountValue:  uint64(value),
+		TraderKey:     traderKey.SerializeCompressed(),
+		AccountExpiry: expiry,
 	})
 	if err != nil {
 		return nil, err
@@ -487,25 +489,50 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		}
 
 		// Did the server find the account we're interested in?
-		switch msg := srvMsg.Msg.(type) {
+		switch {
 		// Account exists, everything's good to continue.
-		case *clmrpc.ServerAuctionMessage_Success:
+		case srvMsg.GetSuccess() != nil:
 			return sub, true, nil
 
-		// The account doesn't exist. If we're recovering accounts,
-		// that's fine. We just skip this account key and try the next
-		// one. If we're not in recovery mode, this is a hard failure.
-		case *clmrpc.ServerAuctionMessage_Error:
+		// We got an error. If we're in recovery mode, this could either
+		// mean the account doesn't exist or there's only a reservation
+		// for it.
+		case srvMsg.GetError() != nil:
+			errMsg := srvMsg.GetError()
+
+			// If we're not in recovery mode we don't expect any
+			// error, this is a hard failure.
 			if !recovery {
 				return nil, false, fmt.Errorf("error "+
 					"subscribing to account: %v",
-					msg.Error.Error)
+					errMsg.Error)
 			}
-			return sub, false, nil
+
+			// If we're in recovery mode, it is possible for an
+			// account to still be in the reservation phase from the
+			// point of view of the auctioneer. We cannot do the
+			// normal recovery in that case because the account
+			// subscription cannot be completed. This needs to be
+			// handled specifically so we return a typed error now.
+			if errMsg.ErrorCode == clmrpc.SubscribeError_INCOMPLETE_ACCOUNT_RESERVATION {
+				return sub, true, AcctResNotCompletedErrFromRPC(
+					*errMsg.AccountReservation,
+				)
+			}
+
+			// The account doesn't exist. We are in recovery mode so
+			// this is fine. We just skip this account key and try
+			// the next one.
+			if errMsg.ErrorCode == clmrpc.SubscribeError_ACCOUNT_DOES_NOT_EXIST {
+				return sub, false, nil
+			}
+
+			return nil, false, fmt.Errorf("unknown error message "+
+				"received: %v", errMsg)
 
 		default:
 			return nil, false, fmt.Errorf("unknown message "+
-				"received: %v", msg)
+				"received: %v", srvMsg)
 		}
 
 	case <-c.quit:
@@ -527,14 +554,44 @@ func (c *Client) RecoverAccounts(ctx context.Context,
 	var recoveredAccounts []*account.Account
 	for _, keyDesc := range accountKeys {
 		acctKeyBytes := keyDesc.PubKey.SerializeCompressed()
+		var resErr *AcctResNotCompletedError
+
+		// Start the recovery of this account by connecting and going
+		// through the 3-way-handshake. There's four possibilities of
+		// what can happen: 1. The account exists but only as a
+		// reservation. This special case needs to be handled
+		// separately. 2. We get an unexpected error in which case we
+		// abort the recovery. 3. The account doesn't exist and we skip
+		// it. 4. The account exists and we get a success message.
+		// Normal recovery can be attempted.
 		subscription, canRecover, err := c.connectAndAuthenticate(
 			ctx, keyDesc, true,
 		)
-		if err != nil {
-			return nil, fmt.Errorf("could not recover account %x: %v",
-				acctKeyBytes, err)
+
+		// Case 1: Special recovery of an account that was only
+		// reserved.
+		if errors.As(err, &resErr) {
+			acct, err := incompleteAcctFromErr(keyDesc, resErr)
+			if err != nil {
+				return nil, fmt.Errorf("could not recover "+
+					"reserved account %x: %v", acctKeyBytes,
+					err)
+			}
+			recoveredAccounts = append(recoveredAccounts, acct)
+
+			// Don't send any further messages to the auctioneer,
+			// we won't get any more information than was in the
+			// error.
+			continue
 		}
 
+		// Case 2: Abort on unexpected error.
+		if err != nil {
+			return nil, fmt.Errorf("could not recover account %x: "+
+				"%v", acctKeyBytes, err)
+		}
+
+		// Case 3: The auctioneer doesn't know the account.
 		if !canRecover {
 			numNotFoundAccounts++
 
@@ -547,10 +604,11 @@ func (c *Client) RecoverAccounts(ctx context.Context,
 			continue
 		}
 
-		// Reset our not found counter as we've found a recoverable
-		// account here. Then ask the auctioneer to send us back the
-		// state as it knows it in its database. The response to this
-		// message will be handled outside of the client.
+		// Case 4: Attempt normal recovery. First we reset our not found
+		// counter as we've found a recoverable account here. Then ask
+		// the auctioneer to send us back the state as it knows it in
+		// its database. The response to this message will be handled
+		// outside of the client.
 		numNotFoundAccounts = 0
 		err = c.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
 			Msg: &clmrpc.ClientAuctionMessage_Recover{
@@ -573,7 +631,27 @@ func (c *Client) RecoverAccounts(ctx context.Context,
 					"recovery message from server: %v",
 					msg)
 			}
-			acct, err := unmarshallServerAccount(acctMsg.Account)
+
+			// The trader key must match our key, otherwise
+			// something got out of order.
+			acctKey, err := btcec.ParsePubKey(
+				acctMsg.Account.TraderKey, btcec.S256(),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing account "+
+					"key: %v", err)
+			}
+			if !acctKey.IsEqual(keyDesc.PubKey) {
+				return nil, fmt.Errorf("invalid trader key, "+
+					"got %x wanted %x",
+					acctMsg.Account.TraderKey,
+					keyDesc.PubKey.SerializeCompressed())
+			}
+
+			// Account is ok, parse the rest of the fields.
+			acct, err := unmarshallServerAccount(
+				keyDesc, acctMsg.Account,
+			)
 			if err != nil {
 				return nil, fmt.Errorf("error recovering "+
 					"account: %v", err)
@@ -589,6 +667,39 @@ func (c *Client) RecoverAccounts(ctx context.Context,
 	}
 
 	return recoveredAccounts, nil
+}
+
+// incompleteAcctFromErr creates an account in the state initiated from an error
+// that contains the bare minimum of recovery information.
+func incompleteAcctFromErr(traderKey *keychain.KeyDescriptor,
+	resErr *AcctResNotCompletedError) (*account.Account, error) {
+
+	var (
+		acct = &account.Account{
+			Value:      resErr.Value,
+			State:      account.StateInitiated,
+			TraderKey:  traderKey,
+			Expiry:     resErr.Expiry,
+			HeightHint: resErr.HeightHint,
+		}
+		err error
+	)
+
+	acct.AuctioneerKey, err = btcec.ParsePubKey(
+		resErr.AuctioneerKey[:], btcec.S256(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing auctioneer key: %v", err)
+	}
+
+	acct.BatchKey, err = btcec.ParsePubKey(
+		resErr.InitialBatchKey[:], btcec.S256(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing batch key: %v", err)
+	}
+
+	return acct, nil
 }
 
 // SendAuctionMessage sends an auction message through the long-lived stream to
@@ -781,9 +892,10 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		case *clmrpc.ServerAuctionMessage_Error:
 			errCode := t.Error.ErrorCode
 
+			switch errCode {
 			// The server is shutting down. No need to forward this,
 			// we can just shutdown the stream and try to reconnect.
-			if errCode == clmrpc.SubscribeError_SERVER_SHUTDOWN {
+			case clmrpc.SubscribeError_SERVER_SHUTDOWN:
 				err := c.HandleServerShutdown(nil)
 				if err != nil {
 					select {
@@ -792,12 +904,13 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 					}
 				}
 				return
-			}
 
 			// We received an account not found error. This is not
 			// a reason to abort in case we are in recovery mode.
 			// We let the subscription decide what to do.
-			if errCode == clmrpc.SubscribeError_ACCOUNT_DOES_NOT_EXIST {
+			case clmrpc.SubscribeError_ACCOUNT_DOES_NOT_EXIST,
+				clmrpc.SubscribeError_INCOMPLETE_ACCOUNT_RESERVATION:
+
 				err := c.sendToSubscription(
 					t.Error.TraderKey, msg,
 				)
@@ -905,12 +1018,10 @@ func (c *Client) HandleServerShutdown(err error) error {
 
 // unmarshallServerAccount parses the account information sent from the
 // auctioneer into our local account struct.
-func unmarshallServerAccount(a *clmrpc.AuctionAccount) (*account.Account, error) {
+func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
+	a *clmrpc.AuctionAccount) (*account.Account, error) {
+
 	// Parse all raw public keys.
-	acctKey, err := btcec.ParsePubKey(a.TraderKey, btcec.S256())
-	if err != nil {
-		return nil, fmt.Errorf("error parsing account key: %v", err)
-	}
 	auctioneerKey, err := btcec.ParsePubKey(a.AuctioneerKey, btcec.S256())
 	if err != nil {
 		return nil, fmt.Errorf("error parsing auctioneer key: %v", err)
@@ -960,18 +1071,9 @@ func unmarshallServerAccount(a *clmrpc.AuctionAccount) (*account.Account, error)
 	}
 
 	return &account.Account{
-		Value:  btcutil.Amount(a.Value),
-		Expiry: a.Expiry,
-		// We don't know the key index at this point. We'll need to go
-		// through all our keys to find it, which we'll do in the
-		// manager. Once we know the index, we'll also be able to derive
-		// the shared secret.
-		TraderKey: &keychain.KeyDescriptor{
-			KeyLocator: keychain.KeyLocator{
-				Family: clmscript.AccountKeyFamily,
-			},
-			PubKey: acctKey,
-		},
+		Value:         btcutil.Amount(a.Value),
+		Expiry:        a.Expiry,
+		TraderKey:     keyDesc,
 		AuctioneerKey: auctioneerKey,
 		BatchKey:      batchKey,
 		State:         state,

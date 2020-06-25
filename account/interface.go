@@ -70,6 +70,13 @@ const (
 	// broadcast by the trader that fully spent the account. An account in
 	// this state can no longer be used.
 	StateClosed State = 6
+
+	// StateCanceledAfterRecovery denotes that the account was attempted to
+	// be recovered but failed because the opening transaction wasn't found
+	// by lnd. This could be because it was never published or it never
+	// confirmed. Then the funds are SAFU and the account can be considered
+	// to never have been opened in the first place.
+	StateCanceledAfterRecovery State = 7
 )
 
 // String returns a human-readable description of an account's state.
@@ -89,6 +96,8 @@ func (s State) String() string {
 		return "StatePendingClosed"
 	case StateClosed:
 		return "StateClosed"
+	case StateCanceledAfterRecovery:
+		return "StateCanceledAfterRecovery"
 	default:
 		return "unknown"
 	}
@@ -304,8 +313,11 @@ type Auctioneer interface {
 	// auctioneer. The auctioneer checks the account value against current
 	// min/max values configured. If the value is valid, it returns the
 	// public key we should use for them in our 2-of-2 multi-sig
-	// construction.
-	ReserveAccount(context.Context, btcutil.Amount) (*Reservation, error)
+	// construction. To address an edge case in the account recovery where
+	// the trader crashes before confirming the account with the auctioneer,
+	// we also send the trader key and expiry along with the reservation.
+	ReserveAccount(context.Context, btcutil.Amount, uint32,
+		*btcec.PublicKey) (*Reservation, error)
 
 	// InitAccount initializes an account with the auctioneer such that it
 	// can be used once fully confirmed.
