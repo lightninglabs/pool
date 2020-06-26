@@ -283,6 +283,19 @@ func connectToMatchedTrader(lndClient lnrpc.LightningClient,
 
 			continue
 		}
+
+		// Don't spam peer connections. This can lead to race errors in
+		// the itest when we try to connect to the same node in very
+		// short intervals.
+		//
+		// TODO(guggero): Fix this problem in lnd and also try to
+		// de-duplicate peers and their addresses to reduce connection
+		// tries.
+		time.Sleep(200 * time.Millisecond)
+
+		// We connected successfully, not need to try any of the other
+		// addresses.
+		break
 	}
 
 	// Since we specified perm, the error is async, and not fully
