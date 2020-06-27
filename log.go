@@ -18,6 +18,7 @@ const Subsystem = "AGOD"
 var (
 	logWriter = build.NewRotatingLogWriter()
 	log       = build.NewSubLogger(Subsystem, logWriter.GenSubLogger)
+	rpcLog    = build.NewSubLogger("RPCS", logWriter.GenSubLogger)
 
 	// SupportedSubsystems is a function that returns a list of all
 	// supported logging sub systems.
@@ -26,6 +27,7 @@ var (
 
 func init() {
 	setSubLogger(Subsystem, log, nil)
+	setSubLogger("RPCS", rpcLog, nil)
 	addSubLogger(auctioneer.Subsystem, auctioneer.UseLogger)
 	addSubLogger(order.Subsystem, order.UseLogger)
 	addSubLogger("LNDC", lndclient.UseLogger)
