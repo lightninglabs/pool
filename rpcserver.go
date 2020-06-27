@@ -674,9 +674,24 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 func (s *rpcServer) InitAccount(ctx context.Context,
 	req *clmrpc.InitAccountRequest) (*clmrpc.Account, error) {
 
+	bestHeight := atomic.LoadUint32(&s.bestHeight)
+
+	var expiryHeight uint32
+	switch {
+	case req.GetAbsoluteHeight() != 0:
+		expiryHeight = req.GetAbsoluteHeight()
+
+	case req.GetRelativeHeight() != 0:
+		expiryHeight = req.GetRelativeHeight() + bestHeight
+
+	default:
+		return nil, fmt.Errorf("either relative or absolute height " +
+			"must be specified")
+	}
+
 	account, err := s.accountManager.InitAccount(
-		ctx, btcutil.Amount(req.AccountValue), req.AccountExpiry,
-		atomic.LoadUint32(&s.bestHeight),
+		ctx, btcutil.Amount(req.AccountValue), expiryHeight,
+		bestHeight,
 	)
 	if err != nil {
 		return nil, err

@@ -52,6 +52,12 @@ func NewAccountFromProto(a *clmrpc.Account) *Account {
 	}
 }
 
+const (
+	accountExpiryAbsolute = "expiry_height"
+
+	accountExpiryRelative = "expiry_blocks"
+)
+
 var newAccountCommand = cli.Command{
 	Name:      "new",
 	ShortName: "n",
@@ -66,9 +72,14 @@ var newAccountCommand = cli.Command{
 			Usage: "the amount in satoshis to create account for",
 		},
 		cli.Uint64Flag{
-			Name: "expiry",
+			Name: accountExpiryAbsolute,
 			Usage: "the block height at which this account should " +
 				"expire at",
+		},
+		cli.Uint64Flag{
+			Name: accountExpiryRelative,
+			Usage: "the relative height (from the current chain " +
+				"height) that the account should expire at",
 		},
 	},
 	Action: newAccount,
@@ -81,9 +92,27 @@ func newAccount(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	expiry, err := parseUint64(ctx, 1, "expiry", cmd)
-	if err != nil {
-		return err
+
+	req := &clmrpc.InitAccountRequest{
+		AccountValue: amt,
+	}
+
+	if ctx.IsSet(accountExpiryAbsolute) && ctx.IsSet(accountExpiryRelative) {
+		return fmt.Errorf("only %v or %v should be set, but not both",
+			accountExpiryAbsolute, accountExpiryRelative)
+	}
+
+	if height, err := parseUint64(ctx, 1, accountExpiryAbsolute, cmd); err != nil {
+		req.AccountExpiry = &clmrpc.InitAccountRequest_AbsoluteHeight{
+			AbsoluteHeight: uint32(height),
+		}
+	} else if height, err := parseUint64(ctx, 1, accountExpiryRelative, cmd); err != nil {
+		req.AccountExpiry = &clmrpc.InitAccountRequest_RelativeHeight{
+			RelativeHeight: uint32(height),
+		}
+	} else {
+		return fmt.Errorf("either a relative or absolute height must " +
+			"be specified")
 	}
 
 	client, cleanup, err := getClient(ctx)
@@ -92,12 +121,7 @@ func newAccount(ctx *cli.Context) error {
 	}
 	defer cleanup()
 
-	resp, err := client.InitAccount(context.Background(),
-		&clmrpc.InitAccountRequest{
-			AccountValue:  amt,
-			AccountExpiry: uint32(expiry),
-		},
-	)
+	resp, err := client.InitAccount(context.Background(), req)
 	if err != nil {
 		return err
 	}
