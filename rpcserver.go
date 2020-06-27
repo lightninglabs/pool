@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -862,6 +863,36 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	dbOrders, err := s.server.db.GetOrders()
+	if err != nil {
+		return nil, err
+	}
+
+	var openOrders bool
+	for _, dbOrder := range dbOrders {
+		orderDetails := dbOrder.Details()
+
+		// If the order isn't in the base state, then we'll skip it as
+		// it isn't considered an "active" order.
+		switch orderDetails.State {
+		case order.StateFailed, order.StateExpired,
+			order.StateCanceled, order.StateExecuted:
+			continue
+		}
+
+		if bytes.Equal(orderDetails.AcctKey[:], req.TraderKey) {
+			openOrders = true
+			break
+		}
+	}
+
+	// We don't allow an account to be closed if it has open orders so they
+	// don't dangle in the order book on the server's side.
+	if openOrders {
+		return nil, fmt.Errorf("acct=%x has open orders, cancel them "+
+			"before closing", req.TraderKey)
 	}
 
 	closeTx, err := s.accountManager.CloseAccount(
