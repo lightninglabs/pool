@@ -264,6 +264,9 @@ func connectToMatchedTrader(lndClient lnrpc.LightningClient,
 	nodeKey := hex.EncodeToString(matchedOrder.NodeKey[:])
 
 	for _, addr := range matchedOrder.NodeAddrs {
+		rpcLog.Debugf("Connecting to node=%v for order_nonce=%v",
+			nodeKey, matchedOrder.Order.Nonce())
+
 		_, err := lndClient.ConnectPeer(ctxb, &lnrpc.ConnectPeerRequest{
 			Addr: &lnrpc.LightningAddress{
 				Pubkey: nodeKey,
@@ -310,6 +313,10 @@ func connectToMatchedTrader(lndClient lnrpc.LightningClient,
 func (s *rpcServer) deriveFundingShim(ourOrder order.Order,
 	matchedOrder *order.MatchedOrder,
 	batchTx *wire.MsgTx) (*lnrpc.FundingShim, error) {
+
+	rpcLog.Infof("Registering funding shim for Order(type=%v, amt=%v, "+
+		"nonce=%v", ourOrder.Type(),
+		matchedOrder.UnitsFilled.ToSatoshis(), ourOrder.Nonce())
 
 	// First, we'll compute the pending channel ID key which will be unique
 	// to this order pair.
@@ -436,6 +443,9 @@ func (s *rpcServer) registerFundingShim(ourOrder order.Order,
 //
 // TODO(roasbeef): move?
 func (s *rpcServer) prepChannelFunding(batch *order.Batch) error {
+	rpcLog.Infof("Batch(%x): preparing channel funding for %v orders",
+		batch.ID[:], len(batch.MatchedOrders))
+
 	// Now that we know this batch passes our sanity checks, we'll register
 	// all the funding shims we need to be able to respond
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
@@ -496,6 +506,9 @@ func (s *rpcServer) prepChannelFunding(batch *order.Batch) error {
 // finalized and locked in.
 func (s *rpcServer) batchChannelSetup(batch *order.Batch) error {
 	var eg errgroup.Group
+
+	rpcLog.Infof("Batch(%x): opening channels for %v matched orders",
+		batch.ID[:], len(batch.MatchedOrders))
 
 	// For each ask order of ours that's matched, we'll make a new funding
 	// flow, blocking until they all progress to the final state.
@@ -600,6 +613,9 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 			return fmt.Errorf("error parsing RPC batch: %v", err)
 		}
 
+		rpcLog.Infof("Received PrepareMsg for batch=%x, num_orders=%v",
+			batch.ID[:], len(batch.MatchedOrders))
+
 		// Do an in-depth verification of the batch.
 		err = s.orderManager.OrderMatchValidate(batch)
 		if err != nil {
@@ -642,6 +658,9 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 			return s.sendRejectBatch(batch, err)
 		}
 
+		rpcLog.Infof("Received OrderMatchSign for batch=%x, "+
+			"num_orders=%v", batch.ID[:], len(batch.MatchedOrders))
+
 		// Sign for the accounts in the batch.
 		sigs, err := s.orderManager.BatchSign()
 		if err != nil {
@@ -659,6 +678,9 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 	case *clmrpc.ServerAuctionMessage_Finalize:
 		rpcLog.Tracef("Received finalize msg from server, batch_id=%x: %v",
 			msg.Finalize.BatchId, spew.Sdump(msg))
+
+		rpcLog.Infof("Received FinalizeMsg for batch=%x",
+			msg.Finalize.BatchId)
 
 		var batchID order.BatchID
 		copy(batchID[:], msg.Finalize.BatchId)
@@ -758,6 +780,9 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 func (s *rpcServer) DepositAccount(ctx context.Context,
 	req *clmrpc.DepositAccountRequest) (*clmrpc.DepositAccountResponse, error) {
 
+	rpcLog.Infof("Depositing %v into acct=%x",
+		btcutil.Amount(req.AmountSat), req.TraderKey)
+
 	// Ensure the trader key is well formed.
 	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
 	if err != nil {
@@ -800,6 +825,8 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 // outputs.
 func (s *rpcServer) WithdrawAccount(ctx context.Context,
 	req *clmrpc.WithdrawAccountRequest) (*clmrpc.WithdrawAccountResponse, error) {
+
+	rpcLog.Infof("Withdrawing from acct=%x", req.TraderKey)
 
 	// Ensure the trader key is well formed.
 	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
@@ -850,6 +877,8 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 // CloseAccount handles a trader's request to close the specified account.
 func (s *rpcServer) CloseAccount(ctx context.Context,
 	req *clmrpc.CloseAccountRequest) (*clmrpc.CloseAccountResponse, error) {
+
+	rpcLog.Infof("Closing acct=%x", req.TraderKey)
 
 	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
 	if err != nil {
@@ -913,6 +942,8 @@ func (s *rpcServer) parseRPCOutputs(outputs []*clmrpc.Output) ([]*wire.TxOut,
 func (s *rpcServer) RecoverAccounts(ctx context.Context,
 	_ *clmrpc.RecoverAccountsRequest) (*clmrpc.RecoverAccountsResponse,
 	error) {
+
+	log.Infof("Attempting to recover accounts...")
 
 	s.recoveryMutex.Lock()
 	if s.recoveryPending {
@@ -1129,6 +1160,9 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 
 	var nonce order.Nonce
 	copy(nonce[:], req.OrderNonce)
+
+	rpcLog.Infof("Cancelling order_nonce=%v", nonce)
+
 	err := s.auctioneer.CancelOrder(ctx, nonce)
 	if err != nil {
 		return nil, err
@@ -1157,6 +1191,7 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	default:
 		msg.Reject.ReasonCode = clmrpc.OrderMatchReject_UNKNOWN
 	}
+
 	rpcLog.Infof("Sending batch rejection message for batch %x with "+
 		"code %v and message: %v", batch.ID, msg.Reject.ReasonCode,
 		failure)
@@ -1182,6 +1217,8 @@ func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
 	for nonce := range batch.MatchedOrders {
 		nonces = append(nonces, nonce[:])
 	}
+
+	rpcLog.Infof("Accepting batch=%x", batch.ID[:])
 
 	// Send the message to the server.
 	return s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
