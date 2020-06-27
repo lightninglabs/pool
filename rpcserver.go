@@ -1088,6 +1088,19 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		return nil, fmt.Errorf("cannot accept order: %v", err)
 	}
 
+	// We'll only allow orders for accounts that present in an open state,
+	// or have a pending update. On the server-side if we have a pending
+	// update we won't be matched, but this lets us place our orders early
+	// so we can join the earliest available batch.
+	switch acct.State {
+	case account.StateOpen, account.StatePendingUpdate:
+		break
+
+	default:
+		return nil, fmt.Errorf("acct=%x is in state %v, cannot "+
+			"make order", o.Details().AcctKey[:], acct.State)
+	}
+
 	// Collect all the order data and sign it before sending it to the
 	// auction server.
 	serverParams, err := s.orderManager.PrepareOrder(ctx, o, acct)
