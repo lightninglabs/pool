@@ -9,6 +9,13 @@ import (
 	"github.com/lightninglabs/llm/clmrpc"
 )
 
+const (
+	// heightHintPadding is the padding we add to our best known height to
+	// avoid any discrepancies in block propagation between us and the
+	// auctioneer.
+	heightHintPadding = -3
+)
+
 // batchStorer is a type that implements BatchStorer and can persist a batch to
 // the local trader database.
 type batchStorer struct {
@@ -23,7 +30,7 @@ type batchStorer struct {
 // modifications will be applied atomically as a result of MarkBatchComplete.
 //
 // NOTE: This method is part of the BatchStorer interface.
-func (s *batchStorer) StorePendingBatch(batch *Batch) error {
+func (s *batchStorer) StorePendingBatch(batch *Batch, bestHeight uint32) error {
 	// Prepare the order modifications first.
 	orders := make([]Nonce, len(batch.MatchedOrders))
 	orderModifiers := make([][]Modifier, len(orders))
@@ -64,6 +71,13 @@ func (s *batchStorer) StorePendingBatch(batch *Batch) error {
 	// Next create our account modifiers.
 	accounts := make([]*account.Account, len(batch.AccountDiffs))
 	accountModifiers := make([][]account.Modifier, len(accounts))
+
+	// Each account will have the same height hint applied.
+	heightHint := int64(bestHeight) + heightHintPadding
+	if heightHint < 0 {
+		heightHint = 0
+	}
+
 	for idx, diff := range batch.AccountDiffs {
 		// Get the current state of the account first so we can create
 		// a proper diff.
@@ -107,10 +121,14 @@ func (s *batchStorer) StorePendingBatch(batch *Batch) error {
 				diff.EndingState)
 		}
 
-		// Finally update the account value and expiry.
-		accountModifiers[idx] = append(
+		// Finally update the account value and height hint.
+		modifiers = append(
 			modifiers, account.ValueModifier(diff.EndingBalance),
 		)
+		modifiers = append(
+			modifiers, account.HeightHintModifier(uint32(heightHint)),
+		)
+		accountModifiers[idx] = modifiers
 	}
 
 	// Everything is ready to be persisted now.

@@ -643,7 +643,8 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		}
 
 		// Sign for the accounts in the batch.
-		sigs, err := s.orderManager.BatchSign()
+		bestHeight := atomic.LoadUint32(&s.bestHeight)
+		sigs, err := s.orderManager.BatchSign(bestHeight)
 		if err != nil {
 			log.Errorf("Error signing batch: %v", err)
 			return s.sendRejectBatch(batch, err)

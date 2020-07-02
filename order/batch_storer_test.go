@@ -15,6 +15,7 @@ import (
 func TestBatchStorer(t *testing.T) {
 	t.Parallel()
 
+	const bestHeight = 1337
 	var (
 		storeMock = newMockStore()
 		storer    = &batchStorer{
@@ -119,7 +120,7 @@ func TestBatchStorer(t *testing.T) {
 	}
 
 	// Pass the assembled batch to the storer now.
-	err := storer.StorePendingBatch(batch)
+	err := storer.StorePendingBatch(batch, bestHeight)
 	if err != nil {
 		t.Fatalf("error storing batch: %v", err)
 	}
@@ -165,6 +166,11 @@ func TestBatchStorer(t *testing.T) {
 		t.Fatalf("invalid account expiry, got %d wanted %d",
 			smallAcct.Value, 144)
 	}
+	heightHint := uint32(bestHeight + heightHintPadding)
+	if smallAcct.HeightHint != heightHint {
+		t.Fatalf("invalid account height hint, got %d wanted %d",
+			smallAcct.Value, heightHint)
+	}
 
 	if bigAcct.State != account.StatePendingUpdate {
 		t.Fatalf("invalid account state, got %d wanted %d",
@@ -177,6 +183,10 @@ func TestBatchStorer(t *testing.T) {
 	if bigAcct.Expiry != 144 {
 		t.Fatalf("invalid account expiry, got %d wanted %d",
 			bigAcct.Value, 144)
+	}
+	if bigAcct.HeightHint != heightHint {
+		t.Fatalf("invalid account height hint, got %d wanted %d",
+			bigAcct.Value, heightHint)
 	}
 }
 
