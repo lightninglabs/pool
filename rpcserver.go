@@ -338,17 +338,6 @@ func (s *rpcServer) deriveFundingShim(ourOrder order.Order,
 		thawHeight = matchedOrder.Order.(*order.Bid).MinDuration
 	}
 
-	// The thaw height is absolute, so we'll need to offset it relative to
-	// the current best block from the PoV of our backing node.
-	//
-	// TODO(roasbeef): this is racey, should have it based on an absolute
-	// height?
-	nodeInfo, err := s.lndServices.Client.GetInfo(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("unable to get best height: %v", err)
-	}
-	thawHeight += nodeInfo.BlockHeight
-
 	pendingChanID := order.PendingChanKey(
 		askNonce, bidNonce,
 	)
