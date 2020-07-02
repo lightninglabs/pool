@@ -138,10 +138,21 @@ func NewServer(cfg *Config) (*Server, error) {
 			return &tokenID, nil
 		}
 	}
+	activeLoggers := logWriter.SubLoggers()
 	cfg.AuctioneerDialOpts = append(
 		cfg.AuctioneerDialOpts,
-		grpc.WithUnaryInterceptor(interceptor.UnaryInterceptor),
-		grpc.WithStreamInterceptor(interceptor.StreamInterceptor),
+		grpc.WithChainUnaryInterceptor(
+			interceptor.UnaryInterceptor,
+			errorLogUnaryClientInterceptor(
+				activeLoggers[auctioneer.Subsystem],
+			),
+		),
+		grpc.WithChainStreamInterceptor(
+			interceptor.StreamInterceptor,
+			errorLogStreamClientInterceptor(
+				activeLoggers[auctioneer.Subsystem],
+			),
+		),
 	)
 
 	// Create an instance of the auctioneer client library.
@@ -190,7 +201,14 @@ func (s *Server) Start() error {
 	// Instantiate the llmd gRPC server.
 	s.traderServer = newRPCServer(s)
 
-	serverOpts := []grpc.ServerOption{}
+	serverOpts := []grpc.ServerOption{
+		grpc.StreamInterceptor(
+			errorLogStreamServerInterceptor(rpcLog),
+		),
+		grpc.UnaryInterceptor(
+			errorLogUnaryServerInterceptor(rpcLog),
+		),
+	}
 	s.grpcServer = grpc.NewServer(serverOpts...)
 	clmrpc.RegisterTraderServer(s.grpcServer, s.traderServer)
 

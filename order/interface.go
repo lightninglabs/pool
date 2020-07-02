@@ -47,6 +47,21 @@ const (
 	TypeBid Type = 1
 )
 
+// String returns a human read-able string describing the passed order type.
+func (t Type) String() string {
+	switch t {
+
+	case TypeAsk:
+		return "Ask"
+
+	case TypeBid:
+		return "Bid"
+
+	default:
+		return "<unknown>"
+	}
+}
+
 // State describes the different possible states of an order. We don't use iota
 // for the constants due to the order state being persisted to disk.
 type State uint8

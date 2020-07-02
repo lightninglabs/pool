@@ -107,7 +107,7 @@ func (s *rpcServer) Start() error {
 		return nil
 	}
 
-	log.Infof("Starting trader server")
+	rpcLog.Infof("Starting trader server")
 
 	ctx := context.Background()
 
@@ -118,7 +118,7 @@ func (s *rpcServer) Start() error {
 		return fmt.Errorf("error in GetInfo: %v", err)
 	}
 
-	log.Infof("Connected to lnd node %v with pubkey %v", info.Alias,
+	rpcLog.Infof("Connected to lnd node %v with pubkey %v", info.Alias,
 		hex.EncodeToString(info.IdentityPubkey[:]))
 
 	var blockCtx context.Context
@@ -159,7 +159,7 @@ func (s *rpcServer) Start() error {
 	s.wg.Add(1)
 	go s.serverHandler(blockChan, blockErrChan)
 
-	log.Infof("Trader server is now active")
+	rpcLog.Infof("Trader server is now active")
 
 	return nil
 }
@@ -170,18 +170,18 @@ func (s *rpcServer) Stop() error {
 		return nil
 	}
 
-	log.Info("Trader server stopping")
+	rpcLog.Info("Trader server stopping")
 	s.accountManager.Stop()
 	s.orderManager.Stop()
 	if err := s.auctioneer.Stop(); err != nil {
-		log.Errorf("Error closing server stream: %v")
+		rpcLog.Errorf("Error closing server stream: %v")
 	}
 
 	close(s.quit)
 	s.wg.Wait()
 	s.blockNtfnCancel()
 
-	log.Info("Stopped trader server")
+	rpcLog.Info("Stopped trader server")
 	return nil
 }
 
@@ -197,14 +197,14 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 				continue
 			}
 
-			log.Debugf("Received message from the server: %v", msg)
+			rpcLog.Debugf("Received message from the server: %v", msg)
 			err := s.handleServerMessage(msg)
 			if err != nil {
-				log.Errorf("Error handling server message: %v",
+				rpcLog.Errorf("Error handling server message: %v",
 					err)
 				err := s.server.Stop()
 				if err != nil {
-					log.Errorf("Error shutting down: %v",
+					rpcLog.Errorf("Error shutting down: %v",
 						err)
 				}
 			}
@@ -214,26 +214,26 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 			// already scheduled a restart. We only need to handle
 			// other errors here.
 			if err != nil && err != auctioneer.ErrServerShutdown {
-				log.Errorf("Error in server stream: %v", err)
+				rpcLog.Errorf("Error in server stream: %v", err)
 				err := s.auctioneer.HandleServerShutdown(err)
 				if err != nil {
-					log.Errorf("Error closing stream: %v",
+					rpcLog.Errorf("Error closing stream: %v",
 						err)
 				}
 			}
 
 		case height := <-blockChan:
-			log.Infof("Received new block notification: height=%v",
+			rpcLog.Infof("Received new block notification: height=%v",
 				height)
 			s.updateHeight(height)
 
 		case err := <-blockErrChan:
 			if err != nil {
-				log.Errorf("Unable to receive block "+
+				rpcLog.Errorf("Unable to receive block "+
 					"notification: %v", err)
 				err := s.server.Stop()
 				if err != nil {
-					log.Errorf("Error shutting down: %v",
+					rpcLog.Errorf("Error shutting down: %v",
 						err)
 				}
 			}
@@ -264,6 +264,9 @@ func connectToMatchedTrader(lndClient lnrpc.LightningClient,
 	nodeKey := hex.EncodeToString(matchedOrder.NodeKey[:])
 
 	for _, addr := range matchedOrder.NodeAddrs {
+		rpcLog.Debugf("Connecting to node=%v for order_nonce=%v",
+			nodeKey, matchedOrder.Order.Nonce())
+
 		_, err := lndClient.ConnectPeer(ctxb, &lnrpc.ConnectPeerRequest{
 			Addr: &lnrpc.LightningAddress{
 				Pubkey: nodeKey,
@@ -278,7 +281,7 @@ func connectToMatchedTrader(lndClient lnrpc.LightningClient,
 				return nil
 			}
 
-			log.Warnf("unable to connect to trader at %v@%v",
+			rpcLog.Warnf("unable to connect to trader at %v@%v",
 				nodeKey, addr)
 
 			continue
@@ -310,6 +313,10 @@ func connectToMatchedTrader(lndClient lnrpc.LightningClient,
 func (s *rpcServer) deriveFundingShim(ourOrder order.Order,
 	matchedOrder *order.MatchedOrder,
 	batchTx *wire.MsgTx) (*lnrpc.FundingShim, error) {
+
+	rpcLog.Infof("Registering funding shim for Order(type=%v, amt=%v, "+
+		"nonce=%v", ourOrder.Type(),
+		matchedOrder.UnitsFilled.ToSatoshis(), ourOrder.Nonce())
 
 	// First, we'll compute the pending channel ID key which will be unique
 	// to this order pair.
@@ -436,6 +443,9 @@ func (s *rpcServer) registerFundingShim(ourOrder order.Order,
 //
 // TODO(roasbeef): move?
 func (s *rpcServer) prepChannelFunding(batch *order.Batch) error {
+	rpcLog.Infof("Batch(%x): preparing channel funding for %v orders",
+		batch.ID[:], len(batch.MatchedOrders))
+
 	// Now that we know this batch passes our sanity checks, we'll register
 	// all the funding shims we need to be able to respond
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
@@ -496,6 +506,9 @@ func (s *rpcServer) prepChannelFunding(batch *order.Batch) error {
 // finalized and locked in.
 func (s *rpcServer) batchChannelSetup(batch *order.Batch) error {
 	var eg errgroup.Group
+
+	rpcLog.Infof("Batch(%x): opening channels for %v matched orders",
+		batch.ID[:], len(batch.MatchedOrders))
 
 	// For each ask order of ours that's matched, we'll make a new funding
 	// flow, blocking until they all progress to the final state.
@@ -569,7 +582,7 @@ func (s *rpcServer) batchChannelSetup(batch *order.Batch) error {
 
 					msg, err := chanStream.Recv()
 					if err != nil {
-						log.Errorf("unable to read "+
+						rpcLog.Errorf("unable to read "+
 							"chan open update event: %v", err)
 						return err
 					}
@@ -593,18 +606,21 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 	// A new batch has been assembled with some of our orders.
 	case *clmrpc.ServerAuctionMessage_Prepare:
 		// Parse and formally validate what we got from the server.
-		log.Tracef("Received prepare msg from server, batch_id=%x: %v",
+		rpcLog.Tracef("Received prepare msg from server, batch_id=%x: %v",
 			msg.Prepare.BatchId, spew.Sdump(msg))
 		batch, err := order.ParseRPCBatch(msg.Prepare)
 		if err != nil {
 			return fmt.Errorf("error parsing RPC batch: %v", err)
 		}
 
+		rpcLog.Infof("Received PrepareMsg for batch=%x, num_orders=%v",
+			batch.ID[:], len(batch.MatchedOrders))
+
 		// Do an in-depth verification of the batch.
 		err = s.orderManager.OrderMatchValidate(batch)
 		if err != nil {
 			// We can't accept the batch, something went wrong.
-			log.Errorf("Error validating batch: %v", err)
+			rpcLog.Errorf("Error validating batch: %v", err)
 			return s.sendRejectBatch(batch, err)
 		}
 
@@ -617,7 +633,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		// funding shim.
 		err = s.prepChannelFunding(batch)
 		if err != nil {
-			log.Errorf("Error preparing channel funding: %v", err)
+			rpcLog.Errorf("Error preparing channel funding: %v", err)
 			return s.sendRejectBatch(batch, err)
 		}
 
@@ -627,7 +643,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		// up to this point?
 		err = s.sendAcceptBatch(batch)
 		if err != nil {
-			log.Errorf("Error sending accept msg: %v", err)
+			rpcLog.Errorf("Error sending accept msg: %v", err)
 			return s.sendRejectBatch(batch, err)
 		}
 
@@ -638,27 +654,33 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		batch := s.orderManager.PendingBatch()
 		err := s.batchChannelSetup(batch)
 		if err != nil {
-			log.Errorf("Error setting up channels: %v", err)
+			rpcLog.Errorf("Error setting up channels: %v", err)
 			return s.sendRejectBatch(batch, err)
 		}
+
+		rpcLog.Infof("Received OrderMatchSign for batch=%x, "+
+			"num_orders=%v", batch.ID[:], len(batch.MatchedOrders))
 
 		// Sign for the accounts in the batch.
 		sigs, err := s.orderManager.BatchSign()
 		if err != nil {
-			log.Errorf("Error signing batch: %v", err)
+			rpcLog.Errorf("Error signing batch: %v", err)
 			return s.sendRejectBatch(batch, err)
 		}
 		err = s.sendSignBatch(batch, sigs)
 		if err != nil {
-			log.Errorf("Error sending sign msg: %v", err)
+			rpcLog.Errorf("Error sending sign msg: %v", err)
 			return s.sendRejectBatch(batch, err)
 		}
 
 	// The previously prepared batch has been executed and we can finalize
 	// it by opening the channel and persisting the account and order diffs.
 	case *clmrpc.ServerAuctionMessage_Finalize:
-		log.Tracef("Received finalize msg from server, batch_id=%x: %v",
+		rpcLog.Tracef("Received finalize msg from server, batch_id=%x: %v",
 			msg.Finalize.BatchId, spew.Sdump(msg))
+
+		rpcLog.Infof("Received FinalizeMsg for batch=%x",
+			msg.Finalize.BatchId)
 
 		var batchID order.BatchID
 		copy(batchID[:], msg.Finalize.BatchId)
@@ -758,6 +780,9 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 func (s *rpcServer) DepositAccount(ctx context.Context,
 	req *clmrpc.DepositAccountRequest) (*clmrpc.DepositAccountResponse, error) {
 
+	rpcLog.Infof("Depositing %v into acct=%x",
+		btcutil.Amount(req.AmountSat), req.TraderKey)
+
 	// Ensure the trader key is well formed.
 	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
 	if err != nil {
@@ -767,7 +792,7 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 	// Enforce a minimum fee rate of 1 sat/vbyte.
 	feeRate := chainfee.SatPerKVByte(req.SatPerVbyte * 1000).FeePerKWeight()
 	if feeRate < chainfee.FeePerKwFloor {
-		log.Debugf("Manual fee rate input of %d sat/kw is too low, "+
+		rpcLog.Debugf("Manual fee rate input of %d sat/kw is too low, "+
 			"using %d sat/kw instead", feeRate,
 			chainfee.FeePerKwFloor)
 		feeRate = chainfee.FeePerKwFloor
@@ -801,6 +826,8 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 func (s *rpcServer) WithdrawAccount(ctx context.Context,
 	req *clmrpc.WithdrawAccountRequest) (*clmrpc.WithdrawAccountResponse, error) {
 
+	rpcLog.Infof("Withdrawing from acct=%x", req.TraderKey)
+
 	// Ensure the trader key is well formed.
 	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
 	if err != nil {
@@ -819,7 +846,7 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 	// Enforce a minimum fee rate of 1 sat/vbyte.
 	feeRate := chainfee.SatPerKVByte(req.SatPerVbyte * 1000).FeePerKWeight()
 	if feeRate < chainfee.FeePerKwFloor {
-		log.Debugf("Manual fee rate input of %d sat/kw is too low, "+
+		rpcLog.Debugf("Manual fee rate input of %d sat/kw is too low, "+
 			"using %d sat/kw instead", feeRate,
 			chainfee.FeePerKwFloor)
 		feeRate = chainfee.FeePerKwFloor
@@ -850,6 +877,8 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 // CloseAccount handles a trader's request to close the specified account.
 func (s *rpcServer) CloseAccount(ctx context.Context,
 	req *clmrpc.CloseAccountRequest) (*clmrpc.CloseAccountResponse, error) {
+
+	rpcLog.Infof("Closing acct=%x", req.TraderKey)
 
 	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
 	if err != nil {
@@ -914,6 +943,8 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 	_ *clmrpc.RecoverAccountsRequest) (*clmrpc.RecoverAccountsResponse,
 	error) {
 
+	log.Infof("Attempting to recover accounts...")
+
 	s.recoveryMutex.Lock()
 	if s.recoveryPending {
 		defer s.recoveryMutex.Unlock()
@@ -951,7 +982,7 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 			// If something goes wrong for one account we still want
 			// to continue with the others.
 			numRecovered--
-			log.Errorf("error storing recovered account: %v", err)
+			rpcLog.Errorf("error storing recovered account: %v", err)
 		}
 	}
 
@@ -1024,14 +1055,14 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	if err != nil {
 		// TODO(guggero): Put in state failed instead of removing?
 		if err2 := s.server.db.DelOrder(o.Nonce()); err2 != nil {
-			log.Errorf("Could not delete failed order: %v", err2)
+			rpcLog.Errorf("Could not delete failed order: %v", err2)
 		}
 
 		// If there was something wrong with the information the user
 		// provided, then return this as a nice string instead of an
 		// error type.
 		if userErr, ok := err.(*order.UserError); ok {
-			log.Warnf("Invalid order details: %v", userErr)
+			rpcLog.Warnf("Invalid order details: %v", userErr)
 
 			return &clmrpc.SubmitOrderResponse{
 				Details: &clmrpc.SubmitOrderResponse_InvalidOrder{
@@ -1046,7 +1077,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 			"%v", err)
 	}
 
-	log.Infof("New order submitted: nonce=%v, type=%v", o.Nonce(), o.Type())
+	rpcLog.Infof("New order submitted: nonce=%v, type=%v", o.Nonce(), o.Type())
 
 	// ServerOrder is accepted.
 	orderNonce := o.Nonce()
@@ -1129,6 +1160,9 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 
 	var nonce order.Nonce
 	copy(nonce[:], req.OrderNonce)
+
+	rpcLog.Infof("Cancelling order_nonce=%v", nonce)
+
 	err := s.auctioneer.CancelOrder(ctx, nonce)
 	if err != nil {
 		return nil, err
@@ -1157,7 +1191,8 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	default:
 		msg.Reject.ReasonCode = clmrpc.OrderMatchReject_UNKNOWN
 	}
-	log.Infof("Sending batch rejection message for batch %x with "+
+
+	rpcLog.Infof("Sending batch rejection message for batch %x with "+
 		"code %v and message: %v", batch.ID, msg.Reject.ReasonCode,
 		failure)
 
@@ -1182,6 +1217,8 @@ func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
 	for nonce := range batch.MatchedOrders {
 		nonces = append(nonces, nonce[:])
 	}
+
+	rpcLog.Infof("Accepting batch=%x", batch.ID[:])
 
 	// Send the message to the server.
 	return s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
