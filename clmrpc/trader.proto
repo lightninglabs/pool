@@ -68,7 +68,11 @@ service Trader {
 
 message InitAccountRequest {
     uint64 account_value = 1;
-    uint32 account_expiry = 2;
+
+    oneof account_expiry {
+        uint32 absolute_height = 2;
+        uint32 relative_height = 3;
+    }
 }
 
 message ListAccountsRequest {

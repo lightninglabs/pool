@@ -109,7 +109,7 @@ of an account. As you'll see below, both values can be adjusted at any time.
 
 We can create an account using `llm`, like so:
 ```
-🏔 agora accounts new --amt=50000000 --expiry=1773394
+🏔 agora accounts new --amt=50000000 --expiry_height=1773394
 {
         "trader_key": "0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732",
         "outpoint": "c6f62c80095c98a57f2eef485a7ff06611f97dc856754cad330f4eeb538ff514:0",
@@ -119,6 +119,10 @@ We can create an account using `llm`, like so:
         "close_txid": "0000000000000000000000000000000000000000000000000000000000000000"
 }
 ```
+
+It's also possible to specify a _relative_ account expiry based on the current
+best block with the `--expiry_blocks` argument. As an example, if I wanted my
+account to expiry in 2 weeks, I would pass: `--expiry_blocks=2016'.
 
 Here I created an account with 0.5 BTC, that'll expire at height `1773394`. The
 response shows that it's now pending open (unconfirmed), my `trader_key` (used

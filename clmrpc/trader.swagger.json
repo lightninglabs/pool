@@ -420,7 +420,11 @@
           "type": "string",
           "format": "uint64"
         },
-        "account_expiry": {
+        "absolute_height": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "relative_height": {
           "type": "integer",
           "format": "int64"
         }
