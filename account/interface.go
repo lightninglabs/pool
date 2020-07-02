@@ -269,6 +269,14 @@ func OutPointModifier(op wire.OutPoint) Modifier {
 	}
 }
 
+// HeightHintModifier is a functional option that modifies the height hint of an
+// account.
+func HeightHintModifier(heightHint uint32) Modifier {
+	return func(account *Account) {
+		account.HeightHint = heightHint
+	}
+}
+
 // CloseTxModifier is a functional option that modifies the closing transaction
 // of an account.
 func CloseTxModifier(tx *wire.MsgTx) Modifier {
