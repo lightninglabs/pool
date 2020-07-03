@@ -102,11 +102,11 @@ func newAccount(ctx *cli.Context) error {
 			accountExpiryAbsolute, accountExpiryRelative)
 	}
 
-	if height, err := parseUint64(ctx, 1, accountExpiryAbsolute, cmd); err != nil {
+	if height, err := parseUint64(ctx, 1, accountExpiryAbsolute, cmd); err == nil {
 		req.AccountExpiry = &clmrpc.InitAccountRequest_AbsoluteHeight{
 			AbsoluteHeight: uint32(height),
 		}
-	} else if height, err := parseUint64(ctx, 1, accountExpiryRelative, cmd); err != nil {
+	} else if height, err := parseUint64(ctx, 1, accountExpiryRelative, cmd); err == nil {
 		req.AccountExpiry = &clmrpc.InitAccountRequest_RelativeHeight{
 			RelativeHeight: uint32(height),
 		}
