@@ -152,11 +152,15 @@ func (h *testHarness) openAccount(value btcutil.Amount, expiry uint32, // nolint
 	h.assertAccountNotSubscribed(account.TraderKey.PubKey)
 
 	// Notify the confirmation of the account.
-	h.notifier.confChan <- &chainntnfs.TxConfirmation{}
+	confHeight := bestHeight + 6
+	h.notifier.confChan <- &chainntnfs.TxConfirmation{
+		BlockHeight: confHeight,
+	}
 
 	// This should prompt the account to now be in a StateOpen state and
 	// the subscription for updates should now be realized.
 	account.State = StateOpen
+	account.HeightHint = confHeight
 	h.assertAccountExists(account)
 	h.assertAccountSubscribed(account.TraderKey.PubKey)
 
@@ -195,14 +199,20 @@ func (h *testHarness) closeAccount(account *Account, outputs []*wire.TxOut,
 	closeTx := h.assertSpendTxBroadcast(account, nil, nil, nil)
 
 	account.State = StatePendingClosed
+	account.HeightHint = bestHeight
 	account.CloseTx = closeTx
 	h.assertAccountExists(account)
 
 	// Notify the transaction as a spend of the account.
-	h.notifier.spendChan <- &chainntnfs.SpendDetail{SpendingTx: closeTx}
+	spendHeight := bestHeight + 6
+	h.notifier.spendChan <- &chainntnfs.SpendDetail{
+		SpendingTx:     closeTx,
+		SpendingHeight: int32(spendHeight),
+	}
 
 	// This should prompt the account to now be in a StateClosed state.
 	account.State = StateClosed
+	account.HeightHint = spendHeight
 	h.assertAccountExists(account)
 
 	return closeTx
@@ -371,7 +381,8 @@ func (h *testHarness) assertAuctioneerReceived(inputs []*lnwallet.Utxo,
 // StateOpen.
 func (h *testHarness) assertAccountModification(account *Account,
 	inputs []*lnwallet.Utxo, outputs []*wire.TxOut,
-	newAccountValue btcutil.Amount, accountInputIdx, accountOutputIdx uint32) {
+	newAccountValue btcutil.Amount, accountInputIdx,
+	accountOutputIdx uint32, broadcastHeight uint32) {
 
 	h.t.Helper()
 
@@ -395,6 +406,7 @@ func (h *testHarness) assertAccountModification(account *Account,
 			Hash:  spendTx.TxHash(),
 			Index: accountOutputIdx,
 		}),
+		HeightHintModifier(broadcastHeight),
 		IncrementBatchKey(),
 	}
 	for _, mod := range mods {
@@ -413,8 +425,13 @@ func (h *testHarness) assertAccountModification(account *Account,
 
 	// Notify the confirmation, causing the account to transition back to
 	// StateOpen.
-	h.notifier.confChan <- &chainntnfs.TxConfirmation{Tx: spendTx}
+	confHeight := broadcastHeight + 6
+	h.notifier.confChan <- &chainntnfs.TxConfirmation{
+		Tx:          spendTx,
+		BlockHeight: confHeight,
+	}
 	StateModifier(StateOpen)(account)
+	HeightHintModifier(confHeight)(account)
 	h.assertAccountExists(account)
 }
 
@@ -564,10 +581,14 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 	h.assertAccountExists(account)
 
 	// Notify the confirmation of the account.
-	h.notifier.confChan <- &chainntnfs.TxConfirmation{}
+	confHeight := uint32(bestHeight + 6)
+	h.notifier.confChan <- &chainntnfs.TxConfirmation{
+		BlockHeight: confHeight,
+	}
 
 	// This should prompt the account to now be in a Confirmed state.
 	account.State = StateOpen
+	account.HeightHint = confHeight
 	h.assertAccountExists(account)
 }
 
@@ -709,7 +730,7 @@ func TestAccountWithdrawal(t *testing.T) {
 	withdrawOutputSum := valuePerOutput * btcutil.Amount(len(outputs))
 	valueAfterWithdrawal := account.Value - withdrawOutputSum - expectedFee
 	h.assertAccountModification(
-		account, nil, outputs, valueAfterWithdrawal, 0, 0,
+		account, nil, outputs, valueAfterWithdrawal, 0, 0, bestHeight,
 	)
 
 	// Finally, close the account to ensure we can process another spend
@@ -804,6 +825,7 @@ func TestAccountDeposit(t *testing.T) {
 	h.assertAccountModification(
 		account, h.wallet.utxos, []*wire.TxOut{changeOutput},
 		valueAfterDeposit, accountInputIdx, accountOutputIdx,
+		bestHeight,
 	)
 
 	// Finally, close the account to ensure we can process another spend

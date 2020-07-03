@@ -663,7 +663,8 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 			"num_orders=%v", batch.ID[:], len(batch.MatchedOrders))
 
 		// Sign for the accounts in the batch.
-		sigs, err := s.orderManager.BatchSign()
+		bestHeight := atomic.LoadUint32(&s.bestHeight)
+		sigs, err := s.orderManager.BatchSign(bestHeight)
 		if err != nil {
 			rpcLog.Errorf("Error signing batch: %v", err)
 			return s.sendRejectBatch(batch, err)

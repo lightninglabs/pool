@@ -598,8 +598,11 @@ func (m *Manager) handleAccountConf(traderKey *btcec.PublicKey,
 		traderKey.SerializeCompressed(), confDetails.BlockHeight)
 
 	// Mark the account as open and proceed with the rest of the flow.
-	err = m.cfg.Store.UpdateAccount(account, StateModifier(StateOpen))
-	if err != nil {
+	mods := []Modifier{
+		StateModifier(StateOpen),
+		HeightHintModifier(confDetails.BlockHeight),
+	}
+	if err := m.cfg.Store.UpdateAccount(account, mods...); err != nil {
 		return err
 	}
 
@@ -700,7 +703,9 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 	// Write the spending transaction once again in case the one we
 	// previously broadcast was replaced with a higher fee one.
 	return m.cfg.Store.UpdateAccount(
-		account, StateModifier(StateClosed), CloseTxModifier(spendTx),
+		account, StateModifier(StateClosed),
+		HeightHintModifier(uint32(spendDetails.SpendingHeight)),
+		CloseTxModifier(spendTx),
 	)
 }
 
@@ -933,6 +938,9 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Update the account's height hint.
+	modifiers = append(modifiers, HeightHintModifier(bestHeight))
 
 	// With the transaction crafted, update our on-disk state and broadcast
 	// the transaction. We'll need some additional modifiers based on

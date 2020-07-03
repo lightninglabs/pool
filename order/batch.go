@@ -221,7 +221,7 @@ type BatchSigner interface {
 type BatchStorer interface {
 	// StorePendingBatch makes sure all changes executed by a pending batch
 	// are correctly and atomically stored to the database.
-	StorePendingBatch(*Batch) error
+	StorePendingBatch(_ *Batch, bestHeight uint32) error
 
 	// MarkBatchComplete marks a pending batch as complete, allowing a
 	// trader to participate in a new batch.

@@ -239,13 +239,14 @@ func (m *Manager) PendingBatch() *Batch {
 // belong to the trader. Before sending off the signature to the auctioneer,
 // we'll also persist the batch to disk as pending to ensure we can recover
 // after a crash.
-func (m *Manager) BatchSign() (BatchSignature, error) {
+func (m *Manager) BatchSign(bestHeight uint32) (BatchSignature, error) {
 	sig, err := m.batchSigner.Sign(m.pendingBatch)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := m.batchStorer.StorePendingBatch(m.pendingBatch); err != nil {
+	err = m.batchStorer.StorePendingBatch(m.pendingBatch, bestHeight)
+	if err != nil {
 		return nil, fmt.Errorf("unable to store batch: %v", err)
 	}
 
