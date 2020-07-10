@@ -1301,3 +1301,22 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch,
 		},
 	})
 }
+
+// AuctionFee returns the current fee rate charged for matched orders within
+// the auction.
+func (s *rpcServer) AuctionFee(ctx context.Context,
+	req *clmrpc.AuctionFeeRequest) (*clmrpc.AuctionFeeResponse, error) {
+
+	feeSchedule, err := s.auctioneer.FeeQuote(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO(roasbeef): accept the amt of order instead?
+	return &clmrpc.AuctionFeeResponse{
+		ExecutionFee: &clmrpc.ExecutionFee{
+			BaseFee: uint64(feeSchedule.BaseFee()),
+			FeeRate: uint64(feeSchedule.FeeRate()),
+		},
+	}, nil
+}
