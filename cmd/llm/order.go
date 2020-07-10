@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/clmrpc"
@@ -14,9 +17,7 @@ import (
 
 const (
 	defaultFundingFeeRate = chainfee.FeePerKwFloor
-	defaultAskRate        = 5
 	defaultAskMaxDuration = 210000
-	defaultBidRate        = 5
 	defaultBidMinDuration = 144
 )
 
@@ -51,11 +52,37 @@ var sharedFlags = []cli.Flag{
 	},
 }
 
+// promptForConfirmation continuously prompts the user for the message until
+// receiving a response of "yes" or "no" and returns their answer as a bool.
+func promptForConfirmation(msg string) bool {
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		fmt.Print(msg)
+
+		answer, err := reader.ReadString('\n')
+		if err != nil {
+			return false
+		}
+
+		answer = strings.ToLower(strings.TrimSpace(answer))
+
+		switch {
+		case answer == "yes":
+			return true
+		case answer == "no":
+			return false
+		default:
+			continue
+		}
+	}
+}
+
 // parseCommonParams tries to read the common order parameters from the command
 // line positional arguments and/or flags and parses them based on their
 // destination data type. No formal in-depth validation is performed as the
 // server will do that on the RPC level anyway.
-func parseCommonParams(ctx *cli.Context) (*clmrpc.Order, error) {
+func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*clmrpc.Order, error) {
 	var (
 		err    error
 		amt    btcutil.Amount
@@ -81,7 +108,31 @@ func parseCommonParams(ctx *cli.Context) (*clmrpc.Order, error) {
 	}
 
 	params.FundingFeeRate = ctx.Uint64("funding_fee_rate")
-	params.RateFixed = uint32(ctx.Uint64("rate_fixed"))
+
+	// We'll map the interest rate specified on the command line to our
+	// internal "rate_fixed" unit.
+	//
+	// rate = % / 100
+	// rate = rateFixed / totalParts
+	// rateFixed = rate * totalParts
+	interestPercent := ctx.Float64("interest_rate_percent")
+	interestRate := interestPercent / 100
+	rateFixedFloat := interestRate * order.FeeRateTotalParts
+
+	// We then take this rate fixed, and divide it by the number of blocks
+	// as the user wants this rate to be the final lump sum they pay.
+	rateFixed := uint32(rateFixedFloat / float64(blockDuration))
+
+	// At this point, if this value is less than 1, then we aren't able to
+	// express it given the current precision allowed by our fixed point.
+	if rateFixed < 1 {
+		return nil, fmt.Errorf("fixed rate of %v is too small "+
+			"(%v%% over %v blocks), min is 1 (%v%%)", rateFixed,
+			interestPercent, blockDuration,
+			float64(1)/order.FeeRateTotalParts)
+	}
+
+	params.RateFixed = rateFixed
 
 	return params, nil
 }
@@ -117,11 +168,10 @@ var ordersSubmitAskCommand = cli.Command{
 	Create an offer to provide inbound liquidity to an auction participant
 	by opening a channel to them for a certain time.`,
 	Flags: append([]cli.Flag{
-		cli.Uint64Flag{
-			Name: "rate_fixed",
-			Usage: "the rate at which the funds will be lent out " +
-				"in parts per million",
-			Value: defaultAskRate,
+		cli.Float64Flag{
+			Name: "interest_rate_percent",
+			Usage: "the total percent one is willing to pay or " +
+				"accept as yield for the specified interval",
 		},
 		cli.Uint64Flag{
 			Name: "amt",
@@ -150,21 +200,43 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 		return nil
 	}
 
-	params, err := parseCommonParams(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to parse order params: %v", err)
-	}
 	ask := &clmrpc.Ask{
-		Details:           params,
 		MaxDurationBlocks: uint32(ctx.Uint64("max_duration_blocks")),
 		Version:           uint32(order.VersionDefault),
 	}
+
+	params, err := parseCommonParams(ctx, ask.MaxDurationBlocks)
+	if err != nil {
+		return fmt.Errorf("unable to parse order params: %v", err)
+	}
+
+	ask.Details = params
 
 	client, cleanup, err := getClient(ctx)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
+
+	// If the user didn't opt to force submit this order, then we'll show a
+	// break down of the final order details and request a confirmation
+	// before we submit.
+	if !ctx.Bool("force") {
+		if err := printOrderDetails(
+			client, btcutil.Amount(ask.Details.Amt),
+			order.FixedRatePremium(ask.Details.RateFixed),
+			ask.MaxDurationBlocks, true,
+		); err != nil {
+			return fmt.Errorf("unable to print order details: %v", err)
+		}
+
+		if !promptForConfirmation("Confirm order (yes/no): ") {
+			fmt.Println("Cancelling order...")
+			return nil
+		}
+
+		return nil
+	}
 
 	resp, err := client.SubmitOrder(
 		context.Background(), &clmrpc.SubmitOrderRequest{
@@ -181,6 +253,43 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 	return nil
 }
 
+func printOrderDetails(client clmrpc.TraderClient, amt btcutil.Amount,
+	rate order.FixedRatePremium, leaseDuration uint32, isAsk bool) error {
+
+	auctionFee, err := client.AuctionFee(
+		context.Background(), &clmrpc.AuctionFeeRequest{},
+	)
+	if err != nil {
+		return err
+	}
+
+	feeSchedule := order.NewLinearFeeSchedule(
+		btcutil.Amount(auctionFee.ExecutionFee.BaseFee),
+		btcutil.Amount(auctionFee.ExecutionFee.FeeRate),
+	)
+	exeFee := feeSchedule.BaseFee() + feeSchedule.ExecutionFee(amt)
+
+	orderType := "Bid"
+	premiumDescription := "paid to maker"
+	if isAsk {
+		orderType = "Ask"
+		premiumDescription = "yield from taker"
+	}
+	ratePerMil := float64(rate) / order.FeeRateTotalParts
+
+	premium := rate.LumpSumPremium(amt, leaseDuration)
+
+	fmt.Println("-- Order Details --")
+	fmt.Printf("%v Amount: %v\n", orderType, amt)
+	fmt.Printf("%v Duration: %v\n", orderType, leaseDuration)
+	fmt.Printf("Total Premium (%v): %v \n", premiumDescription, premium)
+	fmt.Printf("Rate Fixed: %v\n", rate)
+	fmt.Printf("Rate Per Block: %.9f (%.7f%%)\n", ratePerMil, ratePerMil*100)
+	fmt.Println("Execution Fee: ", exeFee)
+
+	return nil
+}
+
 var ordersSubmitBidCommand = cli.Command{
 	Name:  "bid",
 	Usage: "obtain channel liquidity",
@@ -190,12 +299,10 @@ var ordersSubmitBidCommand = cli.Command{
 	Place an offer for acquiring inbound liquidity by lending
 	funding capacity from another participant in the order book.`,
 	Flags: append([]cli.Flag{
-		cli.Uint64Flag{
-			Name: "rate_fixed",
-			Usage: "the rate in parts per million that is " +
-				"acceptable to be paid to the offering " +
-				"participant for lending the funds out",
-			Value: defaultBidRate,
+		cli.Float64Flag{
+			Name: "interest_rate_percent",
+			Usage: "the total percent one is willing to pay or " +
+				"accept as yield for the specified interval",
 		},
 		cli.Uint64Flag{
 			Name: "amt",
@@ -213,6 +320,10 @@ var ordersSubmitBidCommand = cli.Command{
 				"liquidity should be provided for",
 			Value: defaultBidMinDuration,
 		},
+		cli.BoolFlag{
+			Name:  "force",
+			Usage: "skip order placement confirmation",
+		},
 	}, sharedFlags...),
 	Action: ordersSubmitBid,
 }
@@ -224,21 +335,43 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 		return nil
 	}
 
-	params, err := parseCommonParams(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to parse order params: %v", err)
-	}
 	bid := &clmrpc.Bid{
-		Details:           params,
 		MinDurationBlocks: uint32(ctx.Uint64("min_duration_blocks")),
 		Version:           uint32(order.VersionDefault),
 	}
+
+	params, err := parseCommonParams(ctx, bid.MinDurationBlocks)
+	if err != nil {
+		return fmt.Errorf("unable to parse order params: %v", err)
+	}
+
+	bid.Details = params
 
 	client, cleanup, err := getClient(ctx)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
+
+	// If the user didn't opt to force submit this order, then we'll show a
+	// break down of the final order details and request a confirmation
+	// before we submit.
+	if !ctx.Bool("force") {
+		if err := printOrderDetails(
+			client, btcutil.Amount(bid.Details.Amt),
+			order.FixedRatePremium(bid.Details.RateFixed),
+			bid.MinDurationBlocks, false,
+		); err != nil {
+			return fmt.Errorf("unable to print order details: %v", err)
+		}
+
+		if !promptForConfirmation("Confirm order (yes/no): ") {
+			fmt.Println("Cancelling order...")
+			return nil
+		}
+
+		return nil
+	}
 
 	resp, err := client.SubmitOrder(
 		context.Background(), &clmrpc.SubmitOrderRequest{
