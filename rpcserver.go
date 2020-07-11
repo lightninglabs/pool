@@ -200,7 +200,11 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 
 			rpcLog.Debugf("Received message from the server: %v", msg)
 			err := s.handleServerMessage(msg)
-			if err != nil {
+
+			// Only shut down if this was a terminal error, and not
+			// a batch reject (should rarely happen, but it's
+			// possible).
+			if err != nil && !errors.Is(err, order.ErrMismatchErr) {
 				rpcLog.Errorf("Error handling server message: %v",
 					err)
 				err := s.server.Stop()
