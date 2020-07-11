@@ -1154,24 +1154,46 @@ func (s *rpcServer) ListOrders(ctx context.Context, _ *clmrpc.ListOrdersRequest)
 	bids := make([]*clmrpc.Bid, 0, len(dbOrders))
 	for _, dbOrder := range dbOrders {
 		nonce := dbOrder.Nonce()
+		dbDetails := dbOrder.Details()
 
-		// Ask the server about the order's current status.
-		orderStateResp, err := s.auctioneer.OrderState(ctx, nonce)
-		if err != nil {
-			return nil, fmt.Errorf("unable to query order state on"+
-				"server for order %v: %v", nonce.String(), err)
+		var orderState clmrpc.OrderState
+		switch dbDetails.State {
+
+		case order.StateSubmitted:
+			orderState = clmrpc.OrderState_ORDER_SUBMITTED
+
+		case order.StateCleared:
+			orderState = clmrpc.OrderState_ORDER_CLEARED
+
+		case order.StatePartiallyFilled:
+			orderState = clmrpc.OrderState_ORDER_PARTIALLY_FILLED
+
+		case order.StateExecuted:
+			orderState = clmrpc.OrderState_ORDER_EXECUTED
+
+		case order.StateCanceled:
+			orderState = clmrpc.OrderState_ORDER_CANCELED
+
+		case order.StateExpired:
+			orderState = clmrpc.OrderState_ORDER_EXPIRED
+
+		case order.StateFailed:
+			orderState = clmrpc.OrderState_ORDER_FAILED
+
+		default:
+			return nil, fmt.Errorf("unknown state: %v",
+				dbDetails.State)
 		}
 
-		dbDetails := dbOrder.Details()
 		details := &clmrpc.Order{
 			TraderKey:        dbDetails.AcctKey[:],
 			RateFixed:        dbDetails.FixedRate,
 			Amt:              uint64(dbDetails.Amt),
 			FundingFeeRate:   uint64(dbDetails.FundingFeeRate),
 			OrderNonce:       nonce[:],
-			State:            orderStateResp.State,
+			State:            orderState,
 			Units:            uint32(dbDetails.Units),
-			UnitsUnfulfilled: orderStateResp.UnitsUnfulfilled,
+			UnitsUnfulfilled: uint32(dbDetails.UnitsUnfulfilled),
 		}
 
 		switch o := dbOrder.(type) {
