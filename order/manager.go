@@ -142,9 +142,14 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 		return nil, fmt.Errorf("unable to parse "+
 			"node uris: %v", err)
 	}
-	if len(nodeAddrs) == 0 {
+
+	// If the order is a ask, then this means they should be an effective
+	// routing node, so we require them to have at least a single
+	// advertised address.
+	if len(nodeAddrs) == 0 && order.Type() == TypeAsk {
 		return nil, fmt.Errorf("the lnd node must " +
-			"be reachable on clearnet to negotiate channel order")
+			"be reachable on clearnet to negotiate channel " +
+			"ask order")
 	}
 
 	// Sign the order digest with the account key.
