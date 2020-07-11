@@ -1222,6 +1222,19 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 // sendRejectBatch sends a reject message to the server with the properly
 // decoded reason code and the full reason message as a string.
 func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
+	// As we're rejecting this batch, we'll now cancel all funding shims
+	// that we may have registered since we may be matched with a distinct
+	// set of channels if this batch is repeated.
+	err := batch.CancelPendingFundingShims(
+		s.lndClient,
+		func(o order.Nonce) (order.Order, error) {
+			return s.server.db.GetOrder(o)
+		},
+	)
+	if err != nil {
+		return err
+	}
+
 	msg := &clmrpc.ClientAuctionMessage_Reject{
 		Reject: &clmrpc.OrderMatchReject{
 			BatchId: batch.ID[:],
@@ -1248,7 +1261,7 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	// Send the message to the server. If a new error happens we return that
 	// one because we know the causing error has at least been logged at
 	// some point before.
-	err := s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
+	err = s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
 		Msg: msg,
 	})
 	if err != nil {

@@ -2,6 +2,7 @@ package order
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
@@ -171,6 +173,67 @@ type Batch struct {
 	// FeeRebate is the rebate that was offered to the trader if another
 	// batch participant wanted to pay more fees for a faster confirmation.
 	FeeRebate btcutil.Amount
+}
+
+// Fetcher describes a function that's able to fetch the latest version of an
+// order based on its nonce.
+type Fetcher func(Nonce) (Order, error)
+
+// CancelPendingFundingShims cancels all funding shims we registered when
+// preparing for this batch. This should be called if for any reason we need to
+// reject the batch, so we're able to process any subsequent modified batches.
+func (b *Batch) CancelPendingFundingShims(lndClient lnrpc.LightningClient,
+	fetchOrder Fetcher) error {
+
+	// Since we support partial matches, a given bid of ours could've been
+	// matched with multiple asks, so we'll iterate through all those to
+	// ensure we unregister all the created shims.
+	ctxb := context.Background()
+	for ourOrderNonce, matchedOrders := range b.MatchedOrders {
+		ourOrder, err := fetchOrder(ourOrderNonce)
+		if err != nil {
+			return err
+		}
+
+		orderIsAsk := ourOrder.Type() == TypeAsk
+
+		// If the order as an ask, then we don't need to do anything,
+		// as we only register funding shims for incoming channels (so
+		// buys).
+		if orderIsAsk {
+			continue
+		}
+
+		// For each ask order that was matched with this bid, we'll
+		// re-derive the pending chan ID key used, then attempt to
+		// unregister it.
+		for _, matchedOrder := range matchedOrders {
+			bidNonce := ourOrder.Nonce()
+			askNonce := matchedOrder.Order.Nonce()
+			pendingChanID := PendingChanKey(
+				askNonce, bidNonce,
+			)
+
+			cancelShimMsg := &lnrpc.FundingTransitionMsg_ShimCancel{
+				ShimCancel: &lnrpc.FundingShimCancel{
+					PendingChanId: pendingChanID[:],
+				},
+			}
+
+			_, err = lndClient.FundingStateStep(
+				ctxb, &lnrpc.FundingTransitionMsg{
+					Trigger: cancelShimMsg,
+				},
+			)
+			if err != nil {
+				log.Warnf("Unable to unregister funding shim "+
+					"(pendingChanID=%x) for order=%v",
+					pendingChanID[:], bidNonce)
+			}
+		}
+	}
+
+	return nil
 }
 
 // MatchedOrder is the other side to one of our matched orders. It contains all
