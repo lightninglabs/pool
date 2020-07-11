@@ -255,9 +255,6 @@ func (s *rpcServer) updateHeight(height int32) {
 // connectToMatchedTrader attempts to connect to a trader that we've had an
 // order matched with. We'll attempt to establish a permanent connection as
 // well, so we can use the connection for any batch retries that may happen.
-//
-// TODO(roasbeef): if entire batch cancelled, then should remove these
-// connections
 func connectToMatchedTrader(lndClient lnrpc.LightningClient,
 	matchedOrder *order.MatchedOrder) error {
 
@@ -273,7 +270,6 @@ func connectToMatchedTrader(lndClient lnrpc.LightningClient,
 				Pubkey: nodeKey,
 				Host:   addr.String(),
 			},
-			Perm: true,
 		})
 
 		if err != nil {
