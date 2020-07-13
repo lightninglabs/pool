@@ -247,6 +247,37 @@ message OrderMatchReject {
     RejectReason reason_code = 3;
 }
 
+enum ChannelType {
+    // The channel supports static to_remote keys.
+    TWEAKLESS = 0;
+
+    // The channel uses an anchor-based commitment.
+    ANCHORS = 1;
+}
+
+message ChannelInfo {
+    // The identifying type of the channel.
+    ChannelType type = 1;
+
+    // The node's identifying public key.
+    bytes local_node_key = 2;
+
+    // The remote node's identifying public key.
+    bytes remote_node_key = 3;
+
+    /*
+    The node's base public key used within the non-delayed pay-to-self output on
+    the commitment transaction.
+    */
+    bytes local_payment_base_point = 4;
+
+    /*
+    RemotePaymentBasePoint is the remote node's base public key used within the
+    non-delayed pay-to-self output on the commitment transaction.
+    */
+    bytes remote_payment_base_point = 5;
+}
+
 message OrderMatchSign {
     /*
     The ID of the batch that the signatures are meant for.
@@ -260,6 +291,14 @@ message OrderMatchSign {
     into a string because protobuf doesn't allow bytes as a map key data type.
     */
     map<string, bytes> account_sigs = 2;
+
+    /*
+    The information for each channel created as part of a batch that's submitted
+    to the auctioneer to ensure they can properly enforce a channel's service
+    lifetime. Entries are indexed by the string representation of a channel's
+    outpoint.
+    */
+    map<string, ChannelInfo> channel_infos = 3;
 }
 
 message AccountRecovery {
