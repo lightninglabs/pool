@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lightninglabs/llm/account"
@@ -47,6 +48,9 @@ type ManagerConfig struct {
 
 // Manager is responsible for the management of orders.
 type Manager struct {
+	// NOTE: This must be used atomically.
+	hasPendingBatch uint32
+
 	started sync.Once
 	stopped sync.Once
 
@@ -229,10 +233,17 @@ func (m *Manager) OrderMatchValidate(batch *Batch) error {
 	if err != nil {
 		return fmt.Errorf("error validating batch: %v", err)
 	}
+
 	m.pendingBatch = batch
+	atomic.StoreUint32(&m.hasPendingBatch, 1)
 
 	// TODO: cancel funding shim of previous pending batch if not nil
 	return nil
+}
+
+// HasPendingBatch returns whether a pending batch is currently being processed.
+func (m *Manager) HasPendingBatch() bool {
+	return atomic.LoadUint32(&m.hasPendingBatch) == 1
 }
 
 // PendingBatch returns the current pending batch being validated.
@@ -273,9 +284,10 @@ func (m *Manager) BatchFinalize(batchID BatchID) error {
 	if err := m.batchStorer.MarkBatchComplete(); err != nil {
 		return fmt.Errorf("unable to mark batch as complete: %v", err)
 	}
-	m.pendingBatch = nil
 
-	// TODO: call lnrpc.OpenChannel to finalize channel creation
+	m.pendingBatch = nil
+	atomic.StoreUint32(&m.hasPendingBatch, 0)
+
 	return nil
 }
 
