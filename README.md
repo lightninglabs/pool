@@ -237,13 +237,14 @@ single order for 10 million satoshis, wanting to receive 0.3% (30 bps)
 over a 3000 block period (a bit under 3 weeks):
 ```
 🏔 llm orders submit ask 10000000 0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732 --interest_rate_percent=0.3 --max_duration_blocks=3000
+-- Order Details --
 Ask Amount: 0.1 BTC
 Ask Duration: 3000
-Total 0.0003 BTC Premium (paid to maker):
-Rate Fixed: 1
-Rate Per Block: 0.0000010 (0.0001000%)
+Total Premium (yield from taker): 0.0003 BTC
+Rate Fixed: 1000
+Rate Per Block: 0.000001000 (0.0001000%)
 Execution Fee:  0.00010001 BTC
-Confirm order (yes/no): eyes
+Confirm order (yes/no): yes
 {
         "accepted_order_nonce": "f1bebca6047dee6657f82377ebac94d1dc6667097f2a4d463deb63eff6f0dbcf"
 }
@@ -252,9 +253,10 @@ Confirm order (yes/no): eyes
 By leaving off the `--force` flag, we request the final break down to confirm
 the details of our order before we put it through.
 
-In this case, if this order is executed, then I'll gain 3k satoshis:
+In this case, if this order is executed, then I'll gain 30k satoshis:
 ```
-3000 = (1/100000)*1000000*3000
+premium = (rate_fixed / billion) * amount * blocks
+30,000 = (1,000/1,000,000,000)*1,000,000*3,000
 ```
 
 It's important to note that although internally we use a fixed rate per block

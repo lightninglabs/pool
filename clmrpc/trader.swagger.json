@@ -530,7 +530,7 @@
         "rate_fixed": {
           "type": "integer",
           "format": "int64",
-          "description": "Fixed order rate in parts per million."
+          "description": "Fixed order rate in parts per billion."
         },
         "amt": {
           "type": "string",

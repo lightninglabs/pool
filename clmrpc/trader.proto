@@ -264,7 +264,7 @@ message Order {
     bytes trader_key = 1;
 
     /*
-    Fixed order rate in parts per million.
+    Fixed order rate in parts per billion.
     */
     uint32 rate_fixed = 2;
 

@@ -1431,7 +1431,7 @@ type OrderMatchPrepare struct {
 	//allowed as a map key data type in protobuf.
 	MatchedOrders map[string]*MatchedOrder `protobuf:"bytes,1,rep,name=matched_orders,json=matchedOrders,proto3" json:"matched_orders,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	//
-	//The uniform clearing price rate in parts per million that was used for this
+	//The uniform clearing price rate in parts per billion that was used for this
 	//batch.
 	ClearingPriceRate uint32 `protobuf:"varint,2,opt,name=clearing_price_rate,json=clearingPriceRate,proto3" json:"clearing_price_rate,omitempty"`
 	//
@@ -2096,7 +2096,7 @@ type ServerOrder struct {
 	//The trader's account key of the account to use for the order.
 	TraderKey []byte `protobuf:"bytes,1,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
 	//
-	//Fixed order rate in parts per million.
+	//Fixed order rate in parts per billion.
 	RateFixed uint32 `protobuf:"varint,2,opt,name=rate_fixed,json=rateFixed,proto3" json:"rate_fixed,omitempty"`
 	//
 	//Order amount in satoshis.
@@ -2924,7 +2924,7 @@ type RelevantBatch struct {
 	//The set of orders that were matched against the orders belonging to the
 	//requested accounts.
 	MatchedOrders map[string]*MatchedOrder `protobuf:"bytes,4,rep,name=matched_orders,json=matchedOrders,proto3" json:"matched_orders,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	// The uniform clearing price rate in parts per million of the batch.
+	// The uniform clearing price rate in parts per billion of the batch.
 	ClearingPriceRate uint32 `protobuf:"varint,5,opt,name=clearing_price_rate,json=clearingPriceRate,proto3" json:"clearing_price_rate,omitempty"`
 	// The fee parameters used to calculate the execution fees.
 	ExecutionFee *ExecutionFee `protobuf:"bytes,6,opt,name=execution_fee,json=executionFee,proto3" json:"execution_fee,omitempty"`
