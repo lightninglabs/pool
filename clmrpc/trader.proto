@@ -5,6 +5,8 @@ import "auctioneer.proto";
 
 package clmrpc;
 
+option go_package = "github.com/lightninglabs/llm/clmrpc";
+
 service Trader {
     rpc InitAccount (InitAccountRequest) returns (Account) {
         option (google.api.http) = {
