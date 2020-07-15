@@ -200,7 +200,11 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 
 			rpcLog.Debugf("Received message from the server: %v", msg)
 			err := s.handleServerMessage(msg)
-			if err != nil {
+
+			// Only shut down if this was a terminal error, and not
+			// a batch reject (should rarely happen, but it's
+			// possible).
+			if err != nil && !errors.Is(err, order.ErrMismatchErr) {
 				rpcLog.Errorf("Error handling server message: %v",
 					err)
 				err := s.server.Stop()
@@ -255,9 +259,6 @@ func (s *rpcServer) updateHeight(height int32) {
 // connectToMatchedTrader attempts to connect to a trader that we've had an
 // order matched with. We'll attempt to establish a permanent connection as
 // well, so we can use the connection for any batch retries that may happen.
-//
-// TODO(roasbeef): if entire batch cancelled, then should remove these
-// connections
 func connectToMatchedTrader(lndClient lnrpc.LightningClient,
 	matchedOrder *order.MatchedOrder) error {
 
@@ -273,7 +274,6 @@ func connectToMatchedTrader(lndClient lnrpc.LightningClient,
 				Pubkey: nodeKey,
 				Host:   addr.String(),
 			},
-			Perm: true,
 		})
 
 		if err != nil {
@@ -1222,6 +1222,19 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 // sendRejectBatch sends a reject message to the server with the properly
 // decoded reason code and the full reason message as a string.
 func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
+	// As we're rejecting this batch, we'll now cancel all funding shims
+	// that we may have registered since we may be matched with a distinct
+	// set of channels if this batch is repeated.
+	err := batch.CancelPendingFundingShims(
+		s.lndClient,
+		func(o order.Nonce) (order.Order, error) {
+			return s.server.db.GetOrder(o)
+		},
+	)
+	if err != nil {
+		return err
+	}
+
 	msg := &clmrpc.ClientAuctionMessage_Reject{
 		Reject: &clmrpc.OrderMatchReject{
 			BatchId: batch.ID[:],
@@ -1248,7 +1261,7 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	// Send the message to the server. If a new error happens we return that
 	// one because we know the causing error has at least been logged at
 	// some point before.
-	err := s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
+	err = s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
 		Msg: msg,
 	})
 	if err != nil {
