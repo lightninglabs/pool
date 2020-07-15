@@ -233,19 +233,36 @@ channel that can be bought or sold on the network.
 
 With that said, let's place some orders to try to earn some yield from this 0.5
 BTC that's been burning a hole in our SD card for the past year. We'll place a
-single order for 10 million satoshis, at 0.0001% (the lowest possible price)
-for 3000 blocks: 
+single order for 10 million satoshis, wanting to receive 0.3% (30 bps)
+over a 3000 block period (a bit under 3 weeks):
 ```
-🏔 llm orders submit ask 10000000 0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732 --rate_fixed=1 --max_duration_blocks=3000
+🏔 llm orders submit ask 10000000 0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732 --interest_rate_percent=0.3 --max_duration_blocks=3000
+Ask Amount: 0.1 BTC
+Ask Duration: 3000
+Total 0.0003 BTC Premium (paid to maker):
+Rate Fixed: 1
+Rate Per Block: 0.0000010 (0.0001000%)
+Execution Fee:  0.00010001 BTC
+Confirm order (yes/no): eyes
 {
         "accepted_order_nonce": "f1bebca6047dee6657f82377ebac94d1dc6667097f2a4d463deb63eff6f0dbcf"
 }
 ```
 
+By leaving off the `--force` flag, we request the final break down to confirm
+the details of our order before we put it through.
+
 In this case, if this order is executed, then I'll gain 3k satoshis:
 ```
 3000 = (1/100000)*1000000*3000
 ```
+
+It's important to note that although internally we use a fixed rate per block
+to compute the final premium, on the command line, we accept the final
+acceptable premium in a _percent_. Therefore, when submitting orders, one
+should place the value that they wish to receive or accept at the end of the
+lease period. Internally, we'll then compute the _per block lease rate_ and
+submit the order using _that_.
 
 The duration and fixed rate (the percentage) are two important values to pay
 attention to when placing orders. Given the same amount, and fixed rate, you

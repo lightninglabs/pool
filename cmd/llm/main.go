@@ -65,6 +65,7 @@ func main() {
 	}
 	app.Commands = append(app.Commands, accountsCommands...)
 	app.Commands = append(app.Commands, ordersCommands...)
+	app.Commands = append(app.Commands, auctionCommands...)
 
 	err := app.Run(os.Args)
 	if err != nil {

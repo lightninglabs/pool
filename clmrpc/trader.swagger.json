@@ -189,6 +189,28 @@
         ]
       }
     },
+    "/v1/clm/fee": {
+      "get": {
+        "operationId": "AuctionFee",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcAuctionFeeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/clm/orders": {
       "get": {
         "operationId": "ListOrders",
@@ -347,6 +369,15 @@
         }
       }
     },
+    "clmrpcAuctionFeeResponse": {
+      "type": "object",
+      "properties": {
+        "execution_fee": {
+          "$ref": "#/definitions/clmrpcExecutionFee",
+          "description": "The execution fee charged per matched order."
+        }
+      }
+    },
     "clmrpcBid": {
       "type": "object",
       "properties": {
@@ -410,6 +441,21 @@
           "type": "string",
           "format": "byte",
           "description": "The transaction used to deposit funds into the account."
+        }
+      }
+    },
+    "clmrpcExecutionFee": {
+      "type": "object",
+      "properties": {
+        "base_fee": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The base fee in satoshis charged per order, regardless of the matched size."
+        },
+        "fee_rate": {
+          "type": "string",
+          "format": "uint64",
+          "title": "The fee rate in parts per million"
         }
       }
     },

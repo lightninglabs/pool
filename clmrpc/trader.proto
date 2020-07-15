@@ -64,6 +64,12 @@ service Trader {
             delete: "/v1/clm/orders/{order_nonce}"
         };
     };
+
+    rpc AuctionFee(AuctionFeeRequest) returns (AuctionFeeResponse) {
+        option (google.api.http) = {
+            get: "/v1/clm/fee"
+        };
+    };
 }
 
 message InitAccountRequest {
@@ -338,4 +344,14 @@ message RecoverAccountsRequest {
 message RecoverAccountsResponse {
     // The number of accounts that were recovered.
     uint32 num_recovered_accounts = 1;
+}
+
+message AuctionFeeRequest {
+}
+
+message AuctionFeeResponse {
+    /*
+    The execution fee charged per matched order.
+    */
+    ExecutionFee execution_fee = 1;
 }

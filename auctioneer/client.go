@@ -1085,3 +1085,16 @@ func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
 		CloseTx: closeTx,
 	}, nil
 }
+
+// FeeQuote returns the current fee schedule for the auction.
+func (c *Client) FeeQuote(ctx context.Context) (*order.LinearFeeSchedule, error) {
+	resp, err := c.client.FeeQuote(ctx, &clmrpc.FeeQuoteRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	return order.NewLinearFeeSchedule(
+		btcutil.Amount(resp.ExecutionFee.BaseFee),
+		btcutil.Amount(resp.ExecutionFee.FeeRate),
+	), nil
+}
