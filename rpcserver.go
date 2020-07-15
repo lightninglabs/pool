@@ -19,10 +19,12 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/auctioneer"
+	"github.com/lightninglabs/llm/chaninfo"
 	"github.com/lightninglabs/llm/clientdb"
 	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/llm/order"
 	"github.com/lightninglabs/loop/lndclient"
+	"github.com/lightningnetwork/lnd/chanbackup"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -52,11 +54,17 @@ type rpcServer struct {
 	accountManager *account.Manager
 	orderManager   *order.Manager
 
-	quit            chan struct{}
-	wg              sync.WaitGroup
-	blockNtfnCancel func()
-	recoveryMutex   sync.Mutex
-	recoveryPending bool
+	// pendingOpenChannels is a channel through which we'll receive
+	// notifications for pending open channels resulting from a successful
+	// batch.
+	pendingOpenChannels chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
+
+	quit                           chan struct{}
+	wg                             sync.WaitGroup
+	blockNtfnCancel                func()
+	pendingOpenChannelStreamCancel func()
+	recoveryMutex                  sync.Mutex
+	recoveryPending                bool
 }
 
 // accountStore is a clientdb.DB wrapper to implement the account.Store
@@ -98,7 +106,8 @@ func newRPCServer(server *Server) *rpcServer {
 			Wallet:    lnd.WalletKit,
 			Signer:    lnd.Signer,
 		}),
-		quit: make(chan struct{}),
+		pendingOpenChannels: make(chan *lnrpc.ChannelEventUpdate_PendingOpenChannel),
+		quit:                make(chan struct{}),
 	}
 }
 
@@ -144,6 +153,17 @@ func (s *rpcServer) Start() error {
 
 	s.updateHeight(height)
 
+	// Subscribe to pending open channel notifications. This will be useful
+	// when we're creating channels with a matched order as part of a batch.
+	streamCtx, streamCancel := context.WithCancel(ctx)
+	s.pendingOpenChannelStreamCancel = streamCancel
+	subStream, err := s.lndClient.SubscribeChannelEvents(
+		streamCtx, &lnrpc.ChannelEventSubscription{},
+	)
+	if err != nil {
+		return err
+	}
+
 	// Start the auctioneer client first to establish a connection.
 	if err := s.auctioneer.Start(); err != nil {
 		return fmt.Errorf("unable to start auctioneer client: %v", err)
@@ -157,12 +177,59 @@ func (s *rpcServer) Start() error {
 		return fmt.Errorf("unable to start order manager: %v", err)
 	}
 
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.serverHandler(blockChan, blockErrChan)
+	go s.consumePendingOpenChannels(subStream)
 
 	rpcLog.Infof("Trader server is now active")
 
 	return nil
+}
+
+// consumePendingOpenChannels consumes pending open channel events from the
+// stream and notifies them if the trader currently has an ongoing batch.
+func (s *rpcServer) consumePendingOpenChannels(
+	subStream lnrpc.Lightning_SubscribeChannelEventsClient) {
+
+	defer s.wg.Done()
+
+	for {
+		select {
+		case <-s.quit:
+			return
+		default:
+		}
+
+		msg, err := subStream.Recv()
+		if err != nil {
+			select {
+			case <-s.quit:
+				return
+			default:
+			}
+
+			rpcLog.Errorf("Unable to read channel event: %v", err)
+			continue
+		}
+
+		// Skip any events other than the pending open channel one.
+		channel, ok := msg.Channel.(*lnrpc.ChannelEventUpdate_PendingOpenChannel)
+		if !ok {
+			continue
+		}
+
+		// If we don't have a pending batch, then there's no need to
+		// notify any pending open channels..
+		if !s.orderManager.HasPendingBatch() {
+			continue
+		}
+
+		select {
+		case s.pendingOpenChannels <- channel:
+		case <-s.quit:
+			return
+		}
+	}
 }
 
 // Stop stops the server.
@@ -179,6 +246,11 @@ func (s *rpcServer) Stop() error {
 	}
 
 	close(s.quit)
+
+	// We call this before Wait to ensure the goroutine is stopped by this
+	// call.
+	s.pendingOpenChannelStreamCancel()
+
 	s.wg.Wait()
 	s.blockNtfnCancel()
 
@@ -494,47 +566,62 @@ func (s *rpcServer) prepChannelFunding(batch *order.Batch) error {
 // will block until the channel is considered pending. Once this phase is
 // complete, and the batch execution transaction broadcast, the channel will be
 // finalized and locked in.
-func (s *rpcServer) batchChannelSetup(batch *order.Batch) error {
+func (s *rpcServer) batchChannelSetup(batch *order.Batch) (
+	map[wire.OutPoint]*chaninfo.ChannelInfo, error) {
+
 	var eg errgroup.Group
+	ctx := context.Background()
 
 	rpcLog.Infof("Batch(%x): opening channels for %v matched orders",
 		batch.ID[:], len(batch.MatchedOrders))
 
 	// For each ask order of ours that's matched, we'll make a new funding
 	// flow, blocking until they all progress to the final state.
+	batchTxHash := batch.BatchTX.TxHash()
+	chanPoints := make(map[wire.OutPoint]struct{})
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
 		ourOrder, err := s.server.db.GetOrder(ourOrderNonce)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		// If this is a bid order, then we don't need to do anything,
-		// as we should've already registered the funding shim during
-		// the prior phase.
-		orderIsBid := ourOrder.Type() == order.TypeBid
-		if orderIsBid {
-			continue
-		}
-
-		// Otherwise, we'll now initiate the funding request to
-		// establish all the channels generated by this order with the
-		// remote parties.
+		// We'll obtain the expected channel point for each matched
+		// order, and complete the funding flow for each one in which
+		// our order was the ask.
 		for _, matchedOrder := range matchedOrders {
-			// Before we make the funding request, we'll make sure
-			// that we're connected to the other party.
-			err := connectToMatchedTrader(
-				s.lndClient, matchedOrder,
-			)
-			if err != nil {
-				return fmt.Errorf("unable to connect to "+
-					"trader: %v", err)
-			}
-
 			fundingShim, err := s.deriveFundingShim(
 				ourOrder, matchedOrder, batch.BatchTX,
 			)
 			if err != nil {
-				return err
+				return nil, err
+			}
+			chanPoint := wire.OutPoint{
+				Hash: batchTxHash,
+				Index: fundingShim.GetChanPointShim().ChanPoint.
+					OutputIndex,
+			}
+			chanPoints[chanPoint] = struct{}{}
+
+			// If this is a bid order, then we don't need to do
+			// anything, as we should've already registered the
+			// funding shim during the prior phase.
+			orderIsBid := ourOrder.Type() == order.TypeBid
+			if orderIsBid {
+				continue
+			}
+
+			// Otherwise, we'll now initiate the funding request to
+			// establish all the channels generated by this order
+			// with the remote parties.
+			//
+			// Before we make the funding request, we'll make sure
+			// that we're connected to the other party.
+			err = connectToMatchedTrader(
+				s.lndClient, matchedOrder,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("unable to connect to "+
+					"trader: %v", err)
 			}
 
 			// Now that we know we're connected, we'll launch off
@@ -550,11 +637,10 @@ func (s *rpcServer) batchChannelSetup(batch *order.Batch) error {
 				FundingShim:        fundingShim,
 			}
 			chanStream, err := s.lndClient.OpenChannel(
-				context.Background(),
-				fundingReq,
+				ctx, fundingReq,
 			)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			// We'll launch a new goroutine to wait until chan
@@ -586,7 +672,67 @@ func (s *rpcServer) batchChannelSetup(batch *order.Batch) error {
 		}
 	}
 
-	return eg.Wait()
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	// Once we've waited for the operations to complete, we'll wait to
+	// receive each channel's pending open notification in order to retrieve
+	// some keys from their SCB we'll need to submit to the auctioneer in
+	// order for them to enforce the channel's service lifetime.
+	channelKeys := make(
+		map[wire.OutPoint]*chaninfo.ChannelInfo, len(chanPoints),
+	)
+
+	rpcLog.Debugf("Waiting for pending open events for %v channel(s)",
+		len(chanPoints))
+
+	timeout := time.After(15 * time.Second)
+	for {
+		var chanPoint wire.OutPoint
+		select {
+		case channel := <-s.pendingOpenChannels:
+			var hash chainhash.Hash
+			copy(hash[:], channel.PendingOpenChannel.Txid)
+			chanPoint = wire.OutPoint{
+				Hash:  hash,
+				Index: channel.PendingOpenChannel.OutputIndex,
+			}
+
+		case <-timeout:
+			return nil, errors.New("timed out waiting for pending " +
+				"open channel notification")
+
+		case <-s.quit:
+			return nil, fmt.Errorf("server shutting down")
+		}
+
+		// If the notification if for a channel we're not interested in,
+		// skip it. This can happen if a channel was opened out-of-band
+		// at the same time the batch channels were.
+		if _, ok := chanPoints[chanPoint]; !ok {
+			continue
+		}
+
+		rpcLog.Debugf("Retrieving info for channel %v", chanPoint)
+
+		chanInfo, err := chaninfo.GatherChannelInfo(
+			ctx, s.lndServices.Client, s.lndServices.WalletKit,
+			chanPoint,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Once we've retrieved the keys for all channels, we can exit.
+		channelKeys[chanPoint] = chanInfo
+		delete(chanPoints, chanPoint)
+		if len(chanPoints) == 0 {
+			break
+		}
+	}
+
+	return channelKeys, nil
 }
 
 // handleServerMessage reads a gRPC message received in the stream from the
@@ -642,13 +788,13 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		// then start negotiating with the remote peers. We'll sign
 		// once all channel partners have responded.
 		batch := s.orderManager.PendingBatch()
-		err := s.batchChannelSetup(batch)
+		channelKeys, err := s.batchChannelSetup(batch)
 		if err != nil {
 			rpcLog.Errorf("Error setting up channels: %v", err)
 			return s.sendRejectBatch(batch, err)
 		}
 
-		rpcLog.Infof("Received OrderMatchSign for batch=%x, "+
+		rpcLog.Infof("Received OrderMatchSignBegin for batch=%x, "+
 			"num_orders=%v", batch.ID[:], len(batch.MatchedOrders))
 
 		// Sign for the accounts in the batch.
@@ -658,7 +804,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 			rpcLog.Errorf("Error signing batch: %v", err)
 			return s.sendRejectBatch(batch, err)
 		}
-		err = s.sendSignBatch(batch, sigs)
+		err = s.sendSignBatch(batch, sigs, channelKeys)
 		if err != nil {
 			rpcLog.Errorf("Error sending sign msg: %v", err)
 			return s.sendRejectBatch(batch, err)
@@ -1317,21 +1463,50 @@ func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
 
 // sendSignBatch sends a sign message to the server with the witness stacks of
 // all accounts that are involved in the batch.
-func (s *rpcServer) sendSignBatch(batch *order.Batch,
-	sigs order.BatchSignature) error {
+func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
+	chanInfos map[wire.OutPoint]*chaninfo.ChannelInfo) error {
 
-	// Prepare the list of witness stack messages and send them to the
-	// server.
-	rpcSigs := make(map[string][]byte)
+	// Prepare the list of witness stacks and channel infos and send them to
+	// the server.
+	rpcSigs := make(map[string][]byte, len(sigs))
 	for acctKey, sig := range sigs {
 		key := hex.EncodeToString(acctKey[:])
 		rpcSigs[key] = sig.Serialize()
 	}
+
+	rpcChannelInfos := make(map[string]*clmrpc.ChannelInfo, len(chanInfos))
+	for chanPoint, chanInfo := range chanInfos {
+		var channelType clmrpc.ChannelType
+		switch chanInfo.Version {
+		case chanbackup.TweaklessCommitVersion:
+			channelType = clmrpc.ChannelType_TWEAKLESS
+		case chanbackup.AnchorsCommitVersion:
+			channelType = clmrpc.ChannelType_ANCHORS
+		default:
+			return fmt.Errorf("unknown channel type: %v",
+				chanInfo.Version)
+		}
+		rpcChannelInfos[chanPoint.String()] = &clmrpc.ChannelInfo{
+			Type: channelType,
+			LocalNodeKey: chanInfo.LocalNodeKey.
+				SerializeCompressed(),
+			RemoteNodeKey: chanInfo.RemoteNodeKey.
+				SerializeCompressed(),
+			LocalPaymentBasePoint: chanInfo.LocalPaymentBasePoint.
+				SerializeCompressed(),
+			RemotePaymentBasePoint: chanInfo.RemotePaymentBasePoint.
+				SerializeCompressed(),
+		}
+	}
+
+	rpcLog.Infof("Sending OrderMatchSign for batch %x", batch.ID[:])
+
 	return s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
 		Msg: &clmrpc.ClientAuctionMessage_Sign{
 			Sign: &clmrpc.OrderMatchSign{
-				BatchId:     batch.ID[:],
-				AccountSigs: rpcSigs,
+				BatchId:      batch.ID[:],
+				AccountSigs:  rpcSigs,
+				ChannelInfos: rpcChannelInfos,
 			},
 		},
 	})
