@@ -26,7 +26,7 @@ var (
 	nodePubkey            = [33]byte{03, 77, 44, 55}
 	execFeeBase           = btcutil.Amount(1_100)
 	execFeeRate           = btcutil.Amount(50)
-	clearingPrice         = FixedRatePremium(5)
+	clearingPrice         = FixedRatePremium(5000)
 	stateRecreated        = clmrpc.AccountDiff_OUTPUT_RECREATED
 	stateExtendedOffchain = clmrpc.AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN
 )
@@ -114,7 +114,7 @@ func TestBatchVerifier(t *testing.T) {
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
-				a.FixedRate = 20
+				a.FixedRate = 20000
 				return v.Verify(b)
 			},
 		},
@@ -136,7 +136,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				delete(b.MatchedOrders, a.nonce)
-				b1.FixedRate = 5
+				b1.FixedRate = 5000
 				return v.Verify(b)
 			},
 		},
@@ -242,7 +242,7 @@ func TestBatchVerifier(t *testing.T) {
 
 	// Run through all the test cases, creating a new, valid batch each
 	// time so no state carries over from the last run.
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		tc := tc
 
 		// We'll create two accounts: A smaller one that has one ask for
@@ -278,7 +278,7 @@ func TestBatchVerifier(t *testing.T) {
 				Units:            4,
 				UnitsUnfulfilled: 4,
 				AcctKey:          acctIDSmall,
-				FixedRate:        10,
+				FixedRate:        10000,
 			}),
 			MaxDuration: 2500,
 		}
@@ -290,9 +290,9 @@ func TestBatchVerifier(t *testing.T) {
 				Units:            2,
 				UnitsUnfulfilled: 2,
 				AcctKey:          acctIDBig,
-				FixedRate:        15,
+				FixedRate:        15000,
 			}),
-			// 2000 * (200_000 * 5 / 1_000_000) = 1000 sats premium
+			// 1000 * (200_000 * 5000 / 1_000_000_000) = 1000 sats premium
 			MinDuration: 1000,
 		}
 		bid2 := &Bid{
@@ -303,9 +303,9 @@ func TestBatchVerifier(t *testing.T) {
 				Units:            8,
 				UnitsUnfulfilled: 8,
 				AcctKey:          acctIDBig,
-				FixedRate:        15,
+				FixedRate:        15000,
 			}),
-			// 2000 * (200_000 * 5 / 1_000_000) = 2000 sats premium
+			// 2000 * (200_000 * 5000 / 1_000_000_000) = 2000 sats premium
 			MinDuration: 2000,
 		}
 		batchTx := &wire.MsgTx{
@@ -424,6 +424,7 @@ func TestBatchVerifier(t *testing.T) {
 		}
 
 		// Finally run the test case itself.
+		i := i
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.doVerify(verifier, ask, bid1, bid2, batch)
 			if (err == nil && tc.expectedErr != "") ||
@@ -431,8 +432,8 @@ func TestBatchVerifier(t *testing.T) {
 					err.Error(), tc.expectedErr,
 				)) {
 
-				t.Fatalf("unexpected error, got '%v' wanted "+
-					"'%v'", err, tc.expectedErr)
+				t.Fatalf("test #%v: unexpected error, got '%v' wanted "+
+					"'%v'", i, err, tc.expectedErr)
 			}
 		})
 	}

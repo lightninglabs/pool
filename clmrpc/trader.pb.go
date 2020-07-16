@@ -1005,7 +1005,7 @@ type Order struct {
 	//The trader's account key of the account that is used for the order.
 	TraderKey []byte `protobuf:"bytes,1,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
 	//
-	//Fixed order rate in parts per million.
+	//Fixed order rate in parts per billion.
 	RateFixed uint32 `protobuf:"varint,2,opt,name=rate_fixed,json=rateFixed,proto3" json:"rate_fixed,omitempty"`
 	//
 	//Order amount in satoshis.

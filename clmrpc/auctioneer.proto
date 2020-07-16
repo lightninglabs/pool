@@ -389,7 +389,7 @@ message OrderMatchPrepare {
     map<string, MatchedOrder> matched_orders = 1;
 
     /*
-    The uniform clearing price rate in parts per million that was used for this
+    The uniform clearing price rate in parts per billion that was used for this
     batch.
     */
     uint32 clearing_price_rate = 2;
@@ -675,7 +675,7 @@ message ServerOrder {
     bytes trader_key = 1;
 
     /*
-    Fixed order rate in parts per million.
+    Fixed order rate in parts per billion.
     */
     uint32 rate_fixed = 2;
 
@@ -911,7 +911,7 @@ message RelevantBatch {
     */
     map<string, MatchedOrder> matched_orders = 4;
 
-    // The uniform clearing price rate in parts per million of the batch.
+    // The uniform clearing price rate in parts per billion of the batch.
     uint32 clearing_price_rate = 5;
 
     // The fee parameters used to calculate the execution fees.
@@ -934,7 +934,7 @@ message ExecutionFee {
     uint64 base_fee = 1;
 
     /*
-    The fee rate in parts per million 
+    The fee rate in parts per million
     */
     uint64 fee_rate = 2;
 }

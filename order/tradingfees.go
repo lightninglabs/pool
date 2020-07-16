@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	// FeeRateTotalParts defines the granularity of the fee rate.
-	// Throughout the codebase, we'll use fix based arithmetic to compute
-	// fees.
-	FeeRateTotalParts = 1e6
+	// FeeRateTotalParts defines the granularity of the fixed rate used to
+	// compute the per-block interest rate.  Throughout the codebase, we'll
+	// use fix based arithmetic to compute fees.
+	FeeRateTotalParts = 1e9
 
 	// dustLimitP2WPKH is the minimum size of a P2WPKH output to not be
 	// considered dust.
@@ -51,7 +51,7 @@ func (f FixedRatePremium) LumpSumPremium(amt btcutil.Amount,
 	// Once we have this value, we can then multiply the premium paid per
 	// block times the number of compounding periods, or the total lease
 	// duration.
-	return btcutil.Amount(premiumPerBlock * float32(durationBlocks))
+	return btcutil.Amount(premiumPerBlock * float64(durationBlocks))
 }
 
 // FeeSchedule is an interface that represents the configuration source that
@@ -111,8 +111,8 @@ var _ FeeSchedule = (*LinearFeeSchedule)(nil)
 // PerBlockPremium calculates the absolute premium in fractions of satoshis for
 // a one block duration from the amount and the specified fee rate in parts per
 // million.
-func PerBlockPremium(amt btcutil.Amount, fixedRate uint32) float32 {
-	return float32(amt) * float32(fixedRate) / float32(FeeRateTotalParts)
+func PerBlockPremium(amt btcutil.Amount, fixedRate uint32) float64 {
+	return float64(amt) * float64(fixedRate) / FeeRateTotalParts
 }
 
 // EstimateTraderFee calculates the chain fees a trader has to pay for their
