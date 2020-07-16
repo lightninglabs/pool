@@ -1098,3 +1098,16 @@ func (c *Client) FeeQuote(ctx context.Context) (*order.LinearFeeSchedule, error)
 		btcutil.Amount(resp.ExecutionFee.FeeRate),
 	), nil
 }
+
+// BatchSnapshot returns information about a target batch including the
+// clearing price of the batch, and the set of orders matched within the batch.
+//
+// NOTE: This isn't wrapped in "native" types, as atm we only use this to
+// shuffle information back to the client over our RPC interface.
+func (c *Client) BatchSnapshot(ctx context.Context,
+	targetBatch order.BatchID) (*clmrpc.BatchSnapshotResponse, error) {
+
+	return c.client.BatchSnapshot(ctx, &clmrpc.BatchSnapshotRequest{
+		BatchId: targetBatch[:],
+	})
+}

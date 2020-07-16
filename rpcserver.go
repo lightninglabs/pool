@@ -1530,3 +1530,16 @@ func (s *rpcServer) AuctionFee(ctx context.Context,
 		},
 	}, nil
 }
+
+// BatchSnapshot returns information about a target batch including the
+// clearing price of the batch, and the set of orders matched within the batch.
+func (s *rpcServer) BatchSnapshot(ctx context.Context,
+	req *clmrpc.BatchSnapshotRequest) (*clmrpc.BatchSnapshotResponse, error) {
+
+	// THe current version of this call just proxies the request to the
+	// auctioneer, as we may only have information about the batch if we
+	// were matched with it on disk.
+	var batchID order.BatchID
+	copy(batchID[:], req.BatchId)
+	return s.auctioneer.BatchSnapshot(ctx, batchID)
+}
