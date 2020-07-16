@@ -14,6 +14,7 @@ service ChannelAuctioneer {
     rpc SubscribeBatchAuction (stream ClientAuctionMessage) returns (stream ServerAuctionMessage);
     rpc FeeQuote (FeeQuoteRequest) returns (FeeQuoteResponse);
     rpc RelevantBatchSnapshot (RelevantBatchRequest) returns (RelevantBatch);
+    rpc BatchSnapshot(BatchSnapshotRequest) returns (BatchSnapshotResponse);
 }
 
 message ReserveAccountRequest {
@@ -954,4 +955,75 @@ message OutPoint {
     The index of the output on the transaction.
     */
     uint32 output_index = 2;
+}
+
+message AskSnapshot {
+    // The version of the order.
+    uint32 version = 1;
+
+    // The longest period of time the channel will survive for.
+    uint32 max_duration_blocks = 2;
+
+    // The true bid price of the order in parts per billion.
+    uint32 rate_fixed = 3;
+
+    // The channel type to be created.
+    uint32 chan_type = 4;
+}
+message BidSnapshot {
+    // The version of the order.
+    uint32 version = 1;
+
+    // The shortest period of time the matched channel should be allocated for.
+    uint32 min_duration_blocks = 2;
+
+    // The true bid price of the order in parts per billion.
+    uint32 rate_fixed = 3;
+
+    // The channel type to be created.
+    uint32 chan_type = 4;
+}
+message MatchedOrderSnapshot {
+    // The full ask order that was matched.
+    AskSnapshot ask = 1;
+
+    // The full bid order that was matched.
+    BidSnapshot bid = 2;
+
+    // The fixed rate premium that was matched, expressed in parts-ber-billion.
+    uint32 matching_rate = 3;
+
+    // The total number of satoshis that were bought.
+    uint64 total_sats_cleared = 4;
+
+    // The total number of units that were matched.
+    uint32 units_matched = 5;
+}
+
+message BatchSnapshotRequest {
+    // The unique identifier of the batch encoded as a compressed pubkey.
+    bytes batch_id = 1;
+}
+
+message BatchSnapshotResponse {
+    // The version of the batch.
+    uint32 version = 1;
+
+    // The unique identifier of the batch.
+    bytes batch_id = 2;
+
+    // The unique identifier of the prior batch.
+    bytes prev_batch_id = 3;
+
+    // The uniform clearing price rate in parts per billion of the batch.
+    uint32 clearing_price_rate = 4;
+
+    // The set of all orders matched in the batch.
+    repeated MatchedOrderSnapshot matched_orders = 5;
+
+    // The txid of the batch transaction.
+    string batch_tx_id = 7;
+
+    // The batch transaction including all witness data.
+    bytes batch_tx = 6;
 }

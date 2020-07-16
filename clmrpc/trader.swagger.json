@@ -189,6 +189,38 @@
         ]
       }
     },
+    "/v1/clm/batch/snapshot": {
+      "get": {
+        "operationId": "BatchSnapshot",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcBatchSnapshotResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "batch_id",
+            "description": "The unique identifier of the batch encoded as a compressed pubkey.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/clm/fee": {
       "get": {
         "operationId": "AuctionFee",
@@ -369,12 +401,78 @@
         }
       }
     },
+    "clmrpcAskSnapshot": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The version of the order."
+        },
+        "max_duration_blocks": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The longest period of time the channel will survive for."
+        },
+        "rate_fixed": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The true bid price of the order in parts per billion."
+        },
+        "chan_type": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The channel type to be created."
+        }
+      }
+    },
     "clmrpcAuctionFeeResponse": {
       "type": "object",
       "properties": {
         "execution_fee": {
           "$ref": "#/definitions/clmrpcExecutionFee",
           "description": "The execution fee charged per matched order."
+        }
+      }
+    },
+    "clmrpcBatchSnapshotResponse": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The version of the batch."
+        },
+        "batch_id": {
+          "type": "string",
+          "format": "byte",
+          "description": "The unique identifier of the batch."
+        },
+        "prev_batch_id": {
+          "type": "string",
+          "format": "byte",
+          "description": "The unique identifier of the prior batch."
+        },
+        "clearing_price_rate": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The uniform clearing price rate in parts per billion of the batch."
+        },
+        "matched_orders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/clmrpcMatchedOrderSnapshot"
+          },
+          "description": "The set of all orders matched in the batch."
+        },
+        "batch_tx_id": {
+          "type": "string",
+          "description": "The txid of the batch transaction."
+        },
+        "batch_tx": {
+          "type": "string",
+          "format": "byte",
+          "description": "The batch transaction including all witness data."
         }
       }
     },
@@ -394,6 +492,31 @@
           "type": "integer",
           "format": "int64",
           "description": "The version of the order format that is used. Will be increased once new\nfeatures are added."
+        }
+      }
+    },
+    "clmrpcBidSnapshot": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The version of the order."
+        },
+        "min_duration_blocks": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The shortest period of time the matched channel should be allocated for."
+        },
+        "rate_fixed": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The true bid price of the order in parts per billion."
+        },
+        "chan_type": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The channel type to be created."
         }
       }
     },
@@ -516,6 +639,34 @@
           "items": {
             "$ref": "#/definitions/clmrpcBid"
           }
+        }
+      }
+    },
+    "clmrpcMatchedOrderSnapshot": {
+      "type": "object",
+      "properties": {
+        "ask": {
+          "$ref": "#/definitions/clmrpcAskSnapshot",
+          "description": "The full ask order that was matched."
+        },
+        "bid": {
+          "$ref": "#/definitions/clmrpcBidSnapshot",
+          "description": "The full bid order that was matched."
+        },
+        "matching_rate": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The fixed rate premium that was matched, expressed in parts-ber-billion."
+        },
+        "total_sats_cleared": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The total number of satoshis that were bought."
+        },
+        "units_matched": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The total number of units that were matched."
         }
       }
     },

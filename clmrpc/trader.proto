@@ -72,6 +72,12 @@ service Trader {
             get: "/v1/clm/fee"
         };
     };
+
+    rpc BatchSnapshot(BatchSnapshotRequest) returns (BatchSnapshotResponse) {
+        option (google.api.http) = {
+            get: "/v1/clm/batch/snapshot"
+        };
+    };
 }
 
 message InitAccountRequest {
