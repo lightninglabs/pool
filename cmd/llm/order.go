@@ -234,8 +234,6 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 			fmt.Println("Cancelling order...")
 			return nil
 		}
-
-		return nil
 	}
 
 	resp, err := client.SubmitOrder(
@@ -369,8 +367,6 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 			fmt.Println("Cancelling order...")
 			return nil
 		}
-
-		return nil
 	}
 
 	resp, err := client.SubmitOrder(
