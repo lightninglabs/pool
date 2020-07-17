@@ -366,8 +366,8 @@ the following command should be run:
 Assuming `llmd` is now in your `$PATH`, you can start the daemon with the
 following command (assuming you have a local testnet `lnd` running): 
 ```
-🏔 llmd --network=testnet --auctionserver=clm.staging.lightningcluster.com:12010 --debuglevel=trace
+🏔 llmd --network=testnet --auctionserver=clm.testnet.lightningcluster.com:12010 --debuglevel=trace
 ```
 
-The current server is reachable at `clm.staging.lightningcluster.com:12010`,
+The current server is reachable at `clm.testnet.lightningcluster.com:12010`,
 this may change as the alpha version progresses.
