@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -16,6 +17,15 @@ import (
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
 )
+
+type invalidUsageError struct {
+	ctx     *cli.Context
+	command string
+}
+
+func (e *invalidUsageError) Error() string {
+	return fmt.Sprintf("invalid usage of command %s", e.command)
+}
 
 func printJSON(resp interface{}) {
 	b, err := json.Marshal(resp)
@@ -46,7 +56,12 @@ func printRespJSON(resp proto.Message) { // nolint
 }
 
 func fatal(err error) {
-	_, _ = fmt.Fprintf(os.Stderr, "[llm] %v\n", err)
+	var e *invalidUsageError
+	if errors.As(err, &e) {
+		_ = cli.ShowCommandHelp(e.ctx, e.command)
+	} else {
+		_, _ = fmt.Fprintf(os.Stderr, "[llm] %v\n", err)
+	}
 	os.Exit(1)
 }
 
@@ -117,7 +132,7 @@ func parseStr(ctx *cli.Context, argIdx int, flag, cmd string) (string, error) {
 	case ctx.Args().Get(argIdx) != "":
 		str = ctx.Args().Get(argIdx)
 	default:
-		return "", cli.ShowCommandHelp(ctx, cmd)
+		return "", &invalidUsageError{ctx, cmd}
 	}
 	return str, nil
 }
