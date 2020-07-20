@@ -109,7 +109,7 @@ of an account. As you'll see below, both values can be adjusted at any time.
 
 We can create an account using `llm`, like so:
 ```
-🏔 agora accounts new --amt=50000000 --expiry_height=1773394
+🏔 llm accounts new --amt=50000000 --expiry_height=1773394
 {
         "trader_key": "0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732",
         "outpoint": "c6f62c80095c98a57f2eef485a7ff06611f97dc856754cad330f4eeb538ff514:0",
