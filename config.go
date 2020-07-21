@@ -84,19 +84,22 @@ const (
 	defaultLsatMaxFee  = btcutil.Amount(10)
 )
 
-var DefaultConfig = Config{
-	Network:        "mainnet",
-	RPCListen:      "localhost:12010",
-	RESTListen:     "localhost:8281",
-	Insecure:       false,
-	BaseDir:        DefaultBaseDir,
-	LogDir:         defaultLogDir,
-	MaxLogFiles:    defaultMaxLogFiles,
-	MaxLogFileSize: defaultMaxLogFileSize,
-	MinBackoff:     defaultMinBackoff,
-	MaxBackoff:     defaultMaxBackoff,
-	DebugLevel:     defaultLogLevel,
-	Lnd: &LndConfig{
-		Host: "localhost:10009",
-	},
+// DefaultConfig returns the default value for the Config struct.
+func DefaultConfig() Config {
+	return Config{
+		Network:        "mainnet",
+		RPCListen:      "localhost:12010",
+		RESTListen:     "localhost:8281",
+		Insecure:       false,
+		BaseDir:        DefaultBaseDir,
+		LogDir:         defaultLogDir,
+		MaxLogFiles:    defaultMaxLogFiles,
+		MaxLogFileSize: defaultMaxLogFileSize,
+		MinBackoff:     defaultMinBackoff,
+		MaxBackoff:     defaultMaxBackoff,
+		DebugLevel:     defaultLogLevel,
+		Lnd: &LndConfig{
+			Host: "localhost:10009",
+		},
+	}
 }

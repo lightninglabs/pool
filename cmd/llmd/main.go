@@ -29,7 +29,7 @@ func main() {
 }
 
 func start() error {
-	config := llm.DefaultConfig
+	config := llm.DefaultConfig()
 
 	// Parse command line flags.
 	parser := flags.NewParser(&config, flags.Default)
