@@ -28,10 +28,7 @@ func Run(cfg *Config) error {
 	}
 
 	signal.Intercept()
-	trader, err := NewServer(cfg)
-	if err != nil {
-		return fmt.Errorf("unable to create server: %v", err)
-	}
+	trader := NewServer(cfg)
 	err = trader.Start()
 	if err != nil {
 		return fmt.Errorf("unable to start server: %v", err)

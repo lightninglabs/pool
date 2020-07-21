@@ -62,13 +62,38 @@ type Server struct {
 }
 
 // NewServer creates a new trader server.
-func NewServer(cfg *Config) (*Server, error) {
+func NewServer(cfg *Config) *Server {
+	return &Server{
+		cfg: cfg,
+	}
+}
+
+// Start runs llmd in daemon mode. It will listen for grpc connections, execute
+// commands and pass back auction status information.
+func (s *Server) Start() error {
+	var (
+		err error
+		cfg = s.cfg
+	)
+
 	// Print the version before executing either primary directive.
 	log.Infof("Version: %v", Version())
 
-	lndServices, err := getLnd(cfg.Network, cfg.Lnd)
+	s.lndServices, err = getLnd(cfg.Network, cfg.Lnd)
 	if err != nil {
-		return nil, err
+		return err
+	}
+
+	// As there're some other lower-level operations we may need access to,
+	// we'll also make a connection for a "basic client".
+	//
+	// TODO(roasbeef): more granular macaroons, can ask user to make just
+	// what we need
+	s.lndClient, err = lndclient.NewBasicClient(
+		cfg.Lnd.Host, cfg.Lnd.TLSPath, cfg.Lnd.MacaroonDir, cfg.Network,
+	)
+	if err != nil {
+		return err
 	}
 
 	// If no auction server is specified, use the default addresses for
@@ -80,8 +105,7 @@ func NewServer(cfg *Config) (*Server, error) {
 		case "testnet":
 			cfg.AuctionServer = TestnetServer
 		default:
-			return nil, errors.New("no auction server address " +
-				"specified")
+			return errors.New("no auction server address specified")
 		}
 	}
 
@@ -91,23 +115,19 @@ func NewServer(cfg *Config) (*Server, error) {
 	networkDir := filepath.Join(cfg.BaseDir, cfg.Network)
 	db, err := clientdb.New(networkDir)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Setup the LSAT interceptor for the client.
-	fileStore, err := lsat.NewFileStore(networkDir)
+	s.lsatStore, err = lsat.NewFileStore(networkDir)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var interceptor Interceptor = lsat.NewInterceptor(
-		&lndServices.LndServices, fileStore, defaultRPCTimeout,
-		defaultLsatMaxCost, defaultLsatMaxFee, false,
-	)
 
-	// getIdentity can be used to determine the current LSAT identification
+	// GetIdentity can be used to determine the current LSAT identification
 	// of the trader.
-	getIdentity := func() (*lsat.TokenID, error) {
-		token, err := fileStore.CurrentToken()
+	s.GetIdentity = func() (*lsat.TokenID, error) {
+		token, err := s.lsatStore.CurrentToken()
 		if err != nil {
 			return nil, err
 		}
@@ -123,14 +143,18 @@ func NewServer(cfg *Config) (*Server, error) {
 	// For any net that isn't mainnet, we allow LSAT auth to be disabled and
 	// create a fixed identity that is used for the whole runtime of the
 	// trader instead.
+	var interceptor Interceptor = lsat.NewInterceptor(
+		&s.lndServices.LndServices, s.lsatStore, defaultRPCTimeout,
+		defaultLsatMaxCost, defaultLsatMaxFee, false,
+	)
 	if cfg.FakeAuth && cfg.Network == "mainnet" {
-		return nil, fmt.Errorf("cannot use fake LSAT auth for mainnet")
+		return fmt.Errorf("cannot use fake LSAT auth for mainnet")
 	}
 	if cfg.FakeAuth {
 		var tokenID lsat.TokenID
 		_, _ = rand.Read(tokenID[:])
 		interceptor = &regtestInterceptor{id: tokenID}
-		getIdentity = func() (*lsat.TokenID, error) {
+		s.GetIdentity = func() (*lsat.TokenID, error) {
 			return &tokenID, nil
 		}
 	}
@@ -157,43 +181,15 @@ func NewServer(cfg *Config) (*Server, error) {
 		Insecure:      cfg.Insecure,
 		TLSPathServer: cfg.TLSPathAuctSrv,
 		DialOpts:      cfg.AuctioneerDialOpts,
-		Signer:        lndServices.Signer,
+		Signer:        s.lndServices.Signer,
 		MinBackoff:    cfg.MinBackoff,
 		MaxBackoff:    cfg.MaxBackoff,
 		BatchSource:   db,
 	}
-	auctioneerClient, err := auctioneer.NewClient(clientCfg)
+	s.AuctioneerClient, err = auctioneer.NewClient(clientCfg)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	// As there're some other lower-level operations we may need access to,
-	// we'll also make a connection for a "basic client".
-	//
-	// TODO(roasbeef): more granular macaroons, can ask user to make just
-	// what we need
-	baseClient, err := lndclient.NewBasicClient(
-		cfg.Lnd.Host, cfg.Lnd.TLSPath, cfg.Lnd.MacaroonDir, cfg.Network,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Server{
-		cfg:              cfg,
-		db:               db,
-		lsatStore:        fileStore,
-		lndServices:      lndServices,
-		lndClient:        baseClient,
-		AuctioneerClient: auctioneerClient,
-		GetIdentity:      getIdentity,
-	}, nil
-}
-
-// Start runs llmd in daemon mode. It will listen for grpc connections,
-// execute commands and pass back auction status information.
-func (s *Server) Start() error {
-	var err error
 
 	// Instantiate the llmd gRPC server.
 	s.traderServer = newRPCServer(s)
