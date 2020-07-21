@@ -94,6 +94,101 @@ func (s *Server) Start() error {
 		return err
 	}
 
+	// Setup the auctioneer client and interceptor.
+	err = s.setupClient()
+	if err != nil {
+		return err
+	}
+
+	// Instantiate the trader gRPC server and start it.
+	s.traderServer = newRPCServer(s)
+	err = s.traderServer.Start()
+	if err != nil {
+		return err
+	}
+
+	serverOpts := []grpc.ServerOption{
+		grpc.StreamInterceptor(
+			errorLogStreamServerInterceptor(rpcLog),
+		),
+		grpc.UnaryInterceptor(
+			errorLogUnaryServerInterceptor(rpcLog),
+		),
+	}
+	s.grpcServer = grpc.NewServer(serverOpts...)
+	clmrpc.RegisterTraderServer(s.grpcServer, s.traderServer)
+
+	// Next, start the gRPC server listening for HTTP/2 connections.
+	// If the provided grpcListener is not nil, it means llmd is being
+	// used as a library and the listener might not be a real network
+	// connection (but maybe a UNIX socket or bufconn). So we don't spin up
+	// a REST listener in that case.
+	log.Infof("Starting gRPC listener")
+	s.grpcListener = s.cfg.RPCListener
+	if s.grpcListener == nil {
+		s.grpcListener, err = net.Listen("tcp", s.cfg.RPCListen)
+		if err != nil {
+			return fmt.Errorf("RPC server unable to listen on %s",
+				s.cfg.RPCListen)
+
+		}
+
+		// We'll also create and start an accompanying proxy to serve
+		// clients through REST.
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		mux := proxy.NewServeMux()
+		proxyOpts := []grpc.DialOption{grpc.WithInsecure()}
+		err = clmrpc.RegisterTraderHandlerFromEndpoint(
+			ctx, mux, s.cfg.RPCListen, proxyOpts,
+		)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("Starting REST proxy listener")
+		s.restListener, err = net.Listen("tcp", s.cfg.RESTListen)
+		if err != nil {
+			return fmt.Errorf("REST proxy unable to listen on %s",
+				s.cfg.RESTListen)
+		}
+		s.restProxy = &http.Server{Handler: mux}
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+
+			err := s.restProxy.Serve(s.restListener)
+			if err != nil && err != http.ErrServerClosed {
+				log.Errorf("Could not start rest listener: %v",
+					err)
+			}
+		}()
+	}
+
+	// Start the grpc server.
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+
+		log.Infof("RPC server listening on %s", s.grpcListener.Addr())
+		if s.restListener != nil {
+			log.Infof("REST proxy listening on %s",
+				s.restListener.Addr())
+		}
+
+		err = s.grpcServer.Serve(s.grpcListener)
+		if err != nil {
+			log.Errorf("Unable to server gRPC: %v", err)
+		}
+	}()
+
+	// The final thing we'll do on start up is sync the order state of the
+	// auctioneer with what we have on disk.
+	return s.syncLocalOrderState()
+}
+
+// setupClient initializes the auctioneer client and its interceptors.
+func (s *Server) setupClient() error {
 	// If no auction server is specified, use the default addresses for
 	// mainnet and testnet.
 	if s.cfg.AuctionServer == "" && len(s.cfg.AuctioneerDialOpts) == 0 {
@@ -110,8 +205,9 @@ func (s *Server) Start() error {
 	log.Infof("Auction server address: %v", s.cfg.AuctionServer)
 
 	// Open the main database.
+	var err error
 	networkDir := filepath.Join(s.cfg.BaseDir, s.cfg.Network)
-	db, err := clientdb.New(networkDir)
+	s.db, err = clientdb.New(networkDir)
 	if err != nil {
 		return err
 	}
@@ -182,105 +278,14 @@ func (s *Server) Start() error {
 		Signer:        s.lndServices.Signer,
 		MinBackoff:    s.cfg.MinBackoff,
 		MaxBackoff:    s.cfg.MaxBackoff,
-		BatchSource:   db,
+		BatchSource:   s.db,
 	}
 	s.AuctioneerClient, err = auctioneer.NewClient(clientCfg)
 	if err != nil {
 		return err
 	}
 
-	// Instantiate the llmd gRPC server.
-	s.traderServer = newRPCServer(s)
-
-	serverOpts := []grpc.ServerOption{
-		grpc.StreamInterceptor(
-			errorLogStreamServerInterceptor(rpcLog),
-		),
-		grpc.UnaryInterceptor(
-			errorLogUnaryServerInterceptor(rpcLog),
-		),
-	}
-	s.grpcServer = grpc.NewServer(serverOpts...)
-	clmrpc.RegisterTraderServer(s.grpcServer, s.traderServer)
-
-	// Next, start the gRPC server listening for HTTP/2 connections.
-	// If the provided grpcListener is not nil, it means llmd is being
-	// used as a library and the listener might not be a real network
-	// connection (but maybe a UNIX socket or bufconn). So we don't spin up
-	// a REST listener in that case.
-	log.Infof("Starting gRPC listener")
-	s.grpcListener = s.cfg.RPCListener
-	if s.grpcListener == nil {
-		s.grpcListener, err = net.Listen("tcp", s.cfg.RPCListen)
-		if err != nil {
-			return fmt.Errorf("RPC server unable to listen on %s",
-				s.cfg.RPCListen)
-
-		}
-
-		// We'll also create and start an accompanying proxy to serve
-		// clients through REST.
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		mux := proxy.NewServeMux()
-		proxyOpts := []grpc.DialOption{grpc.WithInsecure()}
-		err = clmrpc.RegisterTraderHandlerFromEndpoint(
-			ctx, mux, s.cfg.RPCListen, proxyOpts,
-		)
-		if err != nil {
-			return err
-		}
-
-		log.Infof("Starting REST proxy listener")
-		s.restListener, err = net.Listen("tcp", s.cfg.RESTListen)
-		if err != nil {
-			return fmt.Errorf("REST proxy unable to listen on %s",
-				s.cfg.RESTListen)
-		}
-		s.restProxy = &http.Server{Handler: mux}
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-
-			err := s.restProxy.Serve(s.restListener)
-			if err != nil && err != http.ErrServerClosed {
-				log.Errorf("Could not start rest listener: %v",
-					err)
-			}
-		}()
-	}
-
-	err = s.AuctioneerClient.Start()
-	if err != nil {
-		return err
-	}
-
-	// Start the trader server itself.
-	err = s.traderServer.Start()
-	if err != nil {
-		return err
-	}
-
-	// Start the grpc server.
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-
-		log.Infof("RPC server listening on %s", s.grpcListener.Addr())
-		if s.restListener != nil {
-			log.Infof("REST proxy listening on %s",
-				s.restListener.Addr())
-		}
-
-		err = s.grpcServer.Serve(s.grpcListener)
-		if err != nil {
-			log.Errorf("Unable to server gRPC: %v", err)
-		}
-	}()
-
-	// The final thing we'll do on start up is sync the order state of the
-	// auctioneer with what we have on disk.
-	return s.syncLocalOrderState()
+	return s.AuctioneerClient.Start()
 }
 
 // Stop shuts down the server, including the auction server connection, all
