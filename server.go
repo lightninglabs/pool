@@ -71,15 +71,12 @@ func NewServer(cfg *Config) *Server {
 // Start runs llmd in daemon mode. It will listen for grpc connections, execute
 // commands and pass back auction status information.
 func (s *Server) Start() error {
-	var (
-		err error
-		cfg = s.cfg
-	)
+	var err error
 
 	// Print the version before executing either primary directive.
 	log.Infof("Version: %v", Version())
 
-	s.lndServices, err = getLnd(cfg.Network, cfg.Lnd)
+	s.lndServices, err = getLnd(s.cfg.Network, s.cfg.Lnd)
 	if err != nil {
 		return err
 	}
@@ -90,7 +87,8 @@ func (s *Server) Start() error {
 	// TODO(roasbeef): more granular macaroons, can ask user to make just
 	// what we need
 	s.lndClient, err = lndclient.NewBasicClient(
-		cfg.Lnd.Host, cfg.Lnd.TLSPath, cfg.Lnd.MacaroonDir, cfg.Network,
+		s.cfg.Lnd.Host, s.cfg.Lnd.TLSPath, s.cfg.Lnd.MacaroonDir,
+		s.cfg.Network,
 	)
 	if err != nil {
 		return err
@@ -98,21 +96,21 @@ func (s *Server) Start() error {
 
 	// If no auction server is specified, use the default addresses for
 	// mainnet and testnet.
-	if cfg.AuctionServer == "" && len(cfg.AuctioneerDialOpts) == 0 {
-		switch cfg.Network {
+	if s.cfg.AuctionServer == "" && len(s.cfg.AuctioneerDialOpts) == 0 {
+		switch s.cfg.Network {
 		case "mainnet":
-			cfg.AuctionServer = MainnetServer
+			s.cfg.AuctionServer = MainnetServer
 		case "testnet":
-			cfg.AuctionServer = TestnetServer
+			s.cfg.AuctionServer = TestnetServer
 		default:
 			return errors.New("no auction server address specified")
 		}
 	}
 
-	log.Infof("Auction server address: %v", cfg.AuctionServer)
+	log.Infof("Auction server address: %v", s.cfg.AuctionServer)
 
 	// Open the main database.
-	networkDir := filepath.Join(cfg.BaseDir, cfg.Network)
+	networkDir := filepath.Join(s.cfg.BaseDir, s.cfg.Network)
 	db, err := clientdb.New(networkDir)
 	if err != nil {
 		return err
@@ -147,10 +145,10 @@ func (s *Server) Start() error {
 		&s.lndServices.LndServices, s.lsatStore, defaultRPCTimeout,
 		defaultLsatMaxCost, defaultLsatMaxFee, false,
 	)
-	if cfg.FakeAuth && cfg.Network == "mainnet" {
+	if s.cfg.FakeAuth && s.cfg.Network == "mainnet" {
 		return fmt.Errorf("cannot use fake LSAT auth for mainnet")
 	}
-	if cfg.FakeAuth {
+	if s.cfg.FakeAuth {
 		var tokenID lsat.TokenID
 		_, _ = rand.Read(tokenID[:])
 		interceptor = &regtestInterceptor{id: tokenID}
@@ -159,8 +157,8 @@ func (s *Server) Start() error {
 		}
 	}
 	activeLoggers := logWriter.SubLoggers()
-	cfg.AuctioneerDialOpts = append(
-		cfg.AuctioneerDialOpts,
+	s.cfg.AuctioneerDialOpts = append(
+		s.cfg.AuctioneerDialOpts,
 		grpc.WithChainUnaryInterceptor(
 			interceptor.UnaryInterceptor,
 			errorLogUnaryClientInterceptor(
@@ -177,13 +175,13 @@ func (s *Server) Start() error {
 
 	// Create an instance of the auctioneer client library.
 	clientCfg := &auctioneer.Config{
-		ServerAddress: cfg.AuctionServer,
-		Insecure:      cfg.Insecure,
-		TLSPathServer: cfg.TLSPathAuctSrv,
-		DialOpts:      cfg.AuctioneerDialOpts,
+		ServerAddress: s.cfg.AuctionServer,
+		Insecure:      s.cfg.Insecure,
+		TLSPathServer: s.cfg.TLSPathAuctSrv,
+		DialOpts:      s.cfg.AuctioneerDialOpts,
 		Signer:        s.lndServices.Signer,
-		MinBackoff:    cfg.MinBackoff,
-		MaxBackoff:    cfg.MaxBackoff,
+		MinBackoff:    s.cfg.MinBackoff,
+		MaxBackoff:    s.cfg.MaxBackoff,
 		BatchSource:   db,
 	}
 	s.AuctioneerClient, err = auctioneer.NewClient(clientCfg)
