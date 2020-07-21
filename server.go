@@ -18,7 +18,6 @@ import (
 	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/llm/order"
 	"github.com/lightninglabs/lndclient"
-	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/signal"
@@ -64,23 +63,6 @@ type Server struct {
 
 // NewServer creates a new trader server.
 func NewServer(cfg *Config) (*Server, error) {
-	// Append the network type to the log directory so it is
-	// "namespaced" per network in the same fashion as the data directory.
-	cfg.LogDir = filepath.Join(cfg.LogDir, cfg.Network)
-
-	// Initialize logging at the default logging level.
-	err := logWriter.InitLogRotator(
-		filepath.Join(cfg.LogDir, DefaultLogFilename),
-		cfg.MaxLogFileSize, cfg.MaxLogFiles,
-	)
-	if err != nil {
-		return nil, err
-	}
-	err = build.ParseAndSetDebugLevels(cfg.DebugLevel, logWriter)
-	if err != nil {
-		return nil, err
-	}
-
 	// Print the version before executing either primary directive.
 	log.Infof("Version: %v", Version())
 

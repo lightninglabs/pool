@@ -11,7 +11,6 @@ import (
 
 	"github.com/jessevdk/go-flags"
 	"github.com/lightninglabs/llm"
-	"github.com/lightningnetwork/lnd/signal"
 
 	// Blank import to set up profiling HTTP handlers.
 	_ "net/http/pprof"
@@ -100,17 +99,7 @@ func start() error {
 			os.Exit(0)
 		}
 
-		signal.Intercept()
-		trader, err := llm.NewServer(&config)
-		if err != nil {
-			return fmt.Errorf("unable to create server: %v", err)
-		}
-		err = trader.Start()
-		if err != nil {
-			return fmt.Errorf("unable to start server: %v", err)
-		}
-		<-signal.ShutdownChannel()
-		return trader.Stop()
+		return llm.Run(&config)
 	}
 
 	return fmt.Errorf("unimplemented command %v", parser.Active.Name)
