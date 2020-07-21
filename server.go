@@ -194,6 +194,39 @@ func (s *Server) Start() error {
 	return s.syncLocalOrderState()
 }
 
+// StartAsSubserver is an alternative start method where the RPC server does not
+// create its own gRPC server but registers on an existing one.
+func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
+	lndGrpc *lndclient.GrpcLndServices) error {
+
+	if atomic.AddInt32(&s.started, 1) != 1 {
+		return fmt.Errorf("trader can only be started once")
+	}
+
+	s.lndClient = lndClient
+	s.lndServices = lndGrpc
+
+	// Print the version before executing either primary directive.
+	log.Infof("Version: %v", Version())
+
+	// Setup the auctioneer client and interceptor.
+	err := s.setupClient()
+	if err != nil {
+		return err
+	}
+
+	// Instantiate the trader gRPC server and start it.
+	s.traderServer = newRPCServer(s)
+	err = s.traderServer.Start()
+	if err != nil {
+		return err
+	}
+
+	// The final thing we'll do on start up is sync the order state of the
+	// auctioneer with what we have on disk.
+	return s.syncLocalOrderState()
+}
+
 // setupClient initializes the auctioneer client and its interceptors.
 func (s *Server) setupClient() error {
 	// If no auction server is specified, use the default addresses for
