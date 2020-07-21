@@ -42,6 +42,8 @@ type Server struct {
 	// To be used atomically.
 	started int32
 
+	*rpcServer
+
 	// AuctioneerClient is the wrapper around the connection from the trader
 	// client to the auctioneer server. It is exported so we can replace
 	// the connection with a new one in the itest, if the server is
@@ -57,7 +59,6 @@ type Server struct {
 	lsatStore    *lsat.FileStore
 	lndServices  *lndclient.GrpcLndServices
 	lndClient    lnrpc.LightningClient
-	traderServer *rpcServer
 	grpcServer   *grpc.Server
 	restProxy    *http.Server
 	grpcListener net.Listener
@@ -108,8 +109,8 @@ func (s *Server) Start() error {
 	}
 
 	// Instantiate the trader gRPC server and start it.
-	s.traderServer = newRPCServer(s)
-	err = s.traderServer.Start()
+	s.rpcServer = newRPCServer(s)
+	err = s.rpcServer.Start()
 	if err != nil {
 		return err
 	}
@@ -123,7 +124,7 @@ func (s *Server) Start() error {
 		),
 	}
 	s.grpcServer = grpc.NewServer(serverOpts...)
-	clmrpc.RegisterTraderServer(s.grpcServer, s.traderServer)
+	clmrpc.RegisterTraderServer(s.grpcServer, s.rpcServer)
 
 	// Next, start the gRPC server listening for HTTP/2 connections.
 	// If the provided grpcListener is not nil, it means llmd is being
@@ -216,8 +217,8 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 	}
 
 	// Instantiate the trader gRPC server and start it.
-	s.traderServer = newRPCServer(s)
-	err = s.traderServer.Start()
+	s.rpcServer = newRPCServer(s)
+	err = s.rpcServer.Start()
 	if err != nil {
 		return err
 	}
@@ -333,14 +334,18 @@ func (s *Server) setupClient() error {
 func (s *Server) Stop() error {
 	log.Info("Received shutdown signal, stopping server")
 
-	err := s.AuctioneerClient.Stop()
-	if err != nil {
-		return err
-	}
+	var shutdownErr error
 
 	// Don't return any errors yet, give everything else a chance to shut
 	// down first.
-	err = s.traderServer.Stop()
+	err := s.AuctioneerClient.Stop()
+	if err != nil {
+		shutdownErr = err
+	}
+	err = s.rpcServer.Stop()
+	if err != nil {
+		shutdownErr = err
+	}
 	s.grpcServer.GracefulStop()
 	if s.restProxy != nil {
 		err := s.restProxy.Shutdown(context.Background())
@@ -354,8 +359,8 @@ func (s *Server) Stop() error {
 	s.lndServices.Close()
 	s.wg.Wait()
 
-	if err != nil {
-		return fmt.Errorf("error shutting down server: %v", err)
+	if shutdownErr != nil {
+		return fmt.Errorf("error shutting down server: %v", shutdownErr)
 	}
 	return nil
 }
