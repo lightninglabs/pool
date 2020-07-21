@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	proxy "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/lightninglabs/aperture/lsat"
@@ -38,6 +39,9 @@ var (
 
 // Server is the main llmd trader server.
 type Server struct {
+	// To be used atomically.
+	started int32
+
 	// AuctioneerClient is the wrapper around the connection from the trader
 	// client to the auctioneer server. It is exported so we can replace
 	// the connection with a new one in the itest, if the server is
@@ -71,11 +75,14 @@ func NewServer(cfg *Config) *Server {
 // Start runs llmd in daemon mode. It will listen for grpc connections, execute
 // commands and pass back auction status information.
 func (s *Server) Start() error {
-	var err error
+	if atomic.AddInt32(&s.started, 1) != 1 {
+		return fmt.Errorf("trader can only be started once")
+	}
 
 	// Print the version before executing either primary directive.
 	log.Infof("Version: %v", Version())
 
+	var err error
 	s.lndServices, err = getLnd(s.cfg.Network, s.cfg.Lnd)
 	if err != nil {
 		return err
