@@ -209,6 +209,36 @@ func (m *Manager) Stop() {
 	})
 }
 
+// QuoteAccount returns the expected fee rate and total miner fee to send to an
+// account funding output with the given confTarget.
+func (m *Manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
+	confTarget uint32) (chainfee.SatPerKWeight, btcutil.Amount, error) {
+
+	// First, make sure we have a valid amount to create the account.
+	if err := validateAccountValue(value); err != nil {
+		return 0, 0, err
+	}
+
+	// Now calculate the estimated fee rate from the confTarget.
+	feeRate, err := m.cfg.Wallet.EstimateFee(ctx, int32(confTarget))
+	if err != nil {
+		return 0, 0, fmt.Errorf("error estimating fee rate: %v", err)
+	}
+
+	// Then calculate the total fee to pay. This asks lnd to create a full
+	// transaction to spend to a P2WSH output. If not enough confirmed funds
+	// are available in the wallet, this will return an error.
+	totalMinerFee, err := m.cfg.TxFeeEstimator.EstimateFeeToP2WSH(
+		ctx, value, int32(confTarget),
+	)
+	if err != nil {
+		return 0, 0, fmt.Errorf("error estimating total on-chain fee: "+
+			"%v", err)
+	}
+
+	return feeRate, totalMinerFee, nil
+}
+
 // InitAccount handles a request to create a new account with the provided
 // parameters.
 func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
@@ -1574,9 +1604,9 @@ func (m *Manager) toWalletOutput(ctx context.Context,
 	}, nil
 }
 
-// validateAccountParams ensures that a trader has provided sane parameters for
-// the creation of a new account.
-func validateAccountParams(value btcutil.Amount, expiry, bestHeight uint32) error {
+// validateAccountValue ensures that a trader has provided a sane account value
+// for the creation of a new account.
+func validateAccountValue(value btcutil.Amount) error {
 	if value < MinAccountValue {
 		return fmt.Errorf("minimum account value allowed is %v",
 			MinAccountValue)
@@ -1584,6 +1614,17 @@ func validateAccountParams(value btcutil.Amount, expiry, bestHeight uint32) erro
 	if value > maxAccountValue {
 		return fmt.Errorf("maximum account value allowed is %v",
 			maxAccountValue)
+	}
+
+	return nil
+}
+
+// validateAccountParams ensures that a trader has provided sane parameters for
+// the creation of a new account.
+func validateAccountParams(value btcutil.Amount, expiry, bestHeight uint32) error {
+	err := validateAccountValue(value)
+	if err != nil {
+		return err
 	}
 
 	if expiry < bestHeight+minAccountExpiry {

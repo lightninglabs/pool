@@ -125,6 +125,38 @@
         ]
       }
     },
+    "/v1/clm/accounts/quote": {
+      "post": {
+        "operationId": "QuoteAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcQuoteAccountResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/clmrpcQuoteAccountRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/clm/accounts/recover": {
       "post": {
         "operationId": "RecoverAccounts",
@@ -758,6 +790,33 @@
         "address": {
           "type": "string",
           "description": "The address corresponding to the output."
+        }
+      }
+    },
+    "clmrpcQuoteAccountRequest": {
+      "type": "object",
+      "properties": {
+        "account_value": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "conf_target": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The target number of blocks that the transaction should be confirmed in."
+        }
+      }
+    },
+    "clmrpcQuoteAccountResponse": {
+      "type": "object",
+      "properties": {
+        "miner_fee_sat_vbyte": {
+          "type": "number",
+          "format": "double"
+        },
+        "miner_fee_total": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },

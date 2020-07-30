@@ -831,6 +831,29 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 	return nil
 }
 
+func (s *rpcServer) QuoteAccount(ctx context.Context,
+	req *clmrpc.QuoteAccountRequest) (*clmrpc.QuoteAccountResponse, error) {
+
+	// Determine the desired transaction fee.
+	confTarget := req.GetConfTarget()
+	if confTarget < 1 {
+		return nil, fmt.Errorf("confirmation target must be " +
+			"greater than 0")
+	}
+
+	feeRate, totalFee, err := s.accountManager.QuoteAccount(
+		ctx, btcutil.Amount(req.AccountValue), confTarget,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &clmrpc.QuoteAccountResponse{
+		MinerFeeSatVbyte: float64(feeRate.FeePerKVByte()) / 1000,
+		MinerFeeTotal:    uint64(totalFee),
+	}, nil
+}
+
 func (s *rpcServer) InitAccount(ctx context.Context,
 	req *clmrpc.InitAccountRequest) (*clmrpc.Account, error) {
 
