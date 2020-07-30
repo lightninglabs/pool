@@ -358,3 +358,13 @@ type TxSource interface {
 	// by us.
 	ListTransactions(ctx context.Context) ([]*wire.MsgTx, error)
 }
+
+// TxFeeEstimator is a type that provides us with a realistic fee estimation to
+// send coins in a transaction.
+type TxFeeEstimator interface {
+	// EstimateFeeToP2WSH estimates the total chain fees in satoshis to send
+	// the given amount to a single P2WSH output with the given target
+	// confirmation.
+	EstimateFeeToP2WSH(ctx context.Context, amt btcutil.Amount,
+		confTarget int32) (btcutil.Amount, error)
+}

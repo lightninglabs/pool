@@ -67,13 +67,13 @@ service Trader {
         };
     };
 
-    rpc AuctionFee(AuctionFeeRequest) returns (AuctionFeeResponse) {
+    rpc AuctionFee (AuctionFeeRequest) returns (AuctionFeeResponse) {
         option (google.api.http) = {
             get: "/v1/clm/fee"
         };
     };
 
-    rpc BatchSnapshot(BatchSnapshotRequest) returns (BatchSnapshotResponse) {
+    rpc BatchSnapshot (BatchSnapshotRequest) returns (BatchSnapshotResponse) {
         option (google.api.http) = {
             get: "/v1/clm/batch/snapshot"
         };
@@ -86,6 +86,16 @@ message InitAccountRequest {
     oneof account_expiry {
         uint32 absolute_height = 2;
         uint32 relative_height = 3;
+    }
+
+    oneof fees {
+        /*
+        The target number of blocks that the transaction should be confirmed in.
+        */
+        uint32 conf_target = 4;
+
+        // TODO(guggero): Add sat_per_vbyte as soon as lnd has a parameter for
+        // that in rpcServer.EstimateFee.
     }
 }
 

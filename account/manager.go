@@ -113,6 +113,10 @@ type ManagerConfig struct {
 	// TxSource is a source that provides us with transactions previously
 	// broadcast by us.
 	TxSource TxSource
+
+	// TxFeeEstimator is an estimator that can calculate the total on-chain
+	// fees to send to an account output.
+	TxFeeEstimator TxFeeEstimator
 }
 
 // Manager is responsible for the management of accounts on-chain.
@@ -208,12 +212,32 @@ func (m *Manager) Stop() {
 // InitAccount handles a request to create a new account with the provided
 // parameters.
 func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
-	expiry uint32, bestHeight uint32) (*Account, error) {
+	expiry, bestHeight, confTarget uint32) (*Account, error) {
 
 	// First, make sure we have valid parameters to create the account.
 	if err := validateAccountParams(value, expiry, bestHeight); err != nil {
 		return nil, err
 	}
+
+	// Let's make sure our wallet contains enough coins to fund the account
+	// before we reserve any resources. We ask lnd to create a transaction
+	// to send the given account value in dry-run mode. This makes sure we
+	// actually have some UTXOs to fund the account as this method returns
+	// an error on insufficient balance. Unfortunately it currently only
+	// supports estimating the total fee for a transaction using a
+	// confirmation target. We'll want to add sats/vByte as well as soon as
+	// the API allows it.
+	totalMinerFee, err := m.cfg.TxFeeEstimator.EstimateFeeToP2WSH(
+		ctx, value, int32(confTarget),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error estimating on-chain fee: %v", err)
+	}
+
+	// A by-product of the balance check is the total fee we'd need to pay
+	// so we might as well log it here.
+	log.Infof("Estimated total chain fee of %v for new account with "+
+		"value=%v, conf_target=%v", totalMinerFee, value, confTarget)
 
 	// We'll start by deriving a key for ourselves that we'll use in our
 	// 2-of-2 multi-sig construction.

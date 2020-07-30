@@ -92,12 +92,13 @@ func newRPCServer(server *Server) *rpcServer {
 		lndClient:   server.lndClient,
 		auctioneer:  server.AuctioneerClient,
 		accountManager: account.NewManager(&account.ManagerConfig{
-			Store:         accountStore,
-			Auctioneer:    server.AuctioneerClient,
-			Wallet:        lnd.WalletKit,
-			Signer:        lnd.Signer,
-			ChainNotifier: lnd.ChainNotifier,
-			TxSource:      lnd.Client,
+			Store:          accountStore,
+			Auctioneer:     server.AuctioneerClient,
+			Wallet:         lnd.WalletKit,
+			Signer:         lnd.Signer,
+			ChainNotifier:  lnd.ChainNotifier,
+			TxSource:       lnd.Client,
+			TxFeeEstimator: lnd.Client,
 		}),
 		orderManager: order.NewManager(&order.ManagerConfig{
 			Store:     server.db,
@@ -835,6 +836,7 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 
 	bestHeight := atomic.LoadUint32(&s.bestHeight)
 
+	// Determine the desired expiration value, can be relative or absolute.
 	var expiryHeight uint32
 	switch {
 	case req.GetAbsoluteHeight() != 0:
@@ -848,9 +850,16 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 			"must be specified")
 	}
 
+	// Determine the desired transaction fee.
+	confTarget := req.GetConfTarget()
+	if confTarget < 1 {
+		return nil, fmt.Errorf("confirmation target must be " +
+			"greater than 0")
+	}
+
 	account, err := s.accountManager.InitAccount(
 		ctx, btcutil.Amount(req.AccountValue), expiryHeight,
-		bestHeight,
+		bestHeight, confTarget,
 	)
 	if err != nil {
 		return nil, err
