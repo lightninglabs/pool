@@ -16,6 +16,7 @@ require (
 	github.com/lightninglabs/loop v0.6.4-beta.0.20200617020450-0d67b3987a63
 	github.com/lightninglabs/protobuf-hex-display v1.3.3-0.20191212020323-b444784ce75d
 	github.com/lightningnetwork/lnd v0.10.0-beta.rc6.0.20200702223723-2d4facf94061
+	github.com/stretchr/testify v1.5.1
 	github.com/urfave/cli v1.20.0
 	go.etcd.io/bbolt v1.3.5-0.20200615073812-232d8fc87f50
 	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a

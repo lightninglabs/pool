@@ -1,8 +1,11 @@
 package clientdb
 
 import (
+	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
+	"reflect"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/llm/account"
@@ -11,6 +14,19 @@ import (
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
+	"go.etcd.io/bbolt"
+)
+
+var (
+	// additionalDataSuffix is the suffix of the sub-bucket we are going to
+	// use to store new/additional data of objects in. The bucket structure
+	// will look this way with the example of the accounts bucket:
+	// [account]:                          root account bucket
+	//   - <acct_key_1>:                   <binary serialized base data>
+	//   - <acct_key_2>:                   <binary serialized base data>
+	//   [<acct_key_1>-additional-data]:   additional data bucket
+	//     - funding-conf-target:          <binary serialized value>
+	additionalDataSuffix = []byte("-additional-data")
 )
 
 // WriteElements is writes each element in the elements slice to the passed
@@ -194,4 +210,76 @@ func ReadElement(r io.Reader, element interface{}) error {
 	}
 
 	return nil
+}
+
+// getAdditionalDataBucket returns the bucket for additional data of a database
+// object located at mainKey.
+func getAdditionalDataBucket(parentBucket *bbolt.Bucket,
+	mainKey []byte, createBucket bool) (*bbolt.Bucket, error) {
+
+	keyLen := len(mainKey) + len(additionalDataSuffix)
+	additionalDataKey := make([]byte, keyLen)
+	copy(additionalDataKey, mainKey)
+	copy(additionalDataKey[len(mainKey):], additionalDataSuffix)
+
+	// When only reading from the DB we don't want to create the bucket if
+	// it doesn't exist as that would fail on the read-only TX anyway.
+	if createBucket {
+		return parentBucket.CreateBucketIfNotExists(additionalDataKey)
+	}
+
+	return parentBucket.Bucket(additionalDataKey), nil
+}
+
+func writeAdditionalValue(targetBucket *bbolt.Bucket, valueKey []byte,
+	value interface{}) error {
+
+	var valueBuf bytes.Buffer
+	if err := WriteElement(&valueBuf, value); err != nil {
+		return err
+	}
+
+	return targetBucket.Put(valueKey, valueBuf.Bytes())
+}
+
+func readAdditionalValue(sourceBucket *bbolt.Bucket, valueKey []byte,
+	valueTarget interface{}, defaultValue interface{}) error {
+
+	// First of all, check that the valueTarget is a pointer to the same
+	// type as the defaultValue. Otherwise our fallback hack below won't
+	// work.
+	defaultValueType := reflect.TypeOf(defaultValue)
+	valueTargetType := reflect.TypeOf(valueTarget)
+	if valueTargetType != reflect.PtrTo(defaultValueType) {
+		return fmt.Errorf("the defaultValue must be of the same type "+
+			"as valueTarget is a pointer of, got %v expected %v",
+			defaultValueType, valueTargetType.Elem())
+	}
+
+	var rawValue []byte
+
+	// If the additional values bucket exists, see if we have a value for
+	// this value key. If either the bucket and/or the value doesn't exist,
+	// we'll fall back to the default value below.
+	if sourceBucket != nil {
+		rawValue = sourceBucket.Get(valueKey)
+	}
+
+	if rawValue == nil {
+		// No value is stored for this field yet, so we set the default
+		// value. We trick a bit here so we don't have to care about the
+		// data type. We just serialize the default value (which _MUST_
+		// be of the same data type as the target value is a pointer of)
+		// with our generic write function, then pass that raw value to
+		// the generic read function.
+		var buf bytes.Buffer
+		if err := WriteElement(&buf, defaultValue); err != nil {
+			return err
+		}
+		rawValue = buf.Bytes()
+	}
+
+	// Now that the raw value contains a value for sure, use the generic
+	// read function we use for all other fields.
+	return ReadElement(bytes.NewReader(rawValue), valueTarget)
 }

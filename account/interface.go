@@ -162,6 +162,14 @@ type Account struct {
 	CloseTx *wire.MsgTx
 }
 
+const (
+	// DefaultFundingConfTarget is the default value used for the account
+	// funding/init target number of blocks to confirmation. We choose a
+	// very high value of one week to arrive at essentially 1 sat/vByte
+	// which used to be the previous default when creating the transaction.
+	DefaultFundingConfTarget uint32 = 144 * 7
+)
+
 // Output returns the current on-chain output associated with the account.
 func (a *Account) Output() (*wire.TxOut, error) {
 	script, err := clmscript.AccountScript(
