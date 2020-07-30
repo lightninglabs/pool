@@ -1493,6 +1493,40 @@ func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
 	})
 }
 
+// GetLsatTokens returns all tokens that are contained in the LSAT token store.
+func (s *rpcServer) GetLsatTokens(_ context.Context,
+	_ *clmrpc.TokensRequest) (*clmrpc.TokensResponse, error) {
+
+	log.Infof("Get LSAT tokens request received")
+
+	tokens, err := s.server.lsatStore.AllTokens()
+	if err != nil {
+		return nil, err
+	}
+
+	rpcTokens := make([]*clmrpc.LsatToken, len(tokens))
+	idx := 0
+	for key, token := range tokens {
+		macBytes, err := token.BaseMacaroon().MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		rpcTokens[idx] = &clmrpc.LsatToken{
+			BaseMacaroon:       macBytes,
+			PaymentHash:        token.PaymentHash[:],
+			PaymentPreimage:    token.Preimage[:],
+			AmountPaidMsat:     int64(token.AmountPaid),
+			RoutingFeePaidMsat: int64(token.RoutingFeePaid),
+			TimeCreated:        token.TimeCreated.Unix(),
+			Expired:            !token.IsValid(),
+			StorageName:        key,
+		}
+		idx++
+	}
+
+	return &clmrpc.TokensResponse{Tokens: rpcTokens}, nil
+}
+
 // sendSignBatch sends a sign message to the server with the witness stacks of
 // all accounts that are involved in the batch.
 func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,

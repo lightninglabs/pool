@@ -22,4 +22,5 @@ require (
 	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a
 	google.golang.org/genproto v0.0.0-20200513103714-09dca8ec2884
 	google.golang.org/grpc v1.29.1
+	gopkg.in/macaroon.v2 v2.1.0
 )
