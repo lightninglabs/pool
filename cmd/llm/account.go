@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/urfave/cli"
 )
@@ -56,6 +56,8 @@ const (
 	accountExpiryAbsolute = "expiry_height"
 
 	accountExpiryRelative = "expiry_blocks"
+
+	defaultFundingConfTarget = 6
 )
 
 var newAccountCommand = cli.Command{
@@ -81,6 +83,17 @@ var newAccountCommand = cli.Command{
 			Usage: "the relative height (from the current chain " +
 				"height) that the account should expire at",
 		},
+		cli.Uint64Flag{
+			Name: "conf_target",
+			Usage: "the target number of blocks the on-chain " +
+				"account funding transaction should confirm " +
+				"within",
+			Value: defaultFundingConfTarget,
+		},
+		cli.BoolFlag{
+			Name:  "force",
+			Usage: "skip account fee confirmation",
+		},
 	},
 	Action: newAccount,
 }
@@ -95,6 +108,9 @@ func newAccount(ctx *cli.Context) error {
 
 	req := &clmrpc.InitAccountRequest{
 		AccountValue: amt,
+		Fees: &clmrpc.InitAccountRequest_ConfTarget{
+			ConfTarget: uint32(ctx.Uint64("conf_target")),
+		},
 	}
 
 	if ctx.IsSet(accountExpiryAbsolute) && ctx.IsSet(accountExpiryRelative) {
@@ -121,12 +137,54 @@ func newAccount(ctx *cli.Context) error {
 	}
 	defer cleanup()
 
+	// In interactive mode, get a quote for the on-chain fees first and
+	// present it to the user.
+	if !ctx.Bool("force") {
+		if err := printAccountFees(
+			client, btcutil.Amount(amt),
+			uint32(ctx.Uint64("conf_target")),
+		); err != nil {
+			return err
+		}
+
+		if !promptForConfirmation("Confirm account (yes/no): ") {
+			fmt.Println("Cancelling account...")
+			return nil
+		}
+	}
+
 	resp, err := client.InitAccount(context.Background(), req)
 	if err != nil {
 		return err
 	}
 
 	printJSON(NewAccountFromProto(resp))
+
+	return nil
+}
+
+func printAccountFees(client clmrpc.TraderClient, amt btcutil.Amount,
+	confTarget uint32) error {
+
+	req := &clmrpc.QuoteAccountRequest{
+		AccountValue: uint64(amt),
+		Fees: &clmrpc.QuoteAccountRequest_ConfTarget{
+			ConfTarget: confTarget,
+		},
+	}
+	resp, err := client.QuoteAccount(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("unable to estimate on-chain fees: "+
+			"%v", err)
+	}
+
+	fmt.Println("-- Account Funding Details --")
+	fmt.Printf("Amount: %v\n", amt)
+	fmt.Printf("Confirmation target: %v blocks\n", confTarget)
+	fmt.Printf("Fee rate (estimated): %.1f sat/vByte\n",
+		resp.MinerFeeSatVbyte)
+	fmt.Printf("Total miner fee (estimated): %v\n",
+		btcutil.Amount(resp.MinerFeeTotal))
 
 	return nil
 }
