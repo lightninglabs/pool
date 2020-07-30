@@ -28,18 +28,13 @@ func getAccountKey(account *account.Account) []byte {
 
 // AddAccount adds a record for the account to the database.
 func (db *DB) AddAccount(account *account.Account) error {
-	accountKey := getAccountKey(account)
-	var accountBuf bytes.Buffer
-	if err := serializeAccount(&accountBuf, account); err != nil {
-		return err
-	}
-
 	return db.Update(func(tx *bbolt.Tx) error {
 		accounts, err := getBucket(tx, accountBucketKey)
 		if err != nil {
 			return err
 		}
-		return accounts.Put(accountKey, accountBuf.Bytes())
+
+		return storeAccount(accounts, account)
 	})
 }
 
@@ -72,14 +67,7 @@ func (db *DB) UpdateAccount(acct *account.Account,
 func updateAccount(src, dst *bbolt.Bucket, accountKey []byte,
 	modifiers []account.Modifier) error {
 
-	accountBytes := src.Get(accountKey)
-	if accountBytes == nil {
-		return ErrAccountNotFound
-	}
-
-	dbAccount, err := deserializeAccount(
-		bytes.NewReader(accountBytes),
-	)
+	dbAccount, err := readAccount(src, accountKey)
 	if err != nil {
 		return err
 	}
@@ -88,12 +76,7 @@ func updateAccount(src, dst *bbolt.Bucket, accountKey []byte,
 		modifier(dbAccount)
 	}
 
-	var accountBuf bytes.Buffer
-	if err := serializeAccount(&accountBuf, dbAccount); err != nil {
-		return err
-	}
-
-	return dst.Put(accountKey, accountBuf.Bytes())
+	return storeAccount(dst, dbAccount)
 }
 
 // Account retrieves a specific account by trader key or returns
@@ -106,12 +89,9 @@ func (db *DB) Account(traderKey *btcec.PublicKey) (*account.Account, error) {
 			return err
 		}
 
-		accountBytes := accounts.Get(traderKey.SerializeCompressed())
-		if accountBytes == nil {
-			return ErrAccountNotFound
-		}
-
-		acct, err = deserializeAccount(bytes.NewReader(accountBytes))
+		acct, err = readAccount(
+			accounts, traderKey.SerializeCompressed(),
+		)
 		return err
 	})
 	if err != nil {
@@ -131,7 +111,13 @@ func (db *DB) Accounts() ([]*account.Account, error) {
 		}
 
 		return accounts.ForEach(func(k, v []byte) error {
-			acct, err := deserializeAccount(bytes.NewReader(v))
+			// We'll also get buckets here, skip those (identified
+			// by nil value).
+			if v == nil {
+				return nil
+			}
+
+			acct, err := readAccount(accounts, k)
 			if err != nil {
 				return err
 			}
@@ -144,6 +130,28 @@ func (db *DB) Accounts() ([]*account.Account, error) {
 	}
 
 	return res, nil
+}
+
+func storeAccount(targetBucket *bbolt.Bucket, a *account.Account) error {
+	accountKey := getAccountKey(a)
+
+	var accountBuf bytes.Buffer
+	if err := serializeAccount(&accountBuf, a); err != nil {
+		return err
+	}
+
+	return targetBucket.Put(accountKey, accountBuf.Bytes())
+}
+
+func readAccount(sourceBucket *bbolt.Bucket,
+	accountKey []byte) (*account.Account, error) {
+
+	accountBytes := sourceBucket.Get(accountKey)
+	if accountBytes == nil {
+		return nil, ErrAccountNotFound
+	}
+
+	return deserializeAccount(bytes.NewReader(accountBytes))
 }
 
 func serializeAccount(w io.Writer, a *account.Account) error {
