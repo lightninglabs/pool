@@ -189,7 +189,15 @@ func (m *Manager) start() error {
 		return fmt.Errorf("unable to retrieve accounts: %v", err)
 	}
 	for _, account := range accounts {
-		if err := m.resumeAccount(ctx, account, true, false); err != nil {
+		// Try to resume the account now.
+		//
+		// TODO(guggero): Refactor this to extract the init/funding
+		// part so we properly abandon the account if it fails before
+		// publishing the TX instead of trying to re-fund on startup.
+		err := m.resumeAccount(
+			ctx, account, true, false, DefaultFundingConfTarget,
+		)
+		if err != nil {
 			return fmt.Errorf("unable to resume account %x: %v",
 				account.TraderKey.PubKey.SerializeCompressed(),
 				err)
@@ -318,7 +326,8 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	log.Infof("Creating new account %x of %v that expires at height %v",
 		keyDesc.PubKey.SerializeCompressed(), value, expiry)
 
-	if err := m.resumeAccount(ctx, account, false, false); err != nil {
+	err = m.resumeAccount(ctx, account, false, false, confTarget)
+	if err != nil {
 		return nil, err
 	}
 
@@ -329,7 +338,7 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 // This method serves as a way to consolidate the logic of resuming accounts on
 // startup and during normal operation.
 func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
-	onRestart bool, onRecovery bool) error {
+	onRestart bool, onRecovery bool, fundingConfTarget uint32) error {
 
 	accountOutput, err := account.Output()
 	if err != nil {
@@ -387,11 +396,19 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		}
 
 		if createTx {
-			// TODO(wilmer): Expose fee rate and manual controls to
-			// bump fees.
+			// We need a static sat/vByte value for the fee in
+			// SendOutputs, so we use the stored targetConf of the
+			// account to estimate it.
+			feeSatPerKw, err := m.cfg.Wallet.EstimateFee(
+				ctx, int32(fundingConfTarget),
+			)
+			if err != nil {
+				return err
+			}
+
+			// TODO(wilmer): Expose manual controls to bump fees.
 			tx, err := m.cfg.Wallet.SendOutputs(
-				ctx, []*wire.TxOut{accountOutput},
-				chainfee.FeePerKwFloor,
+				ctx, []*wire.TxOut{accountOutput}, feeSatPerKw,
 			)
 			if err != nil {
 				return err
@@ -741,9 +758,11 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 			spendTx, accountOutput.PkScript,
 		)
 		if ok {
-			// Proceed with the rest of the flow.
+			// Proceed with the rest of the flow. We won't send to
+			// the account output again, so we don't need to set
+			// a valid conf target.
 			return m.resumeAccount(
-				context.Background(), account, false, false,
+				context.Background(), account, false, false, 0,
 			)
 		}
 
@@ -1072,8 +1091,9 @@ func (m *Manager) RecoverAccount(ctx context.Context, account *Account) error {
 	// Now let's try to resume the account based on the state of it. We set
 	// the `onRestart` flag to false because that would try to re-publish
 	// the opening transaction in some cases which we don't want. Instead we
-	// set the `onRecovery` flag to true.
-	return m.resumeAccount(ctx, account, false, true)
+	// set the `onRecovery` flag to true. We won't send to the account
+	// output again, so we don't need to set a valid funding conf target.
+	return m.resumeAccount(ctx, account, false, true, 0)
 }
 
 // determineWitnessType determines the appropriate witness type to use for the
