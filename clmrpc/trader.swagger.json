@@ -13,6 +13,7 @@
   "paths": {
     "/v1/clm/accounts": {
       "get": {
+        "summary": "llm: `accounts list`\nListAccounts returns a list of all accounts known to the trader daemon and\ntheir current state.",
         "operationId": "ListAccounts",
         "responses": {
           "200": {
@@ -33,6 +34,7 @@
         ]
       },
       "delete": {
+        "summary": "llm: `accounts close`\nCloseAccount closes an account and returns the funds locked in that account\nto the connected lnd node's wallet.",
         "operationId": "CloseAccount",
         "responses": {
           "200": {
@@ -63,6 +65,7 @@
         ]
       },
       "post": {
+        "summary": "llm: `accounts new`\nInitAccount creates a new account with the requested size and expiration,\nfunding it from the wallet of the connected lnd node.",
         "operationId": "InitAccount",
         "responses": {
           "200": {
@@ -95,6 +98,7 @@
     },
     "/v1/clm/accounts/deposit": {
       "post": {
+        "summary": "llm: `accounts deposit`\nDepositAccount adds more funds from the connected lnd node's wallet to an\naccount.",
         "operationId": "DepositAccount",
         "responses": {
           "200": {
@@ -127,6 +131,7 @@
     },
     "/v1/clm/accounts/quote": {
       "post": {
+        "summary": "QuoteAccount gets a fee quote to fund an account of the given size with the\ngiven confirmation target. If the connected lnd wallet doesn't have enough\nbalance to fund an account of the requested size, an error is returned.",
         "operationId": "QuoteAccount",
         "responses": {
           "200": {
@@ -159,6 +164,7 @@
     },
     "/v1/clm/accounts/recover": {
       "post": {
+        "summary": "llm: `accounts recover`\nRecoverAccounts queries the auction server for this trader daemon's accounts\nin case we lost our local account database.",
         "operationId": "RecoverAccounts",
         "responses": {
           "200": {
@@ -191,6 +197,7 @@
     },
     "/v1/clm/accounts/withdraw": {
       "post": {
+        "summary": "llm: `accounts withdraw`\nWithdrawAccount splits off parts of the account balance into the specified\noutputs while recreating the account with a reduced balance.",
         "operationId": "WithdrawAccount",
         "responses": {
           "200": {
@@ -223,6 +230,7 @@
     },
     "/v1/clm/batch/snapshot": {
       "get": {
+        "summary": "llm: `auction snapshot`\nBatchSnapshot returns the snapshot of a past batch identified by its ID.",
         "operationId": "BatchSnapshot",
         "responses": {
           "200": {
@@ -255,6 +263,7 @@
     },
     "/v1/clm/fee": {
       "get": {
+        "summary": "llm: `auction fee`\nAuctionFee returns the current auction order execution fee specified by the\nauction server.",
         "operationId": "AuctionFee",
         "responses": {
           "200": {
@@ -277,6 +286,7 @@
     },
     "/v1/clm/orders": {
       "get": {
+        "summary": "llm: `orders list`\nListOrders returns a list of all active and archived orders that are\ncurrently known to the trader daemon.",
         "operationId": "ListOrders",
         "responses": {
           "200": {
@@ -297,6 +307,7 @@
         ]
       },
       "post": {
+        "summary": "llm: `orders submit`\nSubmitOrder creates a new ask or bid order and submits for the given account\nand submits it to the auction server for matching.",
         "operationId": "SubmitOrder",
         "responses": {
           "200": {
@@ -329,6 +340,7 @@
     },
     "/v1/clm/orders/{order_nonce}": {
       "delete": {
+        "summary": "llm: `orders cancel`\nCancelOrder cancels an active order with the auction server to remove it\nfrom future matching.",
         "operationId": "CancelOrder",
         "responses": {
           "200": {

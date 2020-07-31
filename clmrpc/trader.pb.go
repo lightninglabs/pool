@@ -1879,17 +1879,53 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type TraderClient interface {
+	//
+	//QuoteAccount gets a fee quote to fund an account of the given size with the
+	//given confirmation target. If the connected lnd wallet doesn't have enough
+	//balance to fund an account of the requested size, an error is returned.
 	QuoteAccount(ctx context.Context, in *QuoteAccountRequest, opts ...grpc.CallOption) (*QuoteAccountResponse, error)
+	// llm: `accounts new`
+	//InitAccount creates a new account with the requested size and expiration,
+	//funding it from the wallet of the connected lnd node.
 	InitAccount(ctx context.Context, in *InitAccountRequest, opts ...grpc.CallOption) (*Account, error)
+	// llm: `accounts list`
+	//ListAccounts returns a list of all accounts known to the trader daemon and
+	//their current state.
 	ListAccounts(ctx context.Context, in *ListAccountsRequest, opts ...grpc.CallOption) (*ListAccountsResponse, error)
+	// llm: `accounts close`
+	//CloseAccount closes an account and returns the funds locked in that account
+	//to the connected lnd node's wallet.
 	CloseAccount(ctx context.Context, in *CloseAccountRequest, opts ...grpc.CallOption) (*CloseAccountResponse, error)
+	// llm: `accounts withdraw`
+	//WithdrawAccount splits off parts of the account balance into the specified
+	//outputs while recreating the account with a reduced balance.
 	WithdrawAccount(ctx context.Context, in *WithdrawAccountRequest, opts ...grpc.CallOption) (*WithdrawAccountResponse, error)
+	// llm: `accounts deposit`
+	//DepositAccount adds more funds from the connected lnd node's wallet to an
+	//account.
 	DepositAccount(ctx context.Context, in *DepositAccountRequest, opts ...grpc.CallOption) (*DepositAccountResponse, error)
+	// llm: `accounts recover`
+	//RecoverAccounts queries the auction server for this trader daemon's accounts
+	//in case we lost our local account database.
 	RecoverAccounts(ctx context.Context, in *RecoverAccountsRequest, opts ...grpc.CallOption) (*RecoverAccountsResponse, error)
+	// llm: `orders submit`
+	//SubmitOrder creates a new ask or bid order and submits for the given account
+	//and submits it to the auction server for matching.
 	SubmitOrder(ctx context.Context, in *SubmitOrderRequest, opts ...grpc.CallOption) (*SubmitOrderResponse, error)
+	// llm: `orders list`
+	//ListOrders returns a list of all active and archived orders that are
+	//currently known to the trader daemon.
 	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error)
+	// llm: `orders cancel`
+	//CancelOrder cancels an active order with the auction server to remove it
+	//from future matching.
 	CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*CancelOrderResponse, error)
+	// llm: `auction fee`
+	//AuctionFee returns the current auction order execution fee specified by the
+	//auction server.
 	AuctionFee(ctx context.Context, in *AuctionFeeRequest, opts ...grpc.CallOption) (*AuctionFeeResponse, error)
+	// llm: `auction snapshot`
+	//BatchSnapshot returns the snapshot of a past batch identified by its ID.
 	BatchSnapshot(ctx context.Context, in *BatchSnapshotRequest, opts ...grpc.CallOption) (*BatchSnapshotResponse, error)
 	//* llm: `listauth`
 	//GetLsatTokens returns all LSAT tokens the daemon ever paid for.
@@ -2023,17 +2059,53 @@ func (c *traderClient) GetLsatTokens(ctx context.Context, in *TokensRequest, opt
 
 // TraderServer is the server API for Trader service.
 type TraderServer interface {
+	//
+	//QuoteAccount gets a fee quote to fund an account of the given size with the
+	//given confirmation target. If the connected lnd wallet doesn't have enough
+	//balance to fund an account of the requested size, an error is returned.
 	QuoteAccount(context.Context, *QuoteAccountRequest) (*QuoteAccountResponse, error)
+	// llm: `accounts new`
+	//InitAccount creates a new account with the requested size and expiration,
+	//funding it from the wallet of the connected lnd node.
 	InitAccount(context.Context, *InitAccountRequest) (*Account, error)
+	// llm: `accounts list`
+	//ListAccounts returns a list of all accounts known to the trader daemon and
+	//their current state.
 	ListAccounts(context.Context, *ListAccountsRequest) (*ListAccountsResponse, error)
+	// llm: `accounts close`
+	//CloseAccount closes an account and returns the funds locked in that account
+	//to the connected lnd node's wallet.
 	CloseAccount(context.Context, *CloseAccountRequest) (*CloseAccountResponse, error)
+	// llm: `accounts withdraw`
+	//WithdrawAccount splits off parts of the account balance into the specified
+	//outputs while recreating the account with a reduced balance.
 	WithdrawAccount(context.Context, *WithdrawAccountRequest) (*WithdrawAccountResponse, error)
+	// llm: `accounts deposit`
+	//DepositAccount adds more funds from the connected lnd node's wallet to an
+	//account.
 	DepositAccount(context.Context, *DepositAccountRequest) (*DepositAccountResponse, error)
+	// llm: `accounts recover`
+	//RecoverAccounts queries the auction server for this trader daemon's accounts
+	//in case we lost our local account database.
 	RecoverAccounts(context.Context, *RecoverAccountsRequest) (*RecoverAccountsResponse, error)
+	// llm: `orders submit`
+	//SubmitOrder creates a new ask or bid order and submits for the given account
+	//and submits it to the auction server for matching.
 	SubmitOrder(context.Context, *SubmitOrderRequest) (*SubmitOrderResponse, error)
+	// llm: `orders list`
+	//ListOrders returns a list of all active and archived orders that are
+	//currently known to the trader daemon.
 	ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error)
+	// llm: `orders cancel`
+	//CancelOrder cancels an active order with the auction server to remove it
+	//from future matching.
 	CancelOrder(context.Context, *CancelOrderRequest) (*CancelOrderResponse, error)
+	// llm: `auction fee`
+	//AuctionFee returns the current auction order execution fee specified by the
+	//auction server.
 	AuctionFee(context.Context, *AuctionFeeRequest) (*AuctionFeeResponse, error)
+	// llm: `auction snapshot`
+	//BatchSnapshot returns the snapshot of a past batch identified by its ID.
 	BatchSnapshot(context.Context, *BatchSnapshotRequest) (*BatchSnapshotResponse, error)
 	//* llm: `listauth`
 	//GetLsatTokens returns all LSAT tokens the daemon ever paid for.
