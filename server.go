@@ -38,6 +38,7 @@ type Server struct {
 
 	cfg          *Config
 	db           *clientdb.DB
+	lsatStore    *lsat.FileStore
 	lndServices  *lndclient.GrpcLndServices
 	lndClient    lnrpc.LightningClient
 	traderServer *rpcServer
@@ -186,6 +187,7 @@ func NewServer(cfg *Config) (*Server, error) {
 	return &Server{
 		cfg:              cfg,
 		db:               db,
+		lsatStore:        fileStore,
 		lndServices:      lndServices,
 		lndClient:        baseClient,
 		AuctioneerClient: auctioneerClient,

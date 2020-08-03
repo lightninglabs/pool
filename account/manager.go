@@ -113,6 +113,10 @@ type ManagerConfig struct {
 	// TxSource is a source that provides us with transactions previously
 	// broadcast by us.
 	TxSource TxSource
+
+	// TxFeeEstimator is an estimator that can calculate the total on-chain
+	// fees to send to an account output.
+	TxFeeEstimator TxFeeEstimator
 }
 
 // Manager is responsible for the management of accounts on-chain.
@@ -185,7 +189,15 @@ func (m *Manager) start() error {
 		return fmt.Errorf("unable to retrieve accounts: %v", err)
 	}
 	for _, account := range accounts {
-		if err := m.resumeAccount(ctx, account, true, false); err != nil {
+		// Try to resume the account now.
+		//
+		// TODO(guggero): Refactor this to extract the init/funding
+		// part so we properly abandon the account if it fails before
+		// publishing the TX instead of trying to re-fund on startup.
+		err := m.resumeAccount(
+			ctx, account, true, false, DefaultFundingConfTarget,
+		)
+		if err != nil {
 			return fmt.Errorf("unable to resume account %x: %v",
 				account.TraderKey.PubKey.SerializeCompressed(),
 				err)
@@ -205,15 +217,65 @@ func (m *Manager) Stop() {
 	})
 }
 
+// QuoteAccount returns the expected fee rate and total miner fee to send to an
+// account funding output with the given confTarget.
+func (m *Manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
+	confTarget uint32) (chainfee.SatPerKWeight, btcutil.Amount, error) {
+
+	// First, make sure we have a valid amount to create the account.
+	if err := validateAccountValue(value); err != nil {
+		return 0, 0, err
+	}
+
+	// Now calculate the estimated fee rate from the confTarget.
+	feeRate, err := m.cfg.Wallet.EstimateFee(ctx, int32(confTarget))
+	if err != nil {
+		return 0, 0, fmt.Errorf("error estimating fee rate: %v", err)
+	}
+
+	// Then calculate the total fee to pay. This asks lnd to create a full
+	// transaction to spend to a P2WSH output. If not enough confirmed funds
+	// are available in the wallet, this will return an error.
+	totalMinerFee, err := m.cfg.TxFeeEstimator.EstimateFeeToP2WSH(
+		ctx, value, int32(confTarget),
+	)
+	if err != nil {
+		return 0, 0, fmt.Errorf("error estimating total on-chain fee: "+
+			"%v", err)
+	}
+
+	return feeRate, totalMinerFee, nil
+}
+
 // InitAccount handles a request to create a new account with the provided
 // parameters.
 func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
-	expiry uint32, bestHeight uint32) (*Account, error) {
+	expiry, bestHeight, confTarget uint32) (*Account, error) {
 
 	// First, make sure we have valid parameters to create the account.
 	if err := validateAccountParams(value, expiry, bestHeight); err != nil {
 		return nil, err
 	}
+
+	// Let's make sure our wallet contains enough coins to fund the account
+	// before we reserve any resources. We ask lnd to create a transaction
+	// to send the given account value in dry-run mode. This makes sure we
+	// actually have some UTXOs to fund the account as this method returns
+	// an error on insufficient balance. Unfortunately it currently only
+	// supports estimating the total fee for a transaction using a
+	// confirmation target. We'll want to add sats/vByte as well as soon as
+	// the API allows it.
+	totalMinerFee, err := m.cfg.TxFeeEstimator.EstimateFeeToP2WSH(
+		ctx, value, int32(confTarget),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error estimating on-chain fee: %v", err)
+	}
+
+	// A by-product of the balance check is the total fee we'd need to pay
+	// so we might as well log it here.
+	log.Infof("Estimated total chain fee of %v for new account with "+
+		"value=%v, conf_target=%v", totalMinerFee, value, confTarget)
 
 	// We'll start by deriving a key for ourselves that we'll use in our
 	// 2-of-2 multi-sig construction.
@@ -264,7 +326,8 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	log.Infof("Creating new account %x of %v that expires at height %v",
 		keyDesc.PubKey.SerializeCompressed(), value, expiry)
 
-	if err := m.resumeAccount(ctx, account, false, false); err != nil {
+	err = m.resumeAccount(ctx, account, false, false, confTarget)
+	if err != nil {
 		return nil, err
 	}
 
@@ -275,7 +338,7 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 // This method serves as a way to consolidate the logic of resuming accounts on
 // startup and during normal operation.
 func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
-	onRestart bool, onRecovery bool) error {
+	onRestart bool, onRecovery bool, fundingConfTarget uint32) error {
 
 	accountOutput, err := account.Output()
 	if err != nil {
@@ -333,11 +396,19 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		}
 
 		if createTx {
-			// TODO(wilmer): Expose fee rate and manual controls to
-			// bump fees.
+			// We need a static sat/vByte value for the fee in
+			// SendOutputs, so we use the stored targetConf of the
+			// account to estimate it.
+			feeSatPerKw, err := m.cfg.Wallet.EstimateFee(
+				ctx, int32(fundingConfTarget),
+			)
+			if err != nil {
+				return err
+			}
+
+			// TODO(wilmer): Expose manual controls to bump fees.
 			tx, err := m.cfg.Wallet.SendOutputs(
-				ctx, []*wire.TxOut{accountOutput},
-				chainfee.FeePerKwFloor,
+				ctx, []*wire.TxOut{accountOutput}, feeSatPerKw,
 			)
 			if err != nil {
 				return err
@@ -687,9 +758,11 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 			spendTx, accountOutput.PkScript,
 		)
 		if ok {
-			// Proceed with the rest of the flow.
+			// Proceed with the rest of the flow. We won't send to
+			// the account output again, so we don't need to set
+			// a valid conf target.
 			return m.resumeAccount(
-				context.Background(), account, false, false,
+				context.Background(), account, false, false, 0,
 			)
 		}
 
@@ -1018,8 +1091,9 @@ func (m *Manager) RecoverAccount(ctx context.Context, account *Account) error {
 	// Now let's try to resume the account based on the state of it. We set
 	// the `onRestart` flag to false because that would try to re-publish
 	// the opening transaction in some cases which we don't want. Instead we
-	// set the `onRecovery` flag to true.
-	return m.resumeAccount(ctx, account, false, true)
+	// set the `onRecovery` flag to true. We won't send to the account
+	// output again, so we don't need to set a valid funding conf target.
+	return m.resumeAccount(ctx, account, false, true, 0)
 }
 
 // determineWitnessType determines the appropriate witness type to use for the
@@ -1550,9 +1624,9 @@ func (m *Manager) toWalletOutput(ctx context.Context,
 	}, nil
 }
 
-// validateAccountParams ensures that a trader has provided sane parameters for
-// the creation of a new account.
-func validateAccountParams(value btcutil.Amount, expiry, bestHeight uint32) error {
+// validateAccountValue ensures that a trader has provided a sane account value
+// for the creation of a new account.
+func validateAccountValue(value btcutil.Amount) error {
 	if value < MinAccountValue {
 		return fmt.Errorf("minimum account value allowed is %v",
 			MinAccountValue)
@@ -1560,6 +1634,17 @@ func validateAccountParams(value btcutil.Amount, expiry, bestHeight uint32) erro
 	if value > maxAccountValue {
 		return fmt.Errorf("maximum account value allowed is %v",
 			maxAccountValue)
+	}
+
+	return nil
+}
+
+// validateAccountParams ensures that a trader has provided sane parameters for
+// the creation of a new account.
+func validateAccountParams(value btcutil.Amount, expiry, bestHeight uint32) error {
+	err := validateAccountValue(value)
+	if err != nil {
+		return err
 	}
 
 	if expiry < bestHeight+minAccountExpiry {

@@ -92,12 +92,13 @@ func newRPCServer(server *Server) *rpcServer {
 		lndClient:   server.lndClient,
 		auctioneer:  server.AuctioneerClient,
 		accountManager: account.NewManager(&account.ManagerConfig{
-			Store:         accountStore,
-			Auctioneer:    server.AuctioneerClient,
-			Wallet:        lnd.WalletKit,
-			Signer:        lnd.Signer,
-			ChainNotifier: lnd.ChainNotifier,
-			TxSource:      lnd.Client,
+			Store:          accountStore,
+			Auctioneer:     server.AuctioneerClient,
+			Wallet:         lnd.WalletKit,
+			Signer:         lnd.Signer,
+			ChainNotifier:  lnd.ChainNotifier,
+			TxSource:       lnd.Client,
+			TxFeeEstimator: lnd.Client,
 		}),
 		orderManager: order.NewManager(&order.ManagerConfig{
 			Store:     server.db,
@@ -830,11 +831,35 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 	return nil
 }
 
+func (s *rpcServer) QuoteAccount(ctx context.Context,
+	req *clmrpc.QuoteAccountRequest) (*clmrpc.QuoteAccountResponse, error) {
+
+	// Determine the desired transaction fee.
+	confTarget := req.GetConfTarget()
+	if confTarget < 1 {
+		return nil, fmt.Errorf("confirmation target must be " +
+			"greater than 0")
+	}
+
+	feeRate, totalFee, err := s.accountManager.QuoteAccount(
+		ctx, btcutil.Amount(req.AccountValue), confTarget,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &clmrpc.QuoteAccountResponse{
+		MinerFeeSatVbyte: float64(feeRate.FeePerKVByte()) / 1000,
+		MinerFeeTotal:    uint64(totalFee),
+	}, nil
+}
+
 func (s *rpcServer) InitAccount(ctx context.Context,
 	req *clmrpc.InitAccountRequest) (*clmrpc.Account, error) {
 
 	bestHeight := atomic.LoadUint32(&s.bestHeight)
 
+	// Determine the desired expiration value, can be relative or absolute.
 	var expiryHeight uint32
 	switch {
 	case req.GetAbsoluteHeight() != 0:
@@ -848,9 +873,16 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 			"must be specified")
 	}
 
+	// Determine the desired transaction fee.
+	confTarget := req.GetConfTarget()
+	if confTarget < 1 {
+		return nil, fmt.Errorf("confirmation target must be " +
+			"greater than 0")
+	}
+
 	account, err := s.accountManager.InitAccount(
 		ctx, btcutil.Amount(req.AccountValue), expiryHeight,
-		bestHeight,
+		bestHeight, confTarget,
 	)
 	if err != nil {
 		return nil, err
@@ -1459,6 +1491,40 @@ func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
 			},
 		},
 	})
+}
+
+// GetLsatTokens returns all tokens that are contained in the LSAT token store.
+func (s *rpcServer) GetLsatTokens(_ context.Context,
+	_ *clmrpc.TokensRequest) (*clmrpc.TokensResponse, error) {
+
+	log.Infof("Get LSAT tokens request received")
+
+	tokens, err := s.server.lsatStore.AllTokens()
+	if err != nil {
+		return nil, err
+	}
+
+	rpcTokens := make([]*clmrpc.LsatToken, len(tokens))
+	idx := 0
+	for key, token := range tokens {
+		macBytes, err := token.BaseMacaroon().MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		rpcTokens[idx] = &clmrpc.LsatToken{
+			BaseMacaroon:       macBytes,
+			PaymentHash:        token.PaymentHash[:],
+			PaymentPreimage:    token.Preimage[:],
+			AmountPaidMsat:     int64(token.AmountPaid),
+			RoutingFeePaidMsat: int64(token.RoutingFeePaid),
+			TimeCreated:        token.TimeCreated.Unix(),
+			Expired:            !token.IsValid(),
+			StorageName:        key,
+		}
+		idx++
+	}
+
+	return &clmrpc.TokensResponse{Tokens: rpcTokens}, nil
 }
 
 // sendSignBatch sends a sign message to the server with the witness stacks of

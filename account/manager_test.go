@@ -54,12 +54,13 @@ func newTestHarness(t *testing.T) *testHarness {
 		notifier:   notifier,
 		auctioneer: auctioneer,
 		manager: NewManager(&ManagerConfig{
-			Store:         store,
-			Auctioneer:    auctioneer,
-			Wallet:        wallet,
-			Signer:        wallet,
-			ChainNotifier: notifier,
-			TxSource:      wallet,
+			Store:          store,
+			Auctioneer:     auctioneer,
+			Wallet:         wallet,
+			Signer:         wallet,
+			ChainNotifier:  notifier,
+			TxSource:       wallet,
+			TxFeeEstimator: wallet,
 		}),
 	}
 }
@@ -139,7 +140,9 @@ func (h *testHarness) openAccount(value btcutil.Amount, expiry uint32, // nolint
 
 	// Create a new account. Its initial state should be StatePendingOpen.
 	ctx := context.Background()
-	account, err := h.manager.InitAccount(ctx, value, expiry, bestHeight)
+	account, err := h.manager.InitAccount(
+		ctx, value, expiry, bestHeight, DefaultFundingConfTarget,
+	)
 	if err != nil {
 		h.t.Fatalf("unable to create new account: %v", err)
 	}
@@ -511,6 +514,7 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 	go func() {
 		_, _ = h.manager.InitAccount(
 			context.Background(), value, expiry, bestHeight,
+			DefaultFundingConfTarget,
 		)
 	}()
 

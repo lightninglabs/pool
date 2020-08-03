@@ -320,6 +320,18 @@ func (w *mockWallet) ComputeInputScript(context.Context, *wire.MsgTx,
 	}}, nil
 }
 
+func (w *mockWallet) EstimateFee(_ context.Context,
+	_ int32) (chainfee.SatPerKWeight, error) {
+
+	return chainfee.FeePerKwFloor, nil
+}
+
+func (w *mockWallet) EstimateFeeToP2WSH(_ context.Context, _ btcutil.Amount,
+	_ int32) (btcutil.Amount, error) {
+
+	return btcutil.Amount(chainfee.FeePerKwFloor), nil
+}
+
 type mockChainNotifier struct {
 	lndclient.ChainNotifierClient
 

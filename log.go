@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btclog"
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/auctioneer"
+	"github.com/lightninglabs/llm/clientdb"
 	"github.com/lightninglabs/llm/order"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightninglabs/loop/lsat"
@@ -37,6 +38,7 @@ func init() {
 	addSubLogger("SGNL", signal.UseLogger)
 	addSubLogger(account.Subsystem, account.UseLogger)
 	addSubLogger(lsat.Subsystem, lsat.UseLogger)
+	addSubLogger(clientdb.Subsystem, clientdb.UseLogger)
 }
 
 // addSubLogger is a helper method to conveniently create and register the

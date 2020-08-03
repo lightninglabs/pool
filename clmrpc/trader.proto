@@ -8,6 +8,22 @@ package clmrpc;
 option go_package = "github.com/lightninglabs/llm/clmrpc";
 
 service Trader {
+    /*
+    QuoteAccount gets a fee quote to fund an account of the given size with the
+    given confirmation target. If the connected lnd wallet doesn't have enough
+    balance to fund an account of the requested size, an error is returned.
+    */
+    rpc QuoteAccount (QuoteAccountRequest) returns (QuoteAccountResponse) {
+        option (google.api.http) = {
+            post: "/v1/clm/accounts/quote"
+            body: "*"
+        };
+    };
+
+    /* llm: `accounts new`
+    InitAccount creates a new account with the requested size and expiration,
+    funding it from the wallet of the connected lnd node.
+    */
     rpc InitAccount (InitAccountRequest) returns (Account) {
         option (google.api.http) = {
             post: "/v1/clm/accounts"
@@ -15,18 +31,30 @@ service Trader {
         };
     };
 
+    /* llm: `accounts list`
+    ListAccounts returns a list of all accounts known to the trader daemon and
+    their current state.
+    */
     rpc ListAccounts (ListAccountsRequest) returns (ListAccountsResponse) {
         option (google.api.http) = {
             get: "/v1/clm/accounts"
         };
     };
 
+    /* llm: `accounts close`
+    CloseAccount closes an account and returns the funds locked in that account
+    to the connected lnd node's wallet.
+    */
     rpc CloseAccount (CloseAccountRequest) returns (CloseAccountResponse) {
         option (google.api.http) = {
             delete: "/v1/clm/accounts"
         };
     };
 
+    /* llm: `accounts withdraw`
+    WithdrawAccount splits off parts of the account balance into the specified
+    outputs while recreating the account with a reduced balance.
+    */
     rpc WithdrawAccount (WithdrawAccountRequest) returns (WithdrawAccountResponse) {
         option (google.api.http) = {
             post: "/v1/clm/accounts/withdraw"
@@ -34,6 +62,10 @@ service Trader {
         };
     };
 
+    /* llm: `accounts deposit`
+    DepositAccount adds more funds from the connected lnd node's wallet to an
+    account.
+    */
     rpc DepositAccount (DepositAccountRequest) returns (DepositAccountResponse) {
         option (google.api.http) = {
             post: "/v1/clm/accounts/deposit"
@@ -41,6 +73,10 @@ service Trader {
         };
     };
 
+    /* llm: `accounts recover`
+    RecoverAccounts queries the auction server for this trader daemon's accounts
+    in case we lost our local account database.
+    */
     rpc RecoverAccounts (RecoverAccountsRequest) returns (RecoverAccountsResponse) {
         option (google.api.http) = {
             post: "/v1/clm/accounts/recover"
@@ -48,6 +84,10 @@ service Trader {
         };
     };
 
+    /* llm: `orders submit`
+    SubmitOrder creates a new ask or bid order and submits for the given account
+    and submits it to the auction server for matching.
+    */
     rpc SubmitOrder (SubmitOrderRequest) returns (SubmitOrderResponse) {
         option (google.api.http) = {
             post: "/v1/clm/orders"
@@ -55,29 +95,53 @@ service Trader {
         };
     };
 
+    /* llm: `orders list`
+    ListOrders returns a list of all active and archived orders that are
+    currently known to the trader daemon.
+    */
     rpc ListOrders (ListOrdersRequest) returns (ListOrdersResponse) {
         option (google.api.http) = {
             get: "/v1/clm/orders"
         };
     }
 
+    /* llm: `orders cancel`
+    CancelOrder cancels an active order with the auction server to remove it
+    from future matching.
+    */
     rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse) {
         option (google.api.http) = {
             delete: "/v1/clm/orders/{order_nonce}"
         };
     };
 
-    rpc AuctionFee(AuctionFeeRequest) returns (AuctionFeeResponse) {
+    /* llm: `auction fee`
+    AuctionFee returns the current auction order execution fee specified by the
+    auction server.
+    */
+    rpc AuctionFee (AuctionFeeRequest) returns (AuctionFeeResponse) {
         option (google.api.http) = {
             get: "/v1/clm/fee"
         };
     };
 
-    rpc BatchSnapshot(BatchSnapshotRequest) returns (BatchSnapshotResponse) {
+    /* llm: `auction snapshot`
+    BatchSnapshot returns the snapshot of a past batch identified by its ID.
+    */
+    rpc BatchSnapshot (BatchSnapshotRequest) returns (BatchSnapshotResponse) {
         option (google.api.http) = {
             get: "/v1/clm/batch/snapshot"
         };
     };
+
+    /** llm: `listauth`
+    GetLsatTokens returns all LSAT tokens the daemon ever paid for.
+    */
+    rpc GetLsatTokens (TokensRequest) returns (TokensResponse) {
+        option (google.api.http) = {
+            get: "/v1/lsat/tokens"
+        };
+    }
 }
 
 message InitAccountRequest {
@@ -87,6 +151,36 @@ message InitAccountRequest {
         uint32 absolute_height = 2;
         uint32 relative_height = 3;
     }
+
+    oneof fees {
+        /*
+        The target number of blocks that the transaction should be confirmed in.
+        */
+        uint32 conf_target = 4;
+
+        // TODO(guggero): Add sat_per_vbyte as soon as lnd has a parameter for
+        // that in rpcServer.EstimateFee.
+    }
+}
+
+message QuoteAccountRequest {
+    uint64 account_value = 1;
+
+    oneof fees {
+        /*
+        The target number of blocks that the transaction should be confirmed in.
+        */
+        uint32 conf_target = 2;
+
+        // TODO(guggero): Add sat_per_vbyte as soon as lnd has a parameter for
+        // that in rpcServer.EstimateFee.
+    }
+}
+
+message QuoteAccountResponse {
+    double miner_fee_sat_vbyte = 1;
+
+    uint64 miner_fee_total = 2;
 }
 
 message ListAccountsRequest {
@@ -362,4 +456,59 @@ message AuctionFeeResponse {
     The execution fee charged per matched order.
     */
     ExecutionFee execution_fee = 1;
+}
+
+message TokensRequest {
+}
+
+message TokensResponse {
+    /**
+    List of all tokens the daemon knows of, including old/expired tokens.
+    */
+    repeated LsatToken tokens = 1;
+}
+
+message LsatToken {
+    /**
+    The base macaroon that was baked by the auth server.
+    */
+    bytes base_macaroon = 1;
+
+    /**
+    The payment hash of the payment that was paid to obtain the token.
+    */
+    bytes payment_hash = 2;
+
+    /**
+    The preimage of the payment hash, knowledge of this is proof that the
+    payment has been paid. If the preimage is set to all zeros, this means the
+    payment is still pending and the token is not yet fully valid.
+    */
+    bytes payment_preimage = 3;
+
+    /**
+    The amount of millisatoshis that was paid to get the token.
+    */
+    int64 amount_paid_msat = 4;
+
+    /**
+    The amount of millisatoshis paid in routing fee to pay for the token.
+    */
+    int64 routing_fee_paid_msat = 5;
+
+    /**
+    The creation time of the token as UNIX timestamp in seconds.
+    */
+    int64 time_created = 6;
+
+    /**
+    Indicates whether the token is expired or still valid.
+    */
+    bool expired = 7;
+
+    /**
+    Identifying attribute of this token in the store. Currently represents the
+    file name of the token where it's stored on the file system.
+    */
+    string storage_name = 8;
 }

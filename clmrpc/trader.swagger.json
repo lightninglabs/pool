@@ -13,6 +13,7 @@
   "paths": {
     "/v1/clm/accounts": {
       "get": {
+        "summary": "llm: `accounts list`\nListAccounts returns a list of all accounts known to the trader daemon and\ntheir current state.",
         "operationId": "ListAccounts",
         "responses": {
           "200": {
@@ -33,6 +34,7 @@
         ]
       },
       "delete": {
+        "summary": "llm: `accounts close`\nCloseAccount closes an account and returns the funds locked in that account\nto the connected lnd node's wallet.",
         "operationId": "CloseAccount",
         "responses": {
           "200": {
@@ -63,6 +65,7 @@
         ]
       },
       "post": {
+        "summary": "llm: `accounts new`\nInitAccount creates a new account with the requested size and expiration,\nfunding it from the wallet of the connected lnd node.",
         "operationId": "InitAccount",
         "responses": {
           "200": {
@@ -95,6 +98,7 @@
     },
     "/v1/clm/accounts/deposit": {
       "post": {
+        "summary": "llm: `accounts deposit`\nDepositAccount adds more funds from the connected lnd node's wallet to an\naccount.",
         "operationId": "DepositAccount",
         "responses": {
           "200": {
@@ -125,8 +129,42 @@
         ]
       }
     },
+    "/v1/clm/accounts/quote": {
+      "post": {
+        "summary": "QuoteAccount gets a fee quote to fund an account of the given size with the\ngiven confirmation target. If the connected lnd wallet doesn't have enough\nbalance to fund an account of the requested size, an error is returned.",
+        "operationId": "QuoteAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcQuoteAccountResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/clmrpcQuoteAccountRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/clm/accounts/recover": {
       "post": {
+        "summary": "llm: `accounts recover`\nRecoverAccounts queries the auction server for this trader daemon's accounts\nin case we lost our local account database.",
         "operationId": "RecoverAccounts",
         "responses": {
           "200": {
@@ -159,6 +197,7 @@
     },
     "/v1/clm/accounts/withdraw": {
       "post": {
+        "summary": "llm: `accounts withdraw`\nWithdrawAccount splits off parts of the account balance into the specified\noutputs while recreating the account with a reduced balance.",
         "operationId": "WithdrawAccount",
         "responses": {
           "200": {
@@ -191,6 +230,7 @@
     },
     "/v1/clm/batch/snapshot": {
       "get": {
+        "summary": "llm: `auction snapshot`\nBatchSnapshot returns the snapshot of a past batch identified by its ID.",
         "operationId": "BatchSnapshot",
         "responses": {
           "200": {
@@ -223,6 +263,7 @@
     },
     "/v1/clm/fee": {
       "get": {
+        "summary": "llm: `auction fee`\nAuctionFee returns the current auction order execution fee specified by the\nauction server.",
         "operationId": "AuctionFee",
         "responses": {
           "200": {
@@ -245,6 +286,7 @@
     },
     "/v1/clm/orders": {
       "get": {
+        "summary": "llm: `orders list`\nListOrders returns a list of all active and archived orders that are\ncurrently known to the trader daemon.",
         "operationId": "ListOrders",
         "responses": {
           "200": {
@@ -265,6 +307,7 @@
         ]
       },
       "post": {
+        "summary": "llm: `orders submit`\nSubmitOrder creates a new ask or bid order and submits for the given account\nand submits it to the auction server for matching.",
         "operationId": "SubmitOrder",
         "responses": {
           "200": {
@@ -297,6 +340,7 @@
     },
     "/v1/clm/orders/{order_nonce}": {
       "delete": {
+        "summary": "llm: `orders cancel`\nCancelOrder cancels an active order with the auction server to remove it\nfrom future matching.",
         "operationId": "CancelOrder",
         "responses": {
           "200": {
@@ -321,6 +365,29 @@
             "format": "byte"
           }
         ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/v1/lsat/tokens": {
+      "get": {
+        "summary": "* llm: `listauth`\nGetLsatTokens returns all LSAT tokens the daemon ever paid for.",
+        "operationId": "GetLsatTokens",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcTokensResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
         "tags": [
           "Trader"
         ]
@@ -596,6 +663,11 @@
         "relative_height": {
           "type": "integer",
           "format": "int64"
+        },
+        "conf_target": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The target number of blocks that the transaction should be confirmed in."
         }
       }
     },
@@ -639,6 +711,50 @@
           "items": {
             "$ref": "#/definitions/clmrpcBid"
           }
+        }
+      }
+    },
+    "clmrpcLsatToken": {
+      "type": "object",
+      "properties": {
+        "base_macaroon": {
+          "type": "string",
+          "format": "byte",
+          "description": "*\nThe base macaroon that was baked by the auth server."
+        },
+        "payment_hash": {
+          "type": "string",
+          "format": "byte",
+          "description": "*\nThe payment hash of the payment that was paid to obtain the token."
+        },
+        "payment_preimage": {
+          "type": "string",
+          "format": "byte",
+          "description": "*\nThe preimage of the payment hash, knowledge of this is proof that the\npayment has been paid. If the preimage is set to all zeros, this means the\npayment is still pending and the token is not yet fully valid."
+        },
+        "amount_paid_msat": {
+          "type": "string",
+          "format": "int64",
+          "description": "*\nThe amount of millisatoshis that was paid to get the token."
+        },
+        "routing_fee_paid_msat": {
+          "type": "string",
+          "format": "int64",
+          "description": "*\nThe amount of millisatoshis paid in routing fee to pay for the token."
+        },
+        "time_created": {
+          "type": "string",
+          "format": "int64",
+          "description": "*\nThe creation time of the token as UNIX timestamp in seconds."
+        },
+        "expired": {
+          "type": "boolean",
+          "format": "boolean",
+          "description": "*\nIndicates whether the token is expired or still valid."
+        },
+        "storage_name": {
+          "type": "string",
+          "description": "*\nIdentifying attribute of this token in the store. Currently represents the\nfile name of the token where it's stored on the file system."
         }
       }
     },
@@ -756,6 +872,33 @@
         }
       }
     },
+    "clmrpcQuoteAccountRequest": {
+      "type": "object",
+      "properties": {
+        "account_value": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "conf_target": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The target number of blocks that the transaction should be confirmed in."
+        }
+      }
+    },
+    "clmrpcQuoteAccountResponse": {
+      "type": "object",
+      "properties": {
+        "miner_fee_sat_vbyte": {
+          "type": "number",
+          "format": "double"
+        },
+        "miner_fee_total": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
     "clmrpcRecoverAccountsRequest": {
       "type": "object"
     },
@@ -791,6 +934,18 @@
           "type": "string",
           "format": "byte",
           "description": "The order nonce of the accepted order."
+        }
+      }
+    },
+    "clmrpcTokensResponse": {
+      "type": "object",
+      "properties": {
+        "tokens": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/clmrpcLsatToken"
+          },
+          "description": "*\nList of all tokens the daemon knows of, including old/expired tokens."
         }
       }
     },
