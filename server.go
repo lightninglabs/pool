@@ -16,6 +16,7 @@ import (
 	"github.com/lightninglabs/llm/auctioneer"
 	"github.com/lightninglabs/llm/clientdb"
 	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/llm/order"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightninglabs/loop/lsat"
 	"github.com/lightningnetwork/lnd/build"
@@ -289,7 +290,9 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	return nil
+	// The final thing we'll do on start up is sync the order state of the
+	// auctioneer with what we have on disk.
+	return s.syncLocalOrderState()
 }
 
 // Stop shuts down the server, including the auction server connection, all
@@ -381,4 +384,73 @@ func (i *regtestInterceptor) StreamInterceptor(ctx context.Context,
 		ctx, auth.HeaderAuthorization, idStr,
 	)
 	return streamer(idCtx, desc, cc, method, opts...)
+}
+
+// syncLocalOrderState synchronizes the order state of the local database with
+// that of the remote auctioneer. Whenever order state diverges, we take the
+// order state of the server but only if the new state is a cancel. Any other
+// order discrepancies should be resolved once we process any possibly
+// partially processed batches.
+func (s *Server) syncLocalOrderState() error {
+	// First, we'll read out the on-disk DB state so we can compare with what
+	// the server has shortly.
+	dbOrders, err := s.db.GetOrders()
+	if err != nil {
+		return fmt.Errorf("unable to read db orders: %v", err)
+	}
+
+	var (
+		noncesToUpdate []order.Nonce
+		ordersToUpdate [][]order.Modifier
+	)
+	for _, dbOrder := range dbOrders {
+		orderNonce := dbOrder.Nonce()
+		localOrderState := dbOrder.Details().State
+
+		// For our comparison below, we'll poll the auctioneer to find
+		// out what state they think this order is in.
+		orderStateResp, err := s.AuctioneerClient.OrderState(
+			context.Background(), orderNonce,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to fetch order state: %v", err)
+		}
+		remoteOrderState, err := rpcOrderStateToDBState(
+			orderStateResp.State,
+		)
+		if err != nil {
+			return err
+		}
+
+		// If the local and remote order states match, then there's no
+		// need to update the local state.
+		if localOrderState == remoteOrderState {
+			continue
+		}
+
+		// Only if the remote state is a cancelled order will we update
+		// our local state. Otherwise, this should be handled after we
+		// complete the handshake and poll to see if there're any
+		// pending batches we need to process.
+		if remoteOrderState == order.StateCanceled {
+			noncesToUpdate = append(noncesToUpdate, orderNonce)
+			ordersToUpdate = append(
+				ordersToUpdate,
+				[]order.Modifier{
+					order.StateModifier(order.StateCanceled),
+				},
+			)
+
+			log.Debugf("Order(%v) is cancelled, updating local "+
+				"state", orderNonce)
+		} else {
+			log.Warnf("Order(%v) has de-synced state, "+
+				"local_state=%v, remote_state=%v", localOrderState,
+				remoteOrderState)
+		}
+	}
+
+	// Now that we know the set of orders we need to update, we'll update
+	// them all in an atomic batch.
+	return s.db.UpdateOrders(noncesToUpdate, ordersToUpdate)
 }
