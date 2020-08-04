@@ -1423,10 +1423,23 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 
 	rpcLog.Infof("Cancelling order_nonce=%v", nonce)
 
+	// We cancel an order in two phases. First, we'll cancel the order on
+	// the server-side.
 	err := s.auctioneer.CancelOrder(ctx, nonce)
 	if err != nil {
 		return nil, err
 	}
+
+	// Now that we've cancelled things on the server-side, we'll update our
+	// local state to reflect this change in the order. If we crash here,
+	// then we'll sync up the order state once we restart again.
+	err = s.server.db.UpdateOrder(
+		nonce, order.StateModifier(order.StateCanceled),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &clmrpc.CancelOrderResponse{}, nil
 }
 
