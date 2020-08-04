@@ -1085,10 +1085,22 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 	var openNonces []order.Nonce
 	for _, dbOrder := range dbOrders {
 		orderDetails := dbOrder.Details()
+		nonce := orderDetails.Nonce()
+
+		// To ensure we have the latest order state, we'll consult with
+		// the auctioneer's state.
+		orderStateResp, err := s.auctioneer.OrderState(ctx, nonce)
+		if err != nil {
+			return nil, err
+		}
+		orderState, err := rpcOrderStateToDBState(orderStateResp.State)
+		if err != nil {
+			return nil, err
+		}
 
 		// If the order isn't in the base state, then we'll skip it as
 		// it isn't considered an "active" order.
-		switch orderDetails.State {
+		switch orderState {
 		case order.StateFailed, order.StateExpired,
 			order.StateCanceled, order.StateExecuted:
 			continue
@@ -1607,4 +1619,39 @@ func (s *rpcServer) BatchSnapshot(ctx context.Context,
 	var batchID order.BatchID
 	copy(batchID[:], req.BatchId)
 	return s.auctioneer.BatchSnapshot(ctx, batchID)
+}
+
+// rpcOrderStateToDBState maps the order state as received over the RPC
+// protocol to the local state that we use in the database.
+func rpcOrderStateToDBState(state clmrpc.OrderState) (order.State, error) {
+
+	var orderState order.State
+	switch state {
+
+	case clmrpc.OrderState_ORDER_SUBMITTED:
+		orderState = order.StateSubmitted
+
+	case clmrpc.OrderState_ORDER_CLEARED:
+		orderState = order.StateCleared
+
+	case clmrpc.OrderState_ORDER_PARTIALLY_FILLED:
+		orderState = order.StatePartiallyFilled
+
+	case clmrpc.OrderState_ORDER_EXECUTED:
+		orderState = order.StateExecuted
+
+	case clmrpc.OrderState_ORDER_CANCELED:
+		orderState = order.StateCanceled
+
+	case clmrpc.OrderState_ORDER_EXPIRED:
+		orderState = order.StateExpired
+
+	case clmrpc.OrderState_ORDER_FAILED:
+		orderState = order.StateFailed
+
+	default:
+		return 0, fmt.Errorf("unknown state: %v", state)
+	}
+
+	return orderState, nil
 }
