@@ -1082,7 +1082,7 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 		return nil, err
 	}
 
-	var openOrders bool
+	var openNonces []order.Nonce
 	for _, dbOrder := range dbOrders {
 		orderDetails := dbOrder.Details()
 
@@ -1095,16 +1095,15 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 		}
 
 		if bytes.Equal(orderDetails.AcctKey[:], req.TraderKey) {
-			openOrders = true
-			break
+			openNonces = append(openNonces, orderDetails.Nonce())
 		}
 	}
 
 	// We don't allow an account to be closed if it has open orders so they
 	// don't dangle in the order book on the server's side.
-	if openOrders {
+	if len(openNonces) > 0 {
 		return nil, fmt.Errorf("acct=%x has open orders, cancel them "+
-			"before closing", req.TraderKey)
+			"before closing: %v", req.TraderKey, openNonces)
 	}
 
 	closeTx, err := s.accountManager.CloseAccount(
