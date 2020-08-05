@@ -1082,29 +1082,40 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 		return nil, err
 	}
 
-	var openOrders bool
+	var openNonces []order.Nonce
 	for _, dbOrder := range dbOrders {
 		orderDetails := dbOrder.Details()
+		nonce := orderDetails.Nonce()
+
+		// To ensure we have the latest order state, we'll consult with
+		// the auctioneer's state.
+		orderStateResp, err := s.auctioneer.OrderState(ctx, nonce)
+		if err != nil {
+			return nil, err
+		}
+		orderState, err := rpcOrderStateToDBState(orderStateResp.State)
+		if err != nil {
+			return nil, err
+		}
 
 		// If the order isn't in the base state, then we'll skip it as
 		// it isn't considered an "active" order.
-		switch orderDetails.State {
+		switch orderState {
 		case order.StateFailed, order.StateExpired,
 			order.StateCanceled, order.StateExecuted:
 			continue
 		}
 
 		if bytes.Equal(orderDetails.AcctKey[:], req.TraderKey) {
-			openOrders = true
-			break
+			openNonces = append(openNonces, orderDetails.Nonce())
 		}
 	}
 
 	// We don't allow an account to be closed if it has open orders so they
 	// don't dangle in the order book on the server's side.
-	if openOrders {
+	if len(openNonces) > 0 {
 		return nil, fmt.Errorf("acct=%x has open orders, cancel them "+
-			"before closing", req.TraderKey)
+			"before closing: %v", req.TraderKey, openNonces)
 	}
 
 	closeTx, err := s.accountManager.CloseAccount(
@@ -1412,10 +1423,23 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 
 	rpcLog.Infof("Cancelling order_nonce=%v", nonce)
 
+	// We cancel an order in two phases. First, we'll cancel the order on
+	// the server-side.
 	err := s.auctioneer.CancelOrder(ctx, nonce)
 	if err != nil {
 		return nil, err
 	}
+
+	// Now that we've cancelled things on the server-side, we'll update our
+	// local state to reflect this change in the order. If we crash here,
+	// then we'll sync up the order state once we restart again.
+	err = s.server.db.UpdateOrder(
+		nonce, order.StateModifier(order.StateCanceled),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &clmrpc.CancelOrderResponse{}, nil
 }
 
@@ -1608,4 +1632,39 @@ func (s *rpcServer) BatchSnapshot(ctx context.Context,
 	var batchID order.BatchID
 	copy(batchID[:], req.BatchId)
 	return s.auctioneer.BatchSnapshot(ctx, batchID)
+}
+
+// rpcOrderStateToDBState maps the order state as received over the RPC
+// protocol to the local state that we use in the database.
+func rpcOrderStateToDBState(state clmrpc.OrderState) (order.State, error) {
+
+	var orderState order.State
+	switch state {
+
+	case clmrpc.OrderState_ORDER_SUBMITTED:
+		orderState = order.StateSubmitted
+
+	case clmrpc.OrderState_ORDER_CLEARED:
+		orderState = order.StateCleared
+
+	case clmrpc.OrderState_ORDER_PARTIALLY_FILLED:
+		orderState = order.StatePartiallyFilled
+
+	case clmrpc.OrderState_ORDER_EXECUTED:
+		orderState = order.StateExecuted
+
+	case clmrpc.OrderState_ORDER_CANCELED:
+		orderState = order.StateCanceled
+
+	case clmrpc.OrderState_ORDER_EXPIRED:
+		orderState = order.StateExpired
+
+	case clmrpc.OrderState_ORDER_FAILED:
+		orderState = order.StateFailed
+
+	default:
+		return 0, fmt.Errorf("unknown state: %v", state)
+	}
+
+	return orderState, nil
 }
