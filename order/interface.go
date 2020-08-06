@@ -164,6 +164,11 @@ type Order interface {
 	// order. Deterministic in this context means that if two orders have
 	// the same content, their digest have to be identical as well.
 	Digest() ([sha256.Size]byte, error)
+
+	// ReservedValue returns the maximum value that could be deducted from
+	// the account if the order is is matched, and therefore has to be
+	// reserved to ensure the trader can afford it.
+	ReservedValue(feeSchedule FeeSchedule) btcutil.Amount
 }
 
 // Kit stores all the common fields that are used to express the decision to
@@ -297,6 +302,63 @@ func (a *Ask) Digest() ([sha256.Size]byte, error) {
 	return sha256.Sum256(msg.Bytes()), nil
 }
 
+// reservedValue returns the maximum value that could be deducted from a single
+// account if the given order is matched under the worst case fee conditions.
+// This usually means the order is partially matched with the minimum match
+// size, all in different batches, leading to maximum chain and execution fees
+// being paid.
+//
+// The passed function should be set to either calculate the maker or taker
+// balance delta for a single match of the given amount.
+func reservedValue(o Order,
+	perMatchDelta func(btcutil.Amount) btcutil.Amount) btcutil.Amount {
+
+	// If this order is in a state where it cannot be matched, return 0.
+	if o.Details().State.Archived() {
+		return 0
+	}
+
+	// The situation where the trader needs to pay the largest amount of
+	// fees is when the order gets partially matched by the base supply
+	// unit per batch. This situation results in the most chain and
+	// execution fees possible.
+	minMatchSize := btcutil.Amount(BaseSupplyUnit)
+	maxNumMatches := o.Details().UnitsUnfulfilled
+
+	// We'll calculate the worst case possible wrt. fees paid by the
+	// account if the order is filled by minimum size matched.
+	balanceDelta := btcutil.Amount(maxNumMatches) * perMatchDelta(minMatchSize)
+
+	// If the balance delta is negative, meaning this order will decrease
+	// the balance, the reserved value is the negative balance delta.
+	if balanceDelta < 0 {
+		return -balanceDelta
+	}
+
+	// Otherwise this order will increase the balance if matched, and we
+	// don't have to reserve any amount.
+	return 0
+}
+
+// ReservedValue returns the maximum value that could be deducted from a single
+// account if the ask is is matched under the worst case fee conditions.
+func (a *Ask) ReservedValue(feeSchedule FeeSchedule) btcutil.Amount {
+	// For an ask the clearing price will be no lower than the ask's fixed
+	// rate, resulting in the smallest gain for the asker.
+	clearingPrice := FixedRatePremium(a.FixedRate)
+
+	// The premium paid to the asker is at its lowest when the min duration
+	// matched is only 1 block.
+	// TODO(halseth): loosen this by requiring higher min duration.
+	minDuration := uint32(1)
+	return reservedValue(a, func(amt btcutil.Amount) btcutil.Amount {
+		delta, _, _ := makerDelta(
+			feeSchedule, clearingPrice, amt, minDuration,
+		)
+		return delta
+	})
+}
+
 // Bid is the specific order type representing the willingness of an auction
 // participant to pay for inbound liquidity provided by other auction
 // participants.
@@ -340,6 +402,25 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 		return result, fmt.Errorf("unknown version %d", b.Kit.Version)
 	}
 	return sha256.Sum256(msg.Bytes()), nil
+}
+
+// ReservedValue returns the maximum value that could be deducted from a single
+// account if the bid is is matched under the worst case fee conditions.
+func (b *Bid) ReservedValue(feeSchedule FeeSchedule) btcutil.Amount {
+	// For a bid, the final clearing price is never higher
+	// that the bid's fixed rate, resulting in the highest possible
+	// premium paid bu the bidder.
+	clearingPrice := FixedRatePremium(b.FixedRate)
+
+	// The bidder always pay a premium based on the
+	// bid's min duration.
+	minDuration := b.MinDuration
+	return reservedValue(b, func(amt btcutil.Amount) btcutil.Amount {
+		delta, _, _ := takerDelta(
+			feeSchedule, clearingPrice, amt, minDuration,
+		)
+		return delta
+	})
 }
 
 // This is a compile time check to make certain that both Ask and Bid implement
