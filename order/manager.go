@@ -19,6 +19,10 @@ const (
 	// defaultLndTimeout is the default number of seconds we are willing to
 	// wait for our lnd node to respond.
 	defaultLndTimeout = time.Second * 30
+
+	// MinimumOrderDurationBlocks is the minimum for a bid's MinDuration or
+	// an ask's MaxDuration.
+	MinimumOrderDurationBlocks = 144
 )
 
 var (
@@ -196,15 +200,15 @@ func (m *Manager) validateOrder(order Order, acct *account.Account,
 	// First parse order type specific fields.
 	switch o := order.(type) {
 	case *Ask:
-		if o.MaxDuration == 0 {
-			return fmt.Errorf("invalid max duration, must be " +
-				"greater than 0")
+		if o.MaxDuration < MinimumOrderDurationBlocks {
+			return fmt.Errorf("invalid max duration, must be "+
+				"at least %d", MinimumOrderDurationBlocks)
 		}
 
 	case *Bid:
-		if o.MinDuration == 0 {
-			return fmt.Errorf("invalid min duration, must be " +
-				"greater than 0")
+		if o.MinDuration < MinimumOrderDurationBlocks {
+			return fmt.Errorf("invalid min duration, must be "+
+				"at least %d", MinimumOrderDurationBlocks)
 		}
 
 	default:

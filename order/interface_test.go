@@ -181,10 +181,10 @@ func TestOrderReservedValue(t *testing.T) {
 			amt := btcutil.Amount(BaseSupplyUnit)
 			for i := 0; i < numBlocks; i++ {
 				// In the worst case, the maker will be paid
-				// only one lump sum for 1 single block, since
-				// that is the minimum duration.
+				// only one lump sum for a 144 block duration,
+				// since that is the minimum duration.
 				lumpSum := FixedRatePremium(o.FixedRate).
-					LumpSumPremium(amt, 1)
+					LumpSumPremium(amt, 144)
 				exeFee := executionFee(amt, simpleFeeSchedule)
 				chainFee := EstimateTraderFee(
 					1, o.MaxBatchFeeRate,

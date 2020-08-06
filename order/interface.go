@@ -353,9 +353,8 @@ func (a *Ask) ReservedValue(feeSchedule FeeSchedule) btcutil.Amount {
 	clearingPrice := FixedRatePremium(a.FixedRate)
 
 	// The premium paid to the asker is at its lowest when the min duration
-	// matched is only 1 block.
-	// TODO(halseth): loosen this by requiring higher min duration.
-	minDuration := uint32(1)
+	// matched is only 144 block.
+	minDuration := uint32(MinimumOrderDurationBlocks)
 	return reservedValue(a, func(amt btcutil.Amount) btcutil.Amount {
 		delta, _, _ := makerDelta(
 			feeSchedule, clearingPrice, amt, minDuration,
