@@ -24,6 +24,7 @@ func TestOrderReservedValue(t *testing.T) {
 					State:            StateSubmitted,
 					UnitsUnfulfilled: 1,
 					FixedRate:        10000,
+					MaxBatchFeeRate:  1000,
 				},
 				MinDuration: 144,
 			},
@@ -35,6 +36,7 @@ func TestOrderReservedValue(t *testing.T) {
 					State:            StateSubmitted,
 					UnitsUnfulfilled: 1,
 					FixedRate:        10000,
+					MaxBatchFeeRate:  1000,
 				},
 				MaxDuration: 144,
 			},
@@ -46,6 +48,7 @@ func TestOrderReservedValue(t *testing.T) {
 					State:            StateSubmitted,
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
+					MaxBatchFeeRate:  1000,
 				},
 				MinDuration: 144,
 			},
@@ -57,6 +60,7 @@ func TestOrderReservedValue(t *testing.T) {
 					State:            StateSubmitted,
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
+					MaxBatchFeeRate:  1000,
 				},
 				MaxDuration: 144,
 			},
@@ -68,6 +72,7 @@ func TestOrderReservedValue(t *testing.T) {
 					State:            StateCanceled,
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
+					MaxBatchFeeRate:  1000,
 				},
 				MaxDuration: 144,
 			},
@@ -79,6 +84,7 @@ func TestOrderReservedValue(t *testing.T) {
 					State:            StateExpired,
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
+					MaxBatchFeeRate:  1000,
 				},
 				MinDuration: 144,
 			},
@@ -90,6 +96,7 @@ func TestOrderReservedValue(t *testing.T) {
 					State:            StateFailed,
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
+					MaxBatchFeeRate:  1000,
 				},
 				MinDuration: 144,
 			},
@@ -101,6 +108,7 @@ func TestOrderReservedValue(t *testing.T) {
 					State:            StatePartiallyFilled,
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
+					MaxBatchFeeRate:  1000,
 				},
 				MaxDuration: 144,
 			},
@@ -112,6 +120,7 @@ func TestOrderReservedValue(t *testing.T) {
 					State:            StateCleared,
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
+					MaxBatchFeeRate:  1000,
 				},
 				MaxDuration: 144,
 			},
@@ -123,6 +132,7 @@ func TestOrderReservedValue(t *testing.T) {
 					State:            StateSubmitted,
 					UnitsUnfulfilled: 10,
 					FixedRate:        10_000_000,
+					MaxBatchFeeRate:  1000,
 				},
 				MaxDuration: 144,
 			},
@@ -150,10 +160,13 @@ func TestOrderReservedValue(t *testing.T) {
 				lumpSum := FixedRatePremium(o.FixedRate).
 					LumpSumPremium(amt, o.MinDuration)
 				exeFee := executionFee(amt, simpleFeeSchedule)
+				chainFee := EstimateTraderFee(
+					1, o.MaxBatchFeeRate,
+				)
 
-				// For bids the lump sum and the execution fee
-				// must be reserved.
-				expValue += lumpSum + exeFee
+				// For bids the lump sum, chain fee  and the
+				// execution fee must be reserved.
+				expValue += lumpSum + chainFee + exeFee
 			}
 
 		case *Ask:
@@ -173,11 +186,14 @@ func TestOrderReservedValue(t *testing.T) {
 				lumpSum := FixedRatePremium(o.FixedRate).
 					LumpSumPremium(amt, 1)
 				exeFee := executionFee(amt, simpleFeeSchedule)
+				chainFee := EstimateTraderFee(
+					1, o.MaxBatchFeeRate,
+				)
 
-				// For asks the amount itself and the execution
-				// fee must be reserved, while the lump sum the
-				// maker gets back.
-				expValue += amt + exeFee - lumpSum
+				// For asks the amount itself, the chain fee
+				// and the execution fee must be reserved,
+				// while the lump sum the maker gets back.
+				expValue += amt + chainFee + exeFee - lumpSum
 			}
 
 		default:

@@ -12,6 +12,7 @@ import (
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 const (
@@ -208,6 +209,12 @@ func (m *Manager) validateOrder(order Order, acct *account.Account,
 
 	default:
 		return fmt.Errorf("invalid order type: %v", o)
+	}
+
+	if order.Details().MaxBatchFeeRate < chainfee.FeePerKwFloor {
+		return fmt.Errorf("invalid max batch fee rate %v, must be "+
+			"greater than %v", order.Details().MaxBatchFeeRate,
+			chainfee.FeePerKwFloor)
 	}
 
 	// Get all existing orders.
