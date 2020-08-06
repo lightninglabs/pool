@@ -117,10 +117,11 @@ func (m *Manager) Stop() {
 
 // PrepareOrder validates an order, signs it and then stores it locally.
 func (m *Manager) PrepareOrder(ctx context.Context, order Order,
-	acct *account.Account) (*ServerOrderParams, error) {
+	acct *account.Account, feeSchedule FeeSchedule) (
+	*ServerOrderParams, error) {
 
 	// Verify incoming request for formal validity.
-	err := m.validateOrder(order, acct)
+	err := m.validateOrder(order, acct, feeSchedule)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +189,9 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 
 // validateOrder makes sure an order is formally correct and that the associated
 // account contains enough balance to execute the order.
-func (m *Manager) validateOrder(order Order, acct *account.Account) error {
+func (m *Manager) validateOrder(order Order, acct *account.Account,
+	feeSchedule FeeSchedule) error {
+
 	// First parse order type specific fields.
 	switch o := order.(type) {
 	case *Ask:
@@ -197,29 +200,31 @@ func (m *Manager) validateOrder(order Order, acct *account.Account) error {
 				"greater than 0")
 		}
 
-		// We don't know the server fee of the order yet so we can only
-		// make sure we have enough to actually fund the channel.
-		if acct.Value < o.Amt {
-			return ErrInsufficientBalance
-		}
-
 	case *Bid:
 		if o.MinDuration == 0 {
 			return fmt.Errorf("invalid min duration, must be " +
 				"greater than 0")
 		}
 
-		// We don't know the server fee of the order yet so we can only
-		// make sure we have enough to pay for the fee rate we are
-		// willing to pay up to.
-		rate := FixedRatePremium(o.FixedRate)
-		orderFee := rate.LumpSumPremium(o.Amt, o.MinDuration)
-		if acct.Value < orderFee {
-			return ErrInsufficientBalance
-		}
-
 	default:
 		return fmt.Errorf("invalid order type: %v", o)
+	}
+
+	// Get all existing orders.
+	dbOrders, err := m.cfg.Store.GetOrders()
+	if err != nil {
+		return err
+	}
+
+	// Ensure the total reserved value won't be larger than the account
+	// value when adding this order.
+	reserved := order.ReservedValue(feeSchedule)
+	for _, o := range dbOrders {
+		reserved += o.ReservedValue(feeSchedule)
+	}
+
+	if acct.Value < reserved {
+		return ErrInsufficientBalance
 	}
 
 	return nil

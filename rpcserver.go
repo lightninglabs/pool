@@ -1279,9 +1279,18 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 			"make order", o.Details().AcctKey[:], acct.State)
 	}
 
+	// Get the current fee schedule to ensure we have enough balance to pay
+	// the fees.
+	feeSchedule, err := s.auctioneer.FeeQuote(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Collect all the order data and sign it before sending it to the
 	// auction server.
-	serverParams, err := s.orderManager.PrepareOrder(ctx, o, acct)
+	serverParams, err := s.orderManager.PrepareOrder(
+		ctx, o, acct, feeSchedule,
+	)
 	if err != nil {
 		return nil, err
 	}
