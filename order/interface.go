@@ -212,9 +212,9 @@ type Kit struct {
 	// has been formally validated.
 	MultiSigKeyLocator keychain.KeyLocator
 
-	// FundingFeeRate is the preferred fee rate to be used for the channel
-	// funding transaction in sat/kW.
-	FundingFeeRate chainfee.SatPerKWeight
+	// MaxBatchFeeRate is is the maximum fee rate the trader is willing to
+	// pay for the batch transaction, in sat/kW.
+	MaxBatchFeeRate chainfee.SatPerKWeight
 
 	// AcctKey is key of the account the order belongs to.
 	AcctKey [33]byte
@@ -290,7 +290,7 @@ func (a *Ask) Digest() ([sha256.Size]byte, error) {
 	case VersionDefault:
 		err := lnwire.WriteElements(
 			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
-			a.Amt, a.MaxDuration, uint64(a.FundingFeeRate),
+			a.Amt, a.MaxDuration, uint64(a.MaxBatchFeeRate),
 		)
 		if err != nil {
 			return result, err
@@ -392,7 +392,7 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 	case VersionDefault:
 		err := lnwire.WriteElements(
 			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
-			b.Amt, b.MinDuration, uint64(b.FundingFeeRate),
+			b.Amt, b.MinDuration, uint64(b.MaxBatchFeeRate),
 		)
 		if err != nil {
 			return result, err

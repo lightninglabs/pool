@@ -178,7 +178,7 @@ message QuoteAccountRequest {
 }
 
 message QuoteAccountResponse {
-    double miner_fee_sat_vbyte = 1;
+    uint64 miner_fee_rate_sat_per_kw = 1;
 
     uint64 miner_fee_total = 2;
 }
@@ -224,9 +224,9 @@ message WithdrawAccountRequest {
     repeated Output outputs = 2;
 
     /*
-    The fee rate, in satoshis per vbyte, to use for the withdrawal transaction.
+    The fee rate, in satoshis per kw, to use for the withdrawal transaction.
     */
-    uint64 sat_per_vbyte = 3;
+    uint64 fee_rate_sat_per_kw = 3;
 }
 message WithdrawAccountResponse {
     // The state of the account after processing the withdrawal.
@@ -247,9 +247,9 @@ message DepositAccountRequest {
     uint64 amount_sat = 2;
 
     /*
-    The fee rate, in satoshis per vbyte, to use for the deposit transaction.
+    The fee rate, in satoshis per kw, to use for the deposit transaction.
     */
-    uint32 sat_per_vbyte = 3;
+    uint64 fee_rate_sat_per_kw = 3;
 }
 message DepositAccountResponse {
     // The state of the account after processing the deposit.
@@ -374,10 +374,10 @@ message Order {
     uint64 amt = 3;
 
     /*
-    Preferred fee rate to be used for the channel funding transaction, expressed
-    in satoshis per 1000 weight units (sat/kW).
+    Maximum fee rate the trader is willing to pay for the batch transaction,
+    expressed in satoshis per 1000 weight units (sat/KW).
     */
-    uint64 funding_fee_rate = 4;
+    uint64 max_batch_fee_rate_sat_per_kw= 4;
 
     /*
     Order nonce, acts as unique order identifier.

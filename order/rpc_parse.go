@@ -37,7 +37,9 @@ func ParseRPCOrder(version uint32, details *clmrpc.Order) (*Kit, error) {
 	kit.Version = Version(version)
 	kit.FixedRate = details.RateFixed
 	kit.Amt = btcutil.Amount(details.Amt)
-	kit.FundingFeeRate = chainfee.SatPerKWeight(details.FundingFeeRate)
+	kit.MaxBatchFeeRate = chainfee.SatPerKWeight(
+		details.MaxBatchFeeRateSatPerKw,
+	)
 	kit.Units = NewSupplyFromSats(kit.Amt)
 	kit.UnitsUnfulfilled = kit.Units
 	return kit, nil
@@ -62,8 +64,8 @@ func ParseRPCServerOrder(version uint32, details *clmrpc.ServerOrder) (*Kit,
 	kit.Amt = btcutil.Amount(details.Amt)
 	kit.Units = NewSupplyFromSats(kit.Amt)
 	kit.UnitsUnfulfilled = kit.Units
-	kit.FundingFeeRate = chainfee.SatPerKWeight(
-		details.FundingFeeRateSatPerKw,
+	kit.MaxBatchFeeRate = chainfee.SatPerKWeight(
+		details.MaxBatchFeeRateSatPerKw,
 	)
 
 	// If the user didn't provide a nonce, we generate one.

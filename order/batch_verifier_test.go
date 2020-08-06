@@ -448,7 +448,7 @@ func newKitFromTemplate(nonce Nonce, tpl *Kit) Kit {
 	kit.Units = tpl.Units
 	kit.UnitsUnfulfilled = tpl.UnitsUnfulfilled
 	kit.MultiSigKeyLocator = tpl.MultiSigKeyLocator
-	kit.FundingFeeRate = tpl.FundingFeeRate
+	kit.MaxBatchFeeRate = tpl.MaxBatchFeeRate
 	kit.AcctKey = tpl.AcctKey
 	return *kit
 }

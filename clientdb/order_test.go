@@ -165,7 +165,7 @@ func dummyOrder(t *testing.T, amt btcutil.Amount) *order.Kit {
 		Family: 123,
 		Index:  345,
 	}
-	kit.FundingFeeRate = chainfee.FeePerKwFloor
+	kit.MaxBatchFeeRate = chainfee.FeePerKwFloor
 	copy(kit.AcctKey[:], testTraderKey.SerializeCompressed())
 	kit.UnitsUnfulfilled = 741
 	return kit
