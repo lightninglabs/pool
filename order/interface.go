@@ -129,7 +129,7 @@ func (s State) String() string {
 // fully executed and no more modifications will be done to it.
 func (s State) Archived() bool {
 	switch s {
-	case StateExecuted, StateCanceled, StateFailed:
+	case StateExecuted, StateCanceled, StateExpired, StateFailed:
 		return true
 
 	default:
