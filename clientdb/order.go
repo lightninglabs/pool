@@ -289,7 +289,7 @@ func SerializeOrder(o order.Order, w io.Writer) error {
 	err := WriteElements(
 		w, kit.Preimage, kit.Version, o.Type(), kit.State,
 		kit.FixedRate, kit.Amt, kit.Units, kit.MultiSigKeyLocator,
-		kit.FundingFeeRate, kit.AcctKey, kit.UnitsUnfulfilled,
+		kit.MaxBatchFeeRate, kit.AcctKey, kit.UnitsUnfulfilled,
 	)
 	if err != nil {
 		return err
@@ -329,7 +329,7 @@ func DeserializeOrder(nonce order.Nonce, r io.Reader) (
 	err := ReadElements(
 		r, &kit.Preimage, &kit.Version, &orderType, &kit.State,
 		&kit.FixedRate, &kit.Amt, &kit.Units, &kit.MultiSigKeyLocator,
-		&kit.FundingFeeRate, &kit.AcctKey, &kit.UnitsUnfulfilled,
+		&kit.MaxBatchFeeRate, &kit.AcctKey, &kit.UnitsUnfulfilled,
 	)
 	if err != nil {
 		return nil, err

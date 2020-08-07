@@ -16,10 +16,12 @@ import (
 )
 
 const (
-	defaultFundingFeeRate = chainfee.FeePerKwFloor
 	defaultAskMaxDuration = 210000
 	defaultBidMinDuration = 144
 )
+
+// Default max batch fee rate to 500 sat/vbyte.
+var defaultMaxBatchFeeRateSatPerKw = chainfee.SatPerKVByte(500 * 1000).FeePerKWeight()
 
 var ordersCommands = []cli.Command{
 	{
@@ -45,10 +47,10 @@ var ordersCommands = []cli.Command{
 
 var sharedFlags = []cli.Flag{
 	cli.Uint64Flag{
-		Name: "funding_fee_rate",
-		Usage: "the fee rate (sat/vByte) to use to publish " +
-			"the funding transaction",
-		Value: uint64(defaultFundingFeeRate),
+		Name: "max_batch_fee_rate",
+		Usage: "the maximum fee rate (sat/kw) to use to for " +
+			"the batch transaction",
+		Value: uint64(defaultMaxBatchFeeRateSatPerKw),
 	},
 }
 
@@ -107,7 +109,7 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*clmrpc.Order, e
 		return nil, fmt.Errorf("unable to parse acct_key: %v", err)
 	}
 
-	params.FundingFeeRate = ctx.Uint64("funding_fee_rate")
+	params.MaxBatchFeeRateSatPerKw = ctx.Uint64("max_batch_fee_rate")
 
 	// We'll map the interest rate specified on the command line to our
 	// internal "rate_fixed" unit.
@@ -291,7 +293,7 @@ func printOrderDetails(client clmrpc.TraderClient, amt btcutil.Amount,
 var ordersSubmitBidCommand = cli.Command{
 	Name:  "bid",
 	Usage: "obtain channel liquidity",
-	ArgsUsage: "amt acct_key [--rate_fixed=R] [--funding_fee_rate=F] " +
+	ArgsUsage: "amt acct_key [--rate_fixed=R] [--max_batch_fee_rate=F] " +
 		"[--min_duration_blocks=M]",
 	Description: `
 	Place an offer for acquiring inbound liquidity by lending

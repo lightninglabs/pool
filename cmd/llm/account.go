@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli"
 )
 
@@ -179,11 +180,13 @@ func printAccountFees(client clmrpc.TraderClient, amt btcutil.Amount,
 			"%v", err)
 	}
 
+	feeRate := chainfee.SatPerKWeight(resp.MinerFeeRateSatPerKw)
+	satPerVByte := float64(feeRate.FeePerKVByte()) / 1000
+
 	fmt.Println("-- Account Funding Details --")
 	fmt.Printf("Amount: %v\n", amt)
 	fmt.Printf("Confirmation target: %v blocks\n", confTarget)
-	fmt.Printf("Fee rate (estimated): %.1f sat/vByte\n",
-		resp.MinerFeeSatVbyte)
+	fmt.Printf("Fee rate (estimated): %.1f sat/vByte\n", satPerVByte)
 	fmt.Printf("Total miner fee (estimated): %v\n",
 		btcutil.Amount(resp.MinerFeeTotal))
 
@@ -269,6 +272,13 @@ func depositAccount(ctx *cli.Context) error {
 		return err
 	}
 
+	// Enforce a minimum fee rate of 253 sat/kw by rounding up if 1
+	// sat/byte is used.
+	feeRate := chainfee.SatPerKVByte(satPerVByte * 1000).FeePerKWeight()
+	if feeRate < chainfee.FeePerKwFloor {
+		feeRate = chainfee.FeePerKwFloor
+	}
+
 	client, cleanup, err := getClient(ctx)
 	if err != nil {
 		return err
@@ -277,9 +287,9 @@ func depositAccount(ctx *cli.Context) error {
 
 	resp, err := client.DepositAccount(
 		context.Background(), &clmrpc.DepositAccountRequest{
-			TraderKey:   traderKey,
-			AmountSat:   amt,
-			SatPerVbyte: uint32(satPerVByte),
+			TraderKey:       traderKey,
+			AmountSat:       amt,
+			FeeRateSatPerKw: uint64(feeRate),
 		},
 	)
 	if err != nil {
@@ -353,6 +363,13 @@ func withdrawAccount(ctx *cli.Context) error {
 		return err
 	}
 
+	// Enforce a minimum fee rate of 253 sat/kw by rounding up if 1
+	// sat/byte is used.
+	feeRate := chainfee.SatPerKVByte(satPerVByte * 1000).FeePerKWeight()
+	if feeRate < chainfee.FeePerKwFloor {
+		feeRate = chainfee.FeePerKwFloor
+	}
+
 	client, cleanup, err := getClient(ctx)
 	if err != nil {
 		return err
@@ -368,7 +385,7 @@ func withdrawAccount(ctx *cli.Context) error {
 					Address:  addr,
 				},
 			},
-			SatPerVbyte: satPerVByte,
+			FeeRateSatPerKw: uint64(feeRate),
 		},
 	)
 	if err != nil {

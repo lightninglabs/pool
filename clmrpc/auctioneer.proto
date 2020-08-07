@@ -698,7 +698,7 @@ message ServerOrder {
     /*
     Signature of the order's digest, signed with the user's account key. The
     signature must be fixed-size LN wire format encoded. Version 0 includes the
-    fields version, rate_fixed, amt, funding_fee_rate_sat_per_kw and
+    fields version, rate_fixed, amt, max_batch_fee_rate_sat_per_kw and
     min/max_duration_blocks in the order digest.
     */
     bytes order_sig = 7;
@@ -731,10 +731,10 @@ message ServerOrder {
     uint32 chan_type = 12;
 
     /*
-    Preferred fee rate to be used for the channel funding transaction, expressed
-    in satoshis per 1000 weight units (sat/kW).
+    Maximum fee rate the trader is willing to pay for the batch transaction,
+    expressed in satoshis per 1000 weight units (sat/kW).
     */
-    uint64 funding_fee_rate_sat_per_kw = 13;
+    uint64 max_batch_fee_rate_sat_per_kw = 13;
 }
 
 message ServerBid {

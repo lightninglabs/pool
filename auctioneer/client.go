@@ -336,15 +336,15 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		})
 	}
 	details := &clmrpc.ServerOrder{
-		TraderKey:              o.Details().AcctKey[:],
-		RateFixed:              o.Details().FixedRate,
-		Amt:                    uint64(o.Details().Amt),
-		OrderNonce:             nonce[:],
-		OrderSig:               serverParams.RawSig,
-		MultiSigKey:            serverParams.MultiSigKey[:],
-		NodePub:                serverParams.NodePubkey[:],
-		NodeAddr:               nodeAddrs,
-		FundingFeeRateSatPerKw: uint64(o.Details().FundingFeeRate),
+		TraderKey:               o.Details().AcctKey[:],
+		RateFixed:               o.Details().FixedRate,
+		Amt:                     uint64(o.Details().Amt),
+		OrderNonce:              nonce[:],
+		OrderSig:                serverParams.RawSig,
+		MultiSigKey:             serverParams.MultiSigKey[:],
+		NodePub:                 serverParams.NodePubkey[:],
+		NodeAddr:                nodeAddrs,
+		MaxBatchFeeRateSatPerKw: uint64(o.Details().MaxBatchFeeRate),
 	}
 
 	// Split into server message which is type specific.

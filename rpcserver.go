@@ -849,8 +849,8 @@ func (s *rpcServer) QuoteAccount(ctx context.Context,
 	}
 
 	return &clmrpc.QuoteAccountResponse{
-		MinerFeeSatVbyte: float64(feeRate.FeePerKVByte()) / 1000,
-		MinerFeeTotal:    uint64(totalFee),
+		MinerFeeRateSatPerKw: uint64(feeRate),
+		MinerFeeTotal:        uint64(totalFee),
 	}, nil
 }
 
@@ -973,13 +973,11 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 		return nil, err
 	}
 
-	// Enforce a minimum fee rate of 1 sat/vbyte.
-	feeRate := chainfee.SatPerKVByte(req.SatPerVbyte * 1000).FeePerKWeight()
+	// Enforce a minimum fee rate of 253 sat/kw.
+	feeRate := chainfee.SatPerKWeight(req.FeeRateSatPerKw)
 	if feeRate < chainfee.FeePerKwFloor {
-		rpcLog.Debugf("Manual fee rate input of %d sat/kw is too low, "+
-			"using %d sat/kw instead", feeRate,
-			chainfee.FeePerKwFloor)
-		feeRate = chainfee.FeePerKwFloor
+		return nil, fmt.Errorf("fee rate of %d sat/kw is too low, "+
+			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
 	}
 
 	// Proceed to process the deposit and map its response to the RPC's
@@ -1027,13 +1025,11 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 		return nil, err
 	}
 
-	// Enforce a minimum fee rate of 1 sat/vbyte.
-	feeRate := chainfee.SatPerKVByte(req.SatPerVbyte * 1000).FeePerKWeight()
+	// Enforce a minimum fee rate of 253 sat/kw.
+	feeRate := chainfee.SatPerKWeight(req.FeeRateSatPerKw)
 	if feeRate < chainfee.FeePerKwFloor {
-		rpcLog.Debugf("Manual fee rate input of %d sat/kw is too low, "+
-			"using %d sat/kw instead", feeRate,
-			chainfee.FeePerKwFloor)
-		feeRate = chainfee.FeePerKwFloor
+		return nil, fmt.Errorf("fee rate of %d sat/kw is too low, "+
+			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
 	}
 
 	// Proceed to process the withdrawal and map its response to the RPC's
@@ -1279,9 +1275,18 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 			"make order", o.Details().AcctKey[:], acct.State)
 	}
 
+	// Get the current fee schedule to ensure we have enough balance to pay
+	// the fees.
+	feeSchedule, err := s.auctioneer.FeeQuote(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Collect all the order data and sign it before sending it to the
 	// auction server.
-	serverParams, err := s.orderManager.PrepareOrder(ctx, o, acct)
+	serverParams, err := s.orderManager.PrepareOrder(
+		ctx, o, acct, feeSchedule,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1375,10 +1380,12 @@ func (s *rpcServer) ListOrders(ctx context.Context, _ *clmrpc.ListOrdersRequest)
 		}
 
 		details := &clmrpc.Order{
-			TraderKey:        dbDetails.AcctKey[:],
-			RateFixed:        dbDetails.FixedRate,
-			Amt:              uint64(dbDetails.Amt),
-			FundingFeeRate:   uint64(dbDetails.FundingFeeRate),
+			TraderKey: dbDetails.AcctKey[:],
+			RateFixed: dbDetails.FixedRate,
+			Amt:       uint64(dbDetails.Amt),
+			MaxBatchFeeRateSatPerKw: uint64(
+				dbDetails.MaxBatchFeeRate,
+			),
 			OrderNonce:       nonce[:],
 			State:            orderState,
 			Units:            uint32(dbDetails.Units),

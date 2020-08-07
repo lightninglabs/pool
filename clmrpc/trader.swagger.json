@@ -613,10 +613,10 @@
           "format": "uint64",
           "description": "The amount in satoshis to deposit into the account."
         },
-        "sat_per_vbyte": {
-          "type": "integer",
-          "format": "int64",
-          "description": "The fee rate, in satoshis per vbyte, to use for the deposit transaction."
+        "fee_rate_sat_per_kw": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The fee rate, in satoshis per kw, to use for the deposit transaction."
         }
       }
     },
@@ -804,10 +804,10 @@
           "format": "uint64",
           "description": "Order amount in satoshis."
         },
-        "funding_fee_rate": {
+        "max_batch_fee_rate_sat_per_kw": {
           "type": "string",
           "format": "uint64",
-          "description": "Preferred fee rate to be used for the channel funding transaction, expressed\nin satoshis per 1000 weight units (sat/kW)."
+          "description": "Maximum fee rate the trader is willing to pay for the batch transaction,\nexpressed in satoshis per 1000 weight units (sat/KW)."
         },
         "order_nonce": {
           "type": "string",
@@ -889,9 +889,9 @@
     "clmrpcQuoteAccountResponse": {
       "type": "object",
       "properties": {
-        "miner_fee_sat_vbyte": {
-          "type": "number",
-          "format": "double"
+        "miner_fee_rate_sat_per_kw": {
+          "type": "string",
+          "format": "uint64"
         },
         "miner_fee_total": {
           "type": "string",
@@ -964,10 +964,10 @@
           },
           "description": "The outputs we'll withdraw funds from the account into."
         },
-        "sat_per_vbyte": {
+        "fee_rate_sat_per_kw": {
           "type": "string",
           "format": "uint64",
-          "description": "The fee rate, in satoshis per vbyte, to use for the withdrawal transaction."
+          "description": "The fee rate, in satoshis per kw, to use for the withdrawal transaction."
         }
       }
     },

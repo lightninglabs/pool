@@ -12,12 +12,17 @@ import (
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/loop/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 const (
 	// defaultLndTimeout is the default number of seconds we are willing to
 	// wait for our lnd node to respond.
 	defaultLndTimeout = time.Second * 30
+
+	// MinimumOrderDurationBlocks is the minimum for a bid's MinDuration or
+	// an ask's MaxDuration.
+	MinimumOrderDurationBlocks = 144
 )
 
 var (
@@ -117,10 +122,11 @@ func (m *Manager) Stop() {
 
 // PrepareOrder validates an order, signs it and then stores it locally.
 func (m *Manager) PrepareOrder(ctx context.Context, order Order,
-	acct *account.Account) (*ServerOrderParams, error) {
+	acct *account.Account, feeSchedule FeeSchedule) (
+	*ServerOrderParams, error) {
 
 	// Verify incoming request for formal validity.
-	err := m.validateOrder(order, acct)
+	err := m.validateOrder(order, acct, feeSchedule)
 	if err != nil {
 		return nil, err
 	}
@@ -188,38 +194,48 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 
 // validateOrder makes sure an order is formally correct and that the associated
 // account contains enough balance to execute the order.
-func (m *Manager) validateOrder(order Order, acct *account.Account) error {
+func (m *Manager) validateOrder(order Order, acct *account.Account,
+	feeSchedule FeeSchedule) error {
+
 	// First parse order type specific fields.
 	switch o := order.(type) {
 	case *Ask:
-		if o.MaxDuration == 0 {
-			return fmt.Errorf("invalid max duration, must be " +
-				"greater than 0")
-		}
-
-		// We don't know the server fee of the order yet so we can only
-		// make sure we have enough to actually fund the channel.
-		if acct.Value < o.Amt {
-			return ErrInsufficientBalance
+		if o.MaxDuration < MinimumOrderDurationBlocks {
+			return fmt.Errorf("invalid max duration, must be "+
+				"at least %d", MinimumOrderDurationBlocks)
 		}
 
 	case *Bid:
-		if o.MinDuration == 0 {
-			return fmt.Errorf("invalid min duration, must be " +
-				"greater than 0")
-		}
-
-		// We don't know the server fee of the order yet so we can only
-		// make sure we have enough to pay for the fee rate we are
-		// willing to pay up to.
-		rate := FixedRatePremium(o.FixedRate)
-		orderFee := rate.LumpSumPremium(o.Amt, o.MinDuration)
-		if acct.Value < orderFee {
-			return ErrInsufficientBalance
+		if o.MinDuration < MinimumOrderDurationBlocks {
+			return fmt.Errorf("invalid min duration, must be "+
+				"at least %d", MinimumOrderDurationBlocks)
 		}
 
 	default:
 		return fmt.Errorf("invalid order type: %v", o)
+	}
+
+	if order.Details().MaxBatchFeeRate < chainfee.FeePerKwFloor {
+		return fmt.Errorf("invalid max batch fee rate %v, must be "+
+			"greater than %v", order.Details().MaxBatchFeeRate,
+			chainfee.FeePerKwFloor)
+	}
+
+	// Get all existing orders.
+	dbOrders, err := m.cfg.Store.GetOrders()
+	if err != nil {
+		return err
+	}
+
+	// Ensure the total reserved value won't be larger than the account
+	// value when adding this order.
+	reserved := order.ReservedValue(feeSchedule)
+	for _, o := range dbOrders {
+		reserved += o.ReservedValue(feeSchedule)
+	}
+
+	if acct.Value < reserved {
+		return ErrInsufficientBalance
 	}
 
 	return nil
