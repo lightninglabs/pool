@@ -311,17 +311,23 @@ message Account {
     */
     OutPoint outpoint = 2;
 
-    // The current value in satoshis of the account.
+    // The current total amount of satoshis in the account.
     uint64 value = 3;
 
+    /*
+    The amount of satoshis in the account that is available, meaning not
+    allocated to any oustanding orders.
+    */
+    uint64 available_balance = 4;
+
     // The height at which the account will expire.
-    uint32 expiration_height = 4;
+    uint32 expiration_height = 5;
 
     // The current state of the account.
-    AccountState state = 5;
+    AccountState state = 6;
 
     // The hash of the account's closing transaction, if any.
-    bytes close_txid = 6;
+    bytes close_txid = 7;
 }
 
 message SubmitOrderRequest {

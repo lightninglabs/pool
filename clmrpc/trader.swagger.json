@@ -417,7 +417,12 @@
         "value": {
           "type": "string",
           "format": "uint64",
-          "description": "The current value in satoshis of the account."
+          "description": "The current total amount of satoshis in the account."
+        },
+        "available_balance": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The amount of satoshis in the account that is available, meaning not\nallocated to any oustanding orders."
         },
         "expiration_height": {
           "type": "integer",
