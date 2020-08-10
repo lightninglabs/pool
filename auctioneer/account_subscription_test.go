@@ -10,7 +10,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/loop/test"
+	"github.com/lightninglabs/llm/internal/test"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
@@ -23,8 +23,7 @@ var (
 		KeyLocator: keychain.KeyLocator{},
 		PubKey:     testTraderKey,
 	}
-	testLnd        = test.NewMockLnd()
-	testSigner     = testLnd.Signer
+	testSigner     = test.NewMockSigner()
 	defaultTimeout = 100 * time.Millisecond
 )
 
@@ -80,9 +79,9 @@ func TestAccountSubscriptionAuthenticate(t *testing.T) {
 		if !ok {
 			t.Fatalf("unexpected message type: %v", msg)
 		}
-		if !bytes.Equal(subMsg.Subscribe.AuthSig, testLnd.Signature) {
+		if !bytes.Equal(subMsg.Subscribe.AuthSig, testSigner.Signature) {
 			t.Fatalf("unexpected signature. got %x, wanted %x",
-				subMsg.Subscribe.AuthSig, testLnd.Signature)
+				subMsg.Subscribe.AuthSig, testSigner.Signature)
 		}
 
 	case <-time.After(defaultTimeout):
