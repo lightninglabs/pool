@@ -12,13 +12,12 @@ import (
 	"sync"
 
 	proxy "github.com/grpc-ecosystem/grpc-gateway/runtime"
-	"github.com/lightninglabs/kirin/auth"
+	"github.com/lightninglabs/aperture/lsat"
 	"github.com/lightninglabs/llm/auctioneer"
 	"github.com/lightninglabs/llm/clientdb"
 	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/llm/order"
-	"github.com/lightninglabs/loop/lndclient"
-	"github.com/lightninglabs/loop/lsat"
+	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"google.golang.org/grpc"
@@ -107,7 +106,7 @@ func NewServer(cfg *Config) (*Server, error) {
 	}
 	var interceptor Interceptor = lsat.NewInterceptor(
 		&lndServices.LndServices, fileStore, defaultRPCTimeout,
-		defaultLsatMaxCost, defaultLsatMaxFee,
+		defaultLsatMaxCost, defaultLsatMaxFee, false,
 	)
 
 	// getIdentity can be used to determine the current LSAT identification
@@ -332,7 +331,7 @@ func getLnd(network string, cfg *LndConfig) (*lndclient.GrpcLndServices, error) 
 	return lndclient.NewLndServices(
 		&lndclient.LndServicesConfig{
 			LndAddress:  cfg.Host,
-			Network:     network,
+			Network:     lndclient.Network(network),
 			MacaroonDir: cfg.MacaroonDir,
 			TLSPath:     cfg.TLSPath,
 		},
@@ -367,7 +366,7 @@ func (i *regtestInterceptor) UnaryInterceptor(ctx context.Context, method string
 
 	idStr := fmt.Sprintf("LSATID %x", i.id[:])
 	idCtx := metadata.AppendToOutgoingContext(
-		ctx, auth.HeaderAuthorization, idStr,
+		ctx, lsat.HeaderAuthorization, idStr,
 	)
 	return invoker(idCtx, method, req, reply, cc, opts...)
 }
@@ -381,7 +380,7 @@ func (i *regtestInterceptor) StreamInterceptor(ctx context.Context,
 
 	idStr := fmt.Sprintf("LSATID %x", i.id[:])
 	idCtx := metadata.AppendToOutgoingContext(
-		ctx, auth.HeaderAuthorization, idStr,
+		ctx, lsat.HeaderAuthorization, idStr,
 	)
 	return streamer(idCtx, desc, cc, method, opts...)
 }

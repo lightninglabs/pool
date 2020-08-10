@@ -8,8 +8,7 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/clmscript"
-	"github.com/lightninglabs/loop/lndclient"
-	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightninglabs/lndclient"
 )
 
 // batchSigner is a type that implements the BatchSigner interface and can sign
@@ -25,7 +24,6 @@ type batchSigner struct {
 // NOTE: This method is part of the BatchSigner interface.
 func (s *batchSigner) Sign(batch *Batch) (BatchSignature, error) {
 	ourSigs := make(BatchSignature)
-	hashes := txscript.NewTxSigHashes(batch.BatchTX)
 
 	// At this point we know that the accounts charged are correct. So we
 	// can just go through them, find the corresponding input in the batch
@@ -67,18 +65,17 @@ func (s *batchSigner) Sign(batch *Batch) (BatchSignature, error) {
 		if err != nil {
 			return nil, err
 		}
-		signDesc := &input.SignDescriptor{
+		signDesc := &lndclient.SignDescriptor{
 			KeyDesc:       *acct.TraderKey,
 			SingleTweak:   traderKeyTweak,
 			WitnessScript: witnessScript,
 			Output:        acctOut,
 			HashType:      txscript.SigHashAll,
 			InputIndex:    inputIndex,
-			SigHashes:     hashes,
 		}
 		sigs, err := s.signer.SignOutputRaw(
 			context.Background(), batch.BatchTX,
-			[]*input.SignDescriptor{signDesc},
+			[]*lndclient.SignDescriptor{signDesc},
 		)
 		if err != nil {
 			return nil, err

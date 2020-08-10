@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/lightninglabs/llm/clmscript"
-	"github.com/lightninglabs/loop/lndclient"
+	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
