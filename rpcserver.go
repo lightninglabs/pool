@@ -908,6 +908,59 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 		rpcAccounts = append(rpcAccounts, rpcAccount)
 	}
 
+	// For each account, we'll need to compute the available balance, which
+	// requires us to sum up all the debits from outstanding orders.
+	orders, err := s.server.db.GetOrders()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the current fee schedule so we can compute the worst-case
+	// account debit assuming all our standing orders were matched.
+	auctionFeeSchedule, err := s.auctioneer.FeeQuote(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// For each active account, consume the worst-case account delta if the
+	// order were to be matched.
+	accountDebits := make(map[[33]byte]btcutil.Amount)
+	for _, account := range accounts {
+		var (
+			debitAmt btcutil.Amount
+			acctKey  [33]byte
+		)
+
+		copy(
+			acctKey[:],
+			account.TraderKey.PubKey.SerializeCompressed(),
+		)
+
+		// We'll make sure to assumulate a distinct sum for each
+		// outstanding account the user has.
+		for _, order := range orders {
+			if order.Details().AcctKey != acctKey {
+				continue
+			}
+
+			debitAmt += order.ReservedValue(auctionFeeSchedule)
+		}
+
+		accountDebits[acctKey] = debitAmt
+	}
+
+	// Finally, we'll populate the available balance value for each of the
+	// existing accounts.
+	for _, rpcAccount := range rpcAccounts {
+		var acctKey [33]byte
+		copy(acctKey[:], rpcAccount.TraderKey)
+
+		accountDebit := accountDebits[acctKey]
+		availableBalance := rpcAccount.Value - uint64(accountDebit)
+
+		rpcAccount.AvailableBalance = availableBalance
+	}
+
 	return &clmrpc.ListAccountsResponse{
 		Accounts: rpcAccounts,
 	}, nil
