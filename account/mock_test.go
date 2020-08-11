@@ -14,7 +14,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/llm/clmscript"
-	"github.com/lightninglabs/loop/lndclient"
+	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -216,7 +216,7 @@ type mockWallet struct {
 	lndclient.WalletKitClient
 	lndclient.SignerClient
 
-	txs         []*wire.MsgTx
+	txs         []lndclient.Transaction
 	publishChan chan *wire.MsgTx
 	utxos       []*lnwallet.Utxo
 
@@ -270,12 +270,14 @@ func (w *mockWallet) NextAddr(ctx context.Context) (btcutil.Address, error) {
 	)
 }
 
-func (w *mockWallet) ListTransactions(ctx context.Context) ([]*wire.MsgTx, error) {
+func (w *mockWallet) ListTransactions(context.Context, int32,
+	int32) ([]lndclient.Transaction, error) {
+
 	return w.txs, nil
 }
 
 func (w *mockWallet) addTx(tx *wire.MsgTx) {
-	w.txs = append(w.txs, tx)
+	w.txs = append(w.txs, lndclient.Transaction{Tx: tx})
 }
 
 func (w *mockWallet) interceptSendOutputs(f func(context.Context, []*wire.TxOut,
@@ -303,13 +305,13 @@ func (w *mockWallet) ReleaseOutput(_ context.Context, lockID wtxmgr.LockID,
 }
 
 func (w *mockWallet) SignOutputRaw(context.Context, *wire.MsgTx,
-	[]*input.SignDescriptor) ([][]byte, error) {
+	[]*lndclient.SignDescriptor) ([][]byte, error) {
 
 	return [][]byte{[]byte("trader sig")}, nil
 }
 
 func (w *mockWallet) ComputeInputScript(context.Context, *wire.MsgTx,
-	[]*input.SignDescriptor) ([]*input.Script, error) {
+	[]*lndclient.SignDescriptor) ([]*input.Script, error) {
 
 	return []*input.Script{{
 		SigScript: []byte("input sig script"),

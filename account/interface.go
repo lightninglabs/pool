@@ -10,6 +10,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/llm/clmscript"
+	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
@@ -362,9 +363,13 @@ type Auctioneer interface {
 // TxSource is a source that provides us with transactions previously broadcast
 // by us.
 type TxSource interface {
-	// ListTransactions returns a list of transactions previously broadcast
-	// by us.
-	ListTransactions(ctx context.Context) ([]*wire.MsgTx, error)
+	// ListTransactions returns all known transactions of the backing lnd
+	// node. It takes a start and end block height which can be used to
+	// limit the block range that we query over. These values can be left
+	// as zero to include all blocks. To include unconfirmed transactions
+	// in the query, endHeight must be set to -1.
+	ListTransactions(ctx context.Context, startHeight,
+		endHeight int32) ([]lndclient.Transaction, error)
 }
 
 // TxFeeEstimator is a type that provides us with a realistic fee estimation to

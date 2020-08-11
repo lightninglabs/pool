@@ -10,7 +10,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/loop/test"
+	"github.com/lightninglabs/llm/internal/test"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -35,7 +35,7 @@ func TestBatchVerifier(t *testing.T) {
 	t.Parallel()
 
 	var (
-		lnd         = test.NewMockLnd()
+		walletKit   = test.NewMockWalletKit()
 		batchID     BatchID
 		acctIDBig   [33]byte
 		acctIDSmall [33]byte
@@ -316,7 +316,8 @@ func TestBatchVerifier(t *testing.T) {
 				{
 					Value: 200_000,
 					PkScript: scriptForChan(
-						t, lnd, ask.MultiSigKeyLocator,
+						t, walletKit,
+						ask.MultiSigKeyLocator,
 						bid1.MultiSigKeyLocator,
 					),
 				},
@@ -325,7 +326,8 @@ func TestBatchVerifier(t *testing.T) {
 				{
 					Value: 200_000,
 					PkScript: scriptForChan(
-						t, lnd, ask.MultiSigKeyLocator,
+						t, walletKit,
+						ask.MultiSigKeyLocator,
 						bid2.MultiSigKeyLocator,
 					),
 				},
@@ -366,14 +368,16 @@ func TestBatchVerifier(t *testing.T) {
 					Order:       bid1,
 					UnitsFilled: 2,
 					MultiSigKey: deriveRawKey(
-						t, lnd, bid1.MultiSigKeyLocator,
+						t, walletKit,
+						bid1.MultiSigKeyLocator,
 					),
 				},
 				{
 					Order:       bid2,
 					UnitsFilled: 2,
 					MultiSigKey: deriveRawKey(
-						t, lnd, bid2.MultiSigKeyLocator,
+						t, walletKit,
+						bid2.MultiSigKeyLocator,
 					),
 				},
 			},
@@ -381,14 +385,14 @@ func TestBatchVerifier(t *testing.T) {
 				Order:       ask,
 				UnitsFilled: 2,
 				MultiSigKey: deriveRawKey(
-					t, lnd, ask.MultiSigKeyLocator,
+					t, walletKit, ask.MultiSigKeyLocator,
 				),
 			}},
 			bid2.nonce: {{
 				Order:       ask,
 				UnitsFilled: 2,
 				MultiSigKey: deriveRawKey(
-					t, lnd, ask.MultiSigKeyLocator,
+					t, walletKit, ask.MultiSigKeyLocator,
 				),
 			}},
 		}
@@ -408,7 +412,7 @@ func TestBatchVerifier(t *testing.T) {
 		// Create the starting database state now.
 		storeMock := newMockStore()
 		verifier := &batchVerifier{
-			wallet:        lnd.WalletKit,
+			wallet:        walletKit,
 			orderStore:    storeMock,
 			ourNodePubkey: nodePubkey,
 			getAccount:    storeMock.getAccount,
@@ -453,11 +457,11 @@ func newKitFromTemplate(nonce Nonce, tpl *Kit) Kit {
 	return *kit
 }
 
-func scriptForChan(t *testing.T, lnd *test.LndMockServices, loc1,
+func scriptForChan(t *testing.T, walletKit *test.MockWalletKit, loc1,
 	loc2 keychain.KeyLocator) []byte {
 
-	key1 := deriveRawKey(t, lnd, loc1)
-	key2 := deriveRawKey(t, lnd, loc2)
+	key1 := deriveRawKey(t, walletKit, loc1)
+	key2 := deriveRawKey(t, walletKit, loc2)
 	_, out, err := input.GenFundingPkScript(key1[:], key2[:], 123)
 	if err != nil {
 		t.Fatalf("error generating funding script: %v", err)
@@ -465,10 +469,10 @@ func scriptForChan(t *testing.T, lnd *test.LndMockServices, loc1,
 	return out.PkScript
 }
 
-func deriveRawKey(t *testing.T, lnd *test.LndMockServices,
+func deriveRawKey(t *testing.T, walletKit *test.MockWalletKit,
 	loc keychain.KeyLocator) [33]byte {
 
-	key, err := lnd.WalletKit.DeriveKey(context.Background(), &loc)
+	key, err := walletKit.DeriveKey(context.Background(), &loc)
 	if err != nil {
 		t.Fatalf("error deriving key: %v", err)
 	}

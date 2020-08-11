@@ -12,17 +12,29 @@ import (
 	"sync"
 
 	proxy "github.com/grpc-ecosystem/grpc-gateway/runtime"
-	"github.com/lightninglabs/kirin/auth"
+	"github.com/lightninglabs/aperture/lsat"
 	"github.com/lightninglabs/llm/auctioneer"
 	"github.com/lightninglabs/llm/clientdb"
 	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/llm/order"
-	"github.com/lightninglabs/loop/lndclient"
-	"github.com/lightninglabs/loop/lsat"
+	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
+	"github.com/lightningnetwork/lnd/signal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+)
+
+var (
+	// minimalCompatibleVersion is the minimum version and build tags
+	// required in lnd to run llm.
+	minimalCompatibleVersion = &verrpc.Version{
+		AppMajor:  0,
+		AppMinor:  11,
+		AppPatch:  0,
+		BuildTags: []string{"signrpc", "walletrpc", "chainrpc"},
+	}
 )
 
 // Server is the main llmd trader server.
@@ -107,7 +119,7 @@ func NewServer(cfg *Config) (*Server, error) {
 	}
 	var interceptor Interceptor = lsat.NewInterceptor(
 		&lndServices.LndServices, fileStore, defaultRPCTimeout,
-		defaultLsatMaxCost, defaultLsatMaxFee,
+		defaultLsatMaxCost, defaultLsatMaxFee, false,
 	)
 
 	// getIdentity can be used to determine the current LSAT identification
@@ -329,14 +341,36 @@ func (s *Server) Stop() error {
 
 // getLnd returns an instance of the lnd services proxy.
 func getLnd(network string, cfg *LndConfig) (*lndclient.GrpcLndServices, error) {
-	return lndclient.NewLndServices(
-		&lndclient.LndServicesConfig{
-			LndAddress:  cfg.Host,
-			Network:     network,
-			MacaroonDir: cfg.MacaroonDir,
-			TLSPath:     cfg.TLSPath,
-		},
-	)
+	// We'll want to wait for lnd to be fully synced to its chain backend.
+	// The call to NewLndServices will block until the sync is completed.
+	// But we still want to be able to shutdown the daemon if the user
+	// decides to not wait. For that we can pass down a context that we
+	// cancel on shutdown.
+	ctxc, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Make sure the context is canceled if the user requests shutdown.
+	go func() {
+		select {
+		// Client requests shutdown, cancel the wait.
+		case <-signal.ShutdownChannel():
+			cancel()
+
+		// The check was completed and the above defer canceled the
+		// context. We can just exit the goroutine, nothing more to do.
+		case <-ctxc.Done():
+		}
+	}()
+
+	return lndclient.NewLndServices(&lndclient.LndServicesConfig{
+		LndAddress:            cfg.Host,
+		Network:               lndclient.Network(network),
+		MacaroonDir:           cfg.MacaroonDir,
+		TLSPath:               cfg.TLSPath,
+		CheckVersion:          minimalCompatibleVersion,
+		BlockUntilChainSynced: true,
+		ChainSyncCtx:          ctxc,
+	})
 }
 
 // Interceptor is the interface a client side gRPC interceptor has to implement.
@@ -367,7 +401,7 @@ func (i *regtestInterceptor) UnaryInterceptor(ctx context.Context, method string
 
 	idStr := fmt.Sprintf("LSATID %x", i.id[:])
 	idCtx := metadata.AppendToOutgoingContext(
-		ctx, auth.HeaderAuthorization, idStr,
+		ctx, lsat.HeaderAuthorization, idStr,
 	)
 	return invoker(idCtx, method, req, reply, cc, opts...)
 }
@@ -381,7 +415,7 @@ func (i *regtestInterceptor) StreamInterceptor(ctx context.Context,
 
 	idStr := fmt.Sprintf("LSATID %x", i.id[:])
 	idCtx := metadata.AppendToOutgoingContext(
-		ctx, auth.HeaderAuthorization, idStr,
+		ctx, lsat.HeaderAuthorization, idStr,
 	)
 	return streamer(idCtx, desc, cc, method, opts...)
 }

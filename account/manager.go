@@ -17,7 +17,7 @@ import (
 	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/lightninglabs/llm/account/watcher"
 	"github.com/lightninglabs/llm/clmscript"
-	"github.com/lightninglabs/loop/lndclient"
+	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -567,18 +567,20 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 func (m *Manager) locateTxByOutput(ctx context.Context,
 	output *wire.TxOut) (*wire.MsgTx, error) {
 
-	txs, err := m.cfg.TxSource.ListTransactions(ctx)
+	// Get all transactions, starting from block 0 and including unconfirmed
+	// TXes (end block = -1).
+	txs, err := m.cfg.TxSource.ListTransactions(ctx, 0, -1)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, tx := range txs {
-		idx, ok := clmscript.LocateOutputScript(tx, output.PkScript)
+		idx, ok := clmscript.LocateOutputScript(tx.Tx, output.PkScript)
 		if !ok {
 			continue
 		}
-		if tx.TxOut[idx].Value == output.Value {
-			return tx, nil
+		if tx.Tx.TxOut[idx].Value == output.Value {
+			return tx.Tx, nil
 		}
 	}
 
@@ -590,14 +592,16 @@ func (m *Manager) locateTxByOutput(ctx context.Context,
 func (m *Manager) locateTxByHash(ctx context.Context,
 	hash chainhash.Hash) (*wire.MsgTx, error) {
 
-	txs, err := m.cfg.TxSource.ListTransactions(ctx)
+	// Get all transactions, starting from block 0 and including unconfirmed
+	// TXes (end block = -1).
+	txs, err := m.cfg.TxSource.ListTransactions(ctx, 0, -1)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, tx := range txs {
-		if tx.TxHash() == hash {
-			return tx, nil
+		if tx.Tx.TxHash() == hash {
+			return tx.Tx, nil
 		}
 	}
 
@@ -1215,7 +1219,6 @@ func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 	// Gather the remaining components required to sign the transaction
 	// fully. This includes signing the account input and any additional
 	// ones.
-	sigHashes := txscript.NewTxSigHashes(tx)
 	sigHashType := txscript.SigHashAll
 	for i, txIn := range tx.TxIn {
 		if i == accountInputIdx {
@@ -1224,7 +1227,7 @@ func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 
 		inputScript, err := m.signInput(
 			ctx, tx, inputMap[txIn.PreviousOutPoint], i,
-			sigHashType, sigHashes,
+			sigHashType,
 		)
 		if err != nil {
 			return nil, err
@@ -1237,7 +1240,7 @@ func (m *Manager) createSpendTx(ctx context.Context, account *Account,
 	// Our account input signature isn't always all that's required to spend
 	// it, so we'll take care of forming a proper signature later.
 	witnessScript, ourSig, err := m.signAccountInput(
-		ctx, tx, account, accountInputIdx, sigHashType, sigHashes,
+		ctx, tx, account, accountInputIdx, sigHashType,
 	)
 	if err != nil {
 		return nil, err
@@ -1510,20 +1513,19 @@ func locateAccountInput(tx *wire.MsgTx, account *Account) (int, error) {
 
 // signInput signs a P2WKH or NP2WKH input of a transaction.
 func (m *Manager) signInput(ctx context.Context, tx *wire.MsgTx,
-	in chanfunding.Coin, idx int, sigHashType txscript.SigHashType,
-	sigHashes *txscript.TxSigHashes) (*input.Script, error) {
+	in chanfunding.Coin, idx int,
+	sigHashType txscript.SigHashType) (*input.Script, error) {
 
-	signDesc := &input.SignDescriptor{
+	signDesc := &lndclient.SignDescriptor{
 		Output: &wire.TxOut{
 			Value:    in.Value,
 			PkScript: in.PkScript,
 		},
 		HashType:   sigHashType,
 		InputIndex: idx,
-		SigHashes:  sigHashes,
 	}
 	inputScripts, err := m.cfg.Signer.ComputeInputScript(
-		ctx, tx, []*input.SignDescriptor{signDesc},
+		ctx, tx, []*lndclient.SignDescriptor{signDesc},
 	)
 	if err != nil {
 		return nil, err
@@ -1536,8 +1538,8 @@ func (m *Manager) signInput(ctx context.Context, tx *wire.MsgTx,
 // account. If the account is being spent with cooperation of the auctioneer,
 // their signature will be required as well.
 func (m *Manager) signAccountInput(ctx context.Context, tx *wire.MsgTx,
-	account *Account, idx int, sigHashType txscript.SigHashType,
-	sigHashes *txscript.TxSigHashes) ([]byte, []byte, error) {
+	account *Account, idx int, sigHashType txscript.SigHashType) ([]byte,
+	[]byte, error) {
 
 	traderKeyTweak := clmscript.TraderKeyTweak(
 		account.BatchKey, account.Secret, account.TraderKey.PubKey,
@@ -1555,17 +1557,16 @@ func (m *Manager) signAccountInput(ctx context.Context, tx *wire.MsgTx,
 		return nil, nil, err
 	}
 
-	signDesc := &input.SignDescriptor{
+	signDesc := &lndclient.SignDescriptor{
 		KeyDesc:       *account.TraderKey,
 		SingleTweak:   traderKeyTweak,
 		WitnessScript: witnessScript,
 		Output:        accountOutput,
 		HashType:      sigHashType,
 		InputIndex:    idx,
-		SigHashes:     sigHashes,
 	}
 	sigs, err := m.cfg.Signer.SignOutputRaw(
-		ctx, tx, []*input.SignDescriptor{signDesc},
+		ctx, tx, []*lndclient.SignDescriptor{signDesc},
 	)
 	if err != nil {
 		return nil, nil, err

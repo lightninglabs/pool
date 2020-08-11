@@ -3,7 +3,7 @@ module github.com/lightninglabs/llm
 go 1.14
 
 require (
-	github.com/btcsuite/btcd v0.20.1-beta.0.20200515232429-9f0179fd2c46
+	github.com/btcsuite/btcd v0.20.1-beta.0.20200730232343-1db1b6f8217f
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/btcsuite/btcwallet/wallet/txrules v1.0.0
@@ -12,10 +12,10 @@ require (
 	github.com/golang/protobuf v1.3.3
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6
 	github.com/jessevdk/go-flags v1.4.0
-	github.com/lightninglabs/kirin v0.0.0-20200217235049-34b4e1f6a585
-	github.com/lightninglabs/loop v0.6.4-beta.0.20200617020450-0d67b3987a63
+	github.com/lightninglabs/aperture v0.0.0-20200811173827-537716305eba
+	github.com/lightninglabs/lndclient v1.0.1-0.20200811080044-d1a60f30cf60
 	github.com/lightninglabs/protobuf-hex-display v1.3.3-0.20191212020323-b444784ce75d
-	github.com/lightningnetwork/lnd v0.10.0-beta.rc6.0.20200702223723-2d4facf94061
+	github.com/lightningnetwork/lnd v0.11.0-beta.rc2
 	github.com/stretchr/testify v1.5.1
 	github.com/urfave/cli v1.20.0
 	go.etcd.io/bbolt v1.3.5-0.20200615073812-232d8fc87f50

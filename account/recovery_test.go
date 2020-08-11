@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lightninglabs/loop/test"
+	"github.com/lightninglabs/llm/internal/test"
 )
 
 // TestGenerateRecoveryKeys tests that a certain number of keys can be created
@@ -12,8 +12,8 @@ import (
 func TestGenerateRecoveryKeys(t *testing.T) {
 	t.Parallel()
 
-	lnd := test.NewMockLnd()
-	keys, err := GenerateRecoveryKeys(context.Background(), lnd.WalletKit)
+	walletKit := test.NewMockWalletKit()
+	keys, err := GenerateRecoveryKeys(context.Background(), walletKit)
 	if err != nil {
 		t.Fatalf("could not generate keys: %v", err)
 	}
