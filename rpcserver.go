@@ -392,7 +392,8 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		// funding shim.
 		err = s.fundingManager.prepChannelFunding(batch)
 		if err != nil {
-			rpcLog.Errorf("Error preparing channel funding: %v", err)
+			rpcLog.Warnf("Error preparing channel funding: %v",
+				err)
 			return s.sendRejectBatch(batch, err)
 		}
 
@@ -1175,12 +1176,20 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	}
 
 	// Attach the status code to the message to give a bit more context.
+	var partialReject *matchRejectErr
 	switch {
 	case errors.Is(failure, order.ErrVersionMismatch):
 		msg.Reject.ReasonCode = clmrpc.OrderMatchReject_BATCH_VERSION_MISMATCH
 
 	case errors.Is(failure, order.ErrMismatchErr):
 		msg.Reject.ReasonCode = clmrpc.OrderMatchReject_SERVER_MISBEHAVIOR
+
+	case errors.As(failure, &partialReject):
+		msg.Reject.ReasonCode = clmrpc.OrderMatchReject_PARTIAL_REJECT
+		msg.Reject.RejectedOrders = make(map[string]*clmrpc.OrderReject)
+		for nonce, reject := range partialReject.rejectedOrders {
+			msg.Reject.RejectedOrders[nonce.String()] = reject
+		}
 
 	default:
 		msg.Reject.ReasonCode = clmrpc.OrderMatchReject_UNKNOWN
@@ -1199,7 +1208,10 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	if err != nil {
 		return fmt.Errorf("error sending reject message: %v", err)
 	}
-	return failure
+
+	// We have handled the batch failure and informed the auctioneer. We
+	// have done our job so no need to return an error.
+	return nil
 }
 
 // sendAcceptBatch sends an accept message to the server with the list of order

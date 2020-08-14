@@ -278,7 +278,7 @@ func (m *Manager) OrderMatchValidate(batch *Batch) error {
 		// This error will lead to us sending an OrderMatchReject
 		// message and canceling all funding shims we might already have
 		// set up.
-		return fmt.Errorf("error validating batch: %v", err)
+		return fmt.Errorf("error validating batch: %w", err)
 	}
 
 	m.pendingBatch = batch
