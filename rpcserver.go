@@ -50,11 +50,12 @@ type rpcServer struct {
 	auctioneer     *auctioneer.Client
 	accountManager *account.Manager
 	orderManager   *order.Manager
+	fundingManager *fundingMgr
 
-	// pendingOpenChannels is a channel through which we'll receive
+	// pendingOpenChannels is a channel through which we'll send received
 	// notifications for pending open channels resulting from a successful
 	// batch.
-	pendingOpenChannels chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
+	pendingOpenChannels chan<- *lnrpc.ChannelEventUpdate_PendingOpenChannel
 
 	quit                           chan struct{}
 	wg                             sync.WaitGroup
@@ -83,6 +84,8 @@ func (s *accountStore) PendingBatch() error {
 func newRPCServer(server *Server) *rpcServer {
 	accountStore := &accountStore{server.db}
 	lnd := &server.lndServices.LndServices
+	pendingOpenChannels := make(chan *lnrpc.ChannelEventUpdate_PendingOpenChannel)
+	quit := make(chan struct{})
 	return &rpcServer{
 		server:      server,
 		lndServices: lnd,
@@ -104,8 +107,16 @@ func newRPCServer(server *Server) *rpcServer {
 			Wallet:    lnd.WalletKit,
 			Signer:    lnd.Signer,
 		}),
-		pendingOpenChannels: make(chan *lnrpc.ChannelEventUpdate_PendingOpenChannel),
-		quit:                make(chan struct{}),
+		fundingManager: &fundingMgr{
+			db:                  server.db,
+			walletKit:           lnd.WalletKit,
+			lightningClient:     lnd.Client,
+			baseClient:          server.lndClient,
+			pendingOpenChannels: pendingOpenChannels,
+			quit:                quit,
+		},
+		pendingOpenChannels: pendingOpenChannels,
+		quit:                quit,
 	}
 }
 
@@ -382,7 +393,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		// Before we accept the batch, we'll finish preparations on our
 		// end which include connecting out to peers, and registering
 		// funding shim.
-		err = s.prepChannelFunding(batch)
+		err = s.fundingManager.prepChannelFunding(batch)
 		if err != nil {
 			rpcLog.Errorf("Error preparing channel funding: %v", err)
 			return s.sendRejectBatch(batch, err)
@@ -403,7 +414,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		// then start negotiating with the remote peers. We'll sign
 		// once all channel partners have responded.
 		batch := s.orderManager.PendingBatch()
-		channelKeys, err := s.batchChannelSetup(batch)
+		channelKeys, err := s.fundingManager.batchChannelSetup(batch)
 		if err != nil {
 			rpcLog.Errorf("Error setting up channels: %v", err)
 			return s.sendRejectBatch(batch, err)

@@ -11,68 +11,32 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/llm/chaninfo"
+	"github.com/lightninglabs/llm/clientdb"
 	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"golang.org/x/sync/errgroup"
 )
 
-// connectToMatchedTrader attempts to connect to a trader that we've had an
-// order matched with. We'll attempt to establish a permanent connection as
-// well, so we can use the connection for any batch retries that may happen.
-func connectToMatchedTrader(lndClient lnrpc.LightningClient,
-	matchedOrder *order.MatchedOrder) error {
+type fundingMgr struct {
+	db              *clientdb.DB
+	walletKit       lndclient.WalletKitClient
+	lightningClient lndclient.LightningClient
+	baseClient      lnrpc.LightningClient
 
-	ctxb := context.Background()
-	nodeKey := hex.EncodeToString(matchedOrder.NodeKey[:])
+	// pendingOpenChannels is a channel through which we'll receive
+	// notifications for pending open channels resulting from a successful
+	// batch.
+	pendingOpenChannels <-chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
 
-	for _, addr := range matchedOrder.NodeAddrs {
-		rpcLog.Debugf("Connecting to node=%v for order_nonce=%v",
-			nodeKey, matchedOrder.Order.Nonce())
-
-		_, err := lndClient.ConnectPeer(ctxb, &lnrpc.ConnectPeerRequest{
-			Addr: &lnrpc.LightningAddress{
-				Pubkey: nodeKey,
-				Host:   addr.String(),
-			},
-		})
-
-		if err != nil {
-			// If we're already connected, then we can stop now.
-			if strings.Contains(err.Error(), "already connected") {
-				return nil
-			}
-
-			rpcLog.Warnf("unable to connect to trader at %v@%v",
-				nodeKey, addr)
-
-			continue
-		}
-
-		// Don't spam peer connections. This can lead to race errors in
-		// the itest when we try to connect to the same node in very
-		// short intervals.
-		//
-		// TODO(guggero): Fix this problem in lnd and also try to
-		// de-duplicate peers and their addresses to reduce connection
-		// tries.
-		time.Sleep(200 * time.Millisecond)
-
-		// We connected successfully, not need to try any of the other
-		// addresses.
-		break
-	}
-
-	// Since we specified perm, the error is async, and not fully
-	// communicated to the caller, so we return nil here. Later on, if we
-	// can't fund the channel, then we'll fail with a hard error.
-	return nil
+	quit chan struct{}
 }
 
 // deriveFundingShim generates the proper funding shim that should be used by
 // the maker or taker to properly make a channel that stems off the main batch
 // funding transaction.
-func (s *rpcServer) deriveFundingShim(ourOrder order.Order,
+func (s *fundingMgr) deriveFundingShim(ourOrder order.Order,
 	matchedOrder *order.MatchedOrder,
 	batchTx *wire.MsgTx) (*lnrpc.FundingShim, error) {
 
@@ -109,7 +73,7 @@ func (s *rpcServer) deriveFundingShim(ourOrder order.Order,
 	// scratch.
 	ctxb := context.Background()
 	ourKeyLocator := ourOrder.Details().MultiSigKeyLocator
-	ourMultiSigKey, err := s.lndServices.WalletKit.DeriveKey(
+	ourMultiSigKey, err := s.walletKit.DeriveKey(
 		ctxb, &ourKeyLocator,
 	)
 	if err != nil {
@@ -166,7 +130,7 @@ func (s *rpcServer) deriveFundingShim(ourOrder order.Order,
 // registerFundingShim is used when we're on the taker (our bid was executed)
 // side of a new matched order. To prepare ourselves for their incoming funding
 // request, we'll register a shim with all the expected parameters.
-func (s *rpcServer) registerFundingShim(ourOrder order.Order,
+func (s *fundingMgr) registerFundingShim(ourOrder order.Order,
 	matchedOrder *order.MatchedOrder, batchTx *wire.MsgTx) error {
 
 	ctxb := context.Background()
@@ -175,7 +139,7 @@ func (s *rpcServer) registerFundingShim(ourOrder order.Order,
 	if err != nil {
 		return err
 	}
-	_, err = s.lndClient.FundingStateStep(
+	_, err = s.baseClient.FundingStateStep(
 		ctxb, &lnrpc.FundingTransitionMsg{
 			Trigger: &lnrpc.FundingTransitionMsg_ShimRegister{
 				ShimRegister: fundingShim,
@@ -191,16 +155,14 @@ func (s *rpcServer) registerFundingShim(ourOrder order.Order,
 
 // prepChannelFunding preps the backing node to either receive or initiate a
 // channel funding based on the items in the order batch.
-//
-// TODO(roasbeef): move?
-func (s *rpcServer) prepChannelFunding(batch *order.Batch) error {
+func (s *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 	rpcLog.Infof("Batch(%x): preparing channel funding for %v orders",
 		batch.ID[:], len(batch.MatchedOrders))
 
 	// Now that we know this batch passes our sanity checks, we'll register
 	// all the funding shims we need to be able to respond
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
-		ourOrder, err := s.server.db.GetOrder(ourOrderNonce)
+		ourOrder, err := s.db.GetOrder(ourOrderNonce)
 		if err != nil {
 			return err
 		}
@@ -223,7 +185,7 @@ func (s *rpcServer) prepChannelFunding(batch *order.Batch) error {
 				//
 				// TODO(roasbeef): info leaks?
 				err := connectToMatchedTrader(
-					s.lndClient, matchedOrder,
+					s.baseClient, matchedOrder,
 				)
 				if err != nil {
 					return err
@@ -255,7 +217,7 @@ func (s *rpcServer) prepChannelFunding(batch *order.Batch) error {
 // will block until the channel is considered pending. Once this phase is
 // complete, and the batch execution transaction broadcast, the channel will be
 // finalized and locked in.
-func (s *rpcServer) batchChannelSetup(batch *order.Batch) (
+func (s *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	map[wire.OutPoint]*chaninfo.ChannelInfo, error) {
 
 	var eg errgroup.Group
@@ -269,7 +231,7 @@ func (s *rpcServer) batchChannelSetup(batch *order.Batch) (
 	batchTxHash := batch.BatchTX.TxHash()
 	chanPoints := make(map[wire.OutPoint]struct{})
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
-		ourOrder, err := s.server.db.GetOrder(ourOrderNonce)
+		ourOrder, err := s.db.GetOrder(ourOrderNonce)
 		if err != nil {
 			return nil, err
 		}
@@ -306,7 +268,7 @@ func (s *rpcServer) batchChannelSetup(batch *order.Batch) (
 			// Before we make the funding request, we'll make sure
 			// that we're connected to the other party.
 			err = connectToMatchedTrader(
-				s.lndClient, matchedOrder,
+				s.baseClient, matchedOrder,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to connect to "+
@@ -325,7 +287,7 @@ func (s *rpcServer) batchChannelSetup(batch *order.Batch) (
 				LocalFundingAmount: chanAmt,
 				FundingShim:        fundingShim,
 			}
-			chanStream, err := s.lndClient.OpenChannel(
+			chanStream, err := s.baseClient.OpenChannel(
 				ctx, fundingReq,
 			)
 			if err != nil {
@@ -406,8 +368,7 @@ func (s *rpcServer) batchChannelSetup(batch *order.Batch) (
 		rpcLog.Debugf("Retrieving info for channel %v", chanPoint)
 
 		chanInfo, err := chaninfo.GatherChannelInfo(
-			ctx, s.lndServices.Client, s.lndServices.WalletKit,
-			chanPoint,
+			ctx, s.lightningClient, s.walletKit, chanPoint,
 		)
 		if err != nil {
 			return nil, err
@@ -422,4 +383,56 @@ func (s *rpcServer) batchChannelSetup(batch *order.Batch) (
 	}
 
 	return channelKeys, nil
+}
+
+// connectToMatchedTrader attempts to connect to a trader that we've had an
+// order matched with. We'll attempt to establish a permanent connection as
+// well, so we can use the connection for any batch retries that may happen.
+func connectToMatchedTrader(lndClient lnrpc.LightningClient,
+	matchedOrder *order.MatchedOrder) error {
+
+	ctxb := context.Background()
+	nodeKey := hex.EncodeToString(matchedOrder.NodeKey[:])
+
+	for _, addr := range matchedOrder.NodeAddrs {
+		rpcLog.Debugf("Connecting to node=%v for order_nonce=%v",
+			nodeKey, matchedOrder.Order.Nonce())
+
+		_, err := lndClient.ConnectPeer(ctxb, &lnrpc.ConnectPeerRequest{
+			Addr: &lnrpc.LightningAddress{
+				Pubkey: nodeKey,
+				Host:   addr.String(),
+			},
+		})
+
+		if err != nil {
+			// If we're already connected, then we can stop now.
+			if strings.Contains(err.Error(), "already connected") {
+				return nil
+			}
+
+			rpcLog.Warnf("unable to connect to trader at %v@%v",
+				nodeKey, addr)
+
+			continue
+		}
+
+		// Don't spam peer connections. This can lead to race errors in
+		// the itest when we try to connect to the same node in very
+		// short intervals.
+		//
+		// TODO(guggero): Fix this problem in lnd and also try to
+		// de-duplicate peers and their addresses to reduce connection
+		// tries.
+		time.Sleep(200 * time.Millisecond)
+
+		// We connected successfully, not need to try any of the other
+		// addresses.
+		break
+	}
+
+	// Since we specified perm, the error is async, and not fully
+	// communicated to the caller, so we return nil here. Later on, if we
+	// can't fund the channel, then we'll fail with a hard error.
+	return nil
 }
