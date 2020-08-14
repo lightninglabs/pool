@@ -1319,11 +1319,13 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	}
 
 	// We'll only allow orders for accounts that present in an open state,
-	// or have a pending update. On the server-side if we have a pending
-	// update we won't be matched, but this lets us place our orders early
-	// so we can join the earliest available batch.
+	// or have a pending update or batch. On the server-side if we have a
+	// pending update we won't be matched, but this lets us place our orders
+	// early so we can join the earliest available batch.
 	switch acct.State {
-	case account.StateOpen, account.StatePendingUpdate:
+	case account.StateOpen, account.StatePendingUpdate,
+		account.StatePendingBatch:
+
 		break
 
 	default:
