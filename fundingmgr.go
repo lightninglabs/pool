@@ -19,6 +19,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/routing/route"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -44,11 +45,27 @@ func (e *matchRejectErr) Error() string {
 	return fmt.Sprintf("trader rejected orders: %v", e.rejectedOrders)
 }
 
+// shimFundingClient is an interface that contains all methods necessary to open
+// a channel with a funding shim.l
+type shimFundingClient interface {
+	// FundingStateStep is an advanced funding related call that allows the
+	// caller to either execute some preparatory steps for a funding
+	// workflow, or manually progress a funding workflow.
+	FundingStateStep(ctx context.Context, req *lnrpc.FundingTransitionMsg,
+		opts ...grpc.CallOption) (*lnrpc.FundingStateStepResp, error)
+
+	// OpenChannel attempts to open a singly funded channel specified in the
+	// request to a remote peer.
+	OpenChannel(ctx context.Context, req *lnrpc.OpenChannelRequest,
+		opts ...grpc.CallOption) (lnrpc.Lightning_OpenChannelClient,
+		error)
+}
+
 type fundingMgr struct {
 	db              *clientdb.DB
 	walletKit       lndclient.WalletKitClient
 	lightningClient lndclient.LightningClient
-	baseClient      lnrpc.LightningClient
+	baseClient      shimFundingClient
 
 	// newNodesOnly specifies if the funding manager should only accept
 	// matched orders with channels from new nodes that the connected lnd
