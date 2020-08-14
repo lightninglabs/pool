@@ -72,7 +72,7 @@ func (f *fundingMgr) deriveFundingShim(ourOrder order.Order,
 	matchedOrder *order.MatchedOrder,
 	batchTx *wire.MsgTx) (*lnrpc.FundingShim, error) {
 
-	rpcLog.Infof("Registering funding shim for Order(type=%v, amt=%v, "+
+	fndgLog.Infof("Registering funding shim for Order(type=%v, amt=%v, "+
 		"nonce=%v", ourOrder.Type(),
 		matchedOrder.UnitsFilled.ToSatoshis(), ourOrder.Nonce())
 
@@ -188,7 +188,7 @@ func (f *fundingMgr) registerFundingShim(ourOrder order.Order,
 // prepChannelFunding preps the backing node to either receive or initiate a
 // channel funding based on the items in the order batch.
 func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
-	rpcLog.Infof("Batch(%x): preparing channel funding for %v orders",
+	fndgLog.Infof("Batch(%x): preparing channel funding for %v orders",
 		batch.ID[:], len(batch.MatchedOrders))
 
 	ctxb := context.Background()
@@ -262,7 +262,7 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 			//
 			// TODO(roasbeef): info leaks?
 			nodeKey := matchedOrder.NodeKey
-			rpcLog.Debugf("Connecting to node=%x for order_nonce="+
+			fndgLog.Debugf("Connecting to node=%x for order_nonce="+
 				"%v", nodeKey[:], matchedOrder.Order.Nonce())
 			_, initiated := connsInitiated[nodeKey]
 			if !initiated {
@@ -316,7 +316,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	)
 	defer cancel()
 
-	rpcLog.Infof("Batch(%x): opening channels for %v matched orders",
+	fndgLog.Infof("Batch(%x): opening channels for %v matched orders",
 		batch.ID[:], len(batch.MatchedOrders))
 
 	// For each ask order of ours that's matched, we'll make a new funding
@@ -389,7 +389,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 			nonce := matchedOrder.Order.Nonce()
 			nodeKey := matchedOrder.NodeKey
 			if err != nil {
-				rpcLog.Warnf("Error when trying to open "+
+				fndgLog.Warnf("Error when trying to open "+
 					"channel to node %x, going to reject "+
 					"channel: %v", nodeKey[:], err)
 				partialReject(nonce, err.Error(), chanPoint)
@@ -412,7 +412,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 
 					msg, err := chanStream.Recv()
 					if err != nil {
-						rpcLog.Errorf("unable to read "+
+						fndgLog.Errorf("unable to read "+
 							"chan open update "+
 							"event from node %x, "+
 							"going to reject "+
@@ -459,7 +459,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 		map[wire.OutPoint]*chaninfo.ChannelInfo, len(chanPoints),
 	)
 
-	rpcLog.Debugf("Waiting for pending open events for %v channel(s)",
+	fndgLog.Debugf("Waiting for pending open events for %v channel(s)",
 		len(chanPoints))
 
 	for {
@@ -498,7 +498,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 			continue
 		}
 
-		rpcLog.Debugf("Retrieving info for channel %v", chanPoint)
+		fndgLog.Debugf("Retrieving info for channel %v", chanPoint)
 
 		chanInfo, err := chaninfo.GatherChannelInfo(
 			setupCtx, f.lightningClient, f.walletKit, chanPoint,
@@ -544,7 +544,7 @@ func (f *fundingMgr) connectToMatchedTrader(ctx context.Context,
 				return
 			}
 
-			rpcLog.Warnf("unable to connect to trader at %x@%v",
+			fndgLog.Warnf("unable to connect to trader at %x@%v",
 				nodeKey[:], addr)
 
 			continue
@@ -599,7 +599,7 @@ func (f *fundingMgr) rejectDuplicateChannels(
 				continue
 			}
 
-			rpcLog.Debugf("Rejecting channel to node %x: %v",
+			fndgLog.Debugf("Rejecting channel to node %x: %v",
 				matchedOrder.NodeKey[:], haveChannel)
 			otherNonce := matchedOrder.Order.Nonce()
 			fundingRejects[otherNonce] = &clmrpc.OrderReject{
