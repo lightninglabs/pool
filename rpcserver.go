@@ -753,6 +753,30 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		rpcLog.Infof("Received PrepareMsg for batch=%x, num_orders=%v",
 			batch.ID[:], len(batch.MatchedOrders))
 
+		// The prepare message can be sent over and over again if the
+		// batch needs adjustment. Clear all previous shims.
+		if s.orderManager.HasPendingBatch() {
+			pendingBatch := s.orderManager.PendingBatch()
+			err := pendingBatch.CancelPendingFundingShims(
+				s.lndClient,
+				func(o order.Nonce) (order.Order, error) {
+					return s.server.db.GetOrder(o)
+				},
+			)
+			if err != nil {
+				// We can't accept the batch, something went
+				// wrong.
+				rpcLog.Errorf("Error clearing previous batch: "+
+					"%v", err)
+				return s.sendRejectBatch(batch, err)
+			}
+
+			// TODO(guggero): Also abandon any channels that might
+			// still be pending from a previous round of the same
+			// batch or a previous batch that we didn't make it into
+			// the final round.
+		}
+
 		// Do an in-depth verification of the batch.
 		err = s.orderManager.OrderMatchValidate(batch)
 		if err != nil {
