@@ -36,7 +36,7 @@ type fundingMgr struct {
 // deriveFundingShim generates the proper funding shim that should be used by
 // the maker or taker to properly make a channel that stems off the main batch
 // funding transaction.
-func (s *fundingMgr) deriveFundingShim(ourOrder order.Order,
+func (f *fundingMgr) deriveFundingShim(ourOrder order.Order,
 	matchedOrder *order.MatchedOrder,
 	batchTx *wire.MsgTx) (*lnrpc.FundingShim, error) {
 
@@ -73,7 +73,7 @@ func (s *fundingMgr) deriveFundingShim(ourOrder order.Order,
 	// scratch.
 	ctxb := context.Background()
 	ourKeyLocator := ourOrder.Details().MultiSigKeyLocator
-	ourMultiSigKey, err := s.walletKit.DeriveKey(
+	ourMultiSigKey, err := f.walletKit.DeriveKey(
 		ctxb, &ourKeyLocator,
 	)
 	if err != nil {
@@ -130,16 +130,16 @@ func (s *fundingMgr) deriveFundingShim(ourOrder order.Order,
 // registerFundingShim is used when we're on the taker (our bid was executed)
 // side of a new matched order. To prepare ourselves for their incoming funding
 // request, we'll register a shim with all the expected parameters.
-func (s *fundingMgr) registerFundingShim(ourOrder order.Order,
+func (f *fundingMgr) registerFundingShim(ourOrder order.Order,
 	matchedOrder *order.MatchedOrder, batchTx *wire.MsgTx) error {
 
 	ctxb := context.Background()
 
-	fundingShim, err := s.deriveFundingShim(ourOrder, matchedOrder, batchTx)
+	fundingShim, err := f.deriveFundingShim(ourOrder, matchedOrder, batchTx)
 	if err != nil {
 		return err
 	}
-	_, err = s.baseClient.FundingStateStep(
+	_, err = f.baseClient.FundingStateStep(
 		ctxb, &lnrpc.FundingTransitionMsg{
 			Trigger: &lnrpc.FundingTransitionMsg_ShimRegister{
 				ShimRegister: fundingShim,
@@ -155,14 +155,14 @@ func (s *fundingMgr) registerFundingShim(ourOrder order.Order,
 
 // prepChannelFunding preps the backing node to either receive or initiate a
 // channel funding based on the items in the order batch.
-func (s *fundingMgr) prepChannelFunding(batch *order.Batch) error {
+func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 	rpcLog.Infof("Batch(%x): preparing channel funding for %v orders",
 		batch.ID[:], len(batch.MatchedOrders))
 
 	// Now that we know this batch passes our sanity checks, we'll register
 	// all the funding shims we need to be able to respond
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
-		ourOrder, err := s.db.GetOrder(ourOrderNonce)
+		ourOrder, err := f.db.GetOrder(ourOrderNonce)
 		if err != nil {
 			return err
 		}
@@ -185,7 +185,7 @@ func (s *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 				//
 				// TODO(roasbeef): info leaks?
 				err := connectToMatchedTrader(
-					s.baseClient, matchedOrder,
+					f.baseClient, matchedOrder,
 				)
 				if err != nil {
 					return err
@@ -198,7 +198,7 @@ func (s *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 			// series of asks, so we'll now register all the
 			// expected funding shims so we can execute the next
 			// phase w/o any issues.
-			err := s.registerFundingShim(
+			err := f.registerFundingShim(
 				ourOrder, matchedOrder, batch.BatchTX,
 			)
 			if err != nil {
@@ -217,7 +217,7 @@ func (s *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 // will block until the channel is considered pending. Once this phase is
 // complete, and the batch execution transaction broadcast, the channel will be
 // finalized and locked in.
-func (s *fundingMgr) batchChannelSetup(batch *order.Batch) (
+func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	map[wire.OutPoint]*chaninfo.ChannelInfo, error) {
 
 	var eg errgroup.Group
@@ -231,7 +231,7 @@ func (s *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	batchTxHash := batch.BatchTX.TxHash()
 	chanPoints := make(map[wire.OutPoint]struct{})
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
-		ourOrder, err := s.db.GetOrder(ourOrderNonce)
+		ourOrder, err := f.db.GetOrder(ourOrderNonce)
 		if err != nil {
 			return nil, err
 		}
@@ -240,7 +240,7 @@ func (s *fundingMgr) batchChannelSetup(batch *order.Batch) (
 		// order, and complete the funding flow for each one in which
 		// our order was the ask.
 		for _, matchedOrder := range matchedOrders {
-			fundingShim, err := s.deriveFundingShim(
+			fundingShim, err := f.deriveFundingShim(
 				ourOrder, matchedOrder, batch.BatchTX,
 			)
 			if err != nil {
@@ -268,7 +268,7 @@ func (s *fundingMgr) batchChannelSetup(batch *order.Batch) (
 			// Before we make the funding request, we'll make sure
 			// that we're connected to the other party.
 			err = connectToMatchedTrader(
-				s.baseClient, matchedOrder,
+				f.baseClient, matchedOrder,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to connect to "+
@@ -287,7 +287,7 @@ func (s *fundingMgr) batchChannelSetup(batch *order.Batch) (
 				LocalFundingAmount: chanAmt,
 				FundingShim:        fundingShim,
 			}
-			chanStream, err := s.baseClient.OpenChannel(
+			chanStream, err := f.baseClient.OpenChannel(
 				ctx, fundingReq,
 			)
 			if err != nil {
@@ -301,7 +301,7 @@ func (s *fundingMgr) batchChannelSetup(batch *order.Batch) (
 				for {
 					select {
 
-					case <-s.quit:
+					case <-f.quit:
 						return fmt.Errorf("server " +
 							"shutting down")
 					default:
@@ -342,7 +342,7 @@ func (s *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	for {
 		var chanPoint wire.OutPoint
 		select {
-		case channel := <-s.pendingOpenChannels:
+		case channel := <-f.pendingOpenChannels:
 			var hash chainhash.Hash
 			copy(hash[:], channel.PendingOpenChannel.Txid)
 			chanPoint = wire.OutPoint{
@@ -354,7 +354,7 @@ func (s *fundingMgr) batchChannelSetup(batch *order.Batch) (
 			return nil, errors.New("timed out waiting for pending " +
 				"open channel notification")
 
-		case <-s.quit:
+		case <-f.quit:
 			return nil, fmt.Errorf("server shutting down")
 		}
 
@@ -368,7 +368,7 @@ func (s *fundingMgr) batchChannelSetup(batch *order.Batch) (
 		rpcLog.Debugf("Retrieving info for channel %v", chanPoint)
 
 		chanInfo, err := chaninfo.GatherChannelInfo(
-			ctx, s.lightningClient, s.walletKit, chanPoint,
+			ctx, f.lightningClient, f.walletKit, chanPoint,
 		)
 		if err != nil {
 			return nil, err
