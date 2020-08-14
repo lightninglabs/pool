@@ -2,22 +2,46 @@ package llm
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/llm/chaninfo"
 	"github.com/lightninglabs/llm/clientdb"
+	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/llm/order"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"golang.org/x/sync/errgroup"
 )
+
+var (
+	// defaultChannelOpenTimeout is the default time we allow a channel open
+	// action to take. If any channel takes longer to open, we might reject
+	// the order from that slow peer. This value SHOULD be lower than the
+	// defaultMsgTimeout on the server side otherwise nodes might get kicked
+	// out of the match making process for timing out even though it was
+	// their peer's fault.
+	defaultChannelOpenTimeout = 8 * time.Second
+)
+
+// matchRejectErr is an error type that is returned from the funding manager if
+// the trader rejects certain orders instead of the whole batch.
+type matchRejectErr struct {
+	rejectedOrders map[order.Nonce]*clmrpc.OrderReject
+}
+
+// Error returns the underlying error string.
+//
+// NOTE: This is part of the error interface.
+func (e *matchRejectErr) Error() string {
+	return fmt.Sprintf("trader rejected orders: %v", e.rejectedOrders)
+}
 
 type fundingMgr struct {
 	db              *clientdb.DB
@@ -29,6 +53,8 @@ type fundingMgr struct {
 	// notifications for pending open channels resulting from a successful
 	// batch.
 	pendingOpenChannels <-chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
+
+	channelOpenTimeout time.Duration
 
 	quit chan struct{}
 }
@@ -235,8 +261,36 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	map[wire.OutPoint]*chaninfo.ChannelInfo, error) {
 
-	var eg errgroup.Group
-	ctx := context.Background()
+	var (
+		eg                errgroup.Group
+		chanPoints        = make(map[wire.OutPoint]order.Nonce)
+		fundingRejects    = make(map[order.Nonce]*clmrpc.OrderReject)
+		fundingRejectsMtx sync.Mutex
+	)
+	partialReject := func(nonce order.Nonce, reason string,
+		chanPoint wire.OutPoint) {
+
+		fundingRejectsMtx.Lock()
+		defer fundingRejectsMtx.Unlock()
+
+		fundingRejects[nonce] = &clmrpc.OrderReject{
+			ReasonCode: clmrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+			Reason:     reason,
+		}
+
+		// Also remove the channel from the map that tracks pending
+		// channels, we won't receive any update on it if we failed
+		// before opening the channel.
+		delete(chanPoints, chanPoint)
+	}
+
+	// We need to make sure our whole process doesn't take too long overall
+	// so we create a context that is valid for the whole funding step and
+	// use that everywhere.
+	setupCtx, cancel := context.WithTimeout(
+		context.Background(), f.channelOpenTimeout,
+	)
+	defer cancel()
 
 	rpcLog.Infof("Batch(%x): opening channels for %v matched orders",
 		batch.ID[:], len(batch.MatchedOrders))
@@ -244,7 +298,6 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	// For each ask order of ours that's matched, we'll make a new funding
 	// flow, blocking until they all progress to the final state.
 	batchTxHash := batch.BatchTX.TxHash()
-	chanPoints := make(map[wire.OutPoint]struct{})
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
 		ourOrder, err := f.db.GetOrder(ourOrderNonce)
 		if err != nil {
@@ -266,7 +319,12 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 				Index: fundingShim.GetChanPointShim().ChanPoint.
 					OutputIndex,
 			}
-			chanPoints[chanPoint] = struct{}{}
+
+			// Some goroutines are already running from previous
+			// iterations so we need to acquire the lock here.
+			fundingRejectsMtx.Lock()
+			chanPoints[chanPoint] = matchedOrder.Order.Nonce()
+			fundingRejectsMtx.Unlock()
 
 			// If this is a bid order, then we don't need to do
 			// anything, as we should've already connected and
@@ -293,10 +351,26 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 				FundingShim:        fundingShim,
 			}
 			chanStream, err := f.baseClient.OpenChannel(
-				ctx, fundingReq,
+				setupCtx, fundingReq,
 			)
+
+			// If we can't open the channel, it could be for a
+			// number of reasons. One of them is that we still
+			// aren't connected to the remote peer because it either
+			// refuses connections or is offline. We want to track
+			// these errors on the server side so we can track and
+			// investigate/intervene. And this is also no reason to
+			// fail the whole batch. So we just mark this order pair
+			// as rejected.
+			nonce := matchedOrder.Order.Nonce()
+			nodeKey := matchedOrder.NodeKey
 			if err != nil {
-				return nil, err
+				rpcLog.Warnf("Error when trying to open "+
+					"channel to node %x, going to reject "+
+					"channel: %v", nodeKey[:], err)
+				partialReject(nonce, err.Error(), chanPoint)
+
+				continue
 			}
 
 			// We'll launch a new goroutine to wait until chan
@@ -315,7 +389,16 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 					msg, err := chanStream.Recv()
 					if err != nil {
 						rpcLog.Errorf("unable to read "+
-							"chan open update event: %v", err)
+							"chan open update "+
+							"event from node %x, "+
+							"going to reject "+
+							"channel: %v",
+							nodeKey[:], err)
+						partialReject(
+							nonce, err.Error(),
+							chanPoint,
+						)
+
 						return err
 					}
 
@@ -328,14 +411,26 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 		}
 	}
 
+	// There can only be two kinds of errors: Either we're shutting down, in
+	// which case we'll just return that error. Or we had a problem opening
+	// the channel which should have resulted in an entry in the rejects
+	// map. We're not going to fail yet in the second case but wait for the
+	// channel openings to proceed first. In case a timeout happens as well
+	// we can report that together with the other errors.
 	if err := eg.Wait(); err != nil {
-		return nil, err
+		select {
+		case <-f.quit:
+			return nil, err
+		default:
+		}
 	}
 
 	// Once we've waited for the operations to complete, we'll wait to
 	// receive each channel's pending open notification in order to retrieve
 	// some keys from their SCB we'll need to submit to the auctioneer in
-	// order for them to enforce the channel's service lifetime.
+	// order for them to enforce the channel's service lifetime. We don't
+	// need to acquire any lock anymore because all previously started
+	// goroutines have now exited.
 	channelKeys := make(
 		map[wire.OutPoint]*chaninfo.ChannelInfo, len(chanPoints),
 	)
@@ -343,7 +438,6 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	rpcLog.Debugf("Waiting for pending open events for %v channel(s)",
 		len(chanPoints))
 
-	timeout := time.After(15 * time.Second)
 	for {
 		var chanPoint wire.OutPoint
 		select {
@@ -355,9 +449,19 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 				Index: channel.PendingOpenChannel.OutputIndex,
 			}
 
-		case <-timeout:
-			return nil, errors.New("timed out waiting for pending " +
-				"open channel notification")
+		case <-setupCtx.Done():
+			// One or more of our peers timed out. At this point the
+			// chanPoints map should only contain channels that
+			// failed/timed out. So we can partially reject all of
+			// them.
+			const timeoutErrStr = "timed out waiting for pending " +
+				"open channel notification"
+			for chanPoint, nonce := range chanPoints {
+				partialReject(nonce, timeoutErrStr, chanPoint)
+			}
+			return nil, &matchRejectErr{
+				rejectedOrders: fundingRejects,
+			}
 
 		case <-f.quit:
 			return nil, fmt.Errorf("server shutting down")
@@ -373,7 +477,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 		rpcLog.Debugf("Retrieving info for channel %v", chanPoint)
 
 		chanInfo, err := chaninfo.GatherChannelInfo(
-			ctx, f.lightningClient, f.walletKit, chanPoint,
+			setupCtx, f.lightningClient, f.walletKit, chanPoint,
 		)
 		if err != nil {
 			return nil, err
@@ -384,6 +488,15 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 		delete(chanPoints, chanPoint)
 		if len(chanPoints) == 0 {
 			break
+		}
+	}
+
+	// If we got to this point with entries in the reject map it means some
+	// channels failed directly when opening but the rest succeeded without
+	// a timeout. We still want to reject the batch because of the failures.
+	if len(fundingRejects) > 0 {
+		return nil, &matchRejectErr{
+			rejectedOrders: fundingRejects,
 		}
 	}
 
