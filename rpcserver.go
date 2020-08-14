@@ -386,10 +386,6 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 			return s.sendRejectBatch(batch, err)
 		}
 
-		// TODO(roasbeef): make sure able to connect out to peers
-		// before sending accept?
-		//  * also need to handle reject on the server-side
-
 		// Before we accept the batch, we'll finish preparations on our
 		// end which include connecting out to peers, and registering
 		// funding shim.

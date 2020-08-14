@@ -2,9 +2,9 @@ package llm
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -159,6 +159,9 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 	rpcLog.Infof("Batch(%x): preparing channel funding for %v orders",
 		batch.ID[:], len(batch.MatchedOrders))
 
+	ctxb := context.Background()
+	connsInitiated := make(map[[33]byte]struct{})
+
 	// Now that we know this batch passes our sanity checks, we'll register
 	// all the funding shims we need to be able to respond
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
@@ -195,20 +198,28 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 				ourOrder, matchedOrder, batch.BatchTX,
 			)
 			if err != nil {
-				return fmt.Errorf("unable to register "+
-					"funding shim: %v", err)
+				return fmt.Errorf("unable to register funding "+
+					"shim: %v", err)
 			}
 
 			// As the bidder, we're the one that needs to make the
 			// connection as we're possibly not reachable from the
-			// outside. Let's kick off the connection now.
+			// outside. Let's kick off the connection now. However
+			// since we might be matching multiple orders from the
+			// same remote node, we want to de-duplicate the peers
+			// to not run into a problem in lnd when connecting to
+			// the same node twice in a very short interval.
 			//
 			// TODO(roasbeef): info leaks?
-			err = connectToMatchedTrader(
-				f.baseClient, matchedOrder,
-			)
-			if err != nil {
-				return err
+			nodeKey := matchedOrder.NodeKey
+			rpcLog.Debugf("Connecting to node=%x for order_nonce="+
+				"%v", nodeKey[:], matchedOrder.Order.Nonce())
+			_, initiated := connsInitiated[nodeKey]
+			if !initiated {
+				f.connectToMatchedTrader(
+					ctxb, nodeKey, matchedOrder.NodeAddrs,
+				)
+				connsInitiated[nodeKey] = struct{}{}
 			}
 		}
 	}
@@ -382,51 +393,33 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 // connectToMatchedTrader attempts to connect to a trader that we've had an
 // order matched with. We'll attempt to establish a permanent connection as
 // well, so we can use the connection for any batch retries that may happen.
-func connectToMatchedTrader(lndClient lnrpc.LightningClient,
-	matchedOrder *order.MatchedOrder) error {
+func (f *fundingMgr) connectToMatchedTrader(ctx context.Context,
+	nodeKey [33]byte, addrs []net.Addr) {
 
-	ctxb := context.Background()
-	nodeKey := hex.EncodeToString(matchedOrder.NodeKey[:])
-
-	for _, addr := range matchedOrder.NodeAddrs {
-		rpcLog.Debugf("Connecting to node=%v for order_nonce=%v",
-			nodeKey, matchedOrder.Order.Nonce())
-
-		_, err := lndClient.ConnectPeer(ctxb, &lnrpc.ConnectPeerRequest{
-			Addr: &lnrpc.LightningAddress{
-				Pubkey: nodeKey,
-				Host:   addr.String(),
-			},
-		})
-
+	for _, addr := range addrs {
+		err := f.lightningClient.Connect(ctx, nodeKey, addr.String())
 		if err != nil {
 			// If we're already connected, then we can stop now.
-			if strings.Contains(err.Error(), "already connected") {
-				return nil
+			if strings.Contains(
+				err.Error(), "already connected",
+			) {
+
+				return
 			}
 
-			rpcLog.Warnf("unable to connect to trader at %v@%v",
-				nodeKey, addr)
+			rpcLog.Warnf("unable to connect to trader at %x@%v",
+				nodeKey[:], addr)
 
 			continue
 		}
 
-		// Don't spam peer connections. This can lead to race errors in
-		// the itest when we try to connect to the same node in very
-		// short intervals.
-		//
-		// TODO(guggero): Fix this problem in lnd and also try to
-		// de-duplicate peers and their addresses to reduce connection
-		// tries.
-		time.Sleep(200 * time.Millisecond)
-
-		// We connected successfully, not need to try any of the other
-		// addresses.
+		// We connected successfully, not need to try any of the
+		// other addresses.
 		break
 	}
 
 	// Since we specified perm, the error is async, and not fully
-	// communicated to the caller, so we return nil here. Later on, if we
-	// can't fund the channel, then we'll fail with a hard error.
-	return nil
+	// communicated to the caller, so we can't really return an error.
+	// Later on, if we can't fund the channel, then we'll fail with a hard
+	// error.
 }
