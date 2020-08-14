@@ -389,8 +389,8 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		}
 
 		// Before we accept the batch, we'll finish preparations on our
-		// end which include connecting out to peers, and registering
-		// funding shim.
+		// end which include applying any order match predicates,
+		// connecting out to peers, and registering funding shim.
 		err = s.fundingManager.prepChannelFunding(batch)
 		if err != nil {
 			rpcLog.Warnf("Error preparing channel funding: %v",
@@ -399,9 +399,6 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		}
 
 		// Accept the match now.
-		//
-		// TODO(guggero): Give user the option to bail out of any order
-		// up to this point?
 		err = s.sendAcceptBatch(batch)
 		if err != nil {
 			rpcLog.Errorf("Error sending accept msg: %v", err)

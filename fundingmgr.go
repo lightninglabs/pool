@@ -17,6 +17,7 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/routing/route"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -192,6 +193,24 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 
 	ctxb := context.Background()
 	connsInitiated := make(map[[33]byte]struct{})
+
+	// Before we connect out to peers, we check that we don't get any new
+	// channels from peers we already have channels with, in case this is
+	// requested by the trader.
+	if f.newNodesOnly {
+		fundingRejects, err := f.rejectDuplicateChannels(batch)
+		if err != nil {
+			return err
+		}
+
+		// In case we have any orders we don't like, tell the auctioneer
+		// now. They'll hopefully prepare and send us another batch.
+		if len(fundingRejects) > 0 {
+			return &matchRejectErr{
+				rejectedOrders: fundingRejects,
+			}
+		}
+	}
 
 	// Now that we know this batch passes our sanity checks, we'll register
 	// all the funding shims we need to be able to respond
@@ -540,4 +559,55 @@ func (f *fundingMgr) connectToMatchedTrader(ctx context.Context,
 	// communicated to the caller, so we can't really return an error.
 	// Later on, if we can't fund the channel, then we'll fail with a hard
 	// error.
+}
+
+// rejectDuplicateChannels gathers a list of matched orders that should be
+// rejected because they would create channels to peers that the trader already
+// has channels with.
+func (f *fundingMgr) rejectDuplicateChannels(
+	batch *order.Batch) (map[order.Nonce]*clmrpc.OrderReject, error) {
+
+	// We gather all peers from the open and pending channels.
+	ctxb := context.Background()
+	peers := make(map[route.Vertex]struct{})
+	openChans, err := f.lightningClient.ListChannels(ctxb)
+	if err != nil {
+		return nil, fmt.Errorf("error listing open channels: %v", err)
+	}
+	pendingChans, err := f.lightningClient.PendingChannels(ctxb)
+	if err != nil {
+		return nil, fmt.Errorf("error listing pending channels: %v",
+			err)
+	}
+
+	for _, openChan := range openChans {
+		peers[openChan.PubKeyBytes] = struct{}{}
+	}
+	for _, pendingChan := range pendingChans.PendingOpen {
+		peers[pendingChan.PubKeyBytes] = struct{}{}
+	}
+
+	// Gather the list of matches we reject because they are to peers we
+	// already have channels with.
+	const haveChannel = "already have open/pending channel with peer"
+	const rejectCode = clmrpc.OrderReject_DUPLICATE_PEER
+	fundingRejects := make(map[order.Nonce]*clmrpc.OrderReject)
+	for _, matchedOrders := range batch.MatchedOrders {
+		for _, matchedOrder := range matchedOrders {
+			_, ok := peers[matchedOrder.NodeKey]
+			if !ok {
+				continue
+			}
+
+			rpcLog.Debugf("Rejecting channel to node %x: %v",
+				matchedOrder.NodeKey[:], haveChannel)
+			otherNonce := matchedOrder.Order.Nonce()
+			fundingRejects[otherNonce] = &clmrpc.OrderReject{
+				ReasonCode: rejectCode,
+				Reason:     haveChannel,
+			}
+		}
+	}
+
+	return fundingRejects, nil
 }
