@@ -49,6 +49,11 @@ type fundingMgr struct {
 	lightningClient lndclient.LightningClient
 	baseClient      lnrpc.LightningClient
 
+	// newNodesOnly specifies if the funding manager should only accept
+	// matched orders with channels from new nodes that the connected lnd
+	// node doesn't already have channels with.
+	newNodesOnly bool
+
 	// pendingOpenChannels is a channel through which we'll receive
 	// notifications for pending open channels resulting from a successful
 	// batch.
