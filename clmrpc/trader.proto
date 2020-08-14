@@ -296,6 +296,11 @@ enum AccountState {
     in the first place.
     */
     RECOVERY_FAILED = 6;
+
+    /*
+    The account has recently participated in a batch and is not yet confirmed.
+    */
+    PENDING_BATCH = 7;
 }
 
 message Account {

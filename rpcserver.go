@@ -990,6 +990,9 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 	case account.StateCanceledAfterRecovery:
 		rpcState = clmrpc.AccountState_RECOVERY_FAILED
 
+	case account.StatePendingBatch:
+		rpcState = clmrpc.AccountState_PENDING_BATCH
+
 	default:
 		return nil, fmt.Errorf("unknown state %v", a.State)
 	}
