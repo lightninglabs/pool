@@ -820,9 +820,30 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		rpcLog.Infof("Received FinalizeMsg for batch=%x",
 			msg.Finalize.BatchId)
 
+		// Before finalizing the batch, we want to know what accounts
+		// were involved so we can start watching them again. Query the
+		// pending batch now as BatchFinalize below will set it to nil.
+		batch := s.orderManager.PendingBatch()
+
 		var batchID order.BatchID
 		copy(batchID[:], msg.Finalize.BatchId)
-		return s.orderManager.BatchFinalize(batchID)
+		err := s.orderManager.BatchFinalize(batchID)
+		if err != nil {
+			return fmt.Errorf("error finalizing batch: %v", err)
+		}
+
+		// Accounts that were updated in the batch need to start new
+		// confirmation watchers, now that we expect a batch TX to be
+		// published.
+		matchedAccounts := make(
+			[]*btcec.PublicKey, len(batch.AccountDiffs),
+		)
+		for idx, acct := range batch.AccountDiffs {
+			matchedAccounts[idx] = acct.AccountKey
+		}
+		return s.accountManager.WatchMatchedAccounts(
+			context.Background(), matchedAccounts,
+		)
 
 	default:
 		return fmt.Errorf("unknown server message: %v", msg)

@@ -20,6 +20,7 @@ import (
 	"github.com/lightningnetwork/lnd/lntest/wait"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -835,4 +836,82 @@ func TestAccountDeposit(t *testing.T) {
 	// Finally, close the account to ensure we can process another spend
 	// after the withdrawal.
 	_ = h.closeAccount(account, nil, bestHeight)
+}
+
+// TestAccountConsecutiveBatches ensures that we can process an account update
+// through multiple consecutive batches that only confirm after we've already
+// updated our database state.
+func TestAccountConsecutiveBatches(t *testing.T) {
+	t.Parallel()
+
+	const bestHeight = 100
+
+	h := newTestHarness(t)
+	h.start()
+	defer h.stop()
+
+	account := h.openAccount(
+		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+	)
+
+	// Then, we'll simulate the maximum number of unconfirmed batches to
+	// happen that'll all confirm in the same block.
+	const newValue = maxAccountValue / 2
+	const numBatches = 10
+	batchTxs := make([]*wire.MsgTx, numBatches)
+	for i := 0; i < numBatches; i++ {
+		newPkScript, err := account.NextOutputScript()
+		require.NoError(t, err)
+
+		// Create an account spend which we'll notify later. This spend
+		// should take the multi-sig path to trigger the logic to lookup
+		// previous outpoints.
+		batchTx := &wire.MsgTx{
+			Version: 2,
+			TxIn: []*wire.TxIn{{
+				PreviousOutPoint: account.OutPoint,
+				Witness: wire.TxWitness{
+					{0x01}, // Use multi-sig path.
+					{},
+					{},
+				},
+			}},
+			TxOut: []*wire.TxOut{{
+				Value:    int64(newValue),
+				PkScript: newPkScript,
+			}},
+		}
+		batchTxs[i] = batchTx
+
+		mods := []Modifier{
+			ValueModifier(newValue - btcutil.Amount(i)),
+			StateModifier(StatePendingBatch),
+			OutPointModifier(wire.OutPoint{
+				Hash:  batchTx.TxHash(),
+				Index: 0,
+			}),
+			IncrementBatchKey(),
+		}
+		err = h.store.updateAccount(account, mods...)
+		require.NoError(t, err)
+
+		// The RPC server will notify the manager each time a batch is
+		// finalized, we do the same here.
+		err = h.manager.WatchMatchedAccounts(
+			context.Background(),
+			[]*btcec.PublicKey{account.TraderKey.PubKey},
+		)
+		require.NoError(t, err)
+	}
+
+	// Notify the confirmation, causing the account to transition back to
+	// StateOpen.
+	confHeight := bestHeight + 6
+	h.notifier.confChan <- &chainntnfs.TxConfirmation{
+		Tx:          batchTxs[len(batchTxs)-1],
+		BlockHeight: uint32(confHeight),
+	}
+	StateModifier(StateOpen)(account)
+	HeightHintModifier(uint32(confHeight))(account)
+	h.assertAccountExists(account)
 }
