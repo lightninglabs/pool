@@ -96,7 +96,7 @@ func (s *batchStorer) StorePendingBatch(batch *Batch, bestHeight uint32) error {
 		case clmrpc.AccountDiff_OUTPUT_RECREATED:
 			modifiers = append(
 				modifiers,
-				account.StateModifier(account.StatePendingUpdate),
+				account.StateModifier(account.StatePendingBatch),
 				account.OutPointModifier(wire.OutPoint{
 					Index: uint32(diff.OutpointIndex),
 					Hash:  batch.BatchTX.TxHash(),
