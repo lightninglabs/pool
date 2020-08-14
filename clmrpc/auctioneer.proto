@@ -230,6 +230,12 @@ message OrderMatchReject {
         server is using.
         */
         BATCH_VERSION_MISMATCH = 2;
+
+        /*
+        The client rejects some of the orders, not the full batch. When this
+        code is set, the rejected_orders map must be set.
+        */
+        PARTIAL_REJECT = 3;
     }
 
     /*
@@ -246,6 +252,54 @@ message OrderMatchReject {
     The reason as a code.
     */
     RejectReason reason_code = 3;
+
+    /*
+    The map of order nonces the trader was matched with but doesn't accept. The
+    map contains the _other_ trader's order nonces and the reason for rejecting
+    them. This can be a subset of the whole list of orders presented as matches
+    if the trader only wants to reject some of them. This map is only
+    considered by the auctioneer if the main reason_code is set to
+    PARTIAL_REJECT. Otherwise it is assumed that the whole batch was faulty for
+    some reason and that the trader rejects all orders contained. The auctioneer
+    will only accept a certain number of these partial rejects before a trader's
+    account is removed completely from the current batch. Abusing this
+    functionality can also lead to a ban of the trader.
+
+    The order nonces are hex encoded strings because the protobuf map doesn't
+    allow raw bytes to be the map key type.
+    */
+    map<string, OrderReject> rejected_orders = 4;
+}
+
+message OrderReject {
+    enum OrderRejectReason {
+        /*
+        The trader's client has a preference to only match orders with peers it
+        doesn't already have channels with. The order that is rejected with this
+        reason type comes from a peer that the trader already has channels with.
+        */
+        DUPLICATE_PEER = 0;
+
+        /*
+        The trader's client couldn't connect to the remote node of the matched
+        order or the channel funding could not be initialized for another
+        reason. This could also be the rejecting node's fault if their
+        connection is not stable. Using this code can have a negative impact on
+        the reputation score of both nodes, depending on the number of errors
+        recorded.
+        */
+        CHANNEL_FUNDING_FAILED = 1;
+    }
+
+    /*
+    The reason/error string for the rejection.
+    */
+    string reason = 1;
+
+    /*
+    The reason as a code.
+    */
+    OrderRejectReason reason_code = 2;
 }
 
 enum ChannelType {
