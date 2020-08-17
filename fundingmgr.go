@@ -45,9 +45,9 @@ func (e *matchRejectErr) Error() string {
 	return fmt.Sprintf("trader rejected orders: %v", e.rejectedOrders)
 }
 
-// shimFundingClient is an interface that contains all methods necessary to open
-// a channel with a funding shim.l
-type shimFundingClient interface {
+// fundingBaseClient is an interface that contains all methods necessary to open
+// a channel with a funding shim and query peer connections.
+type fundingBaseClient interface {
 	// FundingStateStep is an advanced funding related call that allows the
 	// caller to either execute some preparatory steps for a funding
 	// workflow, or manually progress a funding workflow.
@@ -59,13 +59,24 @@ type shimFundingClient interface {
 	OpenChannel(ctx context.Context, req *lnrpc.OpenChannelRequest,
 		opts ...grpc.CallOption) (lnrpc.Lightning_OpenChannelClient,
 		error)
+
+	// ListPeers returns a verbose listing of all currently active peers.
+	ListPeers(ctx context.Context, req *lnrpc.ListPeersRequest,
+		opts ...grpc.CallOption) (*lnrpc.ListPeersResponse, error)
+
+	// SubscribePeerEvents creates a uni-directional stream from the server
+	// to the client in which any events relevant to the state of peers are
+	// sent over. Events include peers going online and offline.
+	SubscribePeerEvents(ctx context.Context, r *lnrpc.PeerEventSubscription,
+		opts ...grpc.CallOption) (
+		lnrpc.Lightning_SubscribePeerEventsClient, error)
 }
 
 type fundingMgr struct {
 	db              *clientdb.DB
 	walletKit       lndclient.WalletKitClient
 	lightningClient lndclient.LightningClient
-	baseClient      shimFundingClient
+	baseClient      fundingBaseClient
 
 	// newNodesOnly specifies if the funding manager should only accept
 	// matched orders with channels from new nodes that the connected lnd

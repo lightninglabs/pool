@@ -48,16 +48,37 @@ func (i *openChannelStream) Recv() (*lnrpc.OpenStatusUpdate, error) {
 	}
 }
 
-type shimFundingClientMock struct {
+type peerEventStream struct {
+	lnrpc.Lightning_SubscribePeerEventsClient
+
+	updateChan chan *lnrpc.PeerEvent
+	quit       chan struct{}
+}
+
+func (i *peerEventStream) Recv() (*lnrpc.PeerEvent, error) {
+	select {
+	case msg := <-i.updateChan:
+		return msg, nil
+
+	case <-i.quit:
+		return nil, context.Canceled
+	}
+}
+
+type fundingBaseClientMock struct {
 	lightningClient *test.MockLightning
 	fundingShims    map[[32]byte]*lnrpc.ChanPointShim
+
+	useManualPeerList bool
+	manualPeerList    map[route.Vertex]string
+	peerEvents        chan *lnrpc.PeerEvent
 
 	quit chan struct{}
 }
 
-func (m *shimFundingClientMock) FundingStateStep(ctx context.Context,
+func (m *fundingBaseClientMock) FundingStateStep(_ context.Context,
 	req *lnrpc.FundingTransitionMsg,
-	opts ...grpc.CallOption) (*lnrpc.FundingStateStepResp, error) {
+	_ ...grpc.CallOption) (*lnrpc.FundingStateStepResp, error) {
 
 	register := req.GetShimRegister()
 	if register == nil || register.GetChanPointShim() == nil {
@@ -71,9 +92,9 @@ func (m *shimFundingClientMock) FundingStateStep(ctx context.Context,
 	return nil, nil
 }
 
-func (m *shimFundingClientMock) OpenChannel(ctx context.Context,
+func (m *fundingBaseClientMock) OpenChannel(ctx context.Context,
 	req *lnrpc.OpenChannelRequest,
-	opts ...grpc.CallOption) (lnrpc.Lightning_OpenChannelClient, error) {
+	_ ...grpc.CallOption) (lnrpc.Lightning_OpenChannelClient, error) {
 
 	if req.FundingShim == nil || req.FundingShim.GetChanPointShim() == nil {
 		return nil, fmt.Errorf("invalid funding shim")
@@ -116,15 +137,45 @@ func (m *shimFundingClientMock) OpenChannel(ctx context.Context,
 	return stream, nil
 }
 
+func (m *fundingBaseClientMock) ListPeers(_ context.Context,
+	_ *lnrpc.ListPeersRequest,
+	_ ...grpc.CallOption) (*lnrpc.ListPeersResponse, error) {
+
+	peerList := m.lightningClient.Connections
+	if m.useManualPeerList {
+		peerList = m.manualPeerList
+	}
+
+	resp := &lnrpc.ListPeersResponse{}
+	for nodeKey, addr := range peerList {
+		resp.Peers = append(resp.Peers, &lnrpc.Peer{
+			PubKey:  nodeKey.String(),
+			Address: addr,
+		})
+	}
+
+	return resp, nil
+}
+
+func (m *fundingBaseClientMock) SubscribePeerEvents(_ context.Context,
+	_ *lnrpc.PeerEventSubscription, _ ...grpc.CallOption) (
+	lnrpc.Lightning_SubscribePeerEventsClient, error) {
+
+	return &peerEventStream{
+		quit:       m.quit,
+		updateChan: m.peerEvents,
+	}, nil
+}
+
 type managerHarness struct {
-	t        *testing.T
-	tempDir  string
-	db       *clientdb.DB
-	quit     chan struct{}
-	msgChan  chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
-	lnMock   *test.MockLightning
-	shimMock *shimFundingClientMock
-	mgr      *fundingMgr
+	t              *testing.T
+	tempDir        string
+	db             *clientdb.DB
+	quit           chan struct{}
+	msgChan        chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
+	lnMock         *test.MockLightning
+	baseClientMock *fundingBaseClientMock
+	mgr            *fundingMgr
 }
 
 func newManagerHarness(t *testing.T) *managerHarness {
@@ -141,24 +192,26 @@ func newManagerHarness(t *testing.T) *managerHarness {
 	msgChan := make(chan *lnrpc.ChannelEventUpdate_PendingOpenChannel)
 	lightningClient := test.NewMockLightning()
 	walletKitClient := test.NewMockWalletKit()
-	shimFundingClient := &shimFundingClientMock{
+	baseClientMock := &fundingBaseClientMock{
 		lightningClient: lightningClient,
 		fundingShims:    make(map[[32]byte]*lnrpc.ChanPointShim),
+		manualPeerList:  make(map[route.Vertex]string),
+		peerEvents:      make(chan *lnrpc.PeerEvent),
 		quit:            quit,
 	}
 	return &managerHarness{
-		t:        t,
-		tempDir:  tempDir,
-		db:       db,
-		quit:     quit,
-		msgChan:  msgChan,
-		lnMock:   lightningClient,
-		shimMock: shimFundingClient,
+		t:              t,
+		tempDir:        tempDir,
+		db:             db,
+		quit:           quit,
+		msgChan:        msgChan,
+		lnMock:         lightningClient,
+		baseClientMock: baseClientMock,
 		mgr: &fundingMgr{
 			db:                  db,
 			walletKit:           walletKitClient,
 			lightningClient:     lightningClient,
-			baseClient:          shimFundingClient,
+			baseClient:          baseClientMock,
 			newNodesOnly:        true,
 			pendingOpenChannels: msgChan,
 			quit:                quit,
@@ -261,10 +314,10 @@ func TestFundingManager(t *testing.T) {
 	// the funding shim while the asker is opening the channel.
 	require.Equal(t, 1, len(h.lnMock.Connections))
 	require.Equal(t, addr1.String(), h.lnMock.Connections[node1Key])
-	require.Equal(t, 1, len(h.shimMock.fundingShims))
+	require.Equal(t, 1, len(h.baseClientMock.fundingShims))
 
 	// Validate the shim.
-	shim := h.shimMock.fundingShims[pendingChanID]
+	shim := h.baseClientMock.fundingShims[pendingChanID]
 	require.NotNil(t, shim)
 	require.Equal(t, uint32(2500), shim.ThawHeight)
 	require.Equal(t, int64(order.SupplyUnit(4).ToSatoshis()), shim.Amt)
