@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -52,6 +53,7 @@ type peerEventStream struct {
 	lnrpc.Lightning_SubscribePeerEventsClient
 
 	updateChan chan *lnrpc.PeerEvent
+	ctx        context.Context
 	quit       chan struct{}
 }
 
@@ -59,6 +61,9 @@ func (i *peerEventStream) Recv() (*lnrpc.PeerEvent, error) {
 	select {
 	case msg := <-i.updateChan:
 		return msg, nil
+
+	case <-i.ctx.Done():
+		return nil, i.ctx.Err()
 
 	case <-i.quit:
 		return nil, context.Canceled
@@ -157,12 +162,13 @@ func (m *fundingBaseClientMock) ListPeers(_ context.Context,
 	return resp, nil
 }
 
-func (m *fundingBaseClientMock) SubscribePeerEvents(_ context.Context,
+func (m *fundingBaseClientMock) SubscribePeerEvents(ctx context.Context,
 	_ *lnrpc.PeerEventSubscription, _ ...grpc.CallOption) (
 	lnrpc.Lightning_SubscribePeerEventsClient, error) {
 
 	return &peerEventStream{
 		quit:       m.quit,
+		ctx:        ctx,
 		updateChan: m.peerEvents,
 	}, nil
 }
@@ -362,6 +368,24 @@ func TestFundingManager(t *testing.T) {
 	}
 	require.Equal(t, expectedErr, err)
 
+	// As a last check of the funding preparation, make sure we get a reject
+	// error if the connections to the remote peers couldn't be established.
+	h.mgr.newNodesOnly = false
+	h.baseClientMock.useManualPeerList = true
+	err = h.mgr.prepChannelFunding(batch)
+	require.Error(t, err)
+
+	expectedErr = &matchRejectErr{
+		rejectedOrders: map[order.Nonce]*clmrpc.OrderReject{
+			ask.Nonce(): {
+				ReasonCode: clmrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+				Reason: "connection not established before " +
+					"timeout",
+			},
+		},
+	}
+	require.Equal(t, expectedErr, err)
+
 	// Next, make sure we can complete the channel funding by opening the
 	// channel for which we are the bidder. We'll also expect a channel open
 	// message for the one where we are the asker so we simulate two msgs.
@@ -419,6 +443,103 @@ func TestFundingManager(t *testing.T) {
 		rejectedOrders: map[order.Nonce]*clmrpc.OrderReject{
 			ask.Nonce(): code,
 			bid.Nonce(): code,
+		},
+	}
+	require.Equal(t, expectedErr, err)
+}
+
+// TestWaitForPeerConnections tests the function that waits for peer connections
+// to be established before continuing with the funding process.
+func TestWaitForPeerConnections(t *testing.T) {
+	h := newManagerHarness(t)
+	defer h.stop()
+
+	const testTimeout = 100 * time.Millisecond
+	h.baseClientMock.useManualPeerList = true
+
+	// First we make sure that if all peer are already connected, no peer
+	// subscription is created.
+	h.baseClientMock.manualPeerList = map[route.Vertex]string{
+		node1Key: "1.1.1.1",
+		node2Key: "2.2.2.2",
+	}
+	ctxt, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	expectedConnections := map[route.Vertex]struct{}{
+		node1Key: {},
+		node2Key: {},
+	}
+	err := h.mgr.waitForPeerConnections(ctxt, expectedConnections, nil)
+	require.NoError(t, err)
+
+	// Next, make sure that connections established while waiting are
+	// notified correctly. We simulate one connection already being done and
+	// one finishing while we wait.
+	h.baseClientMock.manualPeerList = map[route.Vertex]string{
+		node1Key: "1.1.1.1",
+	}
+	go func() {
+		// Send an offline event first just to make sure it's consumed
+		// but ignored.
+		h.baseClientMock.peerEvents <- &lnrpc.PeerEvent{
+			PubKey: hex.EncodeToString(node2Key[:]),
+			Type:   lnrpc.PeerEvent_PEER_OFFLINE,
+		}
+
+		// Now send the event that the manager is waiting for.
+		h.baseClientMock.peerEvents <- &lnrpc.PeerEvent{
+			PubKey: hex.EncodeToString(node2Key[:]),
+			Type:   lnrpc.PeerEvent_PEER_ONLINE,
+		}
+	}()
+	ctxt, cancel = context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	expectedConnections = map[route.Vertex]struct{}{
+		node1Key: {},
+		node2Key: {},
+	}
+	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, nil)
+	require.NoError(t, err)
+
+	// Final test, make sure we get the correct error message back if we
+	// run into a timeout when waiting for the second node to be connected.
+	fakeNonce1, fakeNonce2 := order.Nonce{77, 88}, order.Nonce{88, 99}
+	fakeBatch := &order.Batch{
+		MatchedOrders: map[order.Nonce][]*order.MatchedOrder{
+			fakeNonce1: {{
+				NodeKey: node1Key,
+				Order: &order.Ask{
+					Kit: newKitFromTemplate(
+						fakeNonce1, &order.Kit{},
+					),
+				},
+			}},
+			fakeNonce2: {{
+				NodeKey: node2Key,
+				Order: &order.Ask{
+					Kit: newKitFromTemplate(
+						fakeNonce2, &order.Kit{},
+					),
+				},
+			}},
+		},
+	}
+	ctxt, cancel = context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	expectedConnections = map[route.Vertex]struct{}{
+		node1Key: {},
+		node2Key: {},
+	}
+	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, fakeBatch)
+	require.Error(t, err)
+
+	code := &clmrpc.OrderReject{
+		ReasonCode: clmrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+		Reason:     "connection not established before timeout",
+	}
+	expectedErr := &matchRejectErr{
+		rejectedOrders: map[order.Nonce]*clmrpc.OrderReject{
+			fakeNonce2: code,
 		},
 	}
 	require.Equal(t, expectedErr, err)
