@@ -14,7 +14,7 @@ service ChannelAuctioneer {
     rpc SubscribeBatchAuction (stream ClientAuctionMessage) returns (stream ServerAuctionMessage);
     rpc FeeQuote (FeeQuoteRequest) returns (FeeQuoteResponse);
     rpc RelevantBatchSnapshot (RelevantBatchRequest) returns (RelevantBatch);
-    rpc BatchSnapshot(BatchSnapshotRequest) returns (BatchSnapshotResponse);
+    rpc BatchSnapshot (BatchSnapshotRequest) returns (BatchSnapshotResponse);
 }
 
 message ReserveAccountRequest {
@@ -535,7 +535,7 @@ enum AuctionAccountState {
     STATE_EXPIRED = 2;
 
     /*
-    The account was modified or recreated by a batch and is currently waiting
+    The account was modified by a deposit or withdrawal and is currently waiting
     for the modifying transaction to confirm.
     */
     STATE_PENDING_UPDATE = 3;
@@ -545,6 +545,11 @@ enum AuctionAccountState {
     transaction is already confirmed on-chain or not.
     */
     STATE_CLOSED = 4;
+
+    /*
+    The account has recently participated in a batch and is not yet confirmed.
+    */
+    STATE_PENDING_BATCH = 5;
 }
 
 message AuctionAccount {

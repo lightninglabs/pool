@@ -334,6 +334,47 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	return account, nil
 }
 
+// WatchMatchedAccounts resumes accounts that were just matched in a batch and
+// are expecting the batch transaction to confirm as their next account output.
+// This will cancel all previous spend and conf watchers of all accounts
+// involved in the batch.
+func (m *Manager) WatchMatchedAccounts(ctx context.Context,
+	matchedAccounts []*btcec.PublicKey) error {
+
+	for _, matchedAccount := range matchedAccounts {
+		acct, err := m.cfg.Store.Account(matchedAccount)
+		if err != nil {
+			return fmt.Errorf("error reading account %x: %v",
+				matchedAccount.SerializeCompressed(), err)
+		}
+
+		// The account was just involved in a batch. That means our
+		// account output was spent by a batch transaction. Since we
+		// know that a batch transaction cannot simply be rolled back or
+		// replaced without us being involved, we know that the batch TX
+		// will eventually confirm. To handle the case where an account
+		// is involved in multiple consecutive batches that are all
+		// unconfirmed, we make sure we only track the latest state by
+		// canceling all previous spend and confirmation watchers. We
+		// then only watch the latest batch and once it confirms, create
+		// a new spend watcher on that.
+		m.watcher.CancelAccountSpend(matchedAccount)
+		m.watcher.CancelAccountConf(matchedAccount)
+
+		// After taking part in a batch, the account is either pending
+		// closed because it was used up or pending batch update because
+		// it was recreated. Either way, let's resume it now by creating
+		// the appropriate watchers again.
+		err = m.resumeAccount(ctx, acct, false, false, 0)
+		if err != nil {
+			return fmt.Errorf("error resuming account %x: %v",
+				matchedAccount.SerializeCompressed(), err)
+		}
+	}
+
+	return nil
+}
+
 // resumeAccount performs different operations based on the account's state.
 // This method serves as a way to consolidate the logic of resuming accounts on
 // startup and during normal operation.
@@ -489,15 +530,20 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 				"%v", err)
 		}
 
-	// In StatePendingUpdate, we've processed an account update due to
-	// either a matched order or trader modification, so we'll need to wait
-	// for its confirmation. Once it confirms, handleAccountConf will take
-	// care of the rest of the flow.
+	// In StatePendingUpdate or StatePendingBatch, we've processed an
+	// account update due to either a matched order or trader modification,
+	// so we'll need to wait for its confirmation. Once it confirms,
+	// handleAccountConf will take care of the rest of the flow.
 	//
 	// TODO(wilmer): Handle restart case where the client shuts down after
 	// the modification has been reflected on-disk, but the auctioneer's
 	// signature hasn't been received.
-	case StatePendingUpdate:
+	//
+	// TODO(guggero): Handle the case of a malicious auctioneer that
+	// replaces batch A with a batch A' that contains none of our accounts
+	// and would therefore not be noticed by us. The account would stay
+	// pending forever in that case.
+	case StatePendingUpdate, StatePendingBatch:
 		numConfs := numConfsForValue(account.Value)
 		log.Infof("Waiting for %v confirmation(s) of account %x",
 			numConfs, account.TraderKey.PubKey.SerializeCompressed())
@@ -686,10 +732,13 @@ func (m *Manager) handleAccountConf(traderKey *btcec.PublicKey,
 
 // handleAccountSpend handles the different spend paths of an account. If an
 // account is spent by the expiration path, it'll always be marked as closed
-// thereafter. If it spent by the cooperative path with the auctioneer, then the
-// account will only remain open if the spending transaction recreates the
+// thereafter. If it is spent by the cooperative path with the auctioneer, then
+// the account will only remain open if the spending transaction recreates the
 // account with the expected next account script. Otherwise, it is also marked
-// as closed.
+// as closed. In case of multiple consecutive batches with the same account, we
+// only track the spend of the latest batch, after it confirmed. So the account
+// output in the spend transaction should always match our database state if
+// it was a cooperative spend.
 func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 	spendDetails *chainntnfs.SpendDetail) error {
 

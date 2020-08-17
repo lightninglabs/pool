@@ -1057,6 +1057,9 @@ func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
 	case clmrpc.AuctionAccountState_STATE_PENDING_UPDATE:
 		state = account.StatePendingUpdate
 
+	case clmrpc.AuctionAccountState_STATE_PENDING_BATCH:
+		state = account.StatePendingBatch
+
 	case clmrpc.AuctionAccountState_STATE_EXPIRED:
 		state = account.StateExpired
 	}

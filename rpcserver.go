@@ -820,9 +820,30 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 		rpcLog.Infof("Received FinalizeMsg for batch=%x",
 			msg.Finalize.BatchId)
 
+		// Before finalizing the batch, we want to know what accounts
+		// were involved so we can start watching them again. Query the
+		// pending batch now as BatchFinalize below will set it to nil.
+		batch := s.orderManager.PendingBatch()
+
 		var batchID order.BatchID
 		copy(batchID[:], msg.Finalize.BatchId)
-		return s.orderManager.BatchFinalize(batchID)
+		err := s.orderManager.BatchFinalize(batchID)
+		if err != nil {
+			return fmt.Errorf("error finalizing batch: %v", err)
+		}
+
+		// Accounts that were updated in the batch need to start new
+		// confirmation watchers, now that we expect a batch TX to be
+		// published.
+		matchedAccounts := make(
+			[]*btcec.PublicKey, len(batch.AccountDiffs),
+		)
+		for idx, acct := range batch.AccountDiffs {
+			matchedAccounts[idx] = acct.AccountKey
+		}
+		return s.accountManager.WatchMatchedAccounts(
+			context.Background(), matchedAccounts,
+		)
 
 	default:
 		return fmt.Errorf("unknown server message: %v", msg)
@@ -989,6 +1010,9 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 
 	case account.StateCanceledAfterRecovery:
 		rpcState = clmrpc.AccountState_RECOVERY_FAILED
+
+	case account.StatePendingBatch:
+		rpcState = clmrpc.AccountState_PENDING_BATCH
 
 	default:
 		return nil, fmt.Errorf("unknown state %v", a.State)
@@ -1316,11 +1340,13 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	}
 
 	// We'll only allow orders for accounts that present in an open state,
-	// or have a pending update. On the server-side if we have a pending
-	// update we won't be matched, but this lets us place our orders early
-	// so we can join the earliest available batch.
+	// or have a pending update or batch. On the server-side if we have a
+	// pending update we won't be matched, but this lets us place our orders
+	// early so we can join the earliest available batch.
 	switch acct.State {
-	case account.StateOpen, account.StatePendingUpdate:
+	case account.StateOpen, account.StatePendingUpdate,
+		account.StatePendingBatch:
+
 		break
 
 	default:

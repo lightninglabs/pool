@@ -3,6 +3,7 @@ package clmscript
 import (
 	"bytes"
 	"crypto/sha256"
+	"math/big"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/txscript"
@@ -176,6 +177,25 @@ func IncrementKey(key *btcec.PublicKey) *btcec.PublicKey {
 	return &btcec.PublicKey{
 		X:     newX,
 		Y:     newY,
+		Curve: btcec.S256(),
+	}
+}
+
+// DecrementKey is the opposite of IncrementKey, it "subtracts one" from the
+// current key to arrive at the key used before the IncrementKey operation.
+func DecrementKey(key *btcec.PublicKey) *btcec.PublicKey {
+	//  priorKey = key - G
+	//  priorKey = (key.x, key.y) + (G.x, -G.y)
+	curveParams := btcec.S256().Params()
+	negY := new(big.Int).Neg(curveParams.Gy)
+	negY = negY.Mod(negY, curveParams.P)
+	x, y := key.Curve.Add(
+		key.X, key.Y, curveParams.Gx, negY,
+	)
+
+	return &btcec.PublicKey{
+		X:     x,
+		Y:     y,
 		Curve: btcec.S256(),
 	}
 }
