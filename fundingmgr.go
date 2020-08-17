@@ -23,13 +23,14 @@ import (
 )
 
 var (
-	// defaultChannelOpenTimeout is the default time we allow a channel open
-	// action to take. If any channel takes longer to open, we might reject
+	// defaultBatchStepTimeout is the default time we allow an action that
+	// blocks the batch conversation (like peer connection establishment or
+	// channel open) to take. If any action takes longer, we might reject
 	// the order from that slow peer. This value SHOULD be lower than the
 	// defaultMsgTimeout on the server side otherwise nodes might get kicked
 	// out of the match making process for timing out even though it was
 	// their peer's fault.
-	defaultChannelOpenTimeout = 8 * time.Second
+	defaultBatchStepTimeout = 8 * time.Second
 )
 
 // matchRejectErr is an error type that is returned from the funding manager if
@@ -88,7 +89,7 @@ type fundingMgr struct {
 	// batch.
 	pendingOpenChannels <-chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
 
-	channelOpenTimeout time.Duration
+	batchStepTimeout time.Duration
 
 	quit chan struct{}
 }
@@ -220,7 +221,7 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 		batch.ID[:], len(batch.MatchedOrders))
 
 	ctxb := context.Background()
-	connsInitiated := make(map[[33]byte]struct{})
+	connsInitiated := make(map[route.Vertex]struct{})
 
 	// Before we connect out to peers, we check that we don't get any new
 	// channels from peers we already have channels with, in case this is
@@ -340,7 +341,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	// so we create a context that is valid for the whole funding step and
 	// use that everywhere.
 	setupCtx, cancel := context.WithTimeout(
-		context.Background(), f.channelOpenTimeout,
+		context.Background(), f.batchStepTimeout,
 	)
 	defer cancel()
 

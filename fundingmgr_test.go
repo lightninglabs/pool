@@ -215,7 +215,7 @@ func newManagerHarness(t *testing.T) *managerHarness {
 			newNodesOnly:        true,
 			pendingOpenChannels: msgChan,
 			quit:                quit,
-			channelOpenTimeout:  400 * time.Millisecond,
+			batchStepTimeout:    400 * time.Millisecond,
 		},
 	}
 }
