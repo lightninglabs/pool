@@ -21,6 +21,7 @@ type acctSubscription struct {
 	sendMsg    func(*clmrpc.ClientAuctionMessage) error
 	signer     lndclient.SignerClient
 	msgChan    chan *clmrpc.ServerAuctionMessage
+	quit       <-chan struct{}
 }
 
 // authenticate performs the 3-way authentication handshake between the trader
@@ -96,5 +97,8 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 	case <-ctx.Done():
 		return fmt.Errorf("context canceled before challenge was " +
 			"received")
+
+	case <-s.quit:
+		return ErrClientShutdown
 	}
 }
