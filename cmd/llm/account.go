@@ -33,6 +33,7 @@ type Account struct {
 	TraderKey        string `json:"trader_key"`
 	OutPoint         string `json:"outpoint"`
 	Value            uint64 `json:"value"`
+	AvailableBalance uint64 `json:"available_balance"`
 	ExpirationHeight uint32 `json:"expiration_height"`
 	State            string `json:"state"`
 	CloseTxid        string `json:"close_txid"`
@@ -48,6 +49,7 @@ func NewAccountFromProto(a *clmrpc.Account) *Account {
 		TraderKey:        hex.EncodeToString(a.TraderKey),
 		OutPoint:         fmt.Sprintf("%v:%d", opHash, a.Outpoint.OutputIndex),
 		Value:            a.Value,
+		AvailableBalance: a.AvailableBalance,
 		ExpirationHeight: a.ExpirationHeight,
 		State:            a.State.String(),
 		CloseTxid:        closeTxHash.String(),
