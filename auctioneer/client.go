@@ -473,6 +473,7 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		sendMsg: c.SendAuctionMessage,
 		signer:  c.cfg.Signer,
 		msgChan: make(chan *clmrpc.ServerAuctionMessage),
+		quit:    c.quit,
 	}
 	c.subscribedAccts[acctPubKey] = sub
 	err := sub.authenticate(ctx)
