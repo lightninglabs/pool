@@ -5,6 +5,7 @@ import (
 
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
@@ -49,12 +50,14 @@ func TestValidateOrderAccountIsolation(t *testing.T) {
 		MaxDuration: 144,
 	}
 
-	simpleFeeSchedule := NewLinearFeeSchedule(1, 100)
+	testTerms := &terms.AuctioneerTerms{
+		MaxOrderDuration: 100 * MinimumOrderDurationBlocks,
+		OrderExecBaseFee: 1,
+		OrderExecFeeRate: 100,
+	}
 
 	// Submitting this order for account B should pass validation.
-	err := orderManager.validateOrder(
-		orderB, &accountB, simpleFeeSchedule,
-	)
+	err := orderManager.validateOrder(orderB, &accountB, testTerms)
 	if err != nil {
 		t.Fatalf("order B validation failed: %v", err)
 	}
@@ -81,9 +84,7 @@ func TestValidateOrderAccountIsolation(t *testing.T) {
 		MaxDuration: 144,
 	}
 
-	err = orderManager.validateOrder(
-		orderA, &accountA, simpleFeeSchedule,
-	)
+	err = orderManager.validateOrder(orderA, &accountA, testTerms)
 	if err != nil {
 		t.Fatalf("order A failed validation: %v", err)
 	}

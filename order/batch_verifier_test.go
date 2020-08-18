@@ -11,6 +11,7 @@ import (
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/llm/internal/test"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -198,7 +199,7 @@ func TestBatchVerifier(t *testing.T) {
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
-				b.ExecutionFee = NewLinearFeeSchedule(1, 1)
+				b.ExecutionFee = terms.NewLinearFeeSchedule(1, 1)
 				return v.Verify(b)
 			},
 		},
@@ -208,7 +209,7 @@ func TestBatchVerifier(t *testing.T) {
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
-				b.ExecutionFee = NewLinearFeeSchedule(0, 0)
+				b.ExecutionFee = terms.NewLinearFeeSchedule(0, 0)
 				b.BatchTX.TxOut[2].Value += 2220
 				b.AccountDiffs[0].EndingBalance += 2220
 				b.AccountDiffs[1].EndingBalance += 2220
@@ -221,7 +222,7 @@ func TestBatchVerifier(t *testing.T) {
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
-				b.ExecutionFee = NewLinearFeeSchedule(0, 0)
+				b.ExecutionFee = terms.NewLinearFeeSchedule(0, 0)
 				b.BatchTX.TxOut[2].Value += 2220
 				b.AccountDiffs[0].EndingBalance += 2220
 				b.AccountDiffs[1].EndingBalance += 2220
@@ -401,7 +402,7 @@ func TestBatchVerifier(t *testing.T) {
 			Version:       DefaultVersion,
 			MatchedOrders: matchedOrders,
 			AccountDiffs:  accountDiffs,
-			ExecutionFee: NewLinearFeeSchedule(
+			ExecutionFee: terms.NewLinearFeeSchedule(
 				execFeeBase, execFeeRate,
 			),
 			ClearingPrice:  clearingPrice,

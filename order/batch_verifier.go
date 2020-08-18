@@ -10,6 +10,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 )
@@ -213,7 +214,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 // validateMatchedOrder validates our order against another trader's order and
 // tallies up our order's account balance.
 func (v *batchVerifier) validateMatchedOrder(tally *AccountTally,
-	ourOrder Order, otherOrder *MatchedOrder, executionFee FeeSchedule,
+	ourOrder Order, otherOrder *MatchedOrder, executionFee terms.FeeSchedule,
 	clearingPrice FixedRatePremium) error {
 
 	// Order type must be opposite.

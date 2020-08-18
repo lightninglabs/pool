@@ -10,6 +10,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/llm/clmscript"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 )
@@ -364,6 +365,10 @@ type Auctioneer interface {
 	// same connection. A stream can be long-lived, so this can be called
 	// for every account as soon as it's confirmed open.
 	SubscribeAccountUpdates(context.Context, *keychain.KeyDescriptor) error
+
+	// Terms returns the current dynamic auctioneer terms like max account
+	// size, max order duration in blocks and the auction fee schedule.
+	Terms(ctx context.Context) (*terms.AuctioneerTerms, error)
 }
 
 // TxSource is a source that provides us with transactions previously broadcast

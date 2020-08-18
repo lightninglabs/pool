@@ -11,6 +11,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -218,7 +219,7 @@ func ParseRPCBatch(prepareMsg *clmrpc.OrderMatchPrepare) (*Batch,
 	if prepareMsg.ExecutionFee == nil {
 		return nil, fmt.Errorf("execution fee missing")
 	}
-	b.ExecutionFee = NewLinearFeeSchedule(
+	b.ExecutionFee = terms.NewLinearFeeSchedule(
 		btcutil.Amount(prepareMsg.ExecutionFee.BaseFee),
 		btcutil.Amount(prepareMsg.ExecutionFee.FeeRate),
 	)

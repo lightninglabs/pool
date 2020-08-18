@@ -18,6 +18,7 @@ import (
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 	"google.golang.org/grpc"
@@ -1090,17 +1091,20 @@ func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
 	}, nil
 }
 
-// FeeQuote returns the current fee schedule for the auction.
-func (c *Client) FeeQuote(ctx context.Context) (*order.LinearFeeSchedule, error) {
-	resp, err := c.client.FeeQuote(ctx, &clmrpc.FeeQuoteRequest{})
+// Terms returns the current dynamic auctioneer terms like max account size, max
+// order duration in blocks and the auction fee schedule.
+func (c *Client) Terms(ctx context.Context) (*terms.AuctioneerTerms, error) {
+	resp, err := c.client.Terms(ctx, &clmrpc.TermsRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	return order.NewLinearFeeSchedule(
-		btcutil.Amount(resp.ExecutionFee.BaseFee),
-		btcutil.Amount(resp.ExecutionFee.FeeRate),
-	), nil
+	return &terms.AuctioneerTerms{
+		MaxAccountValue:  btcutil.Amount(resp.MaxAccountValue),
+		MaxOrderDuration: resp.MaxOrderDurationBlocks,
+		OrderExecBaseFee: btcutil.Amount(resp.ExecutionFee.BaseFee),
+		OrderExecFeeRate: btcutil.Amount(resp.ExecutionFee.FeeRate),
+	}, nil
 }
 
 // BatchSnapshot returns information about a target batch including the

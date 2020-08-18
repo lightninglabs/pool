@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -122,11 +123,11 @@ func (m *Manager) Stop() {
 
 // PrepareOrder validates an order, signs it and then stores it locally.
 func (m *Manager) PrepareOrder(ctx context.Context, order Order,
-	acct *account.Account, feeSchedule FeeSchedule) (
-	*ServerOrderParams, error) {
+	acct *account.Account,
+	terms *terms.AuctioneerTerms) (*ServerOrderParams, error) {
 
 	// Verify incoming request for formal validity.
-	err := m.validateOrder(order, acct, feeSchedule)
+	err := m.validateOrder(order, acct, terms)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +196,7 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 // validateOrder makes sure an order is formally correct and that the associated
 // account contains enough balance to execute the order.
 func (m *Manager) validateOrder(order Order, acct *account.Account,
-	feeSchedule FeeSchedule) error {
+	terms *terms.AuctioneerTerms) error {
 
 	// First parse order type specific fields.
 	switch o := order.(type) {
@@ -204,11 +205,29 @@ func (m *Manager) validateOrder(order Order, acct *account.Account,
 			return fmt.Errorf("invalid max duration, must be "+
 				"at least %d", MinimumOrderDurationBlocks)
 		}
+		if o.MaxDuration > terms.MaxOrderDuration {
+			return fmt.Errorf("invalid max duration, must be "+
+				"smaller than or equal to %d",
+				terms.MaxOrderDuration)
+		}
+		if o.MaxDuration%MinimumOrderDurationBlocks != 0 {
+			return fmt.Errorf("invalid max duration, must be "+
+				"multiple of %d", MinimumOrderDurationBlocks)
+		}
 
 	case *Bid:
 		if o.MinDuration < MinimumOrderDurationBlocks {
 			return fmt.Errorf("invalid min duration, must be "+
 				"at least %d", MinimumOrderDurationBlocks)
+		}
+		if o.MinDuration > terms.MaxOrderDuration {
+			return fmt.Errorf("invalid min duration, must be "+
+				"smaller than or equal to %d",
+				terms.MaxOrderDuration)
+		}
+		if o.MinDuration%MinimumOrderDurationBlocks != 0 {
+			return fmt.Errorf("invalid min duration, must be "+
+				"multiple of %d", MinimumOrderDurationBlocks)
 		}
 
 	default:
@@ -231,6 +250,7 @@ func (m *Manager) validateOrder(order Order, acct *account.Account,
 	// value when adding this order.
 	var acctKey [33]byte
 	copy(acctKey[:], acct.TraderKey.PubKey.SerializeCompressed())
+	feeSchedule := terms.FeeSchedule()
 	reserved := order.ReservedValue(feeSchedule)
 	for _, o := range dbOrders {
 		// Only tally the reserved balance if this order waas submited

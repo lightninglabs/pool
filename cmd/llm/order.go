@@ -11,6 +11,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli"
 )
@@ -263,7 +264,7 @@ func printOrderDetails(client clmrpc.TraderClient, amt btcutil.Amount,
 		return err
 	}
 
-	feeSchedule := order.NewLinearFeeSchedule(
+	feeSchedule := terms.NewLinearFeeSchedule(
 		btcutil.Amount(auctionFee.ExecutionFee.BaseFee),
 		btcutil.Amount(auctionFee.ExecutionFee.FeeRate),
 	)

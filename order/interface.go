@@ -12,6 +12,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -168,7 +169,7 @@ type Order interface {
 	// ReservedValue returns the maximum value that could be deducted from
 	// the account if the order is is matched, and therefore has to be
 	// reserved to ensure the trader can afford it.
-	ReservedValue(feeSchedule FeeSchedule) btcutil.Amount
+	ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount
 }
 
 // Kit stores all the common fields that are used to express the decision to
@@ -347,7 +348,7 @@ func reservedValue(o Order,
 
 // ReservedValue returns the maximum value that could be deducted from a single
 // account if the ask is is matched under the worst case fee conditions.
-func (a *Ask) ReservedValue(feeSchedule FeeSchedule) btcutil.Amount {
+func (a *Ask) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
 	// For an ask the clearing price will be no lower than the ask's fixed
 	// rate, resulting in the smallest gain for the asker.
 	clearingPrice := FixedRatePremium(a.FixedRate)
@@ -410,7 +411,7 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 
 // ReservedValue returns the maximum value that could be deducted from a single
 // account if the bid is is matched under the worst case fee conditions.
-func (b *Bid) ReservedValue(feeSchedule FeeSchedule) btcutil.Amount {
+func (b *Bid) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
 	// For a bid, the final clearing price is never higher
 	// that the bid's fixed rate, resulting in the highest possible
 	// premium paid bu the bidder.

@@ -11,6 +11,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -157,7 +158,7 @@ type Batch struct {
 
 	// ExecutionFee is the FeeSchedule that was used by the server to
 	// calculate the execution fee.
-	ExecutionFee FeeSchedule
+	ExecutionFee terms.FeeSchedule
 
 	// ClearingPrice is the fixed rate the orders were cleared at.
 	ClearingPrice FixedRatePremium
