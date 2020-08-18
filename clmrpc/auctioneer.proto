@@ -13,6 +13,7 @@ service ChannelAuctioneer {
     rpc OrderState (ServerOrderStateRequest) returns (ServerOrderStateResponse);
     rpc SubscribeBatchAuction (stream ClientAuctionMessage) returns (stream ServerAuctionMessage);
     rpc FeeQuote (FeeQuoteRequest) returns (FeeQuoteResponse);
+    rpc Terms (TermsRequest) returns (TermsResponse);
     rpc RelevantBatchSnapshot (RelevantBatchRequest) returns (RelevantBatch);
     rpc BatchSnapshot (BatchSnapshotRequest) returns (BatchSnapshotResponse);
 }
@@ -886,6 +887,25 @@ message FeeQuoteResponse {
     ExecutionFee execution_fee = 1;
 }
 
+message TermsRequest {
+}
+
+message TermsResponse {
+    /*
+    The maximum account size in satoshis currently allowed by the auctioneer.
+    */
+    uint64 max_account_value = 1;
+
+    /*
+    The maximum order duration in blocks currently allowed by the auctioneer.
+    */
+    uint32 max_order_duration_blocks = 2;
+
+    /*
+    The execution fee charged per matched order.
+    */
+    ExecutionFee execution_fee = 3;
+}
 
 message RelevantBatchRequest {
     // The unique identifier of the batch.
@@ -940,7 +960,7 @@ message ExecutionFee {
     uint64 base_fee = 1;
 
     /*
-    The fee rate in parts per million
+    The fee rate in parts per million.
     */
     uint64 fee_rate = 2;
 }

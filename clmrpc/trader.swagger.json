@@ -651,7 +651,7 @@
         "fee_rate": {
           "type": "string",
           "format": "uint64",
-          "title": "The fee rate in parts per million"
+          "description": "The fee rate in parts per million."
         }
       }
     },

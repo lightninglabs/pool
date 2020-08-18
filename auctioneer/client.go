@@ -1103,6 +1103,22 @@ func (c *Client) FeeQuote(ctx context.Context) (*terms.LinearFeeSchedule, error)
 	), nil
 }
 
+// Terms returns the current dynamic auctioneer terms like max account size, max
+// order duration in blocks and the auction fee schedule.
+func (c *Client) Terms(ctx context.Context) (*terms.AuctioneerTerms, error) {
+	resp, err := c.client.Terms(ctx, &clmrpc.TermsRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	return &terms.AuctioneerTerms{
+		MaxAccountValue:  btcutil.Amount(resp.MaxAccountValue),
+		MaxOrderDuration: resp.MaxOrderDurationBlocks,
+		OrderExecBaseFee: btcutil.Amount(resp.ExecutionFee.BaseFee),
+		OrderExecFeeRate: btcutil.Amount(resp.ExecutionFee.FeeRate),
+	}, nil
+}
+
 // BatchSnapshot returns information about a target batch including the
 // clearing price of the batch, and the set of orders matched within the batch.
 //
