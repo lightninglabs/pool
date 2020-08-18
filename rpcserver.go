@@ -938,14 +938,16 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 
 	// Get the current fee schedule so we can compute the worst-case
 	// account debit assuming all our standing orders were matched.
-	auctionFeeSchedule, err := s.auctioneer.FeeQuote(ctx)
+	terms, err := s.auctioneer.Terms(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
+			err)
 	}
 
 	// For each active account, consume the worst-case account delta if the
 	// order were to be matched.
 	accountDebits := make(map[[33]byte]btcutil.Amount)
+	auctionFeeSchedule := terms.FeeSchedule()
 	for _, account := range accounts {
 		var (
 			debitAmt btcutil.Amount
@@ -1354,18 +1356,16 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 			"make order", o.Details().AcctKey[:], acct.State)
 	}
 
-	// Get the current fee schedule to ensure we have enough balance to pay
-	// the fees.
-	feeSchedule, err := s.auctioneer.FeeQuote(ctx)
+	// We also need to know the current maximum order duration.
+	terms, err := s.auctioneer.Terms(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not query auctioneer terms: %v",
+			err)
 	}
 
 	// Collect all the order data and sign it before sending it to the
 	// auction server.
-	serverParams, err := s.orderManager.PrepareOrder(
-		ctx, o, acct, feeSchedule,
-	)
+	serverParams, err := s.orderManager.PrepareOrder(ctx, o, acct, terms)
 	if err != nil {
 		return nil, err
 	}
@@ -1691,18 +1691,19 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 // AuctionFee returns the current fee rate charged for matched orders within
 // the auction.
 func (s *rpcServer) AuctionFee(ctx context.Context,
-	req *clmrpc.AuctionFeeRequest) (*clmrpc.AuctionFeeResponse, error) {
+	_ *clmrpc.AuctionFeeRequest) (*clmrpc.AuctionFeeResponse, error) {
 
-	feeSchedule, err := s.auctioneer.FeeQuote(ctx)
+	terms, err := s.auctioneer.Terms(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
+			err)
 	}
 
 	// TODO(roasbeef): accept the amt of order instead?
 	return &clmrpc.AuctionFeeResponse{
 		ExecutionFee: &clmrpc.ExecutionFee{
-			BaseFee: uint64(feeSchedule.BaseFee()),
-			FeeRate: uint64(feeSchedule.FeeRate()),
+			BaseFee: uint64(terms.OrderExecBaseFee),
+			FeeRate: uint64(terms.OrderExecFeeRate),
 		},
 	}, nil
 }
