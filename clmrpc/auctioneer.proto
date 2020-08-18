@@ -12,7 +12,6 @@ service ChannelAuctioneer {
     rpc CancelOrder (ServerCancelOrderRequest) returns (ServerCancelOrderResponse);
     rpc OrderState (ServerOrderStateRequest) returns (ServerOrderStateResponse);
     rpc SubscribeBatchAuction (stream ClientAuctionMessage) returns (stream ServerAuctionMessage);
-    rpc FeeQuote (FeeQuoteRequest) returns (FeeQuoteResponse);
     rpc Terms (TermsRequest) returns (TermsResponse);
     rpc RelevantBatchSnapshot (RelevantBatchRequest) returns (RelevantBatch);
     rpc BatchSnapshot (BatchSnapshotRequest) returns (BatchSnapshotResponse);
@@ -875,16 +874,6 @@ message ServerOrderStateResponse {
     or EXECUTED.
     */
     uint32 units_unfulfilled = 2;
-}
-
-message FeeQuoteRequest {
-}
-
-message FeeQuoteResponse {
-    /*
-    The execution fee charged per matched order.
-    */
-    ExecutionFee execution_fee = 1;
 }
 
 message TermsRequest {

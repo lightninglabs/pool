@@ -1090,19 +1090,6 @@ func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
 	}, nil
 }
 
-// FeeQuote returns the current fee schedule for the auction.
-func (c *Client) FeeQuote(ctx context.Context) (*terms.LinearFeeSchedule, error) {
-	resp, err := c.client.FeeQuote(ctx, &clmrpc.FeeQuoteRequest{})
-	if err != nil {
-		return nil, err
-	}
-
-	return terms.NewLinearFeeSchedule(
-		btcutil.Amount(resp.ExecutionFee.BaseFee),
-		btcutil.Amount(resp.ExecutionFee.FeeRate),
-	), nil
-}
-
 // Terms returns the current dynamic auctioneer terms like max account size, max
 // order duration in blocks and the auction fee schedule.
 func (c *Client) Terms(ctx context.Context) (*terms.AuctioneerTerms, error) {
