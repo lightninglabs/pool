@@ -5,6 +5,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/lightninglabs/llm/clmscript"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -53,60 +54,6 @@ func (f FixedRatePremium) LumpSumPremium(amt btcutil.Amount,
 	// duration.
 	return btcutil.Amount(premiumPerBlock * float64(durationBlocks))
 }
-
-// FeeSchedule is an interface that represents the configuration source that
-// the auctioneer will use to determine how much to charge in fees for each
-// trader.
-type FeeSchedule interface {
-	// BaseFee is the base fee the auctioneer will charge the traders for
-	// each executed order.
-	BaseFee() btcutil.Amount
-
-	// ExecutionFee computes the execution fee (usually based off of a
-	// rate) for the target amount.
-	ExecutionFee(amt btcutil.Amount) btcutil.Amount
-}
-
-// LinearFeeSchedule is a FeeSchedule that calculates the execution fee based
-// upon a static base fee and a variable fee rate in parts per million.
-type LinearFeeSchedule struct {
-	baseFee btcutil.Amount
-	feeRate btcutil.Amount
-}
-
-// BaseFee is the base fee the auctioneer will charge the traders for each
-// executed order.
-//
-// NOTE: This method is part of the orderT.FeeSchedule interface.
-func (s *LinearFeeSchedule) BaseFee() btcutil.Amount {
-	return s.baseFee
-}
-
-// FeeRate is the variable fee rate in parts per million.
-func (s *LinearFeeSchedule) FeeRate() btcutil.Amount {
-	return s.feeRate
-}
-
-// ExecutionFee computes the execution fee (usually based off of a rate) for
-// the target amount.
-//
-// NOTE: This method is part of the orderT.FeeSchedule interface.
-func (s *LinearFeeSchedule) ExecutionFee(amt btcutil.Amount) btcutil.Amount {
-	return amt * s.feeRate / 1_000_000
-}
-
-// NewLinearFeeSchedule creates a new linear fee schedule based upon a static
-// base fee and a relative fee rate in parts per million.
-func NewLinearFeeSchedule(baseFee, feeRate btcutil.Amount) *LinearFeeSchedule {
-	return &LinearFeeSchedule{
-		baseFee: baseFee,
-		feeRate: feeRate,
-	}
-}
-
-// This is a compile time check to make certain that LinearFeeSchedule
-// implements the orderT.FeeSchedule interface.
-var _ FeeSchedule = (*LinearFeeSchedule)(nil)
 
 // PerBlockPremium calculates the absolute premium in fractions of satoshis for
 // a one block duration from the amount and the specified fee rate in parts per
@@ -175,7 +122,7 @@ type AccountTally struct {
 // makerDelta calculates an account's balance and fee difference for a single
 // order where the account is involved on the maker side. It returns the
 // balance delta, fees accrued, and execution fee paid.
-func makerDelta(feeSchedule FeeSchedule, price FixedRatePremium,
+func makerDelta(feeSchedule terms.FeeSchedule, price FixedRatePremium,
 	totalSats btcutil.Amount, duration uint32) (btcutil.Amount,
 	btcutil.Amount, btcutil.Amount) {
 
@@ -201,7 +148,7 @@ func makerDelta(feeSchedule FeeSchedule, price FixedRatePremium,
 // CalcMakerDelta calculates an account's balance and fee difference for a
 // single order where the account is involved on the maker side. It returns the
 // execution fee that is collected by the auctioneer.
-func (t *AccountTally) CalcMakerDelta(feeSchedule FeeSchedule,
+func (t *AccountTally) CalcMakerDelta(feeSchedule terms.FeeSchedule,
 	price FixedRatePremium, totalSats btcutil.Amount,
 	duration uint32) btcutil.Amount {
 
@@ -220,7 +167,7 @@ func (t *AccountTally) CalcMakerDelta(feeSchedule FeeSchedule,
 // takerDelta calculates an account's balance and fee difference for a single
 // order where the account is involved on the taker side. It returns the
 // balance delta, taker fees paid, and execution fee paid.
-func takerDelta(feeSchedule FeeSchedule,
+func takerDelta(feeSchedule terms.FeeSchedule,
 	price FixedRatePremium, totalSats btcutil.Amount,
 	duration uint32) (btcutil.Amount, btcutil.Amount, btcutil.Amount) {
 
@@ -242,7 +189,7 @@ func takerDelta(feeSchedule FeeSchedule,
 // CalcTakerDelta calculates an account's balance and fee difference for a
 // single order where the account is involved on the taker side. It returns the
 // execution fee that is collected by the auctioneer.
-func (t *AccountTally) CalcTakerDelta(feeSchedule FeeSchedule,
+func (t *AccountTally) CalcTakerDelta(feeSchedule terms.FeeSchedule,
 	price FixedRatePremium, totalSats btcutil.Amount,
 	duration uint32) btcutil.Amount {
 
@@ -286,6 +233,8 @@ func minNoDustAccountSize() btcutil.Amount {
 
 // executionFee calculates the execution fee which is the base fee plus the
 // execution fee which scales based on the order size.
-func executionFee(amount btcutil.Amount, schedule FeeSchedule) btcutil.Amount {
+func executionFee(amount btcutil.Amount,
+	schedule terms.FeeSchedule) btcutil.Amount {
+
 	return schedule.BaseFee() + schedule.ExecutionFee(amount)
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcutil"
+	"github.com/lightninglabs/llm/terms"
 )
 
 // TestOrderReservedValue checks orders' ReservedValue merhod returning the
@@ -11,7 +12,7 @@ import (
 func TestOrderReservedValue(t *testing.T) {
 	t.Parallel()
 
-	simpleFeeSchedule := NewLinearFeeSchedule(1, 100)
+	simpleFeeSchedule := terms.NewLinearFeeSchedule(1, 100)
 
 	testCases := []struct {
 		name  string

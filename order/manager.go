@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -122,7 +123,7 @@ func (m *Manager) Stop() {
 
 // PrepareOrder validates an order, signs it and then stores it locally.
 func (m *Manager) PrepareOrder(ctx context.Context, order Order,
-	acct *account.Account, feeSchedule FeeSchedule) (
+	acct *account.Account, feeSchedule terms.FeeSchedule) (
 	*ServerOrderParams, error) {
 
 	// Verify incoming request for formal validity.
@@ -195,7 +196,7 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 // validateOrder makes sure an order is formally correct and that the associated
 // account contains enough balance to execute the order.
 func (m *Manager) validateOrder(order Order, acct *account.Account,
-	feeSchedule FeeSchedule) error {
+	feeSchedule terms.FeeSchedule) error {
 
 	// First parse order type specific fields.
 	switch o := order.(type) {

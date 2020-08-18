@@ -18,6 +18,7 @@ import (
 	"github.com/lightninglabs/llm/account"
 	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 	"google.golang.org/grpc"
@@ -1090,13 +1091,13 @@ func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
 }
 
 // FeeQuote returns the current fee schedule for the auction.
-func (c *Client) FeeQuote(ctx context.Context) (*order.LinearFeeSchedule, error) {
+func (c *Client) FeeQuote(ctx context.Context) (*terms.LinearFeeSchedule, error) {
 	resp, err := c.client.FeeQuote(ctx, &clmrpc.FeeQuoteRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	return order.NewLinearFeeSchedule(
+	return terms.NewLinearFeeSchedule(
 		btcutil.Amount(resp.ExecutionFee.BaseFee),
 		btcutil.Amount(resp.ExecutionFee.FeeRate),
 	), nil
