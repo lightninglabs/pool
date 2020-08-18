@@ -35,13 +35,6 @@ const (
 	// satoshis.
 	MinAccountValue btcutil.Amount = 100000
 
-	// maxAccountValue is the maximum technical value for an account output
-	// in satoshis. This limit is based on the maximum number of satoshis
-	// there can ever exist and is only used to check the basic sanity of
-	// account values. The actual currently allowed maximum amount is
-	// determined by the auctioneer.
-	maxAccountValue btcutil.Amount = btcutil.MaxSatoshi
-
 	// minAccountExpiry and maxAccountExpiry represent the thresholds at
 	// both extremes for valid account expirations.
 	minAccountExpiry = 144       // One day worth of blocks.
@@ -222,8 +215,16 @@ func (m *Manager) Stop() {
 func (m *Manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
 	confTarget uint32) (chainfee.SatPerKWeight, btcutil.Amount, error) {
 
-	// First, make sure we have a valid amount to create the account.
-	if err := validateAccountValue(value); err != nil {
+	// First, make sure we have a valid amount to create the account. We
+	// need to ask the auctioneer for the maximum as it dynamically defines
+	// that value.
+	terms, err := m.cfg.Auctioneer.Terms(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("could not query auctioneer terms: %v",
+			err)
+	}
+	err = validateAccountValue(value, terms.MaxAccountValue)
+	if err != nil {
 		return 0, 0, err
 	}
 
@@ -252,8 +253,18 @@ func (m *Manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
 func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	expiry, bestHeight, confTarget uint32) (*Account, error) {
 
-	// First, make sure we have valid parameters to create the account.
-	if err := validateAccountParams(value, expiry, bestHeight); err != nil {
+	// First, make sure we have a valid amount to create the account. We
+	// need to ask the auctioneer for the maximum as it dynamically defines
+	// that value.
+	terms, err := m.cfg.Auctioneer.Terms(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not query auctioneer terms: %v",
+			err)
+	}
+	err = validateAccountParams(
+		value, terms.MaxAccountValue, expiry, bestHeight,
+	)
+	if err != nil {
 		return nil, err
 	}
 
@@ -384,6 +395,11 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	accountOutput, err := account.Output()
 	if err != nil {
 		return fmt.Errorf("unable to construct account output: %v", err)
+	}
+
+	terms, err := m.cfg.Auctioneer.Terms(ctx)
+	if err != nil {
+		return fmt.Errorf("could not query auctioneer terms: %v", err)
 	}
 
 	var accountTx *wire.MsgTx
@@ -518,7 +534,9 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		}
 
 		// Proceed to watch for the account on-chain.
-		numConfs := numConfsForValue(account.Value)
+		numConfs := NumConfsForValue(
+			account.Value, terms.MaxAccountValue,
+		)
 		log.Infof("Waiting for %v confirmation(s) of account %x",
 			numConfs, account.TraderKey.PubKey.SerializeCompressed())
 		err = m.watcher.WatchAccountConf(
@@ -544,7 +562,9 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	// and would therefore not be noticed by us. The account would stay
 	// pending forever in that case.
 	case StatePendingUpdate, StatePendingBatch:
-		numConfs := numConfsForValue(account.Value)
+		numConfs := NumConfsForValue(
+			account.Value, terms.MaxAccountValue,
+		)
 		log.Infof("Waiting for %v confirmation(s) of account %x",
 			numConfs, account.TraderKey.PubKey.SerializeCompressed())
 		err = m.watcher.WatchAccountConf(
@@ -878,10 +898,18 @@ func (m *Manager) DepositAccount(ctx context.Context,
 		return nil, nil, fmt.Errorf("account must be in %v to be"+
 			"modified", StateOpen)
 	}
+
+	// The auctioneer defines the maximum account size.
+	terms, err := m.cfg.Auctioneer.Terms(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not query auctioneer "+
+			"terms: %v", err)
+	}
+
 	newAccountValue := account.Value + depositAmount
-	if newAccountValue > maxAccountValue {
+	if newAccountValue > terms.MaxAccountValue {
 		return nil, nil, fmt.Errorf("new account value is above "+
-			"accepted maximum of %v", maxAccountValue)
+			"accepted maximum of %v", terms.MaxAccountValue)
 	}
 
 	// TODO(wilmer): Reject if account has pending orders.
@@ -1676,14 +1704,14 @@ func (m *Manager) toWalletOutput(ctx context.Context,
 
 // validateAccountValue ensures that a trader has provided a sane account value
 // for the creation of a new account.
-func validateAccountValue(value btcutil.Amount) error {
+func validateAccountValue(value, maxValue btcutil.Amount) error {
 	if value < MinAccountValue {
 		return fmt.Errorf("minimum account value allowed is %v",
 			MinAccountValue)
 	}
-	if value > maxAccountValue {
+	if value > maxValue {
 		return fmt.Errorf("maximum account value allowed is %v",
-			maxAccountValue)
+			maxValue)
 	}
 
 	return nil
@@ -1691,8 +1719,10 @@ func validateAccountValue(value btcutil.Amount) error {
 
 // validateAccountParams ensures that a trader has provided sane parameters for
 // the creation of a new account.
-func validateAccountParams(value btcutil.Amount, expiry, bestHeight uint32) error {
-	err := validateAccountValue(value)
+func validateAccountParams(value, maxValue btcutil.Amount, expiry,
+	bestHeight uint32) error {
+
+	err := validateAccountValue(value, maxValue)
 	if err != nil {
 		return err
 	}
@@ -1716,7 +1746,7 @@ func validateAccountParams(value btcutil.Amount, expiry, bestHeight uint32) erro
 // particular output size given the current block reward and a user's "risk
 // threshold" (basically a multiplier for the amount of work/fiat-burnt that
 // would need to be done to undo N blocks).
-func numConfsForValue(value btcutil.Amount) uint32 {
+func NumConfsForValue(value, maxAccountValue btcutil.Amount) uint32 {
 	confs := maxConfs * value / maxAccountValue
 	if confs < minConfs {
 		confs = minConfs

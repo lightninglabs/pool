@@ -14,6 +14,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/llm/clmscript"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
@@ -210,6 +211,15 @@ func (a *mockAuctioneer) SubscribeAccountUpdates(_ context.Context,
 	a.subscribed[traderKey] = struct{}{}
 	return nil
 }
+
+func (a *mockAuctioneer) Terms(context.Context) (*terms.AuctioneerTerms, error) {
+	return &terms.AuctioneerTerms{
+		MaxAccountValue:  maxAccountValue,
+		MaxOrderDuration: maxAccountExpiry,
+	}, nil
+}
+
+var _ Auctioneer = (*mockAuctioneer)(nil)
 
 type mockWallet struct {
 	TxSource

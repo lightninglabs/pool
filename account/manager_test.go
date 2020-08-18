@@ -25,6 +25,8 @@ import (
 
 const (
 	timeout = 500 * time.Millisecond
+
+	maxAccountValue = 2 * btcutil.SatoshiPerBitcoin
 )
 
 var (
