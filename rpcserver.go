@@ -1144,12 +1144,65 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 		return nil, err
 	}
 
-	var closeOutputs []*wire.TxOut
-	if len(req.Outputs) > 0 {
-		closeOutputs, err = s.parseRPCOutputs(req.Outputs)
+	// Ensure a valid fee expression was provided.
+	var feeExpr account.FeeExpr
+	switch dest := req.FundsDestination.(type) {
+	// The fee is expressed as a combination of an output along with a fee
+	// rate.
+	case *clmrpc.CloseAccountRequest_OutputWithFee:
+		// Parse the output script if one was provided and ensure it's
+		// valid.
+		var pkScript []byte
+		if dest.OutputWithFee.Address != "" {
+			var err error
+			pkScript, err = s.parseOutputScript(
+				dest.OutputWithFee.Address,
+			)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// Parse the provided fee rate.
+		var feeRate chainfee.SatPerKWeight
+		switch feeExpr := dest.OutputWithFee.Fees.(type) {
+		case *clmrpc.OutputWithFee_ConfTarget:
+			var err error
+			feeRate, err = s.lndServices.WalletKit.EstimateFee(
+				ctx, int32(feeExpr.ConfTarget),
+			)
+			if err != nil {
+				return nil, err
+			}
+
+		case *clmrpc.OutputWithFee_FeeRateSatPerKw:
+			feeRate = chainfee.SatPerKWeight(feeExpr.FeeRateSatPerKw)
+		}
+
+		// Enforce a minimum fee rate of 253 sat/kw.
+		if feeRate < chainfee.FeePerKwFloor {
+			return nil, fmt.Errorf("fee rate of %v is too low, "+
+				"minimum is %v", feeRate, chainfee.FeePerKwFloor)
+		}
+
+		feeExpr = &account.OutputWithFee{
+			PkScript: pkScript,
+			FeeRate:  feeRate,
+		}
+
+	// The fee is expressed as implicitly defined by the total output value
+	// of the provided outputs.
+	case *clmrpc.CloseAccountRequest_Outputs:
+		if len(dest.Outputs.Outputs) == 0 {
+			return nil, errors.New("no outputs provided")
+		}
+
+		outputs, err := s.parseRPCOutputs(dest.Outputs.Outputs)
 		if err != nil {
 			return nil, err
 		}
+
+		feeExpr = account.OutputsWithImplicitFee(outputs)
 	}
 
 	dbOrders, err := s.server.db.GetOrders()
@@ -1193,8 +1246,10 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 			"before closing: %v", req.TraderKey, openNonces)
 	}
 
+	// Proceed to close the requested account with the parsed fee
+	// expression.
 	closeTx, err := s.accountManager.CloseAccount(
-		ctx, traderKey, closeOutputs, atomic.LoadUint32(&s.bestHeight),
+		ctx, traderKey, feeExpr, atomic.LoadUint32(&s.bestHeight),
 	)
 	if err != nil {
 		return nil, err
@@ -1206,30 +1261,31 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 	}, nil
 }
 
+// parseOutputScript parses the output script from the string representation of
+// an on-chain address and ensures it's valid for the current network.
+func (s *rpcServer) parseOutputScript(addrStr string) ([]byte, error) {
+	addr, err := btcutil.DecodeAddress(addrStr, s.lndServices.ChainParams)
+	if err != nil {
+		return nil, err
+	}
+	if !addr.IsForNet(s.lndServices.ChainParams) {
+		return nil, fmt.Errorf("invalid address %v for %v "+
+			"network", addr.String(),
+			s.lndServices.ChainParams.Name)
+	}
+	return txscript.PayToAddrScript(addr)
+}
+
 // parseRPCOutputs maps []*clmrpc.Output -> []*wire.TxOut.
 func (s *rpcServer) parseRPCOutputs(outputs []*clmrpc.Output) ([]*wire.TxOut,
 	error) {
 
 	res := make([]*wire.TxOut, 0, len(outputs))
 	for _, output := range outputs {
-		// Decode each address, make sure it's valid for the current
-		// network, and derive its output script.
-		addr, err := btcutil.DecodeAddress(
-			output.Address, s.lndServices.ChainParams,
-		)
+		outputScript, err := s.parseOutputScript(output.Address)
 		if err != nil {
 			return nil, err
 		}
-		if !addr.IsForNet(s.lndServices.ChainParams) {
-			return nil, fmt.Errorf("invalid address %v for %v "+
-				"network", addr.String(),
-				s.lndServices.ChainParams.Name)
-		}
-		outputScript, err := txscript.PayToAddrScript(addr)
-		if err != nil {
-			return nil, err
-		}
-
 		res = append(res, &wire.TxOut{
 			Value:    int64(output.ValueSat),
 			PkScript: outputScript,
