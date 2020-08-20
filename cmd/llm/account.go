@@ -411,15 +411,30 @@ func withdrawAccount(ctx *cli.Context) error {
 }
 
 var closeAccountCommand = cli.Command{
-	Name:        "close",
-	ShortName:   "c",
-	Usage:       "close an existing account",
-	Description: `Close an existing accounts`,
-	ArgsUsage:   "trader_key",
+	Name:      "close",
+	ShortName: "c",
+	Usage:     "close an existing account",
+	Description: `
+	Close an existing account. An optional address can be provided which the
+	funds of the account to close will be sent to, otherwise they are sent
+	to an address under control of the connected lnd node.
+	`,
+	ArgsUsage: "trader_key sat_per_vbyte",
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:  "trader_key",
-			Usage: "the trader key associated with the account",
+			Name: "trader_key",
+			Usage: "the trader key associated with the account " +
+				"to close",
+		},
+		cli.Uint64Flag{
+			Name: "sat_per_vbyte",
+			Usage: "the fee rate expressed in sat/vbyte that " +
+				"should be used for the closing transaction",
+		},
+		cli.StringFlag{
+			Name: "addr",
+			Usage: "an optional address which the funds of the " +
+				"account to close will be sent to",
 		},
 	},
 	Action: closeAccount,
@@ -431,6 +446,14 @@ func closeAccount(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	satPerVByte, err := parseUint64(ctx, 1, "sat_per_vbyte", cmd)
+	if err != nil {
+		return err
+	}
+	satPerKw := chainfee.SatPerKVByte(satPerVByte * 1000).FeePerKWeight()
+	if satPerKw < chainfee.FeePerKwFloor {
+		satPerKw = chainfee.FeePerKwFloor
+	}
 
 	client, cleanup, err := getClient(ctx)
 	if err != nil {
@@ -441,6 +464,14 @@ func closeAccount(ctx *cli.Context) error {
 	resp, err := client.CloseAccount(
 		context.Background(), &clmrpc.CloseAccountRequest{
 			TraderKey: traderKey,
+			FundsDestination: &clmrpc.CloseAccountRequest_OutputWithFee{
+				OutputWithFee: &clmrpc.OutputWithFee{
+					Address: ctx.String("addr"),
+					Fees: &clmrpc.OutputWithFee_FeeRateSatPerKw{
+						FeeRateSatPerKw: uint64(satPerKw),
+					},
+				},
+			},
 		},
 	)
 	if err != nil {
