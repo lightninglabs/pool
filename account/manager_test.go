@@ -33,6 +33,12 @@ var (
 	p2wsh, _   = hex.DecodeString("00208c2865c87ffd33fc5d698c7df9cf2d0fb39d93103c637a06dea32c848ebc3e1d")
 	p2wpkh, _  = hex.DecodeString("0014ccdeffed4f9c91d5bf45c34e4b8f03a5025ec062")
 	np2wpkh, _ = hex.DecodeString("a91458c11505b54582ab04e96d36908f85a8b689459787")
+
+	// defaultFeeExpr is a fee expression noting that the minimum fee rate
+	// should be used for a wallet output.
+	defaultFeeExpr = &OutputWithFee{
+		FeeRate: chainfee.FeePerKwFloor,
+	}
 )
 
 type testHarness struct {
@@ -184,7 +190,7 @@ func (h *testHarness) expireAccount(account *Account) {
 	h.assertAccountExists(account)
 }
 
-func (h *testHarness) closeAccount(account *Account, outputs []*wire.TxOut,
+func (h *testHarness) closeAccount(account *Account, feeExpr FeeExpr,
 	bestHeight uint32) *wire.MsgTx {
 
 	h.t.Helper()
@@ -192,7 +198,7 @@ func (h *testHarness) closeAccount(account *Account, outputs []*wire.TxOut,
 	// Close the account with the auctioneer.
 	go func() {
 		_, err := h.manager.CloseAccount(
-			context.Background(), account.TraderKey.PubKey, outputs,
+			context.Background(), account.TraderKey.PubKey, feeExpr,
 			bestHeight,
 		)
 		if err != nil {
@@ -292,10 +298,13 @@ func (h *testHarness) assertSpendTxBroadcast(accountBeforeSpend *Account,
 		h.t.Fatalf("unable to generate next output script: %v",
 			err)
 	}
-	outputs := append(externalOutputs, &wire.TxOut{
-		Value:    int64(*newValue),
-		PkScript: nextPkScript,
-	})
+	outputs := externalOutputs
+	if newValue != nil {
+		outputs = append(outputs, &wire.TxOut{
+			Value:    int64(*newValue),
+			PkScript: nextPkScript,
+		})
+	}
 	if len(spendTx.TxOut) != len(outputs) {
 		h.t.Fatalf("expected %d output(s) in spend transaction, found %d",
 			len(outputs), len(spendTx.TxOut))
@@ -474,7 +483,7 @@ func TestNewAccountHappyFlow(t *testing.T) {
 		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
 	)
 
-	h.closeAccount(account, nil, bestHeight+1)
+	h.closeAccount(account, defaultFeeExpr, bestHeight+1)
 }
 
 // TestResumeAccountAfterRestart ensures we're able to properly create a new
@@ -597,6 +606,157 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 	account.State = StateOpen
 	account.HeightHint = confHeight
 	h.assertAccountExists(account)
+}
+
+// TestAccountCloseFundsDestination ensures the different possible destinations
+// for the funds of an account being closed work as intended.
+func TestAccountClose(t *testing.T) {
+	t.Parallel()
+
+	const bestHeight = 100
+	const highFeeRate = 10_000 * chainfee.FeePerKwFloor
+
+	testCases := []struct {
+		name    string
+		feeExpr FeeExpr
+		fee     btcutil.Amount
+		valid   bool
+	}{
+		{
+			name: "below P2WKH dust limit",
+			feeExpr: &OutputWithFee{
+				PkScript: p2wpkh,
+				FeeRate:  highFeeRate,
+			},
+		},
+		{
+			name: "below P2SH dust limit",
+			feeExpr: &OutputWithFee{
+				PkScript: np2wpkh,
+				FeeRate:  highFeeRate,
+			},
+		},
+		{
+			name: "below P2WSH dust limit",
+			feeExpr: &OutputWithFee{
+				PkScript: p2wsh,
+				FeeRate:  highFeeRate,
+			},
+		},
+		{
+			name: "single wallet P2WKH output",
+			feeExpr: &OutputWithFee{
+				PkScript: nil,
+				FeeRate:  chainfee.FeePerKwFloor,
+			},
+			fee:   btcutil.Amount(141),
+			valid: true,
+		},
+		{
+			name: "single external P2WKH output",
+			feeExpr: &OutputWithFee{
+				PkScript: p2wpkh,
+				FeeRate:  2 * chainfee.FeePerKwFloor,
+			},
+			fee:   btcutil.Amount(282),
+			valid: true,
+		},
+		{
+			name: "multiple external outputs",
+			feeExpr: &OutputsWithImplicitFee{
+				{
+					PkScript: p2wpkh,
+					Value:    10_000,
+				},
+				{
+					PkScript: np2wpkh,
+					Value:    10_000,
+				},
+				{
+					PkScript: p2wsh,
+					Value:    10_000,
+				},
+			},
+			fee:   btcutil.Amount(70_000),
+			valid: true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		success := t.Run(testCase.name, func(t *testing.T) {
+			h := newTestHarness(t)
+			h.start()
+			defer h.stop()
+
+			// We'll start by creating a new account of the minimum
+			// value for each test.
+			account := h.openAccount(
+				MinAccountValue, bestHeight+maxAccountExpiry,
+				bestHeight,
+			)
+
+			// We'll immediately attempt to close the account with
+			// the test's fee expression.
+			_, err := h.manager.CloseAccount(
+				context.Background(), account.TraderKey.PubKey,
+				testCase.feeExpr, bestHeight,
+			)
+
+			// If the test's fee expression is not valid, we should
+			// expect to see an error.
+			if !testCase.valid {
+				require.Error(t, err)
+				return
+			}
+
+			// Otherwise, we'll proceed to check whether our fee
+			// expression was honored.
+			require.NoError(t, err)
+
+			// Any external outputs (not sourced from the backing
+			// lnd node) should be found in the closing transaction.
+			var externalOutputs []*wire.TxOut
+			switch feeExpr := testCase.feeExpr.(type) {
+			case *OutputWithFee:
+				if feeExpr.PkScript != nil {
+					output := &wire.TxOut{
+						PkScript: feeExpr.PkScript,
+						Value: int64(
+							account.Value - testCase.fee,
+						),
+					}
+					externalOutputs = append(
+						externalOutputs, output,
+					)
+				}
+
+			case *OutputsWithImplicitFee:
+				externalOutputs = feeExpr.Outputs()
+
+			default:
+				t.Fatal("unhandled fee expr")
+			}
+
+			// The account's closing transaction should be
+			// broadcast.
+			closeTx := h.assertSpendTxBroadcast(
+				account, nil, externalOutputs, nil,
+			)
+
+			// Finally, compute the resulting fee of the transaction
+			// and ensure it matches what we expect.
+			var outputTotal btcutil.Amount
+			for _, output := range closeTx.TxOut {
+				outputTotal += btcutil.Amount(output.Value)
+			}
+			fee := account.Value - outputTotal
+			require.Equal(t, fee, testCase.fee)
+		})
+		if !success {
+			return
+		}
+	}
 }
 
 // TestAccountExpiration ensures that we properly detect when an account expires
@@ -742,7 +902,7 @@ func TestAccountWithdrawal(t *testing.T) {
 
 	// Finally, close the account to ensure we can process another spend
 	// after the withdrawal.
-	_ = h.closeAccount(account, nil, bestHeight)
+	_ = h.closeAccount(account, defaultFeeExpr, bestHeight)
 }
 
 // TestAccountDeposit ensures that we can process an account deposit
@@ -837,7 +997,7 @@ func TestAccountDeposit(t *testing.T) {
 
 	// Finally, close the account to ensure we can process another spend
 	// after the withdrawal.
-	_ = h.closeAccount(account, nil, bestHeight)
+	_ = h.closeAccount(account, defaultFeeExpr, bestHeight)
 }
 
 // TestAccountConsecutiveBatches ensures that we can process an account update
