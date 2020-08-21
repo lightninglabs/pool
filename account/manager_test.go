@@ -210,6 +210,7 @@ func (h *testHarness) closeAccount(account *Account, feeExpr FeeExpr,
 	// and its state transitioned to StatePendingClosed.
 	closeTx := h.assertSpendTxBroadcast(account, nil, nil, nil)
 
+	account.Value = 0
 	account.State = StatePendingClosed
 	account.HeightHint = bestHeight
 	account.CloseTx = closeTx

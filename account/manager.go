@@ -1052,7 +1052,9 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 
 	// Proceed to create the closing transaction and perform any operations
 	// thereby required.
-	modifiers := []Modifier{StateModifier(StatePendingClosed)}
+	modifiers := []Modifier{
+		ValueModifier(0), StateModifier(StatePendingClosed),
+	}
 	_, spendPkg, err := m.spendAccount(
 		ctx, account, nil, closeOutputs, witnessType, modifiers, true,
 		bestHeight,
