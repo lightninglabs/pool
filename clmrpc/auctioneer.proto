@@ -200,18 +200,10 @@ message AccountSubscription {
 
 message OrderMatchAccept {
     /*
-    A list of all order nonces of the orders that are accepted by the trader to
-    be matched by the auctioneer. Orders that didn't have all their units
-    fulfilled need to be tracked by the trader locally by applying all diffs
-    resulting from an executed batch.
-    */
-    repeated bytes order_nonce = 1;
-
-    /*
     The batch ID this acceptance message refers to. Must be set to avoid out-of-
     order responses from disrupting the batching process.
     */
-    bytes batch_id = 2;
+    bytes batch_id = 1;
 }
 
 message OrderMatchReject {

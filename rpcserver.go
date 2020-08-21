@@ -1215,21 +1215,13 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 // sendAcceptBatch sends an accept message to the server with the list of order
 // nonces that we accept in the batch.
 func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
-	// Prepare the list of nonces we accept by serializing them to a slice
-	// of byte slices.
-	nonces := make([][]byte, 0, len(batch.MatchedOrders))
-	for nonce := range batch.MatchedOrders {
-		nonces = append(nonces, nonce[:])
-	}
-
 	rpcLog.Infof("Accepting batch=%x", batch.ID[:])
 
 	// Send the message to the server.
 	return s.auctioneer.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
 		Msg: &clmrpc.ClientAuctionMessage_Accept{
 			Accept: &clmrpc.OrderMatchAccept{
-				BatchId:    batch.ID[:],
-				OrderNonce: nonces,
+				BatchId: batch.ID[:],
 			},
 		},
 	})
