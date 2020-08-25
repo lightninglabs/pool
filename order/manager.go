@@ -275,13 +275,15 @@ func (m *Manager) OrderMatchValidate(batch *Batch) error {
 	// it in case it ends up being the final version.
 	err := m.batchVerifier.Verify(batch)
 	if err != nil {
-		return fmt.Errorf("error validating batch: %v", err)
+		// This error will lead to us sending an OrderMatchReject
+		// message and canceling all funding shims we might already have
+		// set up.
+		return fmt.Errorf("error validating batch: %w", err)
 	}
 
 	m.pendingBatch = batch
 	atomic.StoreUint32(&m.hasPendingBatch, 1)
 
-	// TODO: cancel funding shim of previous pending batch if not nil
 	return nil
 }
 

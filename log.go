@@ -1,5 +1,5 @@
 // As this file is very similar in every package, ignore the linter here.
-// nolint:dupl
+// nolint:dupl,interfacer
 package llm
 
 import (
@@ -23,6 +23,7 @@ var (
 	logWriter = build.NewRotatingLogWriter()
 	log       = build.NewSubLogger(Subsystem, logWriter.GenSubLogger)
 	rpcLog    = build.NewSubLogger("RPCS", logWriter.GenSubLogger)
+	fndgLog   = build.NewSubLogger("FNDG", logWriter.GenSubLogger)
 
 	// SupportedSubsystems is a function that returns a list of all
 	// supported logging sub systems.
@@ -32,6 +33,7 @@ var (
 func init() {
 	setSubLogger(Subsystem, log, nil)
 	setSubLogger("RPCS", rpcLog, nil)
+	setSubLogger("FNDG", fndgLog, nil)
 	addSubLogger(auctioneer.Subsystem, auctioneer.UseLogger)
 	addSubLogger(order.Subsystem, order.UseLogger)
 	addSubLogger("LNDC", lndclient.UseLogger)

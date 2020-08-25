@@ -192,6 +192,10 @@ var ordersSubmitAskCommand = cli.Command{
 				"liquidity should be offered for",
 			Value: defaultAskMaxDuration,
 		},
+		cli.BoolFlag{
+			Name:  "force",
+			Usage: "skip order placement confirmation",
+		},
 	}, sharedFlags...),
 	Action: ordersSubmitAsk,
 }
