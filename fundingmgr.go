@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"strings"
@@ -23,13 +24,14 @@ import (
 )
 
 var (
-	// defaultChannelOpenTimeout is the default time we allow a channel open
-	// action to take. If any channel takes longer to open, we might reject
+	// defaultBatchStepTimeout is the default time we allow an action that
+	// blocks the batch conversation (like peer connection establishment or
+	// channel open) to take. If any action takes longer, we might reject
 	// the order from that slow peer. This value SHOULD be lower than the
 	// defaultMsgTimeout on the server side otherwise nodes might get kicked
 	// out of the match making process for timing out even though it was
 	// their peer's fault.
-	defaultChannelOpenTimeout = 8 * time.Second
+	defaultBatchStepTimeout = 8 * time.Second
 )
 
 // matchRejectErr is an error type that is returned from the funding manager if
@@ -45,9 +47,9 @@ func (e *matchRejectErr) Error() string {
 	return fmt.Sprintf("trader rejected orders: %v", e.rejectedOrders)
 }
 
-// shimFundingClient is an interface that contains all methods necessary to open
-// a channel with a funding shim.l
-type shimFundingClient interface {
+// fundingBaseClient is an interface that contains all methods necessary to open
+// a channel with a funding shim and query peer connections.
+type fundingBaseClient interface {
 	// FundingStateStep is an advanced funding related call that allows the
 	// caller to either execute some preparatory steps for a funding
 	// workflow, or manually progress a funding workflow.
@@ -59,13 +61,24 @@ type shimFundingClient interface {
 	OpenChannel(ctx context.Context, req *lnrpc.OpenChannelRequest,
 		opts ...grpc.CallOption) (lnrpc.Lightning_OpenChannelClient,
 		error)
+
+	// ListPeers returns a verbose listing of all currently active peers.
+	ListPeers(ctx context.Context, req *lnrpc.ListPeersRequest,
+		opts ...grpc.CallOption) (*lnrpc.ListPeersResponse, error)
+
+	// SubscribePeerEvents creates a uni-directional stream from the server
+	// to the client in which any events relevant to the state of peers are
+	// sent over. Events include peers going online and offline.
+	SubscribePeerEvents(ctx context.Context, r *lnrpc.PeerEventSubscription,
+		opts ...grpc.CallOption) (
+		lnrpc.Lightning_SubscribePeerEventsClient, error)
 }
 
 type fundingMgr struct {
 	db              *clientdb.DB
 	walletKit       lndclient.WalletKitClient
 	lightningClient lndclient.LightningClient
-	baseClient      shimFundingClient
+	baseClient      fundingBaseClient
 
 	// newNodesOnly specifies if the funding manager should only accept
 	// matched orders with channels from new nodes that the connected lnd
@@ -77,7 +90,7 @@ type fundingMgr struct {
 	// batch.
 	pendingOpenChannels <-chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
 
-	channelOpenTimeout time.Duration
+	batchStepTimeout time.Duration
 
 	quit chan struct{}
 }
@@ -208,8 +221,13 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 	fndgLog.Infof("Batch(%x): preparing channel funding for %v orders",
 		batch.ID[:], len(batch.MatchedOrders))
 
-	ctxb := context.Background()
-	connsInitiated := make(map[[33]byte]struct{})
+	// We need to make sure our whole process doesn't take too long overall
+	// so we create a context that is valid for the whole funding step and
+	// use that everywhere.
+	setupCtx, cancel := context.WithTimeout(
+		context.Background(), f.batchStepTimeout,
+	)
+	defer cancel()
 
 	// Before we connect out to peers, we check that we don't get any new
 	// channels from peers we already have channels with, in case this is
@@ -231,6 +249,7 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 
 	// Now that we know this batch passes our sanity checks, we'll register
 	// all the funding shims we need to be able to respond
+	connsInitiated := make(map[route.Vertex]struct{})
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
 		ourOrder, err := f.db.GetOrder(ourOrderNonce)
 		if err != nil {
@@ -284,14 +303,18 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 			_, initiated := connsInitiated[nodeKey]
 			if !initiated {
 				f.connectToMatchedTrader(
-					ctxb, nodeKey, matchedOrder.NodeAddrs,
+					setupCtx, nodeKey,
+					matchedOrder.NodeAddrs,
 				)
 				connsInitiated[nodeKey] = struct{}{}
 			}
 		}
 	}
 
-	return nil
+	// We need to wait for all connections to be established now. Otherwise
+	// the asker won't be able to open the channel as it doesn't know the
+	// connection details of the bidder.
+	return f.waitForPeerConnections(setupCtx, connsInitiated, batch)
 }
 
 // batchChannelSetup will attempt to establish new funding flows with all
@@ -329,7 +352,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	// so we create a context that is valid for the whole funding step and
 	// use that everywhere.
 	setupCtx, cancel := context.WithTimeout(
-		context.Background(), f.channelOpenTimeout,
+		context.Background(), f.batchStepTimeout,
 	)
 	defer cancel()
 
@@ -578,6 +601,106 @@ func (f *fundingMgr) connectToMatchedTrader(ctx context.Context,
 	// error.
 }
 
+// waitForPeerConnections makes sure the connected lnd has a persistent
+// connection to each of the peers in the given map. This method blocks until
+// either all connections are established successfully or the passed context is
+// canceled.
+//
+// NOTE: The passed context MUST have a timeout applied to it, otherwise this
+// method will block forever in case a connection doesn't succeed.
+func (f *fundingMgr) waitForPeerConnections(ctx context.Context,
+	peers map[route.Vertex]struct{}, batch *order.Batch) error {
+
+	// First of all, subscribe to new peer events so we certainly don't miss
+	// an update while we look for the already connected peers.
+	ctxc, cancel := context.WithCancel(ctx)
+	defer cancel()
+	subscription, err := f.baseClient.SubscribePeerEvents(
+		ctxc, &lnrpc.PeerEventSubscription{},
+	)
+	if err != nil {
+		return fmt.Errorf("unable to subscribe to peer events: %v", err)
+	}
+
+	// Query all connected peers. This only returns active peers so once a
+	// node key appears in this list, we can be reasonably sure the
+	// connection is established (flapping peers notwithstanding).
+	resp, err := f.baseClient.ListPeers(
+		ctx, &lnrpc.ListPeersRequest{},
+	)
+	if err != nil {
+		return fmt.Errorf("unable to query peers: %v", err)
+	}
+
+	// Remove all connected peers from our previously de-duplicated map.
+	for _, peer := range resp.Peers {
+		peerKeyBytes, err := hex.DecodeString(peer.PubKey)
+		if err != nil {
+			return fmt.Errorf("error parsing node key: %v", err)
+		}
+
+		var peerKey [33]byte
+		copy(peerKey[:], peerKeyBytes)
+		delete(peers, peerKey)
+	}
+
+	// Some connection attempts are still ongoing, let's now wait for peer
+	// events or the cancellation of the context.
+	for {
+		// Great, we're done now, all connections established!
+		if len(peers) == 0 {
+			return nil
+		}
+
+		select {
+		// We can't wait forever, otherwise the auctioneer will kick us
+		// out of the batch for not responding. In case we weren't able
+		// to open all required connections, we reject the orders that
+		// came from the peers with the failed connections.
+		case <-ctx.Done():
+			return &matchRejectErr{
+				rejectedOrders: f.rejectFailedConnections(
+					peers, batch,
+				),
+			}
+
+		// We're shutting down, nothing more to do here.
+		case <-f.quit:
+			return nil
+
+		default:
+		}
+
+		// Block on reading the next peer event now.
+		msg, err := subscription.Recv()
+		if err == context.Canceled || err == context.DeadlineExceeded {
+			// We've run into the timeout. Let the code above return
+			// the error, we should now run into the ctx.Done()
+			// case.
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("error reading peer event: %v", err)
+		}
+
+		// We're only interested in online events, skip everything else.
+		if msg.Type != lnrpc.PeerEvent_PEER_ONLINE {
+			continue
+		}
+
+		// Great, a new peer is online, let's remove it from the wait
+		// list now.
+		peerKeyBytes, err := hex.DecodeString(msg.PubKey)
+		if err != nil {
+			return fmt.Errorf("error parsing node key: %v", err)
+		}
+
+		var peerKey [33]byte
+		copy(peerKey[:], peerKeyBytes)
+		delete(peers, peerKey)
+	}
+}
+
 // rejectDuplicateChannels gathers a list of matched orders that should be
 // rejected because they would create channels to peers that the trader already
 // has channels with.
@@ -627,4 +750,34 @@ func (f *fundingMgr) rejectDuplicateChannels(
 	}
 
 	return fundingRejects, nil
+}
+
+// rejectFailedConnections gathers a list of all matched orders that are to
+// peers to which we couldn't connect and want to reject because of that.
+func (f *fundingMgr) rejectFailedConnections(peers map[route.Vertex]struct{},
+	batch *order.Batch) map[order.Nonce]*clmrpc.OrderReject {
+
+	// Gather the list of matches we reject because the connection to them
+	// failed.
+	const connFailed = "connection not established before timeout"
+	const rejectCode = clmrpc.OrderReject_CHANNEL_FUNDING_FAILED
+	fundingRejects := make(map[order.Nonce]*clmrpc.OrderReject)
+	for _, matchedOrders := range batch.MatchedOrders {
+		for _, matchedOrder := range matchedOrders {
+			_, ok := peers[matchedOrder.NodeKey]
+			if !ok {
+				continue
+			}
+
+			fndgLog.Debugf("Rejecting channel to node %x: %v",
+				matchedOrder.NodeKey[:], connFailed)
+			otherNonce := matchedOrder.Order.Nonce()
+			fundingRejects[otherNonce] = &clmrpc.OrderReject{
+				ReasonCode: rejectCode,
+				Reason:     connFailed,
+			}
+		}
+	}
+
+	return fundingRejects
 }

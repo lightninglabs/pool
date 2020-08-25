@@ -114,7 +114,7 @@ func newRPCServer(server *Server) *rpcServer {
 			baseClient:          server.lndClient,
 			pendingOpenChannels: pendingOpenChannels,
 			quit:                quit,
-			channelOpenTimeout:  defaultChannelOpenTimeout,
+			batchStepTimeout:    defaultBatchStepTimeout,
 			newNodesOnly:        server.cfg.NewNodesOnly,
 		},
 		pendingOpenChannels: pendingOpenChannels,

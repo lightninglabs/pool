@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -48,16 +49,41 @@ func (i *openChannelStream) Recv() (*lnrpc.OpenStatusUpdate, error) {
 	}
 }
 
-type shimFundingClientMock struct {
+type peerEventStream struct {
+	lnrpc.Lightning_SubscribePeerEventsClient
+
+	updateChan chan *lnrpc.PeerEvent
+	ctx        context.Context
+	quit       chan struct{}
+}
+
+func (i *peerEventStream) Recv() (*lnrpc.PeerEvent, error) {
+	select {
+	case msg := <-i.updateChan:
+		return msg, nil
+
+	case <-i.ctx.Done():
+		return nil, i.ctx.Err()
+
+	case <-i.quit:
+		return nil, context.Canceled
+	}
+}
+
+type fundingBaseClientMock struct {
 	lightningClient *test.MockLightning
 	fundingShims    map[[32]byte]*lnrpc.ChanPointShim
+
+	useManualPeerList bool
+	manualPeerList    map[route.Vertex]string
+	peerEvents        chan *lnrpc.PeerEvent
 
 	quit chan struct{}
 }
 
-func (m *shimFundingClientMock) FundingStateStep(ctx context.Context,
+func (m *fundingBaseClientMock) FundingStateStep(_ context.Context,
 	req *lnrpc.FundingTransitionMsg,
-	opts ...grpc.CallOption) (*lnrpc.FundingStateStepResp, error) {
+	_ ...grpc.CallOption) (*lnrpc.FundingStateStepResp, error) {
 
 	register := req.GetShimRegister()
 	if register == nil || register.GetChanPointShim() == nil {
@@ -71,9 +97,9 @@ func (m *shimFundingClientMock) FundingStateStep(ctx context.Context,
 	return nil, nil
 }
 
-func (m *shimFundingClientMock) OpenChannel(ctx context.Context,
+func (m *fundingBaseClientMock) OpenChannel(ctx context.Context,
 	req *lnrpc.OpenChannelRequest,
-	opts ...grpc.CallOption) (lnrpc.Lightning_OpenChannelClient, error) {
+	_ ...grpc.CallOption) (lnrpc.Lightning_OpenChannelClient, error) {
 
 	if req.FundingShim == nil || req.FundingShim.GetChanPointShim() == nil {
 		return nil, fmt.Errorf("invalid funding shim")
@@ -116,15 +142,46 @@ func (m *shimFundingClientMock) OpenChannel(ctx context.Context,
 	return stream, nil
 }
 
+func (m *fundingBaseClientMock) ListPeers(_ context.Context,
+	_ *lnrpc.ListPeersRequest,
+	_ ...grpc.CallOption) (*lnrpc.ListPeersResponse, error) {
+
+	peerList := m.lightningClient.Connections
+	if m.useManualPeerList {
+		peerList = m.manualPeerList
+	}
+
+	resp := &lnrpc.ListPeersResponse{}
+	for nodeKey, addr := range peerList {
+		resp.Peers = append(resp.Peers, &lnrpc.Peer{
+			PubKey:  nodeKey.String(),
+			Address: addr,
+		})
+	}
+
+	return resp, nil
+}
+
+func (m *fundingBaseClientMock) SubscribePeerEvents(ctx context.Context,
+	_ *lnrpc.PeerEventSubscription, _ ...grpc.CallOption) (
+	lnrpc.Lightning_SubscribePeerEventsClient, error) {
+
+	return &peerEventStream{
+		quit:       m.quit,
+		ctx:        ctx,
+		updateChan: m.peerEvents,
+	}, nil
+}
+
 type managerHarness struct {
-	t        *testing.T
-	tempDir  string
-	db       *clientdb.DB
-	quit     chan struct{}
-	msgChan  chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
-	lnMock   *test.MockLightning
-	shimMock *shimFundingClientMock
-	mgr      *fundingMgr
+	t              *testing.T
+	tempDir        string
+	db             *clientdb.DB
+	quit           chan struct{}
+	msgChan        chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
+	lnMock         *test.MockLightning
+	baseClientMock *fundingBaseClientMock
+	mgr            *fundingMgr
 }
 
 func newManagerHarness(t *testing.T) *managerHarness {
@@ -141,28 +198,30 @@ func newManagerHarness(t *testing.T) *managerHarness {
 	msgChan := make(chan *lnrpc.ChannelEventUpdate_PendingOpenChannel)
 	lightningClient := test.NewMockLightning()
 	walletKitClient := test.NewMockWalletKit()
-	shimFundingClient := &shimFundingClientMock{
+	baseClientMock := &fundingBaseClientMock{
 		lightningClient: lightningClient,
 		fundingShims:    make(map[[32]byte]*lnrpc.ChanPointShim),
+		manualPeerList:  make(map[route.Vertex]string),
+		peerEvents:      make(chan *lnrpc.PeerEvent),
 		quit:            quit,
 	}
 	return &managerHarness{
-		t:        t,
-		tempDir:  tempDir,
-		db:       db,
-		quit:     quit,
-		msgChan:  msgChan,
-		lnMock:   lightningClient,
-		shimMock: shimFundingClient,
+		t:              t,
+		tempDir:        tempDir,
+		db:             db,
+		quit:           quit,
+		msgChan:        msgChan,
+		lnMock:         lightningClient,
+		baseClientMock: baseClientMock,
 		mgr: &fundingMgr{
 			db:                  db,
 			walletKit:           walletKitClient,
 			lightningClient:     lightningClient,
-			baseClient:          shimFundingClient,
+			baseClient:          baseClientMock,
 			newNodesOnly:        true,
 			pendingOpenChannels: msgChan,
 			quit:                quit,
-			channelOpenTimeout:  400 * time.Millisecond,
+			batchStepTimeout:    400 * time.Millisecond,
 		},
 	}
 }
@@ -261,10 +320,10 @@ func TestFundingManager(t *testing.T) {
 	// the funding shim while the asker is opening the channel.
 	require.Equal(t, 1, len(h.lnMock.Connections))
 	require.Equal(t, addr1.String(), h.lnMock.Connections[node1Key])
-	require.Equal(t, 1, len(h.shimMock.fundingShims))
+	require.Equal(t, 1, len(h.baseClientMock.fundingShims))
 
 	// Validate the shim.
-	shim := h.shimMock.fundingShims[pendingChanID]
+	shim := h.baseClientMock.fundingShims[pendingChanID]
 	require.NotNil(t, shim)
 	require.Equal(t, uint32(2500), shim.ThawHeight)
 	require.Equal(t, int64(order.SupplyUnit(4).ToSatoshis()), shim.Amt)
@@ -304,6 +363,24 @@ func TestFundingManager(t *testing.T) {
 				ReasonCode: clmrpc.OrderReject_DUPLICATE_PEER,
 				Reason: "already have open/pending channel " +
 					"with peer",
+			},
+		},
+	}
+	require.Equal(t, expectedErr, err)
+
+	// As a last check of the funding preparation, make sure we get a reject
+	// error if the connections to the remote peers couldn't be established.
+	h.mgr.newNodesOnly = false
+	h.baseClientMock.useManualPeerList = true
+	err = h.mgr.prepChannelFunding(batch)
+	require.Error(t, err)
+
+	expectedErr = &matchRejectErr{
+		rejectedOrders: map[order.Nonce]*clmrpc.OrderReject{
+			ask.Nonce(): {
+				ReasonCode: clmrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+				Reason: "connection not established before " +
+					"timeout",
 			},
 		},
 	}
@@ -366,6 +443,103 @@ func TestFundingManager(t *testing.T) {
 		rejectedOrders: map[order.Nonce]*clmrpc.OrderReject{
 			ask.Nonce(): code,
 			bid.Nonce(): code,
+		},
+	}
+	require.Equal(t, expectedErr, err)
+}
+
+// TestWaitForPeerConnections tests the function that waits for peer connections
+// to be established before continuing with the funding process.
+func TestWaitForPeerConnections(t *testing.T) {
+	h := newManagerHarness(t)
+	defer h.stop()
+
+	const testTimeout = 100 * time.Millisecond
+	h.baseClientMock.useManualPeerList = true
+
+	// First we make sure that if all peer are already connected, no peer
+	// subscription is created.
+	h.baseClientMock.manualPeerList = map[route.Vertex]string{
+		node1Key: "1.1.1.1",
+		node2Key: "2.2.2.2",
+	}
+	ctxt, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	expectedConnections := map[route.Vertex]struct{}{
+		node1Key: {},
+		node2Key: {},
+	}
+	err := h.mgr.waitForPeerConnections(ctxt, expectedConnections, nil)
+	require.NoError(t, err)
+
+	// Next, make sure that connections established while waiting are
+	// notified correctly. We simulate one connection already being done and
+	// one finishing while we wait.
+	h.baseClientMock.manualPeerList = map[route.Vertex]string{
+		node1Key: "1.1.1.1",
+	}
+	go func() {
+		// Send an offline event first just to make sure it's consumed
+		// but ignored.
+		h.baseClientMock.peerEvents <- &lnrpc.PeerEvent{
+			PubKey: hex.EncodeToString(node2Key[:]),
+			Type:   lnrpc.PeerEvent_PEER_OFFLINE,
+		}
+
+		// Now send the event that the manager is waiting for.
+		h.baseClientMock.peerEvents <- &lnrpc.PeerEvent{
+			PubKey: hex.EncodeToString(node2Key[:]),
+			Type:   lnrpc.PeerEvent_PEER_ONLINE,
+		}
+	}()
+	ctxt, cancel = context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	expectedConnections = map[route.Vertex]struct{}{
+		node1Key: {},
+		node2Key: {},
+	}
+	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, nil)
+	require.NoError(t, err)
+
+	// Final test, make sure we get the correct error message back if we
+	// run into a timeout when waiting for the second node to be connected.
+	fakeNonce1, fakeNonce2 := order.Nonce{77, 88}, order.Nonce{88, 99}
+	fakeBatch := &order.Batch{
+		MatchedOrders: map[order.Nonce][]*order.MatchedOrder{
+			fakeNonce1: {{
+				NodeKey: node1Key,
+				Order: &order.Ask{
+					Kit: newKitFromTemplate(
+						fakeNonce1, &order.Kit{},
+					),
+				},
+			}},
+			fakeNonce2: {{
+				NodeKey: node2Key,
+				Order: &order.Ask{
+					Kit: newKitFromTemplate(
+						fakeNonce2, &order.Kit{},
+					),
+				},
+			}},
+		},
+	}
+	ctxt, cancel = context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	expectedConnections = map[route.Vertex]struct{}{
+		node1Key: {},
+		node2Key: {},
+	}
+	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, fakeBatch)
+	require.Error(t, err)
+
+	code := &clmrpc.OrderReject{
+		ReasonCode: clmrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+		Reason:     "connection not established before timeout",
+	}
+	expectedErr := &matchRejectErr{
+		rejectedOrders: map[order.Nonce]*clmrpc.OrderReject{
+			fakeNonce2: code,
 		},
 	}
 	require.Equal(t, expectedErr, err)
