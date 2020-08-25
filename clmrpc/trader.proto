@@ -197,16 +197,48 @@ message Output {
     string address = 2;
 }
 
+message OutputWithFee {
+    // The address corresponding to the output.
+    string address = 1;
+
+    oneof fees {
+        /*
+        The target number of blocks that the transaction should be confirmed in.
+        */
+        uint32 conf_target = 2;
+
+        /*
+        The fee rate, in satoshis per kw, to use for the withdrawal transaction.
+        */
+        uint64 fee_rate_sat_per_kw = 3;
+    }
+}
+
+message OutputsWithImplicitFee {
+    repeated Output outputs = 1;
+}
+
 message CloseAccountRequest {
     // The trader key associated with the account that will be closed.
     bytes trader_key = 1;
 
-    /*
-    The outputs that should be created as a result of closing the account. If
-    none are specified, then the funds within the account are sent to an address
-    the backing lnd node controls.
-    */
-    repeated Output outputs = 2;
+    oneof funds_destination {
+        /*
+        A single output/address to which the remaining funds of the account will
+        be sent to at the specified fee. If an address is not specified, then
+        the funds are sent to an address the backing lnd node controls.
+        */
+        OutputWithFee output_with_fee = 2;
+
+        /*
+        The outputs to which the remaining funds of the account will be sent to.
+        This should only be used when wanting to create two or more outputs,
+        otherwise OutputWithFee should be used instead. The fee of the account's
+        closing transaction is implicitly defined by the combined value of all
+        outputs.
+        */
+        OutputsWithImplicitFee outputs = 3;
+    }
 }
 message CloseAccountResponse {
     // The hash of the closing transaction.

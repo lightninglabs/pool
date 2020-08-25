@@ -1008,11 +1008,11 @@ func (m *Manager) WithdrawAccount(ctx context.Context,
 }
 
 // CloseAccount attempts to close the account associated with the given trader
-// key. Closing the account requires a signature of the auctioneer since the
-// account is composed of a 2-of-2 multi-sig. The account is closed to a P2WPKH
-// output of the account's trader key.
+// key. Closing the account requires a signature of the auctioneer if the
+// account has not yet expired. The account funds are swept according to the
+// provided fee expression.
 func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
-	closeOutputs []*wire.TxOut, bestHeight uint32) (*wire.MsgTx, error) {
+	feeExpr FeeExpr, bestHeight uint32) (*wire.MsgTx, error) {
 
 	account, err := m.cfg.Store.Account(traderKey)
 	if err != nil {
@@ -1025,25 +1025,36 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		return nil, errors.New("account has already been closed")
 	}
 
-	// TODO(wilmer): Reject if account has pending orders.
-
-	// TODO(wilmer): Expose fee rate or allow fee bump.
-	feeRate := chainfee.FeePerKwFloor
+	// Determine the appropriate witness type for the account input based on
+	// whether it's expired or not.
 	witnessType := determineWitnessType(account, bestHeight)
 
-	// If no outputs were provided, we'll close the account to an output
-	// under the backing lnd node's control.
-	if len(closeOutputs) == 0 {
-		output, err := m.toWalletOutput(
-			ctx, account.Value, feeRate, witnessType,
-		)
+	// We'll then use the fee expression to determine the closing
+	// transaction of the account.
+	//
+	// If a single output along with a fee rate was provided and the output
+	// script was not populated, we'll generate one from the backing lnd
+	// node's wallet.
+	if feeExpr, ok := feeExpr.(*OutputWithFee); ok && feeExpr.PkScript == nil {
+		addr, err := m.cfg.Wallet.NextAddr(ctx)
 		if err != nil {
 			return nil, err
 		}
-		closeOutputs = append(closeOutputs, output)
+		feeExpr.PkScript, err = txscript.PayToAddrScript(addr)
+		if err != nil {
+			return nil, err
+		}
+	}
+	closeOutputs, err := feeExpr.CloseOutputs(account.Value, witnessType)
+	if err != nil {
+		return nil, err
 	}
 
-	modifiers := []Modifier{StateModifier(StatePendingClosed)}
+	// Proceed to create the closing transaction and perform any operations
+	// thereby required.
+	modifiers := []Modifier{
+		ValueModifier(0), StateModifier(StatePendingClosed),
+	}
 	_, spendPkg, err := m.spendAccount(
 		ctx, account, nil, closeOutputs, witnessType, modifiers, true,
 		bestHeight,
@@ -1654,52 +1665,6 @@ func (m *Manager) signAccountInput(ctx context.Context, tx *wire.MsgTx,
 	ourSig := append(sigs[0], byte(signDesc.HashType))
 
 	return witnessScript, ourSig, nil
-}
-
-// toWalletOutput returns an output under the backing lnd node's control to
-// sweep the funds of an account to.
-func (m *Manager) toWalletOutput(ctx context.Context,
-	accountValue btcutil.Amount, feeRate chainfee.SatPerKWeight,
-	witnessType witnessType) (*wire.TxOut, error) {
-
-	// Determine the appropriate witness size based on the type.
-	var witnessSize int
-	switch witnessType {
-	case expiryWitness:
-		witnessSize = clmscript.ExpiryWitnessSize
-	case multiSigWitness:
-		witnessSize = clmscript.MultiSigWitnessSize
-	default:
-		return nil, fmt.Errorf("unhandled witness type %v", witnessType)
-	}
-
-	// Calculate the transaction's weight to determine its fee along with
-	// the provided fee rate. The transaction will contain one P2WSH input,
-	// the account output, and one P2WPKH output.
-	//
-	// TODO(wilmer): Check dust.
-	var weightEstimator input.TxWeightEstimator
-	weightEstimator.AddWitnessInput(witnessSize)
-	weightEstimator.AddP2WKHOutput()
-	fee := feeRate.FeeForWeight(int64(weightEstimator.Weight()))
-	outputValue := accountValue - fee
-
-	// With the fee calculated, compute the accompanying output script.
-	// Using the mainnet parameters for the address doesn't have an impact
-	// on the script.
-	addr, err := m.cfg.Wallet.NextAddr(ctx)
-	if err != nil {
-		return nil, err
-	}
-	outputScript, err := txscript.PayToAddrScript(addr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &wire.TxOut{
-		Value:    int64(outputValue),
-		PkScript: outputScript,
-	}, nil
 }
 
 // validateAccountValue ensures that a trader has provided a sane account value

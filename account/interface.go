@@ -3,16 +3,21 @@ package account
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/llm/clmscript"
 	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 var (
@@ -391,4 +396,105 @@ type TxFeeEstimator interface {
 	// confirmation.
 	EstimateFeeToP2WSH(ctx context.Context, amt btcutil.Amount,
 		confTarget int32) (btcutil.Amount, error)
+}
+
+// FeeExpr represents the different ways a transaction fee can be expressed in
+// terms of a transaction's resulting outputs.
+type FeeExpr interface {
+	// CloseOutputs is the list of outputs that should be used for the
+	// closing transaction of an account based on the concrete fee
+	// expression implementation.
+	CloseOutputs(btcutil.Amount, witnessType) ([]*wire.TxOut, error)
+}
+
+// OutputWithFee signals that a single transaction output along with a fee rate
+// is used to determine the transaction fee.
+type OutputWithFee struct {
+	// PkScript is the destination output script. Note that this may be nil,
+	// in which case a wallet-derived P2WKH script should be used.
+	PkScript []byte
+
+	// FeeRate is the accompanying fee rate to use to determine the
+	// transaction fee.
+	FeeRate chainfee.SatPerKWeight
+}
+
+func (o *OutputWithFee) CloseOutputs(accountValue btcutil.Amount,
+	witnessType witnessType) ([]*wire.TxOut, error) {
+
+	// Calculate the transaction's weight to determine its fee according to
+	// the provided fee rate. The transaction will contain one P2WSH input
+	// (the account input) and one output.
+	var weightEstimator input.TxWeightEstimator
+
+	// Determine the appropriate witness size based on the input and output
+	// type.
+	switch witnessType {
+	case expiryWitness:
+		weightEstimator.AddWitnessInput(clmscript.ExpiryWitnessSize)
+	case multiSigWitness:
+		weightEstimator.AddWitnessInput(clmscript.MultiSigWitnessSize)
+	default:
+		return nil, fmt.Errorf("unhandled witness type %v", witnessType)
+	}
+
+	pkScript, err := txscript.ParsePkScript(o.PkScript)
+	if err != nil {
+		return nil, err
+	}
+
+	// We'll also note the dust limit for each output script type along the
+	// way to determine if the output can even be created.
+	var dustLimit btcutil.Amount
+	switch pkScript.Class() {
+	case txscript.WitnessV0PubKeyHashTy:
+		weightEstimator.AddP2WKHOutput()
+		dustLimit = txrules.GetDustThreshold(
+			input.P2WKHOutputSize, txrules.DefaultRelayFeePerKb,
+		)
+
+	case txscript.ScriptHashTy:
+		weightEstimator.AddP2SHOutput()
+		dustLimit = txrules.GetDustThreshold(
+			input.P2SHOutputSize, txrules.DefaultRelayFeePerKb,
+		)
+
+	case txscript.WitnessV0ScriptHashTy:
+		weightEstimator.AddP2WSHOutput()
+		dustLimit = txrules.GetDustThreshold(
+			input.P2WSHOutputSize, txrules.DefaultRelayFeePerKb,
+		)
+	}
+
+	fee := o.FeeRate.FeeForWeight(int64(weightEstimator.Weight()))
+	outputValue := accountValue - fee
+	if outputValue < dustLimit {
+		return nil, fmt.Errorf("closing to output %x with %v results "+
+			"in dust", pkScript, o.FeeRate)
+	}
+
+	return []*wire.TxOut{
+		{
+			Value:    int64(outputValue),
+			PkScript: pkScript.Script(),
+		},
+	}, nil
+}
+
+// OutputsWithImplicitFee signals that the transaction fee is implicitly defined
+// by the output values provided, i.e., the fee is determined by subtracting
+// the total output value from the total input value.
+type OutputsWithImplicitFee []*wire.TxOut
+
+// Outputs returns the set of outputs.
+func (o OutputsWithImplicitFee) Outputs() []*wire.TxOut {
+	return o
+}
+
+// Outputs is the list of outputs that should be used for the closing
+// transaction of an account using an implicit fee expression.
+func (o OutputsWithImplicitFee) CloseOutputs(accountValue btcutil.Amount,
+	witnessType witnessType) ([]*wire.TxOut, error) {
+
+	return o, nil
 }

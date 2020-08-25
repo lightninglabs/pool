@@ -58,6 +58,29 @@
             "required": false,
             "type": "string",
             "format": "byte"
+          },
+          {
+            "name": "output_with_fee.address",
+            "description": "The address corresponding to the output.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "output_with_fee.conf_target",
+            "description": "The target number of blocks that the transaction should be confirmed in.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "name": "output_with_fee.fee_rate_sat_per_kw",
+            "description": "The fee rate, in satoshis per kw, to use for the withdrawal transaction.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
           }
         ],
         "tags": [
@@ -875,6 +898,36 @@
         "address": {
           "type": "string",
           "description": "The address corresponding to the output."
+        }
+      }
+    },
+    "clmrpcOutputWithFee": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "The address corresponding to the output."
+        },
+        "conf_target": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The target number of blocks that the transaction should be confirmed in."
+        },
+        "fee_rate_sat_per_kw": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The fee rate, in satoshis per kw, to use for the withdrawal transaction."
+        }
+      }
+    },
+    "clmrpcOutputsWithImplicitFee": {
+      "type": "object",
+      "properties": {
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/clmrpcOutput"
+          }
         }
       }
     },
