@@ -641,9 +641,11 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 		return nil, fmt.Errorf("unknown state %v", a.State)
 	}
 
-	var closeTxHash chainhash.Hash
-	if a.CloseTx != nil {
-		closeTxHash = a.CloseTx.TxHash()
+	// The latest transaction is only known after the account has been
+	// funded.
+	var latestTxHash chainhash.Hash
+	if a.State != account.StateInitiated {
+		latestTxHash = a.LatestTx.TxHash()
 	}
 
 	return &clmrpc.Account{
@@ -655,7 +657,7 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 		Value:            uint64(a.Value),
 		ExpirationHeight: a.Expiry,
 		State:            rpcState,
-		CloseTxid:        closeTxHash[:],
+		LatestTxid:       latestTxHash[:],
 	}, nil
 }
 

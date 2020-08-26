@@ -167,12 +167,11 @@ type Account struct {
 	// only exists once the account has reached StatePendingOpen.
 	OutPoint wire.OutPoint
 
-	// CloseTx is the closing transaction of an account. This will only be
-	// populated if the account is in any of the following states:
+	// LatestTx is the latest transaction of an account.
 	//
-	//	- StatePendingClosed
-	//	- StateClosed
-	CloseTx *wire.MsgTx
+	// NOTE: This is only nil within the StateInitiated phase. There are no
+	// guarantees as to whether the transaction has its witness populated.
+	LatestTx *wire.MsgTx
 }
 
 const (
@@ -238,9 +237,8 @@ func (a *Account) Copy(modifiers ...Modifier) *Account {
 		HeightHint: a.HeightHint,
 		OutPoint:   a.OutPoint,
 	}
-
-	if a.CloseTx != nil {
-		accountCopy.CloseTx = a.CloseTx.Copy()
+	if a.State != StateInitiated {
+		accountCopy.LatestTx = a.LatestTx.Copy()
 	}
 
 	for _, modifier := range modifiers {
@@ -298,11 +296,11 @@ func HeightHintModifier(heightHint uint32) Modifier {
 	}
 }
 
-// CloseTxModifier is a functional option that modifies the closing transaction
+// LatestTxModifier is a functional option that modifies the latest transaction
 // of an account.
-func CloseTxModifier(tx *wire.MsgTx) Modifier {
+func LatestTxModifier(tx *wire.MsgTx) Modifier {
 	return func(account *Account) {
-		account.CloseTx = tx
+		account.LatestTx = tx
 	}
 }
 

@@ -363,8 +363,8 @@ message Account {
     // The current state of the account.
     AccountState state = 6;
 
-    // The hash of the account's closing transaction, if any.
-    bytes close_txid = 7;
+    // The hash of the account's latest transaction.
+    bytes latest_txid = 7;
 }
 
 message SubmitOrderRequest {

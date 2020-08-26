@@ -213,7 +213,7 @@ func (h *testHarness) closeAccount(account *Account, feeExpr FeeExpr,
 	account.Value = 0
 	account.State = StatePendingClosed
 	account.HeightHint = bestHeight
-	account.CloseTx = closeTx
+	account.LatestTx = closeTx
 	h.assertAccountExists(account)
 
 	// Notify the transaction as a spend of the account.
@@ -424,6 +424,7 @@ func (h *testHarness) assertAccountModification(account *Account,
 		}),
 		HeightHintModifier(broadcastHeight),
 		IncrementBatchKey(),
+		LatestTxModifier(spendTx),
 	}
 	for _, mod := range mods {
 		mod(account)
@@ -591,6 +592,7 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 	// With the account resumed, it should now be in a StatePendingOpen
 	// state.
 	account.State = StatePendingOpen
+	account.LatestTx = tx
 	account.OutPoint = wire.OutPoint{
 		Hash:  tx.TxHash(),
 		Index: 0,

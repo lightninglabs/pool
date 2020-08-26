@@ -36,14 +36,14 @@ type Account struct {
 	AvailableBalance uint64 `json:"available_balance"`
 	ExpirationHeight uint32 `json:"expiration_height"`
 	State            string `json:"state"`
-	CloseTxid        string `json:"close_txid"`
+	LatestTxid       string `json:"latest_txid"`
 }
 
 // NewAccountFromProto creates a display Account from its proto.
 func NewAccountFromProto(a *clmrpc.Account) *Account {
-	var opHash, closeTxHash chainhash.Hash
+	var opHash, latestTxHash chainhash.Hash
 	copy(opHash[:], a.Outpoint.Txid)
-	copy(closeTxHash[:], a.CloseTxid)
+	copy(latestTxHash[:], a.LatestTxid)
 
 	return &Account{
 		TraderKey:        hex.EncodeToString(a.TraderKey),
@@ -52,7 +52,7 @@ func NewAccountFromProto(a *clmrpc.Account) *Account {
 		AvailableBalance: a.AvailableBalance,
 		ExpirationHeight: a.ExpirationHeight,
 		State:            a.State.String(),
-		CloseTxid:        closeTxHash.String(),
+		LatestTxid:       latestTxHash.String(),
 	}
 }
 

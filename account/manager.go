@@ -494,7 +494,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 
 		err := m.cfg.Store.UpdateAccount(
 			account, StateModifier(StatePendingOpen),
-			OutPointModifier(op),
+			OutPointModifier(op), LatestTxModifier(accountTx),
 		)
 		if err != nil {
 			return err
@@ -602,7 +602,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	// transaction to confirm so that we can transition the account to its
 	// final state.
 	case StatePendingClosed:
-		err := m.cfg.Wallet.PublishTransaction(ctx, account.CloseTx)
+		err := m.cfg.Wallet.PublishTransaction(ctx, account.LatestTx)
 		if err != nil {
 			return err
 		}
@@ -851,7 +851,7 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 	return m.cfg.Store.UpdateAccount(
 		account, StateModifier(StateClosed),
 		HeightHintModifier(uint32(spendDetails.SpendingHeight)),
-		CloseTxModifier(spendTx),
+		LatestTxModifier(spendTx),
 	)
 }
 
@@ -1104,15 +1104,14 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 		return nil, nil, err
 	}
 
-	// Update the account's height hint.
+	// Update the account's height hint and latest transaction.
 	modifiers = append(modifiers, HeightHintModifier(bestHeight))
+	modifiers = append(modifiers, LatestTxModifier(spendPkg.tx))
 
 	// With the transaction crafted, update our on-disk state and broadcast
-	// the transaction. We'll need some additional modifiers based on
-	// whether the account is being closed or not.
-	if isClose {
-		modifiers = append(modifiers, CloseTxModifier(spendPkg.tx))
-	} else {
+	// the transaction. We'll need some additional modifiers if the account
+	// is being modified.
+	if !isClose {
 		// The account output should be recreated, so we need to locate
 		// the new account outpoint.
 		newAccountOutput, err := account.Copy(modifiers...).Output()

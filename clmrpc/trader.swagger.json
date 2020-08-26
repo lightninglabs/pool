@@ -456,10 +456,10 @@
           "$ref": "#/definitions/clmrpcAccountState",
           "description": "The current state of the account."
         },
-        "close_txid": {
+        "latest_txid": {
           "type": "string",
           "format": "byte",
-          "description": "The hash of the account's closing transaction, if any."
+          "description": "The hash of the account's latest transaction."
         }
       }
     },
