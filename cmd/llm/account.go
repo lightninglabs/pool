@@ -24,6 +24,7 @@ var accountsCommands = []cli.Command{
 			depositAccountCommand,
 			withdrawAccountCommand,
 			closeAccountCommand,
+			bumpAccountFeeCommand,
 			recoverAccountsCommand,
 		},
 	},
@@ -488,6 +489,67 @@ func closeAccount(ctx *cli.Context) error {
 	}
 
 	printJSON(closeAccountResp)
+
+	return nil
+}
+
+var bumpAccountFeeCommand = cli.Command{
+	Name:      "bumpfee",
+	ShortName: "b",
+	Usage:     "bump the fee of an account in a pending state",
+	Description: `
+	This command allows users to bump the fee of an account's unconfirmed
+	transaction through child-pays-for-parent (CPFP). Since the CPFP is
+	performed through the backing lnd node, the account transaction must
+	contain an output under its control for a successful bump. If a CPFP has
+	already been performed for an account, and this RPC is invoked again,
+	then a replacing transaction (RBF) of the child will be broadcast.
+	`,
+	ArgsUsage: "trader_key sat_per_vbyte",
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name: "trader_key",
+			Usage: "the trader key associated with the account to " +
+				"bump the fee of",
+		},
+		cli.Uint64Flag{
+			Name: "sat_per_vbyte",
+			Usage: "the fee rate expressed in sat/vbyte that " +
+				"should be used for the CPFP",
+		},
+	},
+	Action: bumpAccountFee,
+}
+
+func bumpAccountFee(ctx *cli.Context) error {
+	cmd := "bumpfee"
+	traderKey, err := parseHexStr(ctx, 0, "trader_key", cmd)
+	if err != nil {
+		return err
+	}
+	satPerVbyte, err := parseUint64(ctx, 1, "sat_per_vbyte", cmd)
+	if err != nil {
+		return err
+	}
+	satPerKw := chainfee.SatPerKVByte(satPerVbyte * 1000).FeePerKWeight()
+
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.BumpAccountFee(
+		context.Background(), &clmrpc.BumpAccountFeeRequest{
+			TraderKey:       traderKey,
+			FeeRateSatPerKw: uint64(satPerKw),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	printRespJSON(resp)
 
 	return nil
 }

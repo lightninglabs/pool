@@ -138,7 +138,7 @@ func parseStr(ctx *cli.Context, argIdx int, flag, cmd string) (string, error) {
 	return str, nil
 }
 
-func parseHexStr(ctx *cli.Context, argIdx int, flag, cmd string) ([]byte, error) {
+func parseHexStr(ctx *cli.Context, argIdx int, flag, cmd string) ([]byte, error) { // nolint:unparam
 	hexStr, err := parseStr(ctx, argIdx, flag, cmd)
 	if err != nil {
 		return nil, err
