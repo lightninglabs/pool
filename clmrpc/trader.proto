@@ -73,6 +73,21 @@ service Trader {
         };
     };
 
+    /* llm: `accounts bumpfee`
+    BumpAccountFee attempts to bump the fee of an account's transaction through
+    child-pays-for-parent (CPFP). Since the CPFP is performed through the
+    backing lnd node, the account transaction must contain an output under its
+    control for a successful bump. If a CPFP has already been performed for an
+    account, and this RPC is invoked again, then a replacing transaction (RBF)
+    of the child will be broadcast.
+    */
+    rpc BumpAccountFee (BumpAccountFeeRequest) returns (BumpAccountFeeResponse) {
+        option (google.api.http) = {
+            post: "/v1/clm/accounts/bump"
+            body: "*"
+        };
+    };
+
     /* llm: `accounts recover`
     RecoverAccounts queries the auction server for this trader daemon's accounts
     in case we lost our local account database.
@@ -289,6 +304,21 @@ message DepositAccountResponse {
 
     // The transaction used to deposit funds into the account.
     bytes deposit_txid = 2;
+}
+
+message BumpAccountFeeRequest {
+    /*
+    The trader key associated with the account that will have its fee bumped.
+    */
+    bytes trader_key = 1;
+
+    /*
+    The new fee rate, in satoshis per kw, to use for the child of the account
+    transaction.
+    */
+    uint64 fee_rate_sat_per_kw = 2;
+}
+message BumpAccountFeeResponse {
 }
 
 enum AccountState {

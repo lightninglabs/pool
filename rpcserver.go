@@ -756,6 +756,29 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 	}, nil
 }
 
+// BumpAccountFee attempts to bump the fee of an account's transaction through
+// child-pays-for-parent (CPFP). Since the CPFP is performed through the backing
+// lnd node, the account transaction must contain an output under its control
+// for a successful bump. If a CPFP has already been performed for an account,
+// and this RPC is invoked again, then a replacing transaction (RBF) of the
+// child will be broadcast.
+func (s *rpcServer) BumpAccountFee(ctx context.Context,
+	req *clmrpc.BumpAccountFeeRequest) (*clmrpc.BumpAccountFeeResponse, error) {
+
+	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
+	if err != nil {
+		return nil, err
+	}
+	feeRate := chainfee.SatPerKWeight(req.FeeRateSatPerKw)
+
+	err = s.accountManager.BumpAccountFee(ctx, traderKey, feeRate)
+	if err != nil {
+		return nil, err
+	}
+
+	return &clmrpc.BumpAccountFeeResponse{}, nil
+}
+
 // CloseAccount handles a trader's request to close the specified account.
 func (s *rpcServer) CloseAccount(ctx context.Context,
 	req *clmrpc.CloseAccountRequest) (*clmrpc.CloseAccountResponse, error) {

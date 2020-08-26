@@ -119,6 +119,39 @@
         ]
       }
     },
+    "/v1/clm/accounts/bump": {
+      "post": {
+        "summary": "llm: `accounts bumpfee`\nBumpAccountFee attempts to bump the fee of an account's transaction through\nchild-pays-for-parent (CPFP). Since the CPFP is performed through the\nbacking lnd node, the account transaction must contain an output under its\ncontrol for a successful bump. If a CPFP has already been performed for an\naccount, and this RPC is invoked again, then a replacing transaction (RBF)\nof the child will be broadcast.",
+        "operationId": "BumpAccountFee",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/clmrpcBumpAccountFeeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/clmrpcBumpAccountFeeRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/clm/accounts/deposit": {
       "post": {
         "summary": "llm: `accounts deposit`\nDepositAccount adds more funds from the connected lnd node's wallet to an\naccount.",
@@ -615,6 +648,24 @@
           "description": "The channel type to be created."
         }
       }
+    },
+    "clmrpcBumpAccountFeeRequest": {
+      "type": "object",
+      "properties": {
+        "trader_key": {
+          "type": "string",
+          "format": "byte",
+          "description": "The trader key associated with the account that will have its fee bumped."
+        },
+        "fee_rate_sat_per_kw": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The new fee rate, in satoshis per kw, to use for the child of the account\ntransaction."
+        }
+      }
+    },
+    "clmrpcBumpAccountFeeResponse": {
+      "type": "object"
     },
     "clmrpcCancelOrderResponse": {
       "type": "object"
