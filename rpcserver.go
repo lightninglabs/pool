@@ -824,6 +824,9 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 		}
 
 		feeExpr = account.OutputsWithImplicitFee(outputs)
+
+	case nil:
+		return nil, errors.New("a funds destination must be specified")
 	}
 
 	dbOrders, err := s.server.db.GetOrders()
