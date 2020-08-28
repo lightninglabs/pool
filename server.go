@@ -441,6 +441,12 @@ func (s *Server) syncLocalOrderState() error {
 		orderNonce := dbOrder.Nonce()
 		localOrderState := dbOrder.Details().State
 
+		// If the order is cancelled or in any other terminal state, we
+		// don't need to query the server for its current status.
+		if localOrderState.Archived() {
+			continue
+		}
+
 		// For our comparison below, we'll poll the auctioneer to find
 		// out what state they think this order is in.
 		orderStateResp, err := s.AuctioneerClient.OrderState(
