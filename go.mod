@@ -15,7 +15,7 @@ require (
 	github.com/lightninglabs/aperture v0.1.1-beta.0.20200901205500-5237b07a6ef5
 	github.com/lightninglabs/lndclient v0.11.0-1
 	github.com/lightninglabs/protobuf-hex-display v1.3.3-0.20191212020323-b444784ce75d
-	github.com/lightningnetwork/lnd v0.11.0-beta.rc2
+	github.com/lightningnetwork/lnd v0.11.0-beta
 	github.com/stretchr/testify v1.5.1
 	github.com/urfave/cli v1.20.0
 	go.etcd.io/bbolt v1.3.5-0.20200615073812-232d8fc87f50
