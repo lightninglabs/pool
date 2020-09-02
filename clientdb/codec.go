@@ -8,8 +8,10 @@ import (
 	"reflect"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -68,6 +70,11 @@ func WriteElement(w io.Writer, element interface{}) error {
 	case order.Nonce:
 		return lnwire.WriteElement(w, e[:])
 
+	case terms.LinearFeeSchedule:
+		return lnwire.WriteElements(
+			w, uint64(e.BaseFee()), uint64(e.FeeRate()),
+		)
+
 	case chainfee.SatPerKWeight:
 		return lnwire.WriteElement(w, uint64(e))
 
@@ -116,7 +123,7 @@ func ReadElements(r io.Reader, elements ...interface{}) error {
 }
 
 // ReadElement is a one-stop utility function to deserialize any data structure.
-func ReadElement(r io.Reader, element interface{}) error {
+func ReadElement(r io.Reader, element interface{}) error { // nolint:gocyclo
 	switch e := element.(type) {
 	case *account.State:
 		var s uint8
@@ -164,6 +171,16 @@ func ReadElement(r io.Reader, element interface{}) error {
 		if err := lnwire.ReadElement(r, e[:]); err != nil {
 			return err
 		}
+
+	case *terms.LinearFeeSchedule:
+		var base, rate uint64
+		if err := lnwire.ReadElements(r, &base, &rate); err != nil {
+			return err
+		}
+
+		*e = *terms.NewLinearFeeSchedule(
+			btcutil.Amount(base), btcutil.Amount(rate),
+		)
 
 	case *chainfee.SatPerKWeight:
 		var v uint64
