@@ -86,7 +86,7 @@ func (db *DB) StorePendingBatch(batchID order.BatchID, batchTx *wire.MsgTx,
 			return err
 		}
 		for idx, nonce := range orders {
-			err := updateOrder(
+			_, err := updateOrder(
 				ordersBucket, pendingOrdersBucket, nonce,
 				orderModifiers[idx],
 			)
@@ -108,7 +108,7 @@ func (db *DB) StorePendingBatch(batchID order.BatchID, batchTx *wire.MsgTx,
 		}
 		for idx, acct := range accounts {
 			accountKey := getAccountKey(acct)
-			err := updateAccount(
+			_, err := updateAccount(
 				accountsBucket, pendingAccountsBucket,
 				accountKey, accountModifiers[idx],
 			)
@@ -255,7 +255,8 @@ func applyBatchUpdates(tx *bbolt.Tx) error {
 		if len(k) != 33 {
 			return nil
 		}
-		return updateAccount(pendingAccounts, accounts, k, nil)
+		_, err := updateAccount(pendingAccounts, accounts, k, nil)
+		return err
 	})
 	if err != nil {
 		return err
@@ -285,7 +286,8 @@ func applyBatchUpdates(tx *bbolt.Tx) error {
 			return nil
 		}
 		copy(nonce[:], k)
-		return updateOrder(pendingOrders, orders, nonce, nil)
+		_, err := updateOrder(pendingOrders, orders, nonce, nil)
+		return err
 	})
 	if err != nil {
 		return err

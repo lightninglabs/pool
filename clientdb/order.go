@@ -83,7 +83,8 @@ func (db *DB) UpdateOrder(nonce order.Nonce, modifiers ...order.Modifier) error 
 		if err != nil {
 			return err
 		}
-		return updateOrder(rootBucket, rootBucket, nonce, modifiers)
+		_, err = updateOrder(rootBucket, rootBucket, nonce, modifiers)
+		return err
 	})
 }
 
@@ -106,7 +107,7 @@ func (db *DB) UpdateOrders(nonces []order.Nonce,
 			return err
 		}
 		for idx, nonce := range nonces {
-			err := updateOrder(
+			_, err := updateOrder(
 				rootBucket, rootBucket, nonce, modifiers[idx],
 			)
 			if err != nil {
@@ -250,7 +251,7 @@ func fetchOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 // updateOrder fetches the binary data of one order specified by its nonce from
 // the src bucket, applies the modifiers, and stores it back into dst bucket.
 func updateOrder(src, dst *bbolt.Bucket, nonce order.Nonce,
-	modifiers []order.Modifier) error {
+	modifiers []order.Modifier) (order.Order, error) {
 
 	var (
 		o        order.Order
@@ -264,7 +265,7 @@ func updateOrder(src, dst *bbolt.Bucket, nonce order.Nonce,
 	// Retrieve the order stored in the database.
 	err = fetchOrderTX(src, nonce, callback)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Apply the given modifications to it and store it back.
@@ -274,10 +275,14 @@ func updateOrder(src, dst *bbolt.Bucket, nonce order.Nonce,
 	var w bytes.Buffer
 	err = SerializeOrder(o, &w)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return storeOrderTX(dst, nonce, w.Bytes())
+	if err := storeOrderTX(dst, nonce, w.Bytes()); err != nil {
+		return nil, err
+	}
+
+	return o, nil
 }
 
 // SerializeOrder binary serializes an order to a writer using the common LN
