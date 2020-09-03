@@ -230,4 +230,17 @@ func TestGetLocalBatchSnapshots(t *testing.T) {
 		}
 	}
 
+	// Make sure we can get a snapshot by batch ID.
+	id := testBatchID
+	id[0] = 4
+	snapshot, err := store.GetLocalBatchSnapshot(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testSnapshot.BatchID = id
+	if !reflect.DeepEqual(testSnapshot, snapshot) {
+		t.Fatalf("mismatch: %v vs %v",
+			spew.Sdump(testSnapshot), spew.Sdump(snapshot))
+	}
 }

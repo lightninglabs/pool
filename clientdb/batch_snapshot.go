@@ -28,6 +28,12 @@ import (
 //         |              |        |
 //         |             ...      ...
 //         |
+//         |-- batch-snapshot-batchid-index-bucket
+//                       |
+//                       |-- <batch id>: <sequence-num>
+//                       |-- <batch id>: <sequence-num>
+//                       |
+//                      ...
 var (
 	// batchSnapshotBucketKey is the top level bucket where we'll find
 	// snapshot information about all batches we have participated in.
@@ -41,6 +47,10 @@ var (
 	// batchSnapshotSeqBucketKey is a sub-bucket where we'll store batch
 	// snapshots indexed by sequence number.
 	batchSnapshotSeqBucketKey = []byte("batch-snapshot-seq-bucket")
+
+	// batchSnapshotBatchIDIndexBucket is a sub-bucket where we'll map
+	// batch IDs to their sequence number.
+	batchSnapshotBatchIDIndexBucketKey = []byte("batch-snapshot-batchid-index-bucket")
 
 	// batchSnapshotBatchKey is the key under where we'll store the
 	// serialized batch snapshot.
@@ -138,10 +148,37 @@ func (db *DB) GetLocalBatchSnapshots() ([]*LocalBatchSnapshot, error) {
 	return snapshots, nil
 }
 
+// GetLocalBatchSnapshot fetches the batch snapshot for the given batch ID.
+func (db *DB) GetLocalBatchSnapshot(id order.BatchID) (
+	*LocalBatchSnapshot, error) {
+
+	var snapshot *LocalBatchSnapshot
+	err := db.View(func(tx *bbolt.Tx) error {
+		_, seqBucket, indexBucket, err := getSnapshotBuckets(tx)
+		if err != nil {
+			return err
+		}
+
+		seq := indexBucket.Get(id[:])
+		if seq == nil {
+			return fmt.Errorf("snapshot of batch %x not found",
+				id[:])
+		}
+
+		snapshot, err = fetchLocalBatchSnapshot(seqBucket, seq)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return snapshot, nil
+}
+
 func (db *DB) fetchLocalBatchSnapshots(tx *bbolt.Tx) ([]*LocalBatchSnapshot,
 	error) {
 
-	_, seqBucket, err := getSnapshotBuckets(tx)
+	_, seqBucket, _, err := getSnapshotBuckets(tx)
 	if err != nil {
 		return nil, err
 	}
@@ -204,8 +241,8 @@ func storePendingBatchSnapshot(tx *bbolt.Tx,
 
 // finalizeBatchSnapshot moves the pending batch snapshot into the sub-bucket
 // indexed by sequence numbers.
-func finalizeBatchSnapshot(tx *bbolt.Tx, _ order.BatchID) error {
-	topBucket, seqBucket, err := getSnapshotBuckets(tx)
+func finalizeBatchSnapshot(tx *bbolt.Tx, batchID order.BatchID) error {
+	topBucket, seqBucket, indexBucket, err := getSnapshotBuckets(tx)
 	if err != nil {
 		return err
 	}
@@ -239,13 +276,21 @@ func finalizeBatchSnapshot(tx *bbolt.Tx, _ order.BatchID) error {
 		return err
 	}
 
+	// Finally add a entry mapping this batch ID to the sequence number.
+	err = indexBucket.Put(batchID[:], seqBytes[:])
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func getSnapshotBuckets(tx *bbolt.Tx) (*bbolt.Bucket, *bbolt.Bucket, error) {
+func getSnapshotBuckets(tx *bbolt.Tx) (*bbolt.Bucket, *bbolt.Bucket,
+	*bbolt.Bucket, error) {
+
 	topBucket, err := getBucket(tx, batchSnapshotBucketKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Get the sub-buckets. We expect them to be created at DB init, so we
@@ -254,10 +299,17 @@ func getSnapshotBuckets(tx *bbolt.Tx) (*bbolt.Bucket, *bbolt.Bucket, error) {
 		topBucket, batchSnapshotSeqBucketKey, false,
 	)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return topBucket, seqBucket, nil
+	indexBucket, err := getNestedBucket(
+		topBucket, batchSnapshotBatchIDIndexBucketKey, false,
+	)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return topBucket, seqBucket, indexBucket, nil
 }
 
 func serializeLocalBatchSnapshot(w io.Writer, b *LocalBatchSnapshot) error {
