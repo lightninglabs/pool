@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	proxy "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/lightninglabs/aperture/lsat"
@@ -18,7 +19,6 @@ import (
 	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/llm/order"
 	"github.com/lightninglabs/lndclient"
-	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/signal"
@@ -39,6 +39,11 @@ var (
 
 // Server is the main llmd trader server.
 type Server struct {
+	// To be used atomically.
+	started int32
+
+	*rpcServer
+
 	// AuctioneerClient is the wrapper around the connection from the trader
 	// client to the auctioneer server. It is exported so we can replace
 	// the connection with a new one in the itest, if the server is
@@ -54,7 +59,6 @@ type Server struct {
 	lsatStore    *lsat.FileStore
 	lndServices  *lndclient.GrpcLndServices
 	lndClient    lnrpc.LightningClient
-	traderServer *rpcServer
 	grpcServer   *grpc.Server
 	restProxy    *http.Server
 	grpcListener net.Listener
@@ -63,126 +67,26 @@ type Server struct {
 }
 
 // NewServer creates a new trader server.
-func NewServer(cfg *Config) (*Server, error) {
-	// Append the network type to the log directory so it is
-	// "namespaced" per network in the same fashion as the data directory.
-	cfg.LogDir = filepath.Join(cfg.LogDir, cfg.Network)
-
-	// Initialize logging at the default logging level.
-	err := logWriter.InitLogRotator(
-		filepath.Join(cfg.LogDir, DefaultLogFilename),
-		cfg.MaxLogFileSize, cfg.MaxLogFiles,
-	)
-	if err != nil {
-		return nil, err
+func NewServer(cfg *Config) *Server {
+	return &Server{
+		cfg: cfg,
 	}
-	err = build.ParseAndSetDebugLevels(cfg.DebugLevel, logWriter)
-	if err != nil {
-		return nil, err
+}
+
+// Start runs llmd in daemon mode. It will listen for grpc connections, execute
+// commands and pass back auction status information.
+func (s *Server) Start() error {
+	if atomic.AddInt32(&s.started, 1) != 1 {
+		return fmt.Errorf("trader can only be started once")
 	}
 
 	// Print the version before executing either primary directive.
 	log.Infof("Version: %v", Version())
 
-	lndServices, err := getLnd(cfg.Network, cfg.Lnd)
+	var err error
+	s.lndServices, err = getLnd(s.cfg.Network, s.cfg.Lnd)
 	if err != nil {
-		return nil, err
-	}
-
-	// If no auction server is specified, use the default addresses for
-	// mainnet and testnet.
-	if cfg.AuctionServer == "" && len(cfg.AuctioneerDialOpts) == 0 {
-		switch cfg.Network {
-		case "mainnet":
-			cfg.AuctionServer = MainnetServer
-		case "testnet":
-			cfg.AuctionServer = TestnetServer
-		default:
-			return nil, errors.New("no auction server address " +
-				"specified")
-		}
-	}
-
-	log.Infof("Auction server address: %v", cfg.AuctionServer)
-
-	// Open the main database.
-	networkDir := filepath.Join(cfg.BaseDir, cfg.Network)
-	db, err := clientdb.New(networkDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// Setup the LSAT interceptor for the client.
-	fileStore, err := lsat.NewFileStore(networkDir)
-	if err != nil {
-		return nil, err
-	}
-	var interceptor Interceptor = lsat.NewInterceptor(
-		&lndServices.LndServices, fileStore, defaultRPCTimeout,
-		defaultLsatMaxCost, defaultLsatMaxFee, false,
-	)
-
-	// getIdentity can be used to determine the current LSAT identification
-	// of the trader.
-	getIdentity := func() (*lsat.TokenID, error) {
-		token, err := fileStore.CurrentToken()
-		if err != nil {
-			return nil, err
-		}
-		macID, err := lsat.DecodeIdentifier(
-			bytes.NewBuffer(token.BaseMacaroon().Id()),
-		)
-		if err != nil {
-			return nil, err
-		}
-		return &macID.TokenID, nil
-	}
-
-	// For any net that isn't mainnet, we allow LSAT auth to be disabled and
-	// create a fixed identity that is used for the whole runtime of the
-	// trader instead.
-	if cfg.FakeAuth && cfg.Network == "mainnet" {
-		return nil, fmt.Errorf("cannot use fake LSAT auth for mainnet")
-	}
-	if cfg.FakeAuth {
-		var tokenID lsat.TokenID
-		_, _ = rand.Read(tokenID[:])
-		interceptor = &regtestInterceptor{id: tokenID}
-		getIdentity = func() (*lsat.TokenID, error) {
-			return &tokenID, nil
-		}
-	}
-	activeLoggers := logWriter.SubLoggers()
-	cfg.AuctioneerDialOpts = append(
-		cfg.AuctioneerDialOpts,
-		grpc.WithChainUnaryInterceptor(
-			interceptor.UnaryInterceptor,
-			errorLogUnaryClientInterceptor(
-				activeLoggers[auctioneer.Subsystem],
-			),
-		),
-		grpc.WithChainStreamInterceptor(
-			interceptor.StreamInterceptor,
-			errorLogStreamClientInterceptor(
-				activeLoggers[auctioneer.Subsystem],
-			),
-		),
-	)
-
-	// Create an instance of the auctioneer client library.
-	clientCfg := &auctioneer.Config{
-		ServerAddress: cfg.AuctionServer,
-		Insecure:      cfg.Insecure,
-		TLSPathServer: cfg.TLSPathAuctSrv,
-		DialOpts:      cfg.AuctioneerDialOpts,
-		Signer:        lndServices.Signer,
-		MinBackoff:    cfg.MinBackoff,
-		MaxBackoff:    cfg.MaxBackoff,
-		BatchSource:   db,
-	}
-	auctioneerClient, err := auctioneer.NewClient(clientCfg)
-	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// As there're some other lower-level operations we may need access to,
@@ -190,31 +94,26 @@ func NewServer(cfg *Config) (*Server, error) {
 	//
 	// TODO(roasbeef): more granular macaroons, can ask user to make just
 	// what we need
-	baseClient, err := lndclient.NewBasicClient(
-		cfg.Lnd.Host, cfg.Lnd.TLSPath, cfg.Lnd.MacaroonDir, cfg.Network,
+	s.lndClient, err = lndclient.NewBasicClient(
+		s.cfg.Lnd.Host, s.cfg.Lnd.TLSPath, s.cfg.Lnd.MacaroonDir,
+		s.cfg.Network,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &Server{
-		cfg:              cfg,
-		db:               db,
-		lsatStore:        fileStore,
-		lndServices:      lndServices,
-		lndClient:        baseClient,
-		AuctioneerClient: auctioneerClient,
-		GetIdentity:      getIdentity,
-	}, nil
-}
+	// Setup the auctioneer client and interceptor.
+	err = s.setupClient()
+	if err != nil {
+		return err
+	}
 
-// Start runs llmd in daemon mode. It will listen for grpc connections,
-// execute commands and pass back auction status information.
-func (s *Server) Start() error {
-	var err error
-
-	// Instantiate the llmd gRPC server.
-	s.traderServer = newRPCServer(s)
+	// Instantiate the trader gRPC server and start it.
+	s.rpcServer = newRPCServer(s)
+	err = s.rpcServer.Start()
+	if err != nil {
+		return err
+	}
 
 	serverOpts := []grpc.ServerOption{
 		grpc.StreamInterceptor(
@@ -225,7 +124,7 @@ func (s *Server) Start() error {
 		),
 	}
 	s.grpcServer = grpc.NewServer(serverOpts...)
-	clmrpc.RegisterTraderServer(s.grpcServer, s.traderServer)
+	clmrpc.RegisterTraderServer(s.grpcServer, s.rpcServer)
 
 	// Next, start the gRPC server listening for HTTP/2 connections.
 	// If the provided grpcListener is not nil, it means llmd is being
@@ -274,17 +173,6 @@ func (s *Server) Start() error {
 		}()
 	}
 
-	err = s.AuctioneerClient.Start()
-	if err != nil {
-		return err
-	}
-
-	// Start the trader server itself.
-	err = s.traderServer.Start()
-	if err != nil {
-		return err
-	}
-
 	// Start the grpc server.
 	s.wg.Add(1)
 	go func() {
@@ -307,19 +195,157 @@ func (s *Server) Start() error {
 	return s.syncLocalOrderState()
 }
 
+// StartAsSubserver is an alternative start method where the RPC server does not
+// create its own gRPC server but registers on an existing one.
+func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
+	lndGrpc *lndclient.GrpcLndServices) error {
+
+	if atomic.AddInt32(&s.started, 1) != 1 {
+		return fmt.Errorf("trader can only be started once")
+	}
+
+	s.lndClient = lndClient
+	s.lndServices = lndGrpc
+
+	// Print the version before executing either primary directive.
+	log.Infof("Version: %v", Version())
+
+	// Setup the auctioneer client and interceptor.
+	err := s.setupClient()
+	if err != nil {
+		return err
+	}
+
+	// Instantiate the trader gRPC server and start it.
+	s.rpcServer = newRPCServer(s)
+	err = s.rpcServer.Start()
+	if err != nil {
+		return err
+	}
+
+	// The final thing we'll do on start up is sync the order state of the
+	// auctioneer with what we have on disk.
+	return s.syncLocalOrderState()
+}
+
+// setupClient initializes the auctioneer client and its interceptors.
+func (s *Server) setupClient() error {
+	// If no auction server is specified, use the default addresses for
+	// mainnet and testnet.
+	if s.cfg.AuctionServer == "" && len(s.cfg.AuctioneerDialOpts) == 0 {
+		switch s.cfg.Network {
+		case "mainnet":
+			s.cfg.AuctionServer = MainnetServer
+		case "testnet":
+			s.cfg.AuctionServer = TestnetServer
+		default:
+			return errors.New("no auction server address specified")
+		}
+	}
+
+	log.Infof("Auction server address: %v", s.cfg.AuctionServer)
+
+	// Open the main database.
+	var err error
+	networkDir := filepath.Join(s.cfg.BaseDir, s.cfg.Network)
+	s.db, err = clientdb.New(networkDir)
+	if err != nil {
+		return err
+	}
+
+	// Setup the LSAT interceptor for the client.
+	s.lsatStore, err = lsat.NewFileStore(networkDir)
+	if err != nil {
+		return err
+	}
+
+	// GetIdentity can be used to determine the current LSAT identification
+	// of the trader.
+	s.GetIdentity = func() (*lsat.TokenID, error) {
+		token, err := s.lsatStore.CurrentToken()
+		if err != nil {
+			return nil, err
+		}
+		macID, err := lsat.DecodeIdentifier(
+			bytes.NewBuffer(token.BaseMacaroon().Id()),
+		)
+		if err != nil {
+			return nil, err
+		}
+		return &macID.TokenID, nil
+	}
+
+	// For any net that isn't mainnet, we allow LSAT auth to be disabled and
+	// create a fixed identity that is used for the whole runtime of the
+	// trader instead.
+	var interceptor Interceptor = lsat.NewInterceptor(
+		&s.lndServices.LndServices, s.lsatStore, defaultRPCTimeout,
+		defaultLsatMaxCost, defaultLsatMaxFee, false,
+	)
+	if s.cfg.FakeAuth && s.cfg.Network == "mainnet" {
+		return fmt.Errorf("cannot use fake LSAT auth for mainnet")
+	}
+	if s.cfg.FakeAuth {
+		var tokenID lsat.TokenID
+		_, _ = rand.Read(tokenID[:])
+		interceptor = &regtestInterceptor{id: tokenID}
+		s.GetIdentity = func() (*lsat.TokenID, error) {
+			return &tokenID, nil
+		}
+	}
+	activeLoggers := logWriter.SubLoggers()
+	s.cfg.AuctioneerDialOpts = append(
+		s.cfg.AuctioneerDialOpts,
+		grpc.WithChainUnaryInterceptor(
+			interceptor.UnaryInterceptor,
+			errorLogUnaryClientInterceptor(
+				activeLoggers[auctioneer.Subsystem],
+			),
+		),
+		grpc.WithChainStreamInterceptor(
+			interceptor.StreamInterceptor,
+			errorLogStreamClientInterceptor(
+				activeLoggers[auctioneer.Subsystem],
+			),
+		),
+	)
+
+	// Create an instance of the auctioneer client library.
+	clientCfg := &auctioneer.Config{
+		ServerAddress: s.cfg.AuctionServer,
+		Insecure:      s.cfg.Insecure,
+		TLSPathServer: s.cfg.TLSPathAuctSrv,
+		DialOpts:      s.cfg.AuctioneerDialOpts,
+		Signer:        s.lndServices.Signer,
+		MinBackoff:    s.cfg.MinBackoff,
+		MaxBackoff:    s.cfg.MaxBackoff,
+		BatchSource:   s.db,
+	}
+	s.AuctioneerClient, err = auctioneer.NewClient(clientCfg)
+	if err != nil {
+		return err
+	}
+
+	return s.AuctioneerClient.Start()
+}
+
 // Stop shuts down the server, including the auction server connection, all
 // client connections and network listeners.
 func (s *Server) Stop() error {
 	log.Info("Received shutdown signal, stopping server")
 
-	err := s.AuctioneerClient.Stop()
-	if err != nil {
-		return err
-	}
+	var shutdownErr error
 
 	// Don't return any errors yet, give everything else a chance to shut
 	// down first.
-	err = s.traderServer.Stop()
+	err := s.AuctioneerClient.Stop()
+	if err != nil {
+		shutdownErr = err
+	}
+	err = s.rpcServer.Stop()
+	if err != nil {
+		shutdownErr = err
+	}
 	s.grpcServer.GracefulStop()
 	if s.restProxy != nil {
 		err := s.restProxy.Shutdown(context.Background())
@@ -333,8 +359,8 @@ func (s *Server) Stop() error {
 	s.lndServices.Close()
 	s.wg.Wait()
 
-	if err != nil {
-		return fmt.Errorf("error shutting down server: %v", err)
+	if shutdownErr != nil {
+		return fmt.Errorf("error shutting down server: %v", shutdownErr)
 	}
 	return nil
 }

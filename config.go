@@ -38,7 +38,7 @@ type LndConfig struct {
 }
 
 type Config struct {
-	ShowVersion    bool   `short:"V" long:"version" description:"Display version information and exit"`
+	ShowVersion    bool   `long:"version" description:"Display version information and exit"`
 	Insecure       bool   `long:"insecure" description:"disable tls"`
 	Network        string `long:"network" description:"network to run on" choice:"regtest" choice:"testnet" choice:"mainnet" choice:"simnet"`
 	AuctionServer  string `long:"auctionserver" description:"auction server address host:port"`
@@ -53,7 +53,7 @@ type Config struct {
 
 	MinBackoff time.Duration `long:"minbackoff" description:"Shortest backoff when reconnecting to the server. Valid time units are {s, m, h}."`
 	MaxBackoff time.Duration `long:"maxbackoff" description:"Longest backoff when reconnecting to the server. Valid time units are {s, m, h}."`
-	DebugLevel string        `short:"d" long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	DebugLevel string        `long:"debuglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 
 	NewNodesOnly bool `long:"newnodesonly" description:"Only accept channels from nodes that the connected lnd node doesn't already have open or pending channels with."`
 
@@ -84,19 +84,22 @@ const (
 	defaultLsatMaxFee  = btcutil.Amount(10)
 )
 
-var DefaultConfig = Config{
-	Network:        "mainnet",
-	RPCListen:      "localhost:12010",
-	RESTListen:     "localhost:8281",
-	Insecure:       false,
-	BaseDir:        DefaultBaseDir,
-	LogDir:         defaultLogDir,
-	MaxLogFiles:    defaultMaxLogFiles,
-	MaxLogFileSize: defaultMaxLogFileSize,
-	MinBackoff:     defaultMinBackoff,
-	MaxBackoff:     defaultMaxBackoff,
-	DebugLevel:     defaultLogLevel,
-	Lnd: &LndConfig{
-		Host: "localhost:10009",
-	},
+// DefaultConfig returns the default value for the Config struct.
+func DefaultConfig() Config {
+	return Config{
+		Network:        "mainnet",
+		RPCListen:      "localhost:12010",
+		RESTListen:     "localhost:8281",
+		Insecure:       false,
+		BaseDir:        DefaultBaseDir,
+		LogDir:         defaultLogDir,
+		MaxLogFiles:    defaultMaxLogFiles,
+		MaxLogFileSize: defaultMaxLogFileSize,
+		MinBackoff:     defaultMinBackoff,
+		MaxBackoff:     defaultMaxBackoff,
+		DebugLevel:     defaultLogLevel,
+		Lnd: &LndConfig{
+			Host: "localhost:10009",
+		},
+	}
 }

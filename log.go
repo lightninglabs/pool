@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-const Subsystem = "AGOD"
+const Subsystem = "LLMD"
 
 var (
 	logWriter = build.NewRotatingLogWriter()
