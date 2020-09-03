@@ -645,7 +645,7 @@ func marshallAccount(a *account.Account) (*clmrpc.Account, error) {
 	// The latest transaction is only known after the account has been
 	// funded.
 	var latestTxHash chainhash.Hash
-	if a.State != account.StateInitiated {
+	if a.LatestTx != nil {
 		latestTxHash = a.LatestTx.TxHash()
 	}
 
