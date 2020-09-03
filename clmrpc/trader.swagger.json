@@ -907,6 +907,11 @@
           "type": "integer",
           "format": "int64",
           "description": "The number of currently unfilled units of this order. This will be equal to\nthe total amount of units until the order has reached the state PARTIAL_FILL\nor EXECUTED."
+        },
+        "reserved_value_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The value reserved from the account by this order to ensure the account\ncan pay execution and chain fees in case it gets matched."
         }
       }
     },

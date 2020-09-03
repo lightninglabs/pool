@@ -473,6 +473,10 @@ message Order {
     or EXECUTED.
     */
     uint32 units_unfulfilled = 8;
+
+    // The value reserved from the account by this order to ensure the account
+    // can pay execution and chain fees in case it gets matched.
+    uint64 reserved_value_sat = 9;
 }
 
 message Bid {

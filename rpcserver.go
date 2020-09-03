@@ -22,6 +22,7 @@ import (
 	"github.com/lightninglabs/llm/clientdb"
 	"github.com/lightninglabs/llm/clmrpc"
 	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chanbackup"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -1127,6 +1128,16 @@ func (s *rpcServer) ListOrders(ctx context.Context, _ *clmrpc.ListOrdersRequest)
 		return nil, err
 	}
 
+	// If we cannot query the auctioneer, we just use an empty fee
+	// schedule, as it is only used for calculating the reserved value.
+	var feeSchedule terms.FeeSchedule = terms.NewLinearFeeSchedule(0, 0)
+	terms, err := s.auctioneer.Terms(ctx)
+	if err != nil {
+		log.Warnf("unable to query auctioneer terms: %v", err)
+	} else {
+		feeSchedule = terms.FeeSchedule()
+	}
+
 	// The RPC is split by order type so we have to separate them now.
 	asks := make([]*clmrpc.Ask, 0, len(dbOrders))
 	bids := make([]*clmrpc.Bid, 0, len(dbOrders))
@@ -1174,6 +1185,9 @@ func (s *rpcServer) ListOrders(ctx context.Context, _ *clmrpc.ListOrdersRequest)
 			State:            orderState,
 			Units:            uint32(dbDetails.Units),
 			UnitsUnfulfilled: uint32(dbDetails.UnitsUnfulfilled),
+			ReservedValueSat: uint64(
+				dbOrder.ReservedValue(feeSchedule),
+			),
 		}
 
 		switch o := dbOrder.(type) {

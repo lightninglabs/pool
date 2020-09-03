@@ -232,7 +232,10 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 		if err := printOrderDetails(
 			client, btcutil.Amount(ask.Details.Amt),
 			order.FixedRatePremium(ask.Details.RateFixed),
-			ask.MaxDurationBlocks, true,
+			ask.MaxDurationBlocks,
+			chainfee.SatPerKWeight(
+				ask.Details.MaxBatchFeeRateSatPerKw,
+			), true,
 		); err != nil {
 			return fmt.Errorf("unable to print order details: %v", err)
 		}
@@ -259,7 +262,8 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 }
 
 func printOrderDetails(client clmrpc.TraderClient, amt btcutil.Amount,
-	rate order.FixedRatePremium, leaseDuration uint32, isAsk bool) error {
+	rate order.FixedRatePremium, leaseDuration uint32,
+	maxBatchFeeRate chainfee.SatPerKWeight, isAsk bool) error {
 
 	auctionFee, err := client.AuctionFee(
 		context.Background(), &clmrpc.AuctionFeeRequest{},
@@ -284,6 +288,9 @@ func printOrderDetails(client clmrpc.TraderClient, amt btcutil.Amount,
 
 	premium := rate.LumpSumPremium(amt, leaseDuration)
 
+	maxNumMatches := amt / btcutil.Amount(order.BaseSupplyUnit)
+	chainFee := maxNumMatches * order.EstimateTraderFee(1, maxBatchFeeRate)
+
 	fmt.Println("-- Order Details --")
 	fmt.Printf("%v Amount: %v\n", orderType, amt)
 	fmt.Printf("%v Duration: %v\n", orderType, leaseDuration)
@@ -291,6 +298,8 @@ func printOrderDetails(client clmrpc.TraderClient, amt btcutil.Amount,
 	fmt.Printf("Rate Fixed: %v\n", rate)
 	fmt.Printf("Rate Per Block: %.9f (%.7f%%)\n", ratePerMil, ratePerMil*100)
 	fmt.Println("Execution Fee: ", exeFee)
+	fmt.Println("Max batch fee rate:", maxBatchFeeRate)
+	fmt.Println("Max chain fee:", chainFee)
 
 	return nil
 }
@@ -365,7 +374,10 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 		if err := printOrderDetails(
 			client, btcutil.Amount(bid.Details.Amt),
 			order.FixedRatePremium(bid.Details.RateFixed),
-			bid.MinDurationBlocks, false,
+			bid.MinDurationBlocks,
+			chainfee.SatPerKWeight(
+				bid.Details.MaxBatchFeeRateSatPerKw,
+			), false,
 		); err != nil {
 			return fmt.Errorf("unable to print order details: %v", err)
 		}
