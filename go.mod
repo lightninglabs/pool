@@ -12,8 +12,8 @@ require (
 	github.com/golang/protobuf v1.3.3
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6
 	github.com/jessevdk/go-flags v1.4.0
-	github.com/lightninglabs/aperture v0.0.0-20200811173827-537716305eba
-	github.com/lightninglabs/lndclient v1.0.1-0.20200811080044-d1a60f30cf60
+	github.com/lightninglabs/aperture v0.1.1-beta.0.20200901205500-5237b07a6ef5
+	github.com/lightninglabs/lndclient v0.11.0-1
 	github.com/lightninglabs/protobuf-hex-display v1.3.3-0.20191212020323-b444784ce75d
 	github.com/lightningnetwork/lnd v0.11.0-beta.rc2
 	github.com/stretchr/testify v1.5.1

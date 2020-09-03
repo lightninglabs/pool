@@ -113,7 +113,6 @@ func (s *batchStorer) StorePendingBatch(batch *Batch, bestHeight uint32) error {
 			modifiers = append(
 				modifiers,
 				account.StateModifier(account.StatePendingClosed),
-				account.CloseTxModifier(batch.BatchTX),
 			)
 
 		default:
@@ -121,12 +120,16 @@ func (s *batchStorer) StorePendingBatch(batch *Batch, bestHeight uint32) error {
 				diff.EndingState)
 		}
 
-		// Finally update the account value and height hint.
+		// Finally update the account value, height hint, and its latest
+		// transaction.
 		modifiers = append(
 			modifiers, account.ValueModifier(diff.EndingBalance),
 		)
 		modifiers = append(
 			modifiers, account.HeightHintModifier(uint32(heightHint)),
+		)
+		modifiers = append(
+			modifiers, account.LatestTxModifier(batch.BatchTX),
 		)
 		accountModifiers[idx] = modifiers
 	}

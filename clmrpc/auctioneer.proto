@@ -643,10 +643,10 @@ message AuctionAccount {
     OutPoint outpoint = 8;
 
     /*
-    The closing transaction of an account. This will only be populated if the
-    account is in the STATE_CLOSED state.
+    The latest transaction of an account. This is only known by the auctioneer
+    after the account has met its initial funding confirmation.
     */
-    bytes close_tx = 9;
+    bytes latest_tx = 9;
 }
 
 message MatchedOrder {

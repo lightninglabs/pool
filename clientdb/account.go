@@ -163,11 +163,9 @@ func serializeAccount(w io.Writer, a *account.Account) error {
 		return err
 	}
 
-	// The close transaction is only found in the following states.
-	if a.State == account.StatePendingClosed ||
-		a.State == account.StateClosed {
-
-		if err := WriteElement(w, a.CloseTx); err != nil {
+	// The latest transaction is not found within StateInitiated.
+	if a.State != account.StateInitiated {
+		if err := WriteElement(w, a.LatestTx); err != nil {
 			return err
 		}
 	}
@@ -185,11 +183,9 @@ func deserializeAccount(r io.Reader) (*account.Account, error) {
 		return nil, err
 	}
 
-	// The close transaction is only found in the following states.
-	if a.State == account.StatePendingClosed ||
-		a.State == account.StateClosed {
-
-		if err := ReadElement(r, &a.CloseTx); err != nil {
+	// The latest transaction is not found within StateInitiated.
+	if a.State != account.StateInitiated {
+		if err := ReadElement(r, &a.LatestTx); err != nil {
 			return nil, err
 		}
 	}

@@ -154,3 +154,9 @@ func (m *MockWalletKit) AddTx(tx *wire.MsgTx) {
 	m.Transactions = append(m.Transactions, tx.Copy())
 	m.lock.Unlock()
 }
+
+func (m *MockWalletKit) BumpFee(context.Context, wire.OutPoint,
+	chainfee.SatPerKWeight) error {
+
+	panic("unimplemented")
+}

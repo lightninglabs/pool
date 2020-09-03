@@ -1039,7 +1039,6 @@ func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
 	// for the confirmation on chain in any case. That's why we always map
 	// the auctioneer's state to the corresponding pending state on our
 	// side.
-	var closeTx *wire.MsgTx
 	state := account.StateClosed
 	switch a.State {
 	case clmrpc.AuctionAccountState_STATE_OPEN,
@@ -1049,12 +1048,6 @@ func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
 
 	case clmrpc.AuctionAccountState_STATE_CLOSED:
 		state = account.StatePendingClosed
-
-		closeTx = &wire.MsgTx{}
-		err := closeTx.Deserialize(bytes.NewReader(a.CloseTx))
-		if err != nil {
-			return nil, err
-		}
 
 	case clmrpc.AuctionAccountState_STATE_PENDING_UPDATE:
 		state = account.StatePendingUpdate
@@ -1075,6 +1068,17 @@ func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
 		return nil, fmt.Errorf("error parsing outpoint hash: %v", err)
 	}
 
+	// The latest transaction is only known to the auctioneer after it's
+	// been confirmed.
+	var latestTx *wire.MsgTx
+	if a.State != clmrpc.AuctionAccountState_STATE_PENDING_OPEN {
+		latestTx = &wire.MsgTx{}
+		err := latestTx.Deserialize(bytes.NewReader(a.LatestTx))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &account.Account{
 		Value:         btcutil.Amount(a.Value),
 		Expiry:        a.Expiry,
@@ -1087,7 +1091,7 @@ func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
 			Hash:  *hash,
 			Index: a.Outpoint.OutputIndex,
 		},
-		CloseTx: closeTx,
+		LatestTx: latestTx,
 	}, nil
 }
 

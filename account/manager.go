@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/btcsuite/btcd/blockchain"
@@ -20,6 +21,7 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwallet/chanfunding"
 )
@@ -494,7 +496,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 
 		err := m.cfg.Store.UpdateAccount(
 			account, StateModifier(StatePendingOpen),
-			OutPointModifier(op),
+			OutPointModifier(op), LatestTxModifier(accountTx),
 		)
 		if err != nil {
 			return err
@@ -602,7 +604,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	// transaction to confirm so that we can transition the account to its
 	// final state.
 	case StatePendingClosed:
-		err := m.cfg.Wallet.PublishTransaction(ctx, account.CloseTx)
+		err := m.cfg.Wallet.PublishTransaction(ctx, account.LatestTx)
 		if err != nil {
 			return err
 		}
@@ -851,7 +853,7 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 	return m.cfg.Store.UpdateAccount(
 		account, StateModifier(StateClosed),
 		HeightHintModifier(uint32(spendDetails.SpendingHeight)),
-		CloseTxModifier(spendTx),
+		LatestTxModifier(spendTx),
 	)
 }
 
@@ -1007,6 +1009,59 @@ func (m *Manager) WithdrawAccount(ctx context.Context,
 	return modifiedAccount, spendPkg.tx, nil
 }
 
+// BumpAccountFee attempts to bump the fee of an account's most recent
+// transaction. This is done by locating an eligible output for lnd to CPFP,
+// otherwise the fee bump will not succeed. Further invocations of this call for
+// the same account will result in the child being replaced by the higher fee
+// transaction (RBF).
+func (m *Manager) BumpAccountFee(ctx context.Context,
+	traderKey *btcec.PublicKey, newFeeRate chainfee.SatPerKWeight) error {
+
+	account, err := m.cfg.Store.Account(traderKey)
+	if err != nil {
+		return err
+	}
+
+	// Only accounts in pending states can have their transaction fees
+	// bumped.
+	switch account.State {
+	case StatePendingOpen, StatePendingUpdate, StatePendingClosed:
+	default:
+		return fmt.Errorf("cannot bump fee for account in state %v",
+			account.State)
+	}
+
+	// Since we're using lnd's sweeper for fee bumps, we'll need to find an
+	// output in the transaction under its control to perform the CPFP/RBF.
+	op := wire.OutPoint{Hash: account.LatestTx.TxHash()}
+	for i := range account.LatestTx.TxOut {
+		op.Index = uint32(i)
+
+		log.Debugf("Attempting CPFP with %v for account %x", op,
+			traderKey.SerializeCompressed())
+
+		err := m.cfg.Wallet.BumpFee(ctx, op, newFeeRate)
+		if err != nil {
+			// Output isn't known to lnd, continue to the next one.
+			if strings.Contains(err.Error(), lnwallet.ErrNotMine.Error()) {
+				continue
+			}
+
+			// A fatal error occurred, return it.
+			return err
+		}
+
+		// Once we've found an eligible output, we can return.
+		log.Infof("Found eligible output %v for CPFP of account %x",
+			op, traderKey.SerializeCompressed())
+		return nil
+	}
+
+	// If we didn't find an eligible output, report it as an error.
+	return fmt.Errorf("transaction %v did not contain any eligible "+
+		"outputs to CPFP", op.Hash)
+}
+
 // CloseAccount attempts to close the account associated with the given trader
 // key. Closing the account requires a signature of the auctioneer if the
 // account has not yet expired. The account funds are swept according to the
@@ -1104,15 +1159,14 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 		return nil, nil, err
 	}
 
-	// Update the account's height hint.
+	// Update the account's height hint and latest transaction.
 	modifiers = append(modifiers, HeightHintModifier(bestHeight))
+	modifiers = append(modifiers, LatestTxModifier(spendPkg.tx))
 
 	// With the transaction crafted, update our on-disk state and broadcast
-	// the transaction. We'll need some additional modifiers based on
-	// whether the account is being closed or not.
-	if isClose {
-		modifiers = append(modifiers, CloseTxModifier(spendPkg.tx))
-	} else {
+	// the transaction. We'll need some additional modifiers if the account
+	// is being modified.
+	if !isClose {
 		// The account output should be recreated, so we need to locate
 		// the new account outpoint.
 		newAccountOutput, err := account.Copy(modifiers...).Output()

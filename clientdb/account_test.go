@@ -99,9 +99,30 @@ func TestAccounts(t *testing.T) {
 	// Transition the account from StateInitiated to StatePendingOpen. If
 	// the database update is successful, the in-memory account should be
 	// updated as well.
-	err := db.UpdateAccount(
+	accountOutput, err := a.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	accountTx := &wire.MsgTx{
+		Version: 2,
+		TxIn: []*wire.TxIn{
+			{
+				PreviousOutPoint: wire.OutPoint{
+					Index: 1,
+				},
+				SignatureScript: []byte{0x40},
+			},
+		},
+		TxOut: []*wire.TxOut{accountOutput},
+	}
+	accountPoint := wire.OutPoint{
+		Hash:  accountTx.TxHash(),
+		Index: 0,
+	}
+	err = db.UpdateAccount(
 		a, account.StateModifier(account.StatePendingOpen),
-		account.OutPointModifier(testOutPoint),
+		account.OutPointModifier(accountPoint),
+		account.LatestTxModifier(accountTx),
 	)
 	if err != nil {
 		t.Fatalf("unable to update account: %v", err)
@@ -124,7 +145,7 @@ func TestAccounts(t *testing.T) {
 	}
 	err = db.UpdateAccount(
 		a, account.StateModifier(account.StatePendingClosed),
-		account.CloseTxModifier(closeTx),
+		account.LatestTxModifier(closeTx),
 	)
 	if err != nil {
 		t.Fatalf("unable to update account: %v", err)

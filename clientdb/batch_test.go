@@ -306,6 +306,22 @@ func TestPersistBatchResult(t *testing.T) {
 				State:         account.StateOpen,
 				HeightHint:    1,
 			}
+			accountOutput, err := acct.Output()
+			if err != nil {
+				t.Fatal(err)
+			}
+			acct.LatestTx = &wire.MsgTx{
+				Version: 2,
+				TxIn: []*wire.TxIn{
+					{
+						PreviousOutPoint: wire.OutPoint{
+							Index: 1,
+						},
+						SignatureScript: []byte{0x40},
+					},
+				},
+				TxOut: []*wire.TxOut{accountOutput},
+			}
 			ask := &order.Ask{
 				Kit:         *dummyOrder(t, 900000),
 				MaxDuration: 1337,
@@ -319,7 +335,7 @@ func TestPersistBatchResult(t *testing.T) {
 
 			// Prepare the DB state by storing our test account and
 			// orders.
-			err := store.AddAccount(acct)
+			err = store.AddAccount(acct)
 			if err != nil {
 				t.Fatalf("error storing test account: %v", err)
 			}
