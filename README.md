@@ -29,7 +29,7 @@ Amongst several other uses cases, the Pool allows a new participant in the
 network to easily _boostrap_ their ability to receive funds by paying only a
 percentage of the total amount of inbound funds acquired. As an example, a node
 could acquire 100 million satoshis (1000 units, more on that below) for 100,000
-satoshis for 0.1%. Ultimately the prices will be determined by the open market
+satoshis, or 0.1%. Ultimately the prices will be determined by the open market
 place.
 
 A non-exhaustive list of use cases includes:
@@ -38,7 +38,7 @@ A non-exhaustive list of use cases includes:
     posted concerning the Lightning Network goes something like: Alice is new
     to Bitcoin entirely, how can she join the Lightning Network without her,
     herself, making any new on-chain Bitcoin transactions? It’s desirable to a
-    solution to on boarding new users on to the network which is as as simple as
+    solution to onboarding new users on to the network which is as as simple as
     sending coins to a fresh address. The Pool solves this by allowing a third
     party Carol, to purchase a channel _for_ Alice, which includes starting
     _outbound_ liquidity.
