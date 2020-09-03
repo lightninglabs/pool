@@ -651,7 +651,7 @@ func (c *Client) RecoverAccounts(ctx context.Context,
 			}
 
 			// Account is ok, parse the rest of the fields.
-			acct, err := unmarshallServerAccount(
+			acct, err := unmarshallServerRecoveredAccount(
 				keyDesc, acctMsg.Account,
 			)
 			if err != nil {
@@ -1020,7 +1020,7 @@ func (c *Client) HandleServerShutdown(err error) error {
 
 // unmarshallServerAccount parses the account information sent from the
 // auctioneer into our local account struct.
-func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
+func unmarshallServerRecoveredAccount(keyDesc *keychain.KeyDescriptor,
 	a *clmrpc.AuctionAccount) (*account.Account, error) {
 
 	// Parse all raw public keys.
@@ -1044,7 +1044,7 @@ func unmarshallServerAccount(keyDesc *keychain.KeyDescriptor,
 	case clmrpc.AuctionAccountState_STATE_OPEN,
 		clmrpc.AuctionAccountState_STATE_PENDING_OPEN:
 
-		state = account.StatePendingOpen
+		state = account.StateInitiated
 
 	case clmrpc.AuctionAccountState_STATE_CLOSED:
 		state = account.StatePendingClosed
