@@ -48,8 +48,8 @@ func ParseRPCOrder(version uint32, details *clmrpc.Order) (*Kit, error) {
 
 // ParseRPCServerOrder parses the incoming raw RPC server order into the go
 // native data types used in the order struct.
-func ParseRPCServerOrder(version uint32, details *clmrpc.ServerOrder) (*Kit,
-	[33]byte, []net.Addr, [33]byte, error) {
+func ParseRPCServerOrder(version uint32, details *clmrpc.ServerOrder,
+	orderIsAsk bool) (*Kit, [33]byte, []net.Addr, [33]byte, error) {
 
 	var (
 		nonce       Nonce
@@ -90,7 +90,7 @@ func ParseRPCServerOrder(version uint32, details *clmrpc.ServerOrder) (*Kit,
 				err)
 	}
 	copy(nodeKey[:], nodePubKey.SerializeCompressed())
-	if len(details.NodeAddr) == 0 {
+	if len(details.NodeAddr) == 0 && orderIsAsk {
 		return nil, nodeKey, nodeAddrs, multiSigKey,
 			fmt.Errorf("invalid node addresses")
 	}
@@ -122,8 +122,9 @@ func ParseRPCServerAsk(details *clmrpc.ServerAsk) (*MatchedOrder, error) {
 		kit *Kit
 		err error
 	)
-	kit, o.NodeKey, o.NodeAddrs, o.MultiSigKey, err =
-		ParseRPCServerOrder(details.Version, details.Details)
+	kit, o.NodeKey, o.NodeAddrs, o.MultiSigKey, err = ParseRPCServerOrder(
+		details.Version, details.Details, true,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -142,8 +143,9 @@ func ParseRPCServerBid(details *clmrpc.ServerBid) (*MatchedOrder, error) {
 		kit *Kit
 		err error
 	)
-	kit, o.NodeKey, o.NodeAddrs, o.MultiSigKey, err =
-		ParseRPCServerOrder(details.Version, details.Details)
+	kit, o.NodeKey, o.NodeAddrs, o.MultiSigKey, err = ParseRPCServerOrder(
+		details.Version, details.Details, false,
+	)
 	if err != nil {
 		return nil, err
 	}
