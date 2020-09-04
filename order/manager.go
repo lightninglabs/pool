@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,6 +15,7 @@ import (
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
+	"github.com/lightningnetwork/lnd/tor"
 )
 
 const (
@@ -337,9 +339,29 @@ func (m *Manager) BatchFinalize(batchID BatchID) error {
 	return nil
 }
 
+// parseOnionAddr parses an onion address specified in host:port format.
+func parseOnionAddr(onionAddr string) (net.Addr, error) {
+	addrHost, addrPort, err := net.SplitHostPort(onionAddr)
+	if err != nil {
+		// If the port wasn't specified, then we'll assume the
+		// default p2p port.
+		addrHost = onionAddr
+		addrPort = "9735" // TODO(roasbeef): constant somewhere?
+	}
+
+	portNum, err := strconv.Atoi(addrPort)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tor.OnionAddr{
+		OnionService: addrHost,
+		Port:         portNum,
+	}, nil
+}
+
 // parseNodeUris parses a list of node URIs in the format <pubkey>@addr:port
 // as it's returned in the `lnrpc.GetInfo` request.
-// TODO(guggero): What is needed to support tor as well?
 func parseNodeUris(uris []string) ([]net.Addr, error) {
 	result := make([]net.Addr, 0, len(uris))
 	for _, uri := range uris {
@@ -349,18 +371,32 @@ func parseNodeUris(uris []string) ([]net.Addr, error) {
 				"<pubkey>@addr:port")
 		}
 
-		// We don't currently support tor addresses.
-		if strings.Contains(parts[1], ".onion") {
-			continue
+		var (
+			addr net.Addr
+			err  error
+		)
+
+		switch {
+		// We'll need to parse onion addresses in a different manner as
+		// the encoding also differ from v2 to v3 addrs.
+		case tor.IsOnionHost(parts[1]):
+			addr, err = parseOnionAddr(parts[1])
+			if err != nil {
+				return nil, err
+			}
+
+		// Otherwise, we assumes this is a normal TCP/IP address.  We
+		// don't care about the pubkey here, only the address part.
+		default:
+			addr, err = net.ResolveTCPAddr("tcp", parts[1])
+			if err != nil {
+				return nil, fmt.Errorf("could not parse "+
+					"node URI: %v", err)
+			}
 		}
 
-		// We don't care about the pubkey here, only the address part.
-		addr, err := net.ResolveTCPAddr("tcp", parts[1])
-		if err != nil {
-			return nil, fmt.Errorf("could not parse node URI: %v",
-				err)
-		}
 		result = append(result, addr)
+
 	}
 	return result, nil
 }
