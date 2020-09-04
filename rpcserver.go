@@ -351,7 +351,10 @@ func (s *rpcServer) handleServerMessage(rpcMsg *clmrpc.ServerAuctionMessage) err
 			msg.Prepare.BatchId, spew.Sdump(msg))
 		batch, err := order.ParseRPCBatch(msg.Prepare)
 		if err != nil {
-			return fmt.Errorf("error parsing RPC batch: %v", err)
+			// If we aren't able to parse the batch for some
+			// reason, then we'll send a reject message.
+			log.Error("unable to parse batch: %v", err)
+			return s.sendRejectBatch(batch, err)
 		}
 
 		rpcLog.Infof("Received PrepareMsg for batch=%x, num_orders=%v",
