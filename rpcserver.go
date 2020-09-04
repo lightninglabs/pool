@@ -29,6 +29,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
+	"github.com/lightningnetwork/lnd/tor"
 )
 
 const (
@@ -403,10 +404,25 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 			return s.sendRejectBatch(batch, err)
 		}
 
+		// As we need to change our behavior if the node has any Tor
+		// addresses, we'll fetch the current state of our advertised
+		// addrs now.
+		nodeInfo, err := s.lndServices.Client.GetInfo(
+			context.Background(),
+		)
+		if err != nil {
+			log.Errorf("error in GetInfo: %v", err)
+			return s.sendRejectBatch(
+				batch, fmt.Errorf("internal error"),
+			)
+		}
+
 		// Before we accept the batch, we'll finish preparations on our
 		// end which include applying any order match predicates,
 		// connecting out to peers, and registering funding shim.
-		err = s.fundingManager.prepChannelFunding(batch)
+		err = s.fundingManager.prepChannelFunding(
+			batch, nodeHasTorAddrs(nodeInfo.Uris),
+		)
 		if err != nil {
 			rpcLog.Warnf("Error preparing channel funding: %v",
 				err)
@@ -1498,4 +1514,16 @@ func rpcOrderStateToDBState(state poolrpc.OrderState) (order.State, error) {
 	}
 
 	return orderState, nil
+}
+
+// nodeHasTorAddrs returns true if there exists a Tor address amongst the set
+// of active Uris for a node.
+func nodeHasTorAddrs(nodeAddrs []string) bool {
+	for _, nodeAddr := range nodeAddrs {
+		if tor.IsOnionHost(nodeAddr) {
+			return true
+		}
+	}
+
+	return false
 }

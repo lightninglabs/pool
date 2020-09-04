@@ -312,7 +312,7 @@ func TestFundingManager(t *testing.T) {
 	pendingChanID := order.PendingChanKey(ask.Nonce(), bid.Nonce())
 
 	// Make sure the channel preparations work as expected.
-	err = h.mgr.prepChannelFunding(batch)
+	err = h.mgr.prepChannelFunding(batch, false)
 	require.NoError(t, err)
 
 	// Verify we have the expected connections and funding shims registered.
@@ -354,7 +354,7 @@ func TestFundingManager(t *testing.T) {
 	h.lnMock.Channels = append(h.lnMock.Channels, lndclient.ChannelInfo{
 		PubKeyBytes: node1Key,
 	})
-	err = h.mgr.prepChannelFunding(batch)
+	err = h.mgr.prepChannelFunding(batch, false)
 	require.Error(t, err)
 
 	expectedErr := &matchRejectErr{
@@ -372,7 +372,7 @@ func TestFundingManager(t *testing.T) {
 	// error if the connections to the remote peers couldn't be established.
 	h.mgr.newNodesOnly = false
 	h.baseClientMock.useManualPeerList = true
-	err = h.mgr.prepChannelFunding(batch)
+	err = h.mgr.prepChannelFunding(batch, false)
 	require.Error(t, err)
 
 	expectedErr = &matchRejectErr{
