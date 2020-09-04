@@ -63,7 +63,7 @@ A non-exhaustive list of use cases includes:
     inbound channels to users themselves. This gives users the inbound
     bandwidth they need to receive, but can come at a high capital cost to the
     wallet provider as they need to commit funds with a 1:1 ratio. The
-    Lightning Pool allows them to acheive some leverage in a sense, as they can
+    Lightning Pool allows them to achieve some leverage in a sense, as they can
     pay only a percentage of the funds to be allocated to a new user. As an
     eaxmple, they can pay 1000 satohis to have 1 million satoshis be alloacted
     to a user.
@@ -302,7 +302,7 @@ The order hasn't been cleared yet (state `ORDER_SUBMITTED`), and it shows up as
 If we instead wanted to _buy_ inbound bandwidth, we could submit a bid instead.
 A trader can have multiple unfilled bids and asks. Partial matching is possible
 as well, so someone could only purchase 10 of the 100 units we have for sale.
-Over time the orders will gain additional constraints such as kill-or-fill, or
+Over time the orders will gain additional constraints such as fill-or-kill, or
 min partial match size.
 
 ### Batched Uniform-Price Clearing
@@ -322,12 +322,12 @@ can't be made (supply and demand didn't cross). In this case, nothing happens,
 and we just wait for the next batch to come across.
 
 To illustrate how the uniform price clearing works consider the following
-example. Let's say I want to buy 100 million satoshis (1 BTC), for at least 10
-days (1440 blocks) at a price of 5% (using high numbers to make it easy to
-follow). However, the _market clearing price_ (where the supply+demand curves
-cross) is actually 1%. In this case I bid _more_ than the market clearing
-price, but end up paying that price, as it's the best price that was possible
-in that market.
+example. Let's say I want to buy 100 million satoshis (1 BTC, 1000 units), for 
+at least 10 days (1440 blocks) at a price of 5% (using high numbers to make it 
+easy to follow). However, the _market clearing price_ (where the supply+demand
+curves cross) is actually 1%. In this case I bid _more_ than the market 
+clearing price, but end up paying that price, as it's the best price that was 
+possible in that market.
 
 A simple rule of thumb for bids and asks is as follows:
 
