@@ -239,6 +239,63 @@ func (b *Batch) CancelPendingFundingShims(lndClient lnrpc.LightningClient,
 	return nil
 }
 
+// AbandonCanceledChannels removes all channels from lnd's channel database that
+// were created for an iteration of the batch that never made it to chain in its
+// current configuration. This should be called whenever a batch is replaced
+// with an updated version because some traders were offline or rejected the
+// batch. If a non-nil error is returned, something with reading the local order
+// or extracting the channel outpoint went wrong and we should fail hard. If the
+// channel cannot be abandoned for some reason, the error is just logged but not
+// returned.
+func (b *Batch) AbandonCanceledChannels(wallet lndclient.WalletKitClient,
+	lndClient lnrpc.LightningClient, fetchOrder Fetcher) error {
+
+	// Since we support partial matches, a given bid of ours could've been
+	// matched with multiple asks, so we'll iterate through all those to
+	// ensure we remove all channels that never made it to chain.
+	ctxb := context.Background()
+	txHash := b.BatchTX.TxHash()
+	for ourOrderNonce, matchedOrders := range b.MatchedOrders {
+		ourOrder, err := fetchOrder(ourOrderNonce)
+		if err != nil {
+			return err
+		}
+
+		// For each ask order that was matched with this bid, we'll
+		// locate the channel outpoint then abandon it from lnd's
+		// channel database.
+		for _, matchedOrder := range matchedOrders {
+			_, idx, err := b.channelOutput(
+				wallet, ourOrder, matchedOrder,
+			)
+			if err != nil {
+				return fmt.Errorf("error locating channel "+
+					"outpoint: %v", err)
+			}
+
+			channelPoint := &lnrpc.ChannelPoint{
+				OutputIndex: idx,
+				FundingTxid: &lnrpc.ChannelPoint_FundingTxidBytes{
+					FundingTxidBytes: txHash[:],
+				},
+			}
+			_, err = lndClient.AbandonChannel(
+				ctxb, &lnrpc.AbandonChannelRequest{
+					ChannelPoint:           channelPoint,
+					PendingFundingShimOnly: true,
+				},
+			)
+			if err != nil {
+				log.Warnf("Unable to abandon channel "+
+					"(channel_point=%v:%d) for order=%v",
+					txHash, idx, ourOrderNonce)
+			}
+		}
+	}
+
+	return nil
+}
+
 // channelOutput returns the transaction output and output index of the channel
 // created for an order of ours that was matched with another one in the batch.
 func (b *Batch) channelOutput(wallet lndclient.WalletKitClient,
