@@ -10,6 +10,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"go.etcd.io/bbolt"
 )
@@ -35,6 +36,12 @@ var (
 		},
 	}
 
+	testBatch = &order.Batch{
+		ID:           testBatchID,
+		ExecutionFee: terms.NewLinearFeeSchedule(10, 100),
+		BatchTX:      testBatchTx,
+	}
+
 	testCases = []struct {
 		name        string
 		expectedErr string
@@ -48,7 +55,7 @@ var (
 				_ *account.Account) error {
 
 				return db.StorePendingBatch(
-					testBatchID, testBatchTx,
+					testBatch,
 					[]order.Nonce{a.Nonce()}, nil, nil, nil,
 				)
 			},
@@ -60,7 +67,7 @@ var (
 				acct *account.Account) error {
 
 				return db.StorePendingBatch(
-					testBatchID, testBatchTx, nil, nil,
+					testBatch, nil, nil,
 					[]*account.Account{acct}, nil,
 				)
 			},
@@ -75,7 +82,7 @@ var (
 					order.StateModifier(order.StateExecuted),
 				}}
 				return db.StorePendingBatch(
-					testBatchID, testBatchTx,
+					testBatch,
 					[]order.Nonce{{0, 1, 2}}, modifiers,
 					nil, nil,
 				)
@@ -95,7 +102,7 @@ var (
 					account.StateModifier(account.StateClosed),
 				}}
 				return db.StorePendingBatch(
-					testBatchID, testBatchTx, nil, nil,
+					testBatch, nil, nil,
 					[]*account.Account{acct}, modifiers,
 				)
 			},
@@ -139,7 +146,7 @@ var (
 					),
 				}}
 				err := db.StorePendingBatch(
-					testBatchID, testBatchTx, orderNonces,
+					testBatch, orderNonces,
 					orderModifiers, accounts, acctModifiers,
 				)
 				if err != nil {
@@ -157,10 +164,10 @@ var (
 						"batch id %x, got %x",
 						testBatchID, dbBatchID)
 				}
-				if dbBatchTx.TxHash() != testBatchTx.TxHash() {
+				if dbBatchTx.TxHash() != testBatch.BatchTX.TxHash() {
 					return fmt.Errorf("expected pending "+
 						"batch tx %v, got %v",
-						testBatchTx.TxHash(),
+						testBatch.BatchTX.TxHash(),
 						dbBatchTx.TxHash())
 				}
 
@@ -211,7 +218,7 @@ var (
 				// that updates all order and accounts.
 				orderModifier := order.UnitsFulfilledModifier(42)
 				err := db.StorePendingBatch(
-					testBatchID, testBatchTx,
+					testBatch,
 					[]order.Nonce{a.Nonce(), b.Nonce()},
 					[][]order.Modifier{
 						{orderModifier}, {orderModifier},
@@ -228,7 +235,7 @@ var (
 				// Then, we'll assume the batch was overwritten,
 				// and now only the ask order is part of it.
 				err = db.StorePendingBatch(
-					testBatchID, testBatchTx,
+					testBatch,
 					[]order.Nonce{a.Nonce()},
 					[][]order.Modifier{{orderModifier}},
 					nil, nil,
@@ -420,7 +427,7 @@ func TestDeletePendingBatch(t *testing.T) {
 
 	// Store a pending batch. We should expect to find valid values for all
 	// sub-keys and sub-buckets.
-	err := db.StorePendingBatch(testBatchID, testBatchTx, nil, nil, nil, nil)
+	err := db.StorePendingBatch(testBatch, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("unable to store pending batch: %v", err)
 	}
