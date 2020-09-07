@@ -9,9 +9,11 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
+	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -235,6 +237,49 @@ func (b *Batch) CancelPendingFundingShims(lndClient lnrpc.LightningClient,
 	}
 
 	return nil
+}
+
+// channelOutput returns the transaction output and output index of the channel
+// created for an order of ours that was matched with another one in the batch.
+func (b *Batch) channelOutput(wallet lndclient.WalletKitClient,
+	ourOrder Order, otherOrder *MatchedOrder) (*wire.TxOut, uint32, error) {
+
+	// Re-derive our multisig key first.
+	ctxt, cancel := context.WithTimeout(
+		context.Background(), deriveKeyTimeout,
+	)
+	defer cancel()
+	ourKey, err := wallet.DeriveKey(
+		ctxt, &ourOrder.Details().MultiSigKeyLocator,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("could not derive our multisig key: "+
+			"%v", err)
+	}
+
+	// Gather the information we expect to find in the batch TX.
+	expectedOutputSize := otherOrder.UnitsFilled.ToSatoshis()
+	_, expectedOut, err := input.GenFundingPkScript(
+		ourKey.PubKey.SerializeCompressed(), otherOrder.MultiSigKey[:],
+		int64(expectedOutputSize),
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("could not create multisig script: "+
+			"%v", err)
+	}
+
+	// Locate the channel output now that we know what to look for.
+	for idx, out := range b.BatchTX.TxOut {
+		if out.Value == expectedOut.Value &&
+			bytes.Equal(out.PkScript, expectedOut.PkScript) {
+
+			// Bingo, this is what we want.
+			return out, uint32(idx), nil
+		}
+	}
+
+	return nil, 0, fmt.Errorf("no channel output found in batch tx for "+
+		"matched order %v", otherOrder.Order.Nonce())
 }
 
 // MatchedOrder is the other side to one of our matched orders. It contains all
