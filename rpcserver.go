@@ -375,24 +375,32 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		// batch needs adjustment. Clear all previous shims.
 		if s.orderManager.HasPendingBatch() {
 			pendingBatch := s.orderManager.PendingBatch()
+			orderFetcher := s.server.db.GetOrder
 			err := pendingBatch.CancelPendingFundingShims(
-				s.lndClient,
-				func(o order.Nonce) (order.Order, error) {
-					return s.server.db.GetOrder(o)
-				},
+				s.lndClient, orderFetcher,
 			)
 			if err != nil {
-				// We can't accept the batch, something went
-				// wrong.
+				// CancelPendingFundingShims only returns hard
+				// errors that justify us rejecting the batch.
 				rpcLog.Errorf("Error clearing previous batch: "+
 					"%v", err)
 				return s.sendRejectBatch(batch, err)
 			}
 
-			// TODO(guggero): Also abandon any channels that might
-			// still be pending from a previous round of the same
-			// batch or a previous batch that we didn't make it into
-			// the final round.
+			// Also abandon any channels that might still be pending
+			// from a previous round of the same batch or a previous
+			// batch that we didn't make it into the final round.
+			err = pendingBatch.AbandonCanceledChannels(
+				s.lndServices.WalletKit, s.lndClient,
+				orderFetcher,
+			)
+			if err != nil {
+				// AbandonCanceledChannels only returns hard
+				// errors that justify us rejecting the batch.
+				rpcLog.Errorf("Error abandoning channels from "+
+					"last batch: %v", err)
+				return s.sendRejectBatch(batch, err)
+			}
 		}
 
 		// Do an in-depth verification of the batch.
