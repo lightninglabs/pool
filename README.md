@@ -405,6 +405,17 @@ _cooperatively closed_ by the maker until the expiry height (what we call the
 `thaw_height`). Additionally, if we detect a force close by the maker of that
 channel, then we'll ban them from the market for a set period of time.
 
+# Prerequisites
+
+To build and run LLM, the following tools/binaries must be installed on your
+system:
+* Go `1.13` or later
+* `make`
+* `lnd` version `v0.11.1-beta` or later with the build tags `signrpc`,
+ `walletrpc`, `chainrpc` and `invoicesrpc` enabled (or the current `master`
+  branch built with `make install tags="signrpc walletrpc chainrpc invoicesrpc"`
+  if version`v0.11.1-beta` is not yet released).
+
 # Installation
 
 The following section assumes at least Go 1.13 is installed.
@@ -423,3 +434,4 @@ following command (assuming you have a local testnet `lnd` running):
 
 The current server is reachable at `clm.testnet.lightningcluster.com:12010`,
 this may change as the alpha version progresses.
+
