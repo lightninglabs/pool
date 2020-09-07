@@ -20,7 +20,18 @@ var (
 	testBatchTx = &wire.MsgTx{
 		Version: 2,
 		TxIn: []*wire.TxIn{
-			wire.NewTxIn(&wire.OutPoint{Index: 1}, nil, nil),
+			{
+				PreviousOutPoint: wire.OutPoint{
+					Index: 1,
+				},
+				SignatureScript: []byte("aaa"),
+			},
+		},
+		TxOut: []*wire.TxOut{
+			{
+				Value:    4444,
+				PkScript: []byte("ddd"),
+			},
 		},
 	}
 
@@ -323,12 +334,12 @@ func TestPersistBatchResult(t *testing.T) {
 				TxOut: []*wire.TxOut{accountOutput},
 			}
 			ask := &order.Ask{
-				Kit:         *dummyOrder(t, 900000),
+				Kit:         *dummyOrder(900000),
 				MaxDuration: 1337,
 			}
 			ask.State = order.StateSubmitted
 			bid := &order.Bid{
-				Kit:         *dummyOrder(t, 900000),
+				Kit:         *dummyOrder(900000),
 				MinDuration: 1337,
 			}
 			bid.State = order.StateSubmitted
