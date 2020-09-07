@@ -30,10 +30,18 @@ var (
 	// minimalCompatibleVersion is the minimum version and build tags
 	// required in lnd to run pool.
 	minimalCompatibleVersion = &verrpc.Version{
-		AppMajor:  0,
-		AppMinor:  11,
-		AppPatch:  0,
-		BuildTags: []string{"signrpc", "walletrpc", "chainrpc"},
+		AppMajor: 0,
+		AppMinor: 11,
+		AppPatch: 1,
+
+		// We don't actually require the invoicesrpc calls. But if we
+		// try to use lndclient on an lnd that doesn't have it enabled,
+		// the library will try to load the invoices.macaroon anyway and
+		// fail. So until that bug is fixed in lndclient, we require the
+		// build tag to be active.
+		BuildTags: []string{
+			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
+		},
 	}
 )
 
