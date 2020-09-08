@@ -163,8 +163,12 @@ func serializeAccount(w io.Writer, a *account.Account) error {
 		return err
 	}
 
-	// The latest transaction is not found within StateInitiated.
-	if a.State != account.StateInitiated {
+	// The latest transaction is not found within StateInitiated and
+	// StateCanceledAfterRecovery.
+	switch a.State {
+	case account.StateInitiated, account.StateCanceledAfterRecovery:
+
+	default:
 		if err := WriteElement(w, a.LatestTx); err != nil {
 			return err
 		}
@@ -183,8 +187,12 @@ func deserializeAccount(r io.Reader) (*account.Account, error) {
 		return nil, err
 	}
 
-	// The latest transaction is not found within StateInitiated.
-	if a.State != account.StateInitiated {
+	// The latest transaction is not found within StateInitiated and
+	// StateCanceledAfterRecovery.
+	switch a.State {
+	case account.StateInitiated, account.StateCanceledAfterRecovery:
+
+	default:
 		if err := ReadElement(r, &a.LatestTx); err != nil {
 			return nil, err
 		}
