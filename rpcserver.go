@@ -24,9 +24,11 @@ import (
 	"github.com/lightninglabs/llm/order"
 	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightningnetwork/lnd"
 	"github.com/lightningnetwork/lnd/chanbackup"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
+	"github.com/lightningnetwork/lnd/lnwire"
 )
 
 const (
@@ -64,6 +66,10 @@ type rpcServer struct {
 	pendingOpenChannelStreamCancel func()
 	recoveryMutex                  sync.Mutex
 	recoveryPending                bool
+
+	// wumboSupported is true if the backing lnd node supports wumbo
+	// channels.
+	wumboSupported bool
 }
 
 // accountStore is a clientdb.DB wrapper to implement the account.Store
@@ -135,13 +141,18 @@ func (s *rpcServer) Start() error {
 
 	lndCtx, lndCancel := context.WithTimeout(ctx, getInfoTimeout)
 	defer lndCancel()
-	info, err := s.lndServices.Client.GetInfo(lndCtx)
+	info, err := s.lndClient.GetInfo(lndCtx, &lnrpc.GetInfoRequest{})
 	if err != nil {
 		return fmt.Errorf("error in GetInfo: %v", err)
 	}
 
+	_, s.wumboSupported = info.Features[uint32(lnwire.WumboChannelsRequired)]
+	if !s.wumboSupported {
+		_, s.wumboSupported = info.Features[uint32(lnwire.WumboChannelsOptional)]
+	}
+
 	rpcLog.Infof("Connected to lnd node %v with pubkey %v", info.Alias,
-		hex.EncodeToString(info.IdentityPubkey[:]))
+		info.IdentityPubkey)
 
 	var blockCtx context.Context
 	blockCtx, s.blockNtfnCancel = context.WithCancel(ctx)
@@ -1036,6 +1047,14 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 
 	default:
 		return nil, fmt.Errorf("invalid order request")
+	}
+
+	// Now that we now how large the order is, ensure that if it's a
+	// wumbo-sized order, then the backing lnd node is advertising wumbo
+	// support.
+	if o.Details().Amt > lnd.MaxBtcFundingAmount && !s.wumboSupported {
+		return nil, fmt.Errorf("order of %v is wumbo sized, but "+
+			"lnd node isn't signalling wumbo", o.Details().Amt)
 	}
 
 	// Verify that the account exists.
