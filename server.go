@@ -26,6 +26,7 @@ import (
 	"github.com/lightningnetwork/lnd/signal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"gopkg.in/macaroon-bakery.v2/bakery"
 )
 
 var (
@@ -343,6 +344,21 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 	shutdownFuncs = nil
 
 	return nil
+}
+
+// ValidateMacaroon extracts the macaroon from the context's gRPC metadata,
+// checks its signature, makes sure all specified permissions for the called
+// method are contained within and finally ensures all caveat conditions are
+// met. A non-nil error is returned if any of the checks fail. This method is
+// needed to enable poold running as an external subserver in the same process
+// as lnd but still validate its own macaroons.
+func (s *Server) ValidateMacaroon(ctx context.Context,
+	requiredPermissions []bakery.Op, fullMethod string) error {
+
+	// Delegate the call to pool's own macaroon validator service.
+	return s.macaroonService.ValidateMacaroon(
+		ctx, requiredPermissions, fullMethod,
+	)
 }
 
 // setupClient initializes the auctioneer client and its interceptors.
