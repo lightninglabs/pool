@@ -435,3 +435,14 @@ following command (assuming you have a local testnet `lnd` running):
 The current server is reachable at `clm.testnet.lightningcluster.com:12010`,
 this may change as the alpha version progresses.
 
+## Transport security
+
+The gRPC and REST connections of `poold` are encrypted with TLS the same way
+`lnd` is.
+
+If no custom base directory is set then the TLS certificate is stored in
+`~/.pool/<network>/tls.cert`.
+
+The `pool` command will pick up the file automatically on mainnet if no custom
+base directory is used. For other networks it should be sufficient to add the
+`--network` flag to tell the CLI in what sub directory to look for the files.
