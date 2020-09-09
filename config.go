@@ -1,11 +1,14 @@
 package pool
 
 import (
+	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/btcsuite/btcutil"
+	"github.com/lightningnetwork/lnd/lncfg"
 	"google.golang.org/grpc"
 )
 
@@ -15,6 +18,9 @@ var (
 	// ~/.pool. Below this directory the logs and network directory will be
 	// created.
 	DefaultBaseDir = btcutil.AppDataDir("pool", false)
+
+	// DefaultNetwork is the default bitcoin network pool runs on.
+	DefaultNetwork = "mainnet"
 
 	// DefaultLogFilename is the default name that is given to the pool log
 	// file.
@@ -45,7 +51,7 @@ type Config struct {
 	TLSPathAuctSrv string `long:"tlspathauctserver" description:"Path to auction server tls certificate"`
 	RPCListen      string `long:"rpclisten" description:"Address to listen on for gRPC clients"`
 	RESTListen     string `long:"restlisten" description:"Address to listen on for REST clients"`
-	BaseDir        string `long:"basedir" description:"The base directory where pool stores all its data"`
+	BaseDir        string `long:"basedir" description:"The base directory where pool stores all its data. If set, this option overwrites --logdir."`
 
 	LogDir         string `long:"logdir" description:"Directory to log output."`
 	MaxLogFiles    int    `long:"maxlogfiles" description:"Maximum logfiles to keep (0 for no rotation)"`
@@ -87,7 +93,7 @@ const (
 // DefaultConfig returns the default value for the Config struct.
 func DefaultConfig() Config {
 	return Config{
-		Network:        "mainnet",
+		Network:        DefaultNetwork,
 		RPCListen:      "localhost:12010",
 		RESTListen:     "localhost:8281",
 		Insecure:       false,
@@ -102,4 +108,45 @@ func DefaultConfig() Config {
 			Host: "localhost:10009",
 		},
 	}
+}
+
+// Validate cleans up paths in the config provided and validates it.
+func Validate(cfg *Config) error {
+	// Cleanup any paths before we use them.
+	cfg.BaseDir = lncfg.CleanAndExpandPath(cfg.BaseDir)
+	cfg.LogDir = lncfg.CleanAndExpandPath(cfg.LogDir)
+
+	// Since our pool directory overrides our log dir value, make sure that
+	// they are not set when base dir is set. We hard here rather than
+	// overwriting and potentially confusing the user.
+	baseDirSet := cfg.BaseDir != DefaultBaseDir
+
+	if baseDirSet {
+		logDirSet := cfg.LogDir != defaultLogDir
+
+		if logDirSet {
+			return fmt.Errorf("basedir overwrites logdir, please " +
+				"only set one value")
+		}
+
+		// Once we are satisfied that no other config value was set, we
+		// replace them with our pool dir.
+		cfg.LogDir = filepath.Join(cfg.BaseDir, defaultLogDirname)
+	}
+
+	// Append the network type to the log and base directory so it is
+	// "namespaced" per network in the same fashion as the data directory.
+	cfg.LogDir = filepath.Join(cfg.LogDir, cfg.Network)
+	cfg.BaseDir = filepath.Join(cfg.BaseDir, cfg.Network)
+
+	// If either of these directories do not exist, create them.
+	if err := os.MkdirAll(cfg.BaseDir, os.ModePerm); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(cfg.LogDir, os.ModePerm); err != nil {
+		return err
+	}
+
+	return nil
 }

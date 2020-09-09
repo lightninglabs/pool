@@ -10,10 +10,6 @@ import (
 
 // Run starts the trader daemon and blocks until it's shut down again.
 func Run(cfg *Config) error {
-	// Append the network type to the log directory so it is
-	// "namespaced" per network in the same fashion as the data directory.
-	cfg.LogDir = filepath.Join(cfg.LogDir, cfg.Network)
-
 	// Initialize logging at the default logging level.
 	err := logWriter.InitLogRotator(
 		filepath.Join(cfg.LogDir, DefaultLogFilename),

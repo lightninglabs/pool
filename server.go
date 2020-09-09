@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 
@@ -255,14 +254,13 @@ func (s *Server) setupClient() error {
 
 	// Open the main database.
 	var err error
-	networkDir := filepath.Join(s.cfg.BaseDir, s.cfg.Network)
-	s.db, err = clientdb.New(networkDir)
+	s.db, err = clientdb.New(s.cfg.BaseDir)
 	if err != nil {
 		return err
 	}
 
 	// Setup the LSAT interceptor for the client.
-	s.lsatStore, err = lsat.NewFileStore(networkDir)
+	s.lsatStore, err = lsat.NewFileStore(s.cfg.BaseDir)
 	if err != nil {
 		return err
 	}
