@@ -13,7 +13,7 @@
   "paths": {
     "/v1/lsat/tokens": {
       "get": {
-        "summary": "* pool: `listauth`\nGetLsatTokens returns all LSAT tokens the daemon ever paid for.",
+        "summary": "pool: `listauth`\nGetLsatTokens returns all LSAT tokens the daemon ever paid for.",
         "operationId": "GetLsatTokens",
         "responses": {
           "200": {
@@ -358,6 +358,55 @@
             }
           }
         },
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/v1/pool/leases": {
+      "get": {
+        "summary": "pool: `auction leases`\nLeases returns the list of channels that were either purchased or sold by\nthe trader within the auction.",
+        "operationId": "Leases",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcLeasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "batch_ids",
+            "description": "An optional list of batches to retrieve the leases of. If empty, leases\nthroughout all batches are returned.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "byte"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "accounts",
+            "description": "An optional list of accounts to retrieve the leases of. If empty, leases\nfor all accounts are returned.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "byte"
+            },
+            "collectionFormat": "multi"
+          }
+        ],
         "tags": [
           "Trader"
         ]
@@ -784,6 +833,72 @@
         },
         "fail_string": {
           "type": "string"
+        }
+      }
+    },
+    "poolrpcLease": {
+      "type": "object",
+      "properties": {
+        "channel_point": {
+          "$ref": "#/definitions/poolrpcOutPoint",
+          "description": "The outpoint of the channel created."
+        },
+        "channel_amt_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The amount, in satoshis, of the channel created."
+        },
+        "channel_duration_blocks": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The intended duration, in blocks, of the channel created."
+        },
+        "premium_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The premium, in satoshis, either paid or received for the offered liquidity."
+        },
+        "execution_fee_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The execution fee, in satoshis, charged by the auctioneer for the channel\ncreated."
+        },
+        "chain_fee_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The fee, in satoshis, charged by the auctioneer for the batch execution\ntransaction that created this lease."
+        },
+        "order_nonce": {
+          "type": "string",
+          "format": "byte",
+          "description": "The order executed that resulted in the channel created."
+        },
+        "purchased": {
+          "type": "boolean",
+          "format": "boolean",
+          "description": "Whether this channel was purchased from another trader or not."
+        }
+      }
+    },
+    "poolrpcLeasesResponse": {
+      "type": "object",
+      "properties": {
+        "leases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/poolrpcLease"
+          },
+          "description": "The relevant list of leases purchased or sold within the auction."
+        },
+        "total_amt_earned_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The total amount of satoshis earned from the leases returned."
+        },
+        "total_amt_paid_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The total amount of satoshis paid for the leases returned."
         }
       }
     },

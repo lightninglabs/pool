@@ -23,9 +23,11 @@ import (
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd"
 	"github.com/lightningnetwork/lnd/chanbackup"
+	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
@@ -1473,6 +1475,195 @@ func (s *rpcServer) AuctionFee(ctx context.Context,
 			BaseFee: uint64(terms.OrderExecBaseFee),
 			FeeRate: uint64(terms.OrderExecFeeRate),
 		},
+	}, nil
+}
+
+// Leases returns the list of channels that were either purchased or sold by the
+// trader within the auction.
+func (s *rpcServer) Leases(ctx context.Context,
+	req *poolrpc.LeasesRequest) (*poolrpc.LeasesResponse, error) {
+
+	// We'll start by parsing the list of accounts we should retrieve lease
+	// for. If none are specified, leases for all accounts will be returned.
+	accounts := make(map[[33]byte]struct{}, len(req.Accounts))
+	for _, rawAccountKey := range req.Accounts {
+		_, err := btcec.ParsePubKey(rawAccountKey, btcec.S256())
+		if err != nil {
+			return nil, fmt.Errorf("invalid account key: %v", err)
+		}
+
+		var accountKey [33]byte
+		copy(accountKey[:], rawAccountKey)
+		accounts[accountKey] = struct{}{}
+	}
+
+	// We'll then retrieve the list of specified batches. If none are
+	// specified, we'll retrieve all of them.
+	var batches []*clientdb.LocalBatchSnapshot
+	if len(req.BatchIds) == 0 {
+		var err error
+		batches, err = s.server.db.GetLocalBatchSnapshots()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		for _, rawBatchID := range req.BatchIds {
+			batchKey, err := btcec.ParsePubKey(
+				rawBatchID, btcec.S256(),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("invalid batch id: %v",
+					err)
+			}
+
+			batchID := order.NewBatchID(batchKey)
+			batch, err := s.server.db.GetLocalBatchSnapshot(batchID)
+			if err != nil {
+				return nil, err
+			}
+			batches = append(batches, batch)
+		}
+	}
+
+	return s.prepareLeasesResponse(ctx, accounts, batches)
+}
+
+// prepareLeasesResponse prepares a poolrpc.LeasesResponse for the given
+// accounts in the given batches.
+func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
+	accounts map[[33]byte]struct{}, batches []*clientdb.LocalBatchSnapshot) (
+	*poolrpc.LeasesResponse, error) {
+
+	// Now we're ready to prepare our response.
+	var (
+		rpcLeases      []*poolrpc.Lease
+		totalAmtEarned btcutil.Amount
+		totalAmtPaid   btcutil.Amount
+	)
+	for _, batch := range batches {
+		// Keep a tally of how many channels were created within each
+		// batch in order to estimate the chain fees paid.
+		numChans := 0
+
+		// Keep track of the index for the first lease found for this
+		// batch. We'll use this to know where to start from when
+		// populating the ChainFeeSat field for each lease.
+		firstIdxForBatch := len(rpcLeases)
+
+		for nonce, matches := range batch.MatchedOrders {
+			nonce := nonce
+			for _, match := range matches {
+				// Obtain our order that was matched.
+				ourOrder, ok := batch.Orders[nonce]
+				if !ok {
+					return nil, fmt.Errorf("order %v not "+
+						"found in batch snapshot", nonce)
+				}
+
+				// Filter out the account if required.
+				_, ok = accounts[ourOrder.Details().AcctKey]
+				if len(accounts) != 0 && !ok {
+					continue
+				}
+
+				// Derive the channel output script, which we'll
+				// use to locate the channel outpoint within the
+				// batch transaction.
+				ourMultiSigKey, err := s.server.lndServices.WalletKit.DeriveKey(
+					ctx, &ourOrder.Details().MultiSigKeyLocator,
+				)
+				if err != nil {
+					return nil, err
+				}
+				chanAmt := match.UnitsFilled.ToSatoshis()
+				_, chanOutput, err := input.GenFundingPkScript(
+					ourMultiSigKey.PubKey.SerializeCompressed(),
+					match.MultiSigKey[:], int64(chanAmt),
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				batchTxHash := batch.BatchTX.TxHash()
+				chanOutputIdx, ok := poolscript.LocateOutputScript(
+					batch.BatchTX, chanOutput.PkScript,
+				)
+				if !ok {
+					return nil, fmt.Errorf("channel with "+
+						"script %x not found in batch "+
+						"transaction %v",
+						chanOutput.PkScript, batchTxHash)
+				}
+
+				// The duration of the channel is always that
+				// specified by the bid order.
+				var bidDuration uint32
+				if ourOrder.Type() == order.TypeBid {
+					bidDuration = ourOrder.(*order.Bid).MinDuration
+				} else {
+					bidDuration = match.Order.(*order.Bid).MinDuration
+				}
+
+				// Calculate the premium paid/received to/from
+				// the maker/taker and the execution fee paid
+				// to the auctioneer and tally them.
+				premium := batch.ClearingPrice.LumpSumPremium(
+					chanAmt, bidDuration,
+				)
+				exeFee := batch.ExecutionFee.BaseFee() +
+					batch.ExecutionFee.ExecutionFee(chanAmt)
+
+				if ourOrder.Type() == order.TypeBid {
+					totalAmtPaid += premium
+				} else {
+					totalAmtEarned += premium
+				}
+				totalAmtPaid += exeFee
+
+				purchased := ourOrder.Type() == order.TypeBid
+				rpcLeases = append(rpcLeases, &poolrpc.Lease{
+					ChannelPoint: &poolrpc.OutPoint{
+						Txid:        batchTxHash[:],
+						OutputIndex: chanOutputIdx,
+					},
+					ChannelAmtSat:         uint64(chanAmt),
+					ChannelDurationBlocks: bidDuration,
+					PremiumSat:            uint64(premium),
+					ExecutionFeeSat:       uint64(exeFee),
+					OrderNonce:            nonce[:],
+					Purchased:             purchased,
+				})
+
+				numChans++
+			}
+
+			// Estimate the chain fees paid for the number of
+			// channels created in this batch and tally them.
+			chainFee := order.EstimateTraderFee(
+				uint32(numChans), batch.BatchTxFeeRate,
+			)
+
+			// We'll need to compute the chain fee paid for each
+			// lease. Since multiple leases can be created within a
+			// batch, we'll need to evenly distribute. We'll always
+			// apply the remainder to the first lease in the batch.
+			chainFeePerChan := chainFee / btcutil.Amount(numChans)
+			chainFeePerChanRem := chainFee % btcutil.Amount(numChans)
+			for i := firstIdxForBatch; i < len(rpcLeases); i++ {
+				chainFee := chainFeePerChan
+				if i == firstIdxForBatch {
+					chainFee += chainFeePerChanRem
+				}
+				rpcLeases[i].ChainFeeSat = uint64(chainFee)
+			}
+			totalAmtPaid += chainFee
+		}
+	}
+
+	return &poolrpc.LeasesResponse{
+		Leases:            rpcLeases,
+		TotalAmtEarnedSat: uint64(totalAmtEarned),
+		TotalAmtPaidSat:   uint64(totalAmtPaid),
 	}, nil
 }
 
