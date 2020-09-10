@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/urfave/cli"
 )
 
@@ -41,7 +41,7 @@ func auctionFee(ctx *cli.Context) error {
 	defer cleanup()
 
 	auctionFee, err := client.AuctionFee(
-		context.Background(), &clmrpc.AuctionFeeRequest{},
+		context.Background(), &poolrpc.AuctionFeeRequest{},
 	)
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func batchSnapshot(ctx *cli.Context) error {
 	ctxb := context.Background()
 	batchSnapshot, err := client.BatchSnapshot(
 		ctxb,
-		&clmrpc.BatchSnapshotRequest{
+		&poolrpc.BatchSnapshotRequest{
 			BatchId: batchID,
 		},
 	)

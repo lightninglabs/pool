@@ -11,8 +11,8 @@ import (
 	"strconv"
 
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm"
-	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/pool"
+	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/protobuf-hex-display/jsonpb"
 	"github.com/lightninglabs/protobuf-hex-display/proto"
 	"github.com/lightningnetwork/lnd/macaroons"
@@ -33,12 +33,12 @@ var (
 
 	tlsCertFlag = cli.StringFlag{
 		Name: "tlscertpath",
-		Usage: "path to llm's TLS certificate, only needed if llm " +
+		Usage: "path to pool's TLS certificate, only needed if pool " +
 			"runs in the same process as lnd",
 	}
 	macaroonPathFlag = cli.StringFlag{
 		Name: "macaroonpath",
-		Usage: "path to macaroon file, only needed if llm runs " +
+		Usage: "path to macaroon file, only needed if pool runs " +
 			"in the same process as lnd",
 	}
 )
@@ -85,7 +85,7 @@ func fatal(err error) {
 	if errors.As(err, &e) {
 		_ = cli.ShowCommandHelp(e.ctx, e.command)
 	} else {
-		_, _ = fmt.Fprintf(os.Stderr, "[llm] %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "[pool] %v\n", err)
 	}
 	os.Exit(1)
 }
@@ -93,14 +93,14 @@ func fatal(err error) {
 func main() {
 	app := cli.NewApp()
 
-	app.Version = llm.Version()
-	app.Name = "llm"
-	app.Usage = "control plane for your llmd"
+	app.Version = pool.Version()
+	app.Name = "pool"
+	app.Usage = "control plane for your poold"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "rpcserver",
 			Value: "localhost:12010",
-			Usage: "llmd daemon address host:port",
+			Usage: "poold daemon address host:port",
 		},
 		tlsCertFlag,
 		macaroonPathFlag,
@@ -116,7 +116,7 @@ func main() {
 	}
 }
 
-func getClient(ctx *cli.Context) (clmrpc.TraderClient, func(),
+func getClient(ctx *cli.Context) (poolrpc.TraderClient, func(),
 	error) {
 
 	rpcServer := ctx.GlobalString("rpcserver")
@@ -128,7 +128,7 @@ func getClient(ctx *cli.Context) (clmrpc.TraderClient, func(),
 	}
 	cleanup := func() { _ = conn.Close() }
 
-	traderClient := clmrpc.NewTraderClient(conn)
+	traderClient := poolrpc.NewTraderClient(conn)
 	return traderClient, cleanup, nil
 }
 

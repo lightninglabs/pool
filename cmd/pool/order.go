@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/order"
-	"github.com/lightninglabs/llm/terms"
+	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli"
 )
@@ -85,12 +85,12 @@ func promptForConfirmation(msg string) bool {
 // line positional arguments and/or flags and parses them based on their
 // destination data type. No formal in-depth validation is performed as the
 // server will do that on the RPC level anyway.
-func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*clmrpc.Order, error) {
+func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, error) {
 	var (
 		err    error
 		amt    btcutil.Amount
 		args   = ctx.Args()
-		params = &clmrpc.Order{}
+		params = &poolrpc.Order{}
 	)
 
 	switch {
@@ -207,7 +207,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 		return nil
 	}
 
-	ask := &clmrpc.Ask{
+	ask := &poolrpc.Ask{
 		MaxDurationBlocks: uint32(ctx.Uint64("max_duration_blocks")),
 		Version:           uint32(order.VersionDefault),
 	}
@@ -247,8 +247,8 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 	}
 
 	resp, err := client.SubmitOrder(
-		context.Background(), &clmrpc.SubmitOrderRequest{
-			Details: &clmrpc.SubmitOrderRequest_Ask{
+		context.Background(), &poolrpc.SubmitOrderRequest{
+			Details: &poolrpc.SubmitOrderRequest_Ask{
 				Ask: ask,
 			},
 		},
@@ -261,12 +261,12 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 	return nil
 }
 
-func printOrderDetails(client clmrpc.TraderClient, amt btcutil.Amount,
+func printOrderDetails(client poolrpc.TraderClient, amt btcutil.Amount,
 	rate order.FixedRatePremium, leaseDuration uint32,
 	maxBatchFeeRate chainfee.SatPerKWeight, isAsk bool) error {
 
 	auctionFee, err := client.AuctionFee(
-		context.Background(), &clmrpc.AuctionFeeRequest{},
+		context.Background(), &poolrpc.AuctionFeeRequest{},
 	)
 	if err != nil {
 		return err
@@ -349,7 +349,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 		return nil
 	}
 
-	bid := &clmrpc.Bid{
+	bid := &poolrpc.Bid{
 		MinDurationBlocks: uint32(ctx.Uint64("min_duration_blocks")),
 		Version:           uint32(order.VersionDefault),
 	}
@@ -389,8 +389,8 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 	}
 
 	resp, err := client.SubmitOrder(
-		context.Background(), &clmrpc.SubmitOrderRequest{
-			Details: &clmrpc.SubmitOrderRequest_Bid{
+		context.Background(), &poolrpc.SubmitOrderRequest{
+			Details: &poolrpc.SubmitOrderRequest_Bid{
 				Bid: bid,
 			},
 		},
@@ -421,7 +421,7 @@ func ordersList(ctx *cli.Context) error {
 	defer cleanup()
 
 	resp, err := client.ListOrders(
-		context.Background(), &clmrpc.ListOrdersRequest{},
+		context.Background(), &poolrpc.ListOrdersRequest{},
 	)
 	if err != nil {
 		return err
@@ -479,7 +479,7 @@ func ordersCancel(ctx *cli.Context) error { // nolint: dupl
 	defer cleanup()
 
 	resp, err := client.CancelOrder(
-		context.Background(), &clmrpc.CancelOrderRequest{
+		context.Background(), &poolrpc.CancelOrderRequest{
 			OrderNonce: nonce,
 		},
 	)

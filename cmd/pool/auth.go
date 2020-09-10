@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/lightninglabs/aperture/lsat"
-	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/urfave/cli"
 	"gopkg.in/macaroon.v2"
 )
@@ -29,7 +29,7 @@ type printableToken struct {
 var listAuthCommand = cli.Command{
 	Name:        "listauth",
 	Usage:       "list all LSAT tokens",
-	Description: "Shows a list of all LSAT tokens that llmd has paid for",
+	Description: "Shows a list of all LSAT tokens that poold has paid for",
 	Action:      listAuth,
 }
 
@@ -41,7 +41,7 @@ func listAuth(ctx *cli.Context) error {
 	defer cleanup()
 
 	resp, err := client.GetLsatTokens(
-		context.Background(), &clmrpc.TokensRequest{},
+		context.Background(), &poolrpc.TokensRequest{},
 	)
 	if err != nil {
 		return err
