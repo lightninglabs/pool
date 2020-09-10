@@ -3,9 +3,9 @@ syntax = "proto3";
 import "google/api/annotations.proto";
 import "auctioneer.proto";
 
-package clmrpc;
+package poolrpc;
 
-option go_package = "github.com/lightninglabs/llm/clmrpc";
+option go_package = "github.com/lightninglabs/pool/poolrpc";
 
 service Trader {
     /*
@@ -15,65 +15,65 @@ service Trader {
     */
     rpc QuoteAccount (QuoteAccountRequest) returns (QuoteAccountResponse) {
         option (google.api.http) = {
-            post: "/v1/clm/accounts/quote"
+            post: "/v1/pool/accounts/quote"
             body: "*"
         };
     };
 
-    /* llm: `accounts new`
+    /* pool: `accounts new`
     InitAccount creates a new account with the requested size and expiration,
     funding it from the wallet of the connected lnd node.
     */
     rpc InitAccount (InitAccountRequest) returns (Account) {
         option (google.api.http) = {
-            post: "/v1/clm/accounts"
+            post: "/v1/pool/accounts"
             body: "*"
         };
     };
 
-    /* llm: `accounts list`
+    /* pool: `accounts list`
     ListAccounts returns a list of all accounts known to the trader daemon and
     their current state.
     */
     rpc ListAccounts (ListAccountsRequest) returns (ListAccountsResponse) {
         option (google.api.http) = {
-            get: "/v1/clm/accounts"
+            get: "/v1/pool/accounts"
         };
     };
 
-    /* llm: `accounts close`
+    /* pool: `accounts close`
     CloseAccount closes an account and returns the funds locked in that account
     to the connected lnd node's wallet.
     */
     rpc CloseAccount (CloseAccountRequest) returns (CloseAccountResponse) {
         option (google.api.http) = {
-            delete: "/v1/clm/accounts"
+            delete: "/v1/pool/accounts"
         };
     };
 
-    /* llm: `accounts withdraw`
+    /* pool: `accounts withdraw`
     WithdrawAccount splits off parts of the account balance into the specified
     outputs while recreating the account with a reduced balance.
     */
     rpc WithdrawAccount (WithdrawAccountRequest) returns (WithdrawAccountResponse) {
         option (google.api.http) = {
-            post: "/v1/clm/accounts/withdraw"
+            post: "/v1/pool/accounts/withdraw"
             body: "*"
         };
     };
 
-    /* llm: `accounts deposit`
+    /* pool: `accounts deposit`
     DepositAccount adds more funds from the connected lnd node's wallet to an
     account.
     */
     rpc DepositAccount (DepositAccountRequest) returns (DepositAccountResponse) {
         option (google.api.http) = {
-            post: "/v1/clm/accounts/deposit"
+            post: "/v1/pool/accounts/deposit"
             body: "*"
         };
     };
 
-    /* llm: `accounts bumpfee`
+    /* pool: `accounts bumpfee`
     BumpAccountFee attempts to bump the fee of an account's transaction through
     child-pays-for-parent (CPFP). Since the CPFP is performed through the
     backing lnd node, the account transaction must contain an output under its
@@ -83,73 +83,73 @@ service Trader {
     */
     rpc BumpAccountFee (BumpAccountFeeRequest) returns (BumpAccountFeeResponse) {
         option (google.api.http) = {
-            post: "/v1/clm/accounts/bump"
+            post: "/v1/pool/accounts/bump"
             body: "*"
         };
     };
 
-    /* llm: `accounts recover`
+    /* pool: `accounts recover`
     RecoverAccounts queries the auction server for this trader daemon's accounts
     in case we lost our local account database.
     */
     rpc RecoverAccounts (RecoverAccountsRequest) returns (RecoverAccountsResponse) {
         option (google.api.http) = {
-            post: "/v1/clm/accounts/recover"
+            post: "/v1/pool/accounts/recover"
             body: "*"
         };
     };
 
-    /* llm: `orders submit`
+    /* pool: `orders submit`
     SubmitOrder creates a new ask or bid order and submits for the given account
     and submits it to the auction server for matching.
     */
     rpc SubmitOrder (SubmitOrderRequest) returns (SubmitOrderResponse) {
         option (google.api.http) = {
-            post: "/v1/clm/orders"
+            post: "/v1/pool/orders"
             body: "*"
         };
     };
 
-    /* llm: `orders list`
+    /* pool: `orders list`
     ListOrders returns a list of all active and archived orders that are
     currently known to the trader daemon.
     */
     rpc ListOrders (ListOrdersRequest) returns (ListOrdersResponse) {
         option (google.api.http) = {
-            get: "/v1/clm/orders"
+            get: "/v1/pool/orders"
         };
     }
 
-    /* llm: `orders cancel`
+    /* pool: `orders cancel`
     CancelOrder cancels an active order with the auction server to remove it
     from future matching.
     */
     rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse) {
         option (google.api.http) = {
-            delete: "/v1/clm/orders/{order_nonce}"
+            delete: "/v1/pool/orders/{order_nonce}"
         };
     };
 
-    /* llm: `auction fee`
+    /* pool: `auction fee`
     AuctionFee returns the current auction order execution fee specified by the
     auction server.
     */
     rpc AuctionFee (AuctionFeeRequest) returns (AuctionFeeResponse) {
         option (google.api.http) = {
-            get: "/v1/clm/fee"
+            get: "/v1/pool/fee"
         };
     };
 
-    /* llm: `auction snapshot`
+    /* pool: `auction snapshot`
     BatchSnapshot returns the snapshot of a past batch identified by its ID.
     */
     rpc BatchSnapshot (BatchSnapshotRequest) returns (BatchSnapshotResponse) {
         option (google.api.http) = {
-            get: "/v1/clm/batch/snapshot"
+            get: "/v1/pool/batch/snapshot"
         };
     };
 
-    /** llm: `listauth`
+    /** pool: `listauth`
     GetLsatTokens returns all LSAT tokens the daemon ever paid for.
     */
     rpc GetLsatTokens (TokensRequest) returns (TokensResponse) {

@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package clmrpc;
+package poolrpc;
 
-option go_package = "github.com/lightninglabs/llm/clmrpc";
+option go_package = "github.com/lightninglabs/pool/poolrpc";
 
 service ChannelAuctioneer {
     rpc ReserveAccount (ReserveAccountRequest) returns (ReserveAccountResponse);

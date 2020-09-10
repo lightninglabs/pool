@@ -11,15 +11,38 @@
     "application/json"
   ],
   "paths": {
-    "/v1/clm/accounts": {
+    "/v1/lsat/tokens": {
       "get": {
-        "summary": "llm: `accounts list`\nListAccounts returns a list of all accounts known to the trader daemon and\ntheir current state.",
+        "summary": "* pool: `listauth`\nGetLsatTokens returns all LSAT tokens the daemon ever paid for.",
+        "operationId": "GetLsatTokens",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcTokensResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/v1/pool/accounts": {
+      "get": {
+        "summary": "pool: `accounts list`\nListAccounts returns a list of all accounts known to the trader daemon and\ntheir current state.",
         "operationId": "ListAccounts",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcListAccountsResponse"
+              "$ref": "#/definitions/poolrpcListAccountsResponse"
             }
           },
           "default": {
@@ -34,13 +57,13 @@
         ]
       },
       "delete": {
-        "summary": "llm: `accounts close`\nCloseAccount closes an account and returns the funds locked in that account\nto the connected lnd node's wallet.",
+        "summary": "pool: `accounts close`\nCloseAccount closes an account and returns the funds locked in that account\nto the connected lnd node's wallet.",
         "operationId": "CloseAccount",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcCloseAccountResponse"
+              "$ref": "#/definitions/poolrpcCloseAccountResponse"
             }
           },
           "default": {
@@ -88,13 +111,13 @@
         ]
       },
       "post": {
-        "summary": "llm: `accounts new`\nInitAccount creates a new account with the requested size and expiration,\nfunding it from the wallet of the connected lnd node.",
+        "summary": "pool: `accounts new`\nInitAccount creates a new account with the requested size and expiration,\nfunding it from the wallet of the connected lnd node.",
         "operationId": "InitAccount",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcAccount"
+              "$ref": "#/definitions/poolrpcAccount"
             }
           },
           "default": {
@@ -110,7 +133,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/clmrpcInitAccountRequest"
+              "$ref": "#/definitions/poolrpcInitAccountRequest"
             }
           }
         ],
@@ -119,15 +142,15 @@
         ]
       }
     },
-    "/v1/clm/accounts/bump": {
+    "/v1/pool/accounts/bump": {
       "post": {
-        "summary": "llm: `accounts bumpfee`\nBumpAccountFee attempts to bump the fee of an account's transaction through\nchild-pays-for-parent (CPFP). Since the CPFP is performed through the\nbacking lnd node, the account transaction must contain an output under its\ncontrol for a successful bump. If a CPFP has already been performed for an\naccount, and this RPC is invoked again, then a replacing transaction (RBF)\nof the child will be broadcast.",
+        "summary": "pool: `accounts bumpfee`\nBumpAccountFee attempts to bump the fee of an account's transaction through\nchild-pays-for-parent (CPFP). Since the CPFP is performed through the\nbacking lnd node, the account transaction must contain an output under its\ncontrol for a successful bump. If a CPFP has already been performed for an\naccount, and this RPC is invoked again, then a replacing transaction (RBF)\nof the child will be broadcast.",
         "operationId": "BumpAccountFee",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcBumpAccountFeeResponse"
+              "$ref": "#/definitions/poolrpcBumpAccountFeeResponse"
             }
           },
           "default": {
@@ -143,7 +166,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/clmrpcBumpAccountFeeRequest"
+              "$ref": "#/definitions/poolrpcBumpAccountFeeRequest"
             }
           }
         ],
@@ -152,15 +175,15 @@
         ]
       }
     },
-    "/v1/clm/accounts/deposit": {
+    "/v1/pool/accounts/deposit": {
       "post": {
-        "summary": "llm: `accounts deposit`\nDepositAccount adds more funds from the connected lnd node's wallet to an\naccount.",
+        "summary": "pool: `accounts deposit`\nDepositAccount adds more funds from the connected lnd node's wallet to an\naccount.",
         "operationId": "DepositAccount",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcDepositAccountResponse"
+              "$ref": "#/definitions/poolrpcDepositAccountResponse"
             }
           },
           "default": {
@@ -176,7 +199,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/clmrpcDepositAccountRequest"
+              "$ref": "#/definitions/poolrpcDepositAccountRequest"
             }
           }
         ],
@@ -185,7 +208,7 @@
         ]
       }
     },
-    "/v1/clm/accounts/quote": {
+    "/v1/pool/accounts/quote": {
       "post": {
         "summary": "QuoteAccount gets a fee quote to fund an account of the given size with the\ngiven confirmation target. If the connected lnd wallet doesn't have enough\nbalance to fund an account of the requested size, an error is returned.",
         "operationId": "QuoteAccount",
@@ -193,7 +216,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcQuoteAccountResponse"
+              "$ref": "#/definitions/poolrpcQuoteAccountResponse"
             }
           },
           "default": {
@@ -209,7 +232,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/clmrpcQuoteAccountRequest"
+              "$ref": "#/definitions/poolrpcQuoteAccountRequest"
             }
           }
         ],
@@ -218,15 +241,15 @@
         ]
       }
     },
-    "/v1/clm/accounts/recover": {
+    "/v1/pool/accounts/recover": {
       "post": {
-        "summary": "llm: `accounts recover`\nRecoverAccounts queries the auction server for this trader daemon's accounts\nin case we lost our local account database.",
+        "summary": "pool: `accounts recover`\nRecoverAccounts queries the auction server for this trader daemon's accounts\nin case we lost our local account database.",
         "operationId": "RecoverAccounts",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcRecoverAccountsResponse"
+              "$ref": "#/definitions/poolrpcRecoverAccountsResponse"
             }
           },
           "default": {
@@ -242,7 +265,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/clmrpcRecoverAccountsRequest"
+              "$ref": "#/definitions/poolrpcRecoverAccountsRequest"
             }
           }
         ],
@@ -251,15 +274,15 @@
         ]
       }
     },
-    "/v1/clm/accounts/withdraw": {
+    "/v1/pool/accounts/withdraw": {
       "post": {
-        "summary": "llm: `accounts withdraw`\nWithdrawAccount splits off parts of the account balance into the specified\noutputs while recreating the account with a reduced balance.",
+        "summary": "pool: `accounts withdraw`\nWithdrawAccount splits off parts of the account balance into the specified\noutputs while recreating the account with a reduced balance.",
         "operationId": "WithdrawAccount",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcWithdrawAccountResponse"
+              "$ref": "#/definitions/poolrpcWithdrawAccountResponse"
             }
           },
           "default": {
@@ -275,7 +298,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/clmrpcWithdrawAccountRequest"
+              "$ref": "#/definitions/poolrpcWithdrawAccountRequest"
             }
           }
         ],
@@ -284,15 +307,15 @@
         ]
       }
     },
-    "/v1/clm/batch/snapshot": {
+    "/v1/pool/batch/snapshot": {
       "get": {
-        "summary": "llm: `auction snapshot`\nBatchSnapshot returns the snapshot of a past batch identified by its ID.",
+        "summary": "pool: `auction snapshot`\nBatchSnapshot returns the snapshot of a past batch identified by its ID.",
         "operationId": "BatchSnapshot",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcBatchSnapshotResponse"
+              "$ref": "#/definitions/poolrpcBatchSnapshotResponse"
             }
           },
           "default": {
@@ -317,15 +340,15 @@
         ]
       }
     },
-    "/v1/clm/fee": {
+    "/v1/pool/fee": {
       "get": {
-        "summary": "llm: `auction fee`\nAuctionFee returns the current auction order execution fee specified by the\nauction server.",
+        "summary": "pool: `auction fee`\nAuctionFee returns the current auction order execution fee specified by the\nauction server.",
         "operationId": "AuctionFee",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcAuctionFeeResponse"
+              "$ref": "#/definitions/poolrpcAuctionFeeResponse"
             }
           },
           "default": {
@@ -340,15 +363,15 @@
         ]
       }
     },
-    "/v1/clm/orders": {
+    "/v1/pool/orders": {
       "get": {
-        "summary": "llm: `orders list`\nListOrders returns a list of all active and archived orders that are\ncurrently known to the trader daemon.",
+        "summary": "pool: `orders list`\nListOrders returns a list of all active and archived orders that are\ncurrently known to the trader daemon.",
         "operationId": "ListOrders",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcListOrdersResponse"
+              "$ref": "#/definitions/poolrpcListOrdersResponse"
             }
           },
           "default": {
@@ -363,13 +386,13 @@
         ]
       },
       "post": {
-        "summary": "llm: `orders submit`\nSubmitOrder creates a new ask or bid order and submits for the given account\nand submits it to the auction server for matching.",
+        "summary": "pool: `orders submit`\nSubmitOrder creates a new ask or bid order and submits for the given account\nand submits it to the auction server for matching.",
         "operationId": "SubmitOrder",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcSubmitOrderResponse"
+              "$ref": "#/definitions/poolrpcSubmitOrderResponse"
             }
           },
           "default": {
@@ -385,7 +408,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/clmrpcSubmitOrderRequest"
+              "$ref": "#/definitions/poolrpcSubmitOrderRequest"
             }
           }
         ],
@@ -394,15 +417,15 @@
         ]
       }
     },
-    "/v1/clm/orders/{order_nonce}": {
+    "/v1/pool/orders/{order_nonce}": {
       "delete": {
-        "summary": "llm: `orders cancel`\nCancelOrder cancels an active order with the auction server to remove it\nfrom future matching.",
+        "summary": "pool: `orders cancel`\nCancelOrder cancels an active order with the auction server to remove it\nfrom future matching.",
         "operationId": "CancelOrder",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/clmrpcCancelOrderResponse"
+              "$ref": "#/definitions/poolrpcCancelOrderResponse"
             }
           },
           "default": {
@@ -425,29 +448,6 @@
           "Trader"
         ]
       }
-    },
-    "/v1/lsat/tokens": {
-      "get": {
-        "summary": "* llm: `listauth`\nGetLsatTokens returns all LSAT tokens the daemon ever paid for.",
-        "operationId": "GetLsatTokens",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/clmrpcTokensResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response",
-            "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
-            }
-          }
-        },
-        "tags": [
-          "Trader"
-        ]
-      }
     }
   },
   "definitions": {
@@ -458,7 +458,28 @@
       ],
       "default": "INVALID_AMT"
     },
-    "clmrpcAccount": {
+    "gatewayruntimeError": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "poolrpcAccount": {
       "type": "object",
       "properties": {
         "trader_key": {
@@ -467,7 +488,7 @@
           "description": "The identifying component of an account. This is the key used for the trader\nin the 2-of-2 multi-sig construction of an account with an auctioneer."
         },
         "outpoint": {
-          "$ref": "#/definitions/clmrpcOutPoint",
+          "$ref": "#/definitions/poolrpcOutPoint",
           "description": "The current outpoint associated with the account. This will change every\ntime the account has been updated."
         },
         "value": {
@@ -486,7 +507,7 @@
           "description": "The height at which the account will expire."
         },
         "state": {
-          "$ref": "#/definitions/clmrpcAccountState",
+          "$ref": "#/definitions/poolrpcAccountState",
           "description": "The current state of the account."
         },
         "latest_txid": {
@@ -496,7 +517,7 @@
         }
       }
     },
-    "clmrpcAccountState": {
+    "poolrpcAccountState": {
       "type": "string",
       "enum": [
         "PENDING_OPEN",
@@ -511,11 +532,11 @@
       "default": "PENDING_OPEN",
       "description": " - PENDING_OPEN: The state of an account when it is pending its confirmation on-chain.\n - PENDING_UPDATE: The state of an account when it has undergone an update on-chain either as\npart of a matched order or a trader modification and it is pending its\nconfirmation on-chain.\n - OPEN: The state of an account once it has confirmed on-chain.\n - EXPIRED: The state of an account once its expiration has been reached and its closing\ntransaction has confirmed.\n - PENDING_CLOSED: The state of an account when we're waiting for the closing transaction of\nan account to confirm that required cooperation with the auctioneer.\n - CLOSED: The state of an account once its closing transaction has confirmed.\n - RECOVERY_FAILED: The state of an account that indicates that the account was attempted to be\nrecovered but failed because the opening transaction wasn't found by lnd.\nThis could be because it was never published or it never confirmed. Then the\nfunds are SAFU and the account can be considered to never have been opened\nin the first place.\n - PENDING_BATCH: The account has recently participated in a batch and is not yet confirmed."
     },
-    "clmrpcAsk": {
+    "poolrpcAsk": {
       "type": "object",
       "properties": {
         "details": {
-          "$ref": "#/definitions/clmrpcOrder",
+          "$ref": "#/definitions/poolrpcOrder",
           "description": "The common fields shared between both ask and bid order types."
         },
         "max_duration_blocks": {
@@ -530,7 +551,7 @@
         }
       }
     },
-    "clmrpcAskSnapshot": {
+    "poolrpcAskSnapshot": {
       "type": "object",
       "properties": {
         "version": {
@@ -555,16 +576,16 @@
         }
       }
     },
-    "clmrpcAuctionFeeResponse": {
+    "poolrpcAuctionFeeResponse": {
       "type": "object",
       "properties": {
         "execution_fee": {
-          "$ref": "#/definitions/clmrpcExecutionFee",
+          "$ref": "#/definitions/poolrpcExecutionFee",
           "description": "The execution fee charged per matched order."
         }
       }
     },
-    "clmrpcBatchSnapshotResponse": {
+    "poolrpcBatchSnapshotResponse": {
       "type": "object",
       "properties": {
         "version": {
@@ -590,7 +611,7 @@
         "matched_orders": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/clmrpcMatchedOrderSnapshot"
+            "$ref": "#/definitions/poolrpcMatchedOrderSnapshot"
           },
           "description": "The set of all orders matched in the batch."
         },
@@ -605,11 +626,11 @@
         }
       }
     },
-    "clmrpcBid": {
+    "poolrpcBid": {
       "type": "object",
       "properties": {
         "details": {
-          "$ref": "#/definitions/clmrpcOrder",
+          "$ref": "#/definitions/poolrpcOrder",
           "description": "The common fields shared between both ask and bid order types."
         },
         "min_duration_blocks": {
@@ -624,7 +645,7 @@
         }
       }
     },
-    "clmrpcBidSnapshot": {
+    "poolrpcBidSnapshot": {
       "type": "object",
       "properties": {
         "version": {
@@ -649,7 +670,7 @@
         }
       }
     },
-    "clmrpcBumpAccountFeeRequest": {
+    "poolrpcBumpAccountFeeRequest": {
       "type": "object",
       "properties": {
         "trader_key": {
@@ -664,13 +685,13 @@
         }
       }
     },
-    "clmrpcBumpAccountFeeResponse": {
+    "poolrpcBumpAccountFeeResponse": {
       "type": "object"
     },
-    "clmrpcCancelOrderResponse": {
+    "poolrpcCancelOrderResponse": {
       "type": "object"
     },
-    "clmrpcCloseAccountResponse": {
+    "poolrpcCloseAccountResponse": {
       "type": "object",
       "properties": {
         "close_txid": {
@@ -680,7 +701,7 @@
         }
       }
     },
-    "clmrpcDepositAccountRequest": {
+    "poolrpcDepositAccountRequest": {
       "type": "object",
       "properties": {
         "trader_key": {
@@ -700,11 +721,11 @@
         }
       }
     },
-    "clmrpcDepositAccountResponse": {
+    "poolrpcDepositAccountResponse": {
       "type": "object",
       "properties": {
         "account": {
-          "$ref": "#/definitions/clmrpcAccount",
+          "$ref": "#/definitions/poolrpcAccount",
           "description": "The state of the account after processing the deposit."
         },
         "deposit_txid": {
@@ -714,7 +735,7 @@
         }
       }
     },
-    "clmrpcExecutionFee": {
+    "poolrpcExecutionFee": {
       "type": "object",
       "properties": {
         "base_fee": {
@@ -729,7 +750,7 @@
         }
       }
     },
-    "clmrpcInitAccountRequest": {
+    "poolrpcInitAccountRequest": {
       "type": "object",
       "properties": {
         "account_value": {
@@ -751,7 +772,7 @@
         }
       }
     },
-    "clmrpcInvalidOrder": {
+    "poolrpcInvalidOrder": {
       "type": "object",
       "properties": {
         "order_nonce": {
@@ -766,35 +787,35 @@
         }
       }
     },
-    "clmrpcListAccountsResponse": {
+    "poolrpcListAccountsResponse": {
       "type": "object",
       "properties": {
         "accounts": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/clmrpcAccount"
+            "$ref": "#/definitions/poolrpcAccount"
           }
         }
       }
     },
-    "clmrpcListOrdersResponse": {
+    "poolrpcListOrdersResponse": {
       "type": "object",
       "properties": {
         "asks": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/clmrpcAsk"
+            "$ref": "#/definitions/poolrpcAsk"
           }
         },
         "bids": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/clmrpcBid"
+            "$ref": "#/definitions/poolrpcBid"
           }
         }
       }
     },
-    "clmrpcLsatToken": {
+    "poolrpcLsatToken": {
       "type": "object",
       "properties": {
         "base_macaroon": {
@@ -838,15 +859,15 @@
         }
       }
     },
-    "clmrpcMatchedOrderSnapshot": {
+    "poolrpcMatchedOrderSnapshot": {
       "type": "object",
       "properties": {
         "ask": {
-          "$ref": "#/definitions/clmrpcAskSnapshot",
+          "$ref": "#/definitions/poolrpcAskSnapshot",
           "description": "The full ask order that was matched."
         },
         "bid": {
-          "$ref": "#/definitions/clmrpcBidSnapshot",
+          "$ref": "#/definitions/poolrpcBidSnapshot",
           "description": "The full bid order that was matched."
         },
         "matching_rate": {
@@ -866,7 +887,7 @@
         }
       }
     },
-    "clmrpcOrder": {
+    "poolrpcOrder": {
       "type": "object",
       "properties": {
         "trader_key": {
@@ -895,7 +916,7 @@
           "description": "Order nonce, acts as unique order identifier."
         },
         "state": {
-          "$ref": "#/definitions/clmrpcOrderState",
+          "$ref": "#/definitions/poolrpcOrderState",
           "description": "The state the order currently is in."
         },
         "units": {
@@ -915,7 +936,7 @@
         }
       }
     },
-    "clmrpcOrderState": {
+    "poolrpcOrderState": {
       "type": "string",
       "enum": [
         "ORDER_SUBMITTED",
@@ -928,7 +949,7 @@
       ],
       "default": "ORDER_SUBMITTED"
     },
-    "clmrpcOutPoint": {
+    "poolrpcOutPoint": {
       "type": "object",
       "properties": {
         "txid": {
@@ -943,7 +964,7 @@
         }
       }
     },
-    "clmrpcOutput": {
+    "poolrpcOutput": {
       "type": "object",
       "properties": {
         "value_sat": {
@@ -957,7 +978,7 @@
         }
       }
     },
-    "clmrpcOutputWithFee": {
+    "poolrpcOutputWithFee": {
       "type": "object",
       "properties": {
         "address": {
@@ -976,18 +997,18 @@
         }
       }
     },
-    "clmrpcOutputsWithImplicitFee": {
+    "poolrpcOutputsWithImplicitFee": {
       "type": "object",
       "properties": {
         "outputs": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/clmrpcOutput"
+            "$ref": "#/definitions/poolrpcOutput"
           }
         }
       }
     },
-    "clmrpcQuoteAccountRequest": {
+    "poolrpcQuoteAccountRequest": {
       "type": "object",
       "properties": {
         "account_value": {
@@ -1001,7 +1022,7 @@
         }
       }
     },
-    "clmrpcQuoteAccountResponse": {
+    "poolrpcQuoteAccountResponse": {
       "type": "object",
       "properties": {
         "miner_fee_rate_sat_per_kw": {
@@ -1014,10 +1035,10 @@
         }
       }
     },
-    "clmrpcRecoverAccountsRequest": {
+    "poolrpcRecoverAccountsRequest": {
       "type": "object"
     },
-    "clmrpcRecoverAccountsResponse": {
+    "poolrpcRecoverAccountsResponse": {
       "type": "object",
       "properties": {
         "num_recovered_accounts": {
@@ -1027,22 +1048,22 @@
         }
       }
     },
-    "clmrpcSubmitOrderRequest": {
+    "poolrpcSubmitOrderRequest": {
       "type": "object",
       "properties": {
         "ask": {
-          "$ref": "#/definitions/clmrpcAsk"
+          "$ref": "#/definitions/poolrpcAsk"
         },
         "bid": {
-          "$ref": "#/definitions/clmrpcBid"
+          "$ref": "#/definitions/poolrpcBid"
         }
       }
     },
-    "clmrpcSubmitOrderResponse": {
+    "poolrpcSubmitOrderResponse": {
       "type": "object",
       "properties": {
         "invalid_order": {
-          "$ref": "#/definitions/clmrpcInvalidOrder",
+          "$ref": "#/definitions/poolrpcInvalidOrder",
           "description": "Order failed with the given reason."
         },
         "accepted_order_nonce": {
@@ -1052,19 +1073,19 @@
         }
       }
     },
-    "clmrpcTokensResponse": {
+    "poolrpcTokensResponse": {
       "type": "object",
       "properties": {
         "tokens": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/clmrpcLsatToken"
+            "$ref": "#/definitions/poolrpcLsatToken"
           },
           "description": "*\nList of all tokens the daemon knows of, including old/expired tokens."
         }
       }
     },
-    "clmrpcWithdrawAccountRequest": {
+    "poolrpcWithdrawAccountRequest": {
       "type": "object",
       "properties": {
         "trader_key": {
@@ -1075,7 +1096,7 @@
         "outputs": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/clmrpcOutput"
+            "$ref": "#/definitions/poolrpcOutput"
           },
           "description": "The outputs we'll withdraw funds from the account into."
         },
@@ -1086,38 +1107,17 @@
         }
       }
     },
-    "clmrpcWithdrawAccountResponse": {
+    "poolrpcWithdrawAccountResponse": {
       "type": "object",
       "properties": {
         "account": {
-          "$ref": "#/definitions/clmrpcAccount",
+          "$ref": "#/definitions/poolrpcAccount",
           "description": "The state of the account after processing the withdrawal."
         },
         "withdraw_txid": {
           "type": "string",
           "format": "byte",
           "description": "The transaction used to withdraw funds from the account."
-        }
-      }
-    },
-    "gatewayruntimeError": {
-      "type": "object",
-      "properties": {
-        "error": {
-          "type": "string"
-        },
-        "code": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "message": {
-          "type": "string"
-        },
-        "details": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/protobufAny"
-          }
         }
       }
     },

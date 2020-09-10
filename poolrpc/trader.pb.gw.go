@@ -2,11 +2,11 @@
 // source: trader.proto
 
 /*
-Package clmrpc is a reverse proxy.
+Package poolrpc is a reverse proxy.
 
 It translates gRPC into RESTful JSON APIs.
 */
-package clmrpc
+package poolrpc
 
 import (
 	"context"
@@ -1071,31 +1071,31 @@ func RegisterTraderHandlerClient(ctx context.Context, mux *runtime.ServeMux, cli
 }
 
 var (
-	pattern_Trader_QuoteAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "clm", "accounts", "quote"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_QuoteAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "pool", "accounts", "quote"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_InitAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "clm", "accounts"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_InitAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "pool", "accounts"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_ListAccounts_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "clm", "accounts"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_ListAccounts_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "pool", "accounts"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_CloseAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "clm", "accounts"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_CloseAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "pool", "accounts"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_WithdrawAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "clm", "accounts", "withdraw"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_WithdrawAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "pool", "accounts", "withdraw"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_DepositAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "clm", "accounts", "deposit"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_DepositAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "pool", "accounts", "deposit"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_BumpAccountFee_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "clm", "accounts", "bump"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_BumpAccountFee_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "pool", "accounts", "bump"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_RecoverAccounts_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "clm", "accounts", "recover"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_RecoverAccounts_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "pool", "accounts", "recover"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_SubmitOrder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "clm", "orders"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_SubmitOrder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "pool", "orders"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_ListOrders_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "clm", "orders"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_ListOrders_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "pool", "orders"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_CancelOrder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "clm", "orders", "order_nonce"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_CancelOrder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "pool", "orders", "order_nonce"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_AuctionFee_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "clm", "fee"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_AuctionFee_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "pool", "fee"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Trader_BatchSnapshot_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "clm", "batch", "snapshot"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Trader_BatchSnapshot_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "pool", "batch", "snapshot"}, "", runtime.AssumeColonVerbOpt(true)))
 
 	pattern_Trader_GetLsatTokens_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "lsat", "tokens"}, "", runtime.AssumeColonVerbOpt(true)))
 )
