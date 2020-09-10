@@ -7,7 +7,7 @@ import (
 
 	"github.com/btcsuite/btcutil"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/pool/order"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"

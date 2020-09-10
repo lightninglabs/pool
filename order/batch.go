@@ -9,9 +9,9 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/terms"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -57,7 +57,7 @@ type AccountDiff struct {
 
 	// EndingState is the ending on-chain state of the account after the
 	// executed batch as the auctioneer calculated it.
-	EndingState clmrpc.AccountDiff_AccountState
+	EndingState poolrpc.AccountDiff_AccountState
 
 	// EndingBalance is the ending balance for a trader's account.
 	EndingBalance btcutil.Amount
@@ -86,9 +86,9 @@ func (d *AccountDiff) validateEndingState(tx *wire.MsgTx,
 		// by a simple transaction and not create a dust output. We
 		// expect the server to set the state correctly and not re-
 		// create an account outpoint.
-		if state != clmrpc.AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN &&
-			state != clmrpc.AccountDiff_OUTPUT_DUST_ADDED_TO_FEES &&
-			state != clmrpc.AccountDiff_OUTPUT_FULLY_SPENT {
+		if state != poolrpc.AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN &&
+			state != poolrpc.AccountDiff_OUTPUT_DUST_ADDED_TO_FEES &&
+			state != poolrpc.AccountDiff_OUTPUT_FULLY_SPENT {
 
 			return wrongStateErr
 		}
@@ -99,7 +99,7 @@ func (d *AccountDiff) validateEndingState(tx *wire.MsgTx,
 	} else {
 		// There should be enough balance left to justify a new account
 		// output. We should get the outpoint from the server.
-		if state != clmrpc.AccountDiff_OUTPUT_RECREATED {
+		if state != poolrpc.AccountDiff_OUTPUT_RECREATED {
 			return wrongStateErr
 		}
 		if d.OutpointIndex < 0 {

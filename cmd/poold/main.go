@@ -10,14 +10,14 @@ import (
 	"strings"
 
 	"github.com/jessevdk/go-flags"
-	"github.com/lightninglabs/llm"
+	"github.com/lightninglabs/pool"
 
 	// Blank import to set up profiling HTTP handlers.
 	_ "net/http/pprof"
 )
 
 var (
-	defaultConfigFilename = "llmd.conf"
+	defaultConfigFilename = "poold.conf"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 }
 
 func start() error {
-	config := llm.DefaultConfig()
+	config := pool.DefaultConfig()
 
 	// Parse command line flags.
 	parser := flags.NewParser(&config, flags.Default)
@@ -88,18 +88,18 @@ func start() error {
 		appName := filepath.Base(os.Args[0])
 		appName = strings.TrimSuffix(appName, filepath.Ext(appName))
 		if config.ShowVersion {
-			fmt.Println(appName, "version", llm.Version())
+			fmt.Println(appName, "version", pool.Version())
 			os.Exit(0)
 		}
 
 		// Special show command to list supported subsystems and exit.
 		if config.DebugLevel == "show" {
 			fmt.Printf("Supported subsystems: %v\n",
-				llm.SupportedSubsystems())
+				pool.SupportedSubsystems())
 			os.Exit(0)
 		}
 
-		return llm.Run(&config)
+		return pool.Run(&config)
 	}
 
 	return fmt.Errorf("unimplemented command %v", parser.Active.Name)

@@ -11,8 +11,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/clmscript"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
@@ -26,7 +26,7 @@ var (
 	testTraderKey, _    = btcec.ParsePubKey(testRawTraderKey, btcec.S256())
 	testTraderKeyDesc   = &keychain.KeyDescriptor{
 		KeyLocator: keychain.KeyLocator{
-			Family: clmscript.AccountKeyFamily,
+			Family: poolscript.AccountKeyFamily,
 			Index:  0,
 		},
 		PubKey: testTraderKey,

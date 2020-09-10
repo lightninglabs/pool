@@ -1,5 +1,5 @@
-PKG := github.com/lightninglabs/llm
-ESCPKG := github.com\/lightninglabs\/llm
+PKG := github.com/lightninglabs/pool
+ESCPKG := github.com\/lightninglabs\/pool
 
 LINT_PKG := github.com/golangci/golangci-lint/cmd/golangci-lint
 GOVERALLS_PKG := github.com/mattn/goveralls
@@ -68,14 +68,14 @@ $(GOACC_BIN):
 # ============
 
 build:
-	@$(call print, "Building llm.")
-	$(GOBUILD) $(PKG)/cmd/llm
-	$(GOBUILD) $(PKG)/cmd/llmd
+	@$(call print, "Building Pool.")
+	$(GOBUILD) $(PKG)/cmd/pool
+	$(GOBUILD) $(PKG)/cmd/poold
 
 install:
-	@$(call print, "Installing llm.")
-	$(GOINSTALL) $(PKG)/cmd/llm
-	$(GOINSTALL) $(PKG)/cmd/llmd
+	@$(call print, "Installing Pool.")
+	$(GOINSTALL) $(PKG)/cmd/pool
+	$(GOINSTALL) $(PKG)/cmd/poold
 
 scratch: build
 
@@ -134,10 +134,10 @@ list:
 
 rpc:
 	@$(call print, "Compiling protos.")
-	cd ./clmrpc; ./gen_protos.sh
+	cd ./poolrpc; ./gen_protos.sh
 
 clean:
 	@$(call print, "Cleaning source.$(NC)")
-	$(RM) ./llm
-	$(RM) ./llmd
+	$(RM) ./pool
+	$(RM) ./poold
 	$(RM) coverage.txt

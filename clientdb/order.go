@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/pool/order"
 	"go.etcd.io/bbolt"
 )
 

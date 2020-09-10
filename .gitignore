@@ -1,4 +1,4 @@
-/llm
-/llmd
-cmd/llm/llm
-cmd/llmd/llmd
+/pool
+/poold
+cmd/pool/pool
+cmd/poold/poold

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/pool/account"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/bbolt"
 )

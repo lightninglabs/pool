@@ -12,9 +12,9 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/btcsuite/btcwallet/wtxmgr"
-	"github.com/lightninglabs/llm/clmscript"
-	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightninglabs/pool/poolscript"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -184,7 +184,7 @@ const (
 
 // Output returns the current on-chain output associated with the account.
 func (a *Account) Output() (*wire.TxOut, error) {
-	script, err := clmscript.AccountScript(
+	script, err := poolscript.AccountScript(
 		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey, a.BatchKey,
 		a.Secret,
 	)
@@ -202,8 +202,8 @@ func (a *Account) Output() (*wire.TxOut, error) {
 // associated with the account. This is done by using the next batch key, which
 // results from incrementing the current one by its curve's base point.
 func (a *Account) NextOutputScript() ([]byte, error) {
-	nextBatchKey := clmscript.IncrementKey(a.BatchKey)
-	return clmscript.AccountScript(
+	nextBatchKey := poolscript.IncrementKey(a.BatchKey)
+	return poolscript.AccountScript(
 		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey, nextBatchKey,
 		a.Secret,
 	)
@@ -276,7 +276,7 @@ func ExpiryModifier(expiry uint32) Modifier {
 // account by adding the curve's base point.
 func IncrementBatchKey() Modifier {
 	return func(account *Account) {
-		account.BatchKey = clmscript.IncrementKey(account.BatchKey)
+		account.BatchKey = poolscript.IncrementKey(account.BatchKey)
 	}
 }
 
@@ -429,9 +429,9 @@ func (o *OutputWithFee) CloseOutputs(accountValue btcutil.Amount,
 	// type.
 	switch witnessType {
 	case expiryWitness:
-		weightEstimator.AddWitnessInput(clmscript.ExpiryWitnessSize)
+		weightEstimator.AddWitnessInput(poolscript.ExpiryWitnessSize)
 	case multiSigWitness:
-		weightEstimator.AddWitnessInput(clmscript.MultiSigWitnessSize)
+		weightEstimator.AddWitnessInput(poolscript.MultiSigWitnessSize)
 	default:
 		return nil, fmt.Errorf("unhandled witness type %v", witnessType)
 	}

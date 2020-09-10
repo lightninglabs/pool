@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/pool/poolrpc"
 )
 
 var (
@@ -60,7 +60,7 @@ func (e *AcctResNotCompletedError) Unwrap() error {
 // AcctResNotCompletedErrFromRPC creates a new AcctResNotCompletedError from an
 // RPC account message.
 func AcctResNotCompletedErrFromRPC(
-	rpcAcc clmrpc.AuctionAccount) *AcctResNotCompletedError {
+	rpcAcc poolrpc.AuctionAccount) *AcctResNotCompletedError {
 
 	result := &AcctResNotCompletedError{
 		Value:      btcutil.Amount(rpcAcc.Value),

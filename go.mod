@@ -1,4 +1,4 @@
-module github.com/lightninglabs/llm
+module github.com/lightninglabs/pool
 
 go 1.14
 

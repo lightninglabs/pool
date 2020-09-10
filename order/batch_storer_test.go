@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -67,14 +67,14 @@ func TestBatchStorer(t *testing.T) {
 		{
 			AccountKeyRaw: acctIDBig,
 			AccountKey:    acctKeyBig,
-			EndingState:   clmrpc.AccountDiff_OUTPUT_RECREATED,
+			EndingState:   poolrpc.AccountDiff_OUTPUT_RECREATED,
 			OutpointIndex: 0,
 			EndingBalance: 600_000,
 		},
 		{
 			AccountKeyRaw: acctIDSmall,
 			AccountKey:    acctKeySmall,
-			EndingState:   clmrpc.AccountDiff_OUTPUT_FULLY_SPENT,
+			EndingState:   poolrpc.AccountDiff_OUTPUT_FULLY_SPENT,
 			OutpointIndex: -1,
 			EndingBalance: 0,
 		},

@@ -13,9 +13,9 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wtxmgr"
-	"github.com/lightninglabs/llm/clmscript"
-	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightninglabs/pool/poolscript"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -32,7 +32,7 @@ var (
 
 	testTraderKeyDesc = &keychain.KeyDescriptor{
 		KeyLocator: keychain.KeyLocator{
-			Family: clmscript.AccountKeyFamily,
+			Family: poolscript.AccountKeyFamily,
 			Index:  0,
 		},
 		PubKey: testTraderKey,

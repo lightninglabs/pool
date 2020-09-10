@@ -4,8 +4,8 @@ import (
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wallet/txrules"
-	"github.com/lightninglabs/llm/clmscript"
-	"github.com/lightninglabs/llm/terms"
+	"github.com/lightninglabs/pool/poolscript"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -90,7 +90,7 @@ func EstimateTraderFee(numTraderChans uint32,
 
 	// Finally, we tack on the size of the witness spending the account
 	// outpoint.
-	weightEstimate += clmscript.MultiSigWitnessSize
+	weightEstimate += poolscript.MultiSigWitnessSize
 
 	return feeRate.FeeForWeight(weightEstimate)
 }
@@ -220,7 +220,7 @@ func minNoDustAccountSize() btcutil.Amount {
 	// Calculate the minimum fee we would need to pay to coop close the
 	// account to a P2WKH output.
 	var weightEstimator input.TxWeightEstimator
-	weightEstimator.AddWitnessInput(clmscript.MultiSigWitnessSize)
+	weightEstimator.AddWitnessInput(poolscript.MultiSigWitnessSize)
 	weightEstimator.AddP2WKHOutput()
 	minimumFee := chainfee.FeePerKwFloor.FeeForWeight(
 		int64(weightEstimator.Weight()),

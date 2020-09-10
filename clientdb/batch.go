@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/order"
 	"go.etcd.io/bbolt"
 )
 

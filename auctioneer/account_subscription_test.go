@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/internal/test"
+	"github.com/lightninglabs/pool/internal/test"
+	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
@@ -31,10 +31,10 @@ var (
 // handshake is performed correctly when subscribing for account updates.
 func TestAccountSubscriptionAuthenticate(t *testing.T) {
 	var (
-		msgChan    = make(chan *clmrpc.ClientAuctionMessage)
-		srvMsgChan = make(chan *clmrpc.ServerAuctionMessage)
+		msgChan    = make(chan *poolrpc.ClientAuctionMessage)
+		srvMsgChan = make(chan *poolrpc.ServerAuctionMessage)
 		errChan    = make(chan error)
-		sendMsg    = func(msg *clmrpc.ClientAuctionMessage) error {
+		sendMsg    = func(msg *poolrpc.ClientAuctionMessage) error {
 			msgChan <- msg
 			return nil
 		}
@@ -55,7 +55,7 @@ func TestAccountSubscriptionAuthenticate(t *testing.T) {
 	// Step 1: We expect a commitment message.
 	select {
 	case msg := <-msgChan:
-		if _, ok := msg.Msg.(*clmrpc.ClientAuctionMessage_Commit); !ok {
+		if _, ok := msg.Msg.(*poolrpc.ClientAuctionMessage_Commit); !ok {
 			t.Fatalf("unexpected message type: %v", msg)
 		}
 
@@ -64,9 +64,9 @@ func TestAccountSubscriptionAuthenticate(t *testing.T) {
 	}
 
 	// Step 2: Simulate the server sending back the challenge.
-	srvMsgChan <- &clmrpc.ServerAuctionMessage{
-		Msg: &clmrpc.ServerAuctionMessage_Challenge{
-			Challenge: &clmrpc.ServerChallenge{
+	srvMsgChan <- &poolrpc.ServerAuctionMessage{
+		Msg: &poolrpc.ServerAuctionMessage_Challenge{
+			Challenge: &poolrpc.ServerChallenge{
 				Challenge: []byte{11, 99, 11},
 			},
 		},
@@ -75,7 +75,7 @@ func TestAccountSubscriptionAuthenticate(t *testing.T) {
 	// Step 3: We expect the final message, the subscription.
 	select {
 	case msg := <-msgChan:
-		subMsg, ok := msg.Msg.(*clmrpc.ClientAuctionMessage_Subscribe)
+		subMsg, ok := msg.Msg.(*poolrpc.ClientAuctionMessage_Subscribe)
 		if !ok {
 			t.Fatalf("unexpected message type: %v", msg)
 		}
@@ -93,10 +93,10 @@ func TestAccountSubscriptionAuthenticate(t *testing.T) {
 // handshake is canceled if the channel is closed prematurely.
 func TestAccountSubscriptionAuthenticateAbort(t *testing.T) {
 	var (
-		msgChan    = make(chan *clmrpc.ClientAuctionMessage)
-		srvMsgChan = make(chan *clmrpc.ServerAuctionMessage)
+		msgChan    = make(chan *poolrpc.ClientAuctionMessage)
+		srvMsgChan = make(chan *poolrpc.ServerAuctionMessage)
 		errChan    = make(chan error)
-		sendMsg    = func(msg *clmrpc.ClientAuctionMessage) error {
+		sendMsg    = func(msg *poolrpc.ClientAuctionMessage) error {
 			msgChan <- msg
 			return nil
 		}
@@ -117,7 +117,7 @@ func TestAccountSubscriptionAuthenticateAbort(t *testing.T) {
 	// Step 1: We expect a commitment message.
 	select {
 	case msg := <-msgChan:
-		if _, ok := msg.Msg.(*clmrpc.ClientAuctionMessage_Commit); !ok {
+		if _, ok := msg.Msg.(*poolrpc.ClientAuctionMessage_Commit); !ok {
 			t.Fatalf("unexpected message type: %v", msg)
 		}
 
@@ -145,10 +145,10 @@ func TestAccountSubscriptionAuthenticateAbort(t *testing.T) {
 // authentication handshake is canceled if the context is canceled prematurely.
 func TestAccountSubscriptionAuthenticateContextClose(t *testing.T) {
 	var (
-		msgChan    = make(chan *clmrpc.ClientAuctionMessage)
-		srvMsgChan = make(chan *clmrpc.ServerAuctionMessage)
+		msgChan    = make(chan *poolrpc.ClientAuctionMessage)
+		srvMsgChan = make(chan *poolrpc.ServerAuctionMessage)
 		errChan    = make(chan error)
-		sendMsg    = func(msg *clmrpc.ClientAuctionMessage) error {
+		sendMsg    = func(msg *poolrpc.ClientAuctionMessage) error {
 			msgChan <- msg
 			return nil
 		}
@@ -170,7 +170,7 @@ func TestAccountSubscriptionAuthenticateContextClose(t *testing.T) {
 	// Step 1: We expect a commitment message.
 	select {
 	case msg := <-msgChan:
-		if _, ok := msg.Msg.(*clmrpc.ClientAuctionMessage_Commit); !ok {
+		if _, ok := msg.Msg.(*poolrpc.ClientAuctionMessage_Commit); !ok {
 			t.Fatalf("unexpected message type: %v", msg)
 		}
 

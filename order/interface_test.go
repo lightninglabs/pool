@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm/terms"
+	"github.com/lightninglabs/pool/terms"
 )
 
 // TestOrderReservedValue checks orders' ReservedValue merhod returning the

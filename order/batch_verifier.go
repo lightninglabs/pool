@@ -9,9 +9,9 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/terms"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/input"
 )
 

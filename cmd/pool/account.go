@@ -7,7 +7,7 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli"
 )
@@ -41,7 +41,7 @@ type Account struct {
 }
 
 // NewAccountFromProto creates a display Account from its proto.
-func NewAccountFromProto(a *clmrpc.Account) *Account {
+func NewAccountFromProto(a *poolrpc.Account) *Account {
 	var opHash, latestTxHash chainhash.Hash
 	copy(opHash[:], a.Outpoint.Txid)
 	copy(latestTxHash[:], a.LatestTxid)
@@ -111,9 +111,9 @@ func newAccount(ctx *cli.Context) error {
 		return err
 	}
 
-	req := &clmrpc.InitAccountRequest{
+	req := &poolrpc.InitAccountRequest{
 		AccountValue: amt,
-		Fees: &clmrpc.InitAccountRequest_ConfTarget{
+		Fees: &poolrpc.InitAccountRequest_ConfTarget{
 			ConfTarget: uint32(ctx.Uint64("conf_target")),
 		},
 	}
@@ -124,11 +124,11 @@ func newAccount(ctx *cli.Context) error {
 	}
 
 	if height, err := parseUint64(ctx, 1, accountExpiryAbsolute, cmd); err == nil {
-		req.AccountExpiry = &clmrpc.InitAccountRequest_AbsoluteHeight{
+		req.AccountExpiry = &poolrpc.InitAccountRequest_AbsoluteHeight{
 			AbsoluteHeight: uint32(height),
 		}
 	} else if height, err := parseUint64(ctx, 1, accountExpiryRelative, cmd); err == nil {
-		req.AccountExpiry = &clmrpc.InitAccountRequest_RelativeHeight{
+		req.AccountExpiry = &poolrpc.InitAccountRequest_RelativeHeight{
 			RelativeHeight: uint32(height),
 		}
 	} else {
@@ -168,12 +168,12 @@ func newAccount(ctx *cli.Context) error {
 	return nil
 }
 
-func printAccountFees(client clmrpc.TraderClient, amt btcutil.Amount,
+func printAccountFees(client poolrpc.TraderClient, amt btcutil.Amount,
 	confTarget uint32) error {
 
-	req := &clmrpc.QuoteAccountRequest{
+	req := &poolrpc.QuoteAccountRequest{
 		AccountValue: uint64(amt),
-		Fees: &clmrpc.QuoteAccountRequest_ConfTarget{
+		Fees: &poolrpc.QuoteAccountRequest_ConfTarget{
 			ConfTarget: confTarget,
 		},
 	}
@@ -212,7 +212,7 @@ func listAccounts(ctx *cli.Context) error {
 	defer cleanup()
 
 	resp, err := client.ListAccounts(
-		context.Background(), &clmrpc.ListAccountsRequest{},
+		context.Background(), &poolrpc.ListAccountsRequest{},
 	)
 	if err != nil {
 		return err
@@ -289,7 +289,7 @@ func depositAccount(ctx *cli.Context) error {
 	defer cleanup()
 
 	resp, err := client.DepositAccount(
-		context.Background(), &clmrpc.DepositAccountRequest{
+		context.Background(), &poolrpc.DepositAccountRequest{
 			TraderKey:       traderKey,
 			AmountSat:       amt,
 			FeeRateSatPerKw: uint64(feeRate),
@@ -380,9 +380,9 @@ func withdrawAccount(ctx *cli.Context) error {
 	defer cleanup()
 
 	resp, err := client.WithdrawAccount(
-		context.Background(), &clmrpc.WithdrawAccountRequest{
+		context.Background(), &poolrpc.WithdrawAccountRequest{
 			TraderKey: traderKey,
-			Outputs: []*clmrpc.Output{
+			Outputs: []*poolrpc.Output{
 				{
 					ValueSat: amt,
 					Address:  addr,
@@ -463,12 +463,12 @@ func closeAccount(ctx *cli.Context) error {
 	defer cleanup()
 
 	resp, err := client.CloseAccount(
-		context.Background(), &clmrpc.CloseAccountRequest{
+		context.Background(), &poolrpc.CloseAccountRequest{
 			TraderKey: traderKey,
-			FundsDestination: &clmrpc.CloseAccountRequest_OutputWithFee{
-				OutputWithFee: &clmrpc.OutputWithFee{
+			FundsDestination: &poolrpc.CloseAccountRequest_OutputWithFee{
+				OutputWithFee: &poolrpc.OutputWithFee{
 					Address: ctx.String("addr"),
-					Fees: &clmrpc.OutputWithFee_FeeRateSatPerKw{
+					Fees: &poolrpc.OutputWithFee_FeeRateSatPerKw{
 						FeeRateSatPerKw: uint64(satPerKw),
 					},
 				},
@@ -540,7 +540,7 @@ func bumpAccountFee(ctx *cli.Context) error {
 	defer cleanup()
 
 	resp, err := client.BumpAccountFee(
-		context.Background(), &clmrpc.BumpAccountFeeRequest{
+		context.Background(), &poolrpc.BumpAccountFeeRequest{
 			TraderKey:       traderKey,
 			FeeRateSatPerKw: uint64(satPerKw),
 		},
@@ -582,7 +582,7 @@ func recoverAccounts(ctx *cli.Context) error {
 	defer cleanup()
 
 	resp, err := client.RecoverAccounts(
-		context.Background(), &clmrpc.RecoverAccountsRequest{},
+		context.Background(), &poolrpc.RecoverAccountsRequest{},
 	)
 	if err != nil {
 		return err

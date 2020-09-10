@@ -5,8 +5,8 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/clmrpc"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/poolrpc"
 )
 
 const (
@@ -93,7 +93,7 @@ func (s *batchStorer) StorePendingBatch(batch *Batch, bestHeight uint32) error {
 		switch diff.EndingState {
 		// The account output has been recreated and needs to wait to be
 		// confirmed again.
-		case clmrpc.AccountDiff_OUTPUT_RECREATED:
+		case poolrpc.AccountDiff_OUTPUT_RECREATED:
 			modifiers = append(
 				modifiers,
 				account.StateModifier(account.StatePendingBatch),
@@ -106,9 +106,9 @@ func (s *batchStorer) StorePendingBatch(batch *Batch, bestHeight uint32) error {
 
 		// The account was fully spent on-chain. We need to wait for the
 		// batch (spend) TX to be confirmed still.
-		case clmrpc.AccountDiff_OUTPUT_FULLY_SPENT,
-			clmrpc.AccountDiff_OUTPUT_DUST_ADDED_TO_FEES,
-			clmrpc.AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN:
+		case poolrpc.AccountDiff_OUTPUT_FULLY_SPENT,
+			poolrpc.AccountDiff_OUTPUT_DUST_ADDED_TO_FEES,
+			poolrpc.AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN:
 
 			modifiers = append(
 				modifiers,
