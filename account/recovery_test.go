@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lightninglabs/llm/internal/test"
+	"github.com/lightninglabs/pool/internal/test"
 )
 
 // TestGenerateRecoveryKeys tests that a certain number of keys can be created

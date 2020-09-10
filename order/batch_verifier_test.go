@@ -8,10 +8,10 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/internal/test"
-	"github.com/lightninglabs/llm/terms"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/internal/test"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -28,8 +28,8 @@ var (
 	execFeeBase           = btcutil.Amount(1_100)
 	execFeeRate           = btcutil.Amount(50)
 	clearingPrice         = FixedRatePremium(5000)
-	stateRecreated        = clmrpc.AccountDiff_OUTPUT_RECREATED
-	stateExtendedOffchain = clmrpc.AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN
+	stateRecreated        = poolrpc.AccountDiff_OUTPUT_RECREATED
+	stateExtendedOffchain = poolrpc.AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN
 )
 
 func TestBatchVerifier(t *testing.T) {

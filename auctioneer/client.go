@@ -15,10 +15,10 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/order"
-	"github.com/lightninglabs/llm/terms"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 	"google.golang.org/grpc"
@@ -93,14 +93,14 @@ type Client struct {
 	stopped uint32
 
 	StreamErrChan  chan error
-	FromServerChan chan *clmrpc.ServerAuctionMessage
+	FromServerChan chan *poolrpc.ServerAuctionMessage
 
 	serverConn *grpc.ClientConn
-	client     clmrpc.ChannelAuctioneerClient
+	client     poolrpc.ChannelAuctioneerClient
 
 	quit            chan struct{}
 	wg              sync.WaitGroup
-	serverStream    clmrpc.ChannelAuctioneer_SubscribeBatchAuctionClient
+	serverStream    poolrpc.ChannelAuctioneer_SubscribeBatchAuctionClient
 	streamMutex     sync.Mutex
 	streamCancel    func()
 	subscribedAccts map[[33]byte]*acctSubscription
@@ -118,7 +118,7 @@ func NewClient(cfg *Config) (*Client, error) {
 
 	return &Client{
 		cfg:             cfg,
-		FromServerChan:  make(chan *clmrpc.ServerAuctionMessage),
+		FromServerChan:  make(chan *poolrpc.ServerAuctionMessage),
 		StreamErrChan:   make(chan error),
 		quit:            make(chan struct{}),
 		subscribedAccts: make(map[[33]byte]*acctSubscription),
@@ -138,7 +138,7 @@ func (c *Client) Start() error {
 	}
 
 	c.serverConn = serverConn
-	c.client = clmrpc.NewChannelAuctioneerClient(serverConn)
+	c.client = poolrpc.NewChannelAuctioneerClient(serverConn)
 
 	return nil
 }
@@ -220,7 +220,7 @@ func (c *Client) ReserveAccount(ctx context.Context, value btcutil.Amount,
 	expiry uint32, traderKey *btcec.PublicKey) (*account.Reservation,
 	error) {
 
-	resp, err := c.client.ReserveAccount(ctx, &clmrpc.ReserveAccountRequest{
+	resp, err := c.client.ReserveAccount(ctx, &poolrpc.ReserveAccountRequest{
 		AccountValue:  uint64(value),
 		TraderKey:     traderKey.SerializeCompressed(),
 		AccountExpiry: expiry,
@@ -256,8 +256,8 @@ func (c *Client) InitAccount(ctx context.Context, account *account.Account) erro
 		return fmt.Errorf("unable to construct account output: %v", err)
 	}
 
-	_, err = c.client.InitAccount(ctx, &clmrpc.ServerInitAccountRequest{
-		AccountPoint: &clmrpc.OutPoint{
+	_, err = c.client.InitAccount(ctx, &poolrpc.ServerInitAccountRequest{
+		AccountPoint: &poolrpc.OutPoint{
 			Txid:        account.OutPoint.Hash[:],
 			OutputIndex: account.OutPoint.Index,
 		},
@@ -281,34 +281,34 @@ func (c *Client) ModifyAccount(ctx context.Context, account *account.Account,
 	inputs []*wire.TxIn, outputs []*wire.TxOut,
 	modifiers []account.Modifier) ([]byte, error) {
 
-	rpcInputs := make([]*clmrpc.ServerInput, 0, len(inputs))
+	rpcInputs := make([]*poolrpc.ServerInput, 0, len(inputs))
 	for _, input := range inputs {
 		op := input.PreviousOutPoint
-		rpcInputs = append(rpcInputs, &clmrpc.ServerInput{
-			Outpoint: &clmrpc.OutPoint{
+		rpcInputs = append(rpcInputs, &poolrpc.ServerInput{
+			Outpoint: &poolrpc.OutPoint{
 				Txid:        op.Hash[:],
 				OutputIndex: op.Index,
 			},
 		})
 	}
 
-	rpcOutputs := make([]*clmrpc.ServerOutput, 0, len(outputs))
+	rpcOutputs := make([]*poolrpc.ServerOutput, 0, len(outputs))
 	for _, output := range outputs {
-		rpcOutputs = append(rpcOutputs, &clmrpc.ServerOutput{
+		rpcOutputs = append(rpcOutputs, &poolrpc.ServerOutput{
 			Value:  uint64(output.Value),
 			Script: output.PkScript,
 		})
 	}
 
-	var rpcNewParams *clmrpc.ServerModifyAccountRequest_NewAccountParameters
+	var rpcNewParams *poolrpc.ServerModifyAccountRequest_NewAccountParameters
 	modifiedAccount := account.Copy(modifiers...)
 	if len(modifiers) > 0 {
-		rpcNewParams = &clmrpc.ServerModifyAccountRequest_NewAccountParameters{
+		rpcNewParams = &poolrpc.ServerModifyAccountRequest_NewAccountParameters{
 			Value: uint64(modifiedAccount.Value),
 		}
 	}
 
-	resp, err := c.client.ModifyAccount(ctx, &clmrpc.ServerModifyAccountRequest{
+	resp, err := c.client.ModifyAccount(ctx, &poolrpc.ServerModifyAccountRequest{
 		TraderKey:  account.TraderKey.PubKey.SerializeCompressed(),
 		NewInputs:  rpcInputs,
 		NewOutputs: rpcOutputs,
@@ -328,15 +328,15 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 
 	// Prepare everything that is common to both ask and bid orders.
 	nonce := o.Nonce()
-	rpcRequest := &clmrpc.ServerSubmitOrderRequest{}
-	nodeAddrs := make([]*clmrpc.NodeAddress, 0, len(serverParams.Addrs))
+	rpcRequest := &poolrpc.ServerSubmitOrderRequest{}
+	nodeAddrs := make([]*poolrpc.NodeAddress, 0, len(serverParams.Addrs))
 	for _, addr := range serverParams.Addrs {
-		nodeAddrs = append(nodeAddrs, &clmrpc.NodeAddress{
+		nodeAddrs = append(nodeAddrs, &poolrpc.NodeAddress{
 			Network: addr.Network(),
 			Addr:    addr.String(),
 		})
 	}
-	details := &clmrpc.ServerOrder{
+	details := &poolrpc.ServerOrder{
 		TraderKey:               o.Details().AcctKey[:],
 		RateFixed:               o.Details().FixedRate,
 		Amt:                     uint64(o.Details().Amt),
@@ -351,22 +351,22 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 	// Split into server message which is type specific.
 	switch castOrder := o.(type) {
 	case *order.Ask:
-		serverAsk := &clmrpc.ServerAsk{
+		serverAsk := &poolrpc.ServerAsk{
 			Details:           details,
 			MaxDurationBlocks: castOrder.MaxDuration,
 			Version:           uint32(castOrder.Version),
 		}
-		rpcRequest.Details = &clmrpc.ServerSubmitOrderRequest_Ask{
+		rpcRequest.Details = &poolrpc.ServerSubmitOrderRequest_Ask{
 			Ask: serverAsk,
 		}
 
 	case *order.Bid:
-		serverBid := &clmrpc.ServerBid{
+		serverBid := &poolrpc.ServerBid{
 			Details:           details,
 			MinDurationBlocks: castOrder.MinDuration,
 			Version:           uint32(castOrder.Version),
 		}
-		rpcRequest.Details = &clmrpc.ServerSubmitOrderRequest_Bid{
+		rpcRequest.Details = &poolrpc.ServerSubmitOrderRequest_Bid{
 			Bid: serverBid,
 		}
 
@@ -380,13 +380,13 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		return err
 	}
 	switch submitResp := resp.Details.(type) {
-	case *clmrpc.ServerSubmitOrderResponse_InvalidOrder:
+	case *poolrpc.ServerSubmitOrderResponse_InvalidOrder:
 		return &order.UserError{
 			FailMsg: submitResp.InvalidOrder.FailString,
 			Details: submitResp.InvalidOrder,
 		}
 
-	case *clmrpc.ServerSubmitOrderResponse_Accepted:
+	case *poolrpc.ServerSubmitOrderResponse_Accepted:
 		return nil
 
 	default:
@@ -396,7 +396,7 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 
 // CancelOrder sends an order cancellation message to the server.
 func (c *Client) CancelOrder(ctx context.Context, nonce order.Nonce) error {
-	_, err := c.client.CancelOrder(ctx, &clmrpc.ServerCancelOrderRequest{
+	_, err := c.client.CancelOrder(ctx, &poolrpc.ServerCancelOrderRequest{
 		OrderNonce: nonce[:],
 	})
 	return err
@@ -406,9 +406,9 @@ func (c *Client) CancelOrder(ctx context.Context, nonce order.Nonce) error {
 // state as it's currently known to the server's database. For real-time updates
 // on the state, the SubscribeBatchAuction stream should be used.
 func (c *Client) OrderState(ctx context.Context, nonce order.Nonce) (
-	*clmrpc.ServerOrderStateResponse, error) {
+	*poolrpc.ServerOrderStateResponse, error) {
 
-	return c.client.OrderState(ctx, &clmrpc.ServerOrderStateRequest{
+	return c.client.OrderState(ctx, &poolrpc.ServerOrderStateRequest{
 		OrderNonce: nonce[:],
 	})
 }
@@ -473,7 +473,7 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		acctKey: acctKey,
 		sendMsg: c.SendAuctionMessage,
 		signer:  c.cfg.Signer,
-		msgChan: make(chan *clmrpc.ServerAuctionMessage),
+		msgChan: make(chan *poolrpc.ServerAuctionMessage),
 		quit:    c.quit,
 	}
 	c.subscribedAccts[acctPubKey] = sub
@@ -516,7 +516,7 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 			// normal recovery in that case because the account
 			// subscription cannot be completed. This needs to be
 			// handled specifically so we return a typed error now.
-			if errMsg.ErrorCode == clmrpc.SubscribeError_INCOMPLETE_ACCOUNT_RESERVATION {
+			if errMsg.ErrorCode == poolrpc.SubscribeError_INCOMPLETE_ACCOUNT_RESERVATION {
 				return sub, true, AcctResNotCompletedErrFromRPC(
 					*errMsg.AccountReservation,
 				)
@@ -525,7 +525,7 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 			// The account doesn't exist. We are in recovery mode so
 			// this is fine. We just skip this account key and try
 			// the next one.
-			if errMsg.ErrorCode == clmrpc.SubscribeError_ACCOUNT_DOES_NOT_EXIST {
+			if errMsg.ErrorCode == poolrpc.SubscribeError_ACCOUNT_DOES_NOT_EXIST {
 				return sub, false, nil
 			}
 
@@ -612,9 +612,9 @@ func (c *Client) RecoverAccounts(ctx context.Context,
 		// its database. The response to this message will be handled
 		// outside of the client.
 		numNotFoundAccounts = 0
-		err = c.SendAuctionMessage(&clmrpc.ClientAuctionMessage{
-			Msg: &clmrpc.ClientAuctionMessage_Recover{
-				Recover: &clmrpc.AccountRecovery{
+		err = c.SendAuctionMessage(&poolrpc.ClientAuctionMessage{
+			Msg: &poolrpc.ClientAuctionMessage_Recover{
+				Recover: &poolrpc.AccountRecovery{
 					TraderKey: acctKeyBytes,
 				},
 			},
@@ -627,7 +627,7 @@ func (c *Client) RecoverAccounts(ctx context.Context,
 		// Now we wait for the server to send us the account to recover.
 		select {
 		case msg := <-subscription.msgChan:
-			acctMsg, ok := msg.Msg.(*clmrpc.ServerAuctionMessage_Account)
+			acctMsg, ok := msg.Msg.(*poolrpc.ServerAuctionMessage_Account)
 			if !ok {
 				return nil, fmt.Errorf("received unexpected "+
 					"recovery message from server: %v",
@@ -707,7 +707,7 @@ func incompleteAcctFromErr(traderKey *keychain.KeyDescriptor,
 // SendAuctionMessage sends an auction message through the long-lived stream to
 // the auction server. A message can only be sent as a response to a server
 // message, therefore the stream must already be open.
-func (c *Client) SendAuctionMessage(msg *clmrpc.ClientAuctionMessage) error {
+func (c *Client) SendAuctionMessage(msg *poolrpc.ClientAuctionMessage) error {
 	if c.serverStream == nil {
 		return fmt.Errorf("cannot send message, stream not open")
 	}
@@ -844,7 +844,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		switch t := msg.Msg.(type) {
 		// The server sends us the challenge that we need to complete
 		// the 3-way handshake.
-		case *clmrpc.ServerAuctionMessage_Challenge:
+		case *poolrpc.ServerAuctionMessage_Challenge:
 			// Try to find the subscription this message is for so
 			// we can send it over the correct chan.
 			var commitHash [32]byte
@@ -871,7 +871,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		// The server confirms the account subscription. We only really
 		// care about this response in the recovery case because it
 		// means we can recover this account.
-		case *clmrpc.ServerAuctionMessage_Success:
+		case *poolrpc.ServerAuctionMessage_Success:
 			err := c.sendToSubscription(t.Success.TraderKey, msg)
 			if err != nil {
 				c.StreamErrChan <- err
@@ -881,7 +881,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		// We've requested to recover an account and the auctioneer now
 		// sent us their state of the account. We'll try to restore it
 		// in our database.
-		case *clmrpc.ServerAuctionMessage_Account:
+		case *poolrpc.ServerAuctionMessage_Account:
 			err := c.sendToSubscription(t.Account.TraderKey, msg)
 			if err != nil {
 				c.StreamErrChan <- err
@@ -891,13 +891,13 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		// The shutdown message and the account not found error are sent
 		// as general error messages. We only handle these two specific
 		// cases here, the rest is forwarded to the handler.
-		case *clmrpc.ServerAuctionMessage_Error:
+		case *poolrpc.ServerAuctionMessage_Error:
 			errCode := t.Error.ErrorCode
 
 			switch errCode {
 			// The server is shutting down. No need to forward this,
 			// we can just shutdown the stream and try to reconnect.
-			case clmrpc.SubscribeError_SERVER_SHUTDOWN:
+			case poolrpc.SubscribeError_SERVER_SHUTDOWN:
 				err := c.HandleServerShutdown(nil)
 				if err != nil {
 					select {
@@ -910,8 +910,8 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 			// We received an account not found error. This is not
 			// a reason to abort in case we are in recovery mode.
 			// We let the subscription decide what to do.
-			case clmrpc.SubscribeError_ACCOUNT_DOES_NOT_EXIST,
-				clmrpc.SubscribeError_INCOMPLETE_ACCOUNT_RESERVATION:
+			case poolrpc.SubscribeError_ACCOUNT_DOES_NOT_EXIST,
+				poolrpc.SubscribeError_INCOMPLETE_ACCOUNT_RESERVATION:
 
 				err := c.sendToSubscription(
 					t.Error.TraderKey, msg,
@@ -945,7 +945,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 // sendToSubscription finds the subscription for a trader's account public key
 // and forwards the given message to it.
 func (c *Client) sendToSubscription(traderAccountKey []byte,
-	msg *clmrpc.ServerAuctionMessage) error {
+	msg *poolrpc.ServerAuctionMessage) error {
 
 	// Try to find the subscription this message is for so we can send it
 	// over the correct chan. If the key isn't a valid pubkey we'll just not
@@ -1021,7 +1021,7 @@ func (c *Client) HandleServerShutdown(err error) error {
 // unmarshallServerAccount parses the account information sent from the
 // auctioneer into our local account struct.
 func unmarshallServerRecoveredAccount(keyDesc *keychain.KeyDescriptor,
-	a *clmrpc.AuctionAccount) (*account.Account, error) {
+	a *poolrpc.AuctionAccount) (*account.Account, error) {
 
 	// Parse all raw public keys.
 	auctioneerKey, err := btcec.ParsePubKey(a.AuctioneerKey, btcec.S256())
@@ -1041,21 +1041,21 @@ func unmarshallServerRecoveredAccount(keyDesc *keychain.KeyDescriptor,
 	// side.
 	state := account.StateClosed
 	switch a.State {
-	case clmrpc.AuctionAccountState_STATE_OPEN,
-		clmrpc.AuctionAccountState_STATE_PENDING_OPEN:
+	case poolrpc.AuctionAccountState_STATE_OPEN,
+		poolrpc.AuctionAccountState_STATE_PENDING_OPEN:
 
 		state = account.StateInitiated
 
-	case clmrpc.AuctionAccountState_STATE_CLOSED:
+	case poolrpc.AuctionAccountState_STATE_CLOSED:
 		state = account.StatePendingClosed
 
-	case clmrpc.AuctionAccountState_STATE_PENDING_UPDATE:
+	case poolrpc.AuctionAccountState_STATE_PENDING_UPDATE:
 		state = account.StatePendingUpdate
 
-	case clmrpc.AuctionAccountState_STATE_PENDING_BATCH:
+	case poolrpc.AuctionAccountState_STATE_PENDING_BATCH:
 		state = account.StatePendingBatch
 
-	case clmrpc.AuctionAccountState_STATE_EXPIRED:
+	case poolrpc.AuctionAccountState_STATE_EXPIRED:
 		state = account.StateExpired
 	}
 
@@ -1071,7 +1071,7 @@ func unmarshallServerRecoveredAccount(keyDesc *keychain.KeyDescriptor,
 	// The latest transaction is only known to the auctioneer after it's
 	// been confirmed.
 	var latestTx *wire.MsgTx
-	if a.State != clmrpc.AuctionAccountState_STATE_PENDING_OPEN {
+	if a.State != poolrpc.AuctionAccountState_STATE_PENDING_OPEN {
 		latestTx = &wire.MsgTx{}
 		err := latestTx.Deserialize(bytes.NewReader(a.LatestTx))
 		if err != nil {
@@ -1098,7 +1098,7 @@ func unmarshallServerRecoveredAccount(keyDesc *keychain.KeyDescriptor,
 // Terms returns the current dynamic auctioneer terms like max account size, max
 // order duration in blocks and the auction fee schedule.
 func (c *Client) Terms(ctx context.Context) (*terms.AuctioneerTerms, error) {
-	resp, err := c.client.Terms(ctx, &clmrpc.TermsRequest{})
+	resp, err := c.client.Terms(ctx, &poolrpc.TermsRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -1117,9 +1117,9 @@ func (c *Client) Terms(ctx context.Context) (*terms.AuctioneerTerms, error) {
 // NOTE: This isn't wrapped in "native" types, as atm we only use this to
 // shuffle information back to the client over our RPC interface.
 func (c *Client) BatchSnapshot(ctx context.Context,
-	targetBatch order.BatchID) (*clmrpc.BatchSnapshotResponse, error) {
+	targetBatch order.BatchID) (*poolrpc.BatchSnapshotResponse, error) {
 
-	return c.client.BatchSnapshot(ctx, &clmrpc.BatchSnapshotRequest{
+	return c.client.BatchSnapshot(ctx, &poolrpc.BatchSnapshotRequest{
 		BatchId: targetBatch[:],
 	})
 }

@@ -5,9 +5,9 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 )
@@ -18,9 +18,9 @@ import (
 type acctSubscription struct {
 	acctKey    *keychain.KeyDescriptor
 	commitHash [32]byte
-	sendMsg    func(*clmrpc.ClientAuctionMessage) error
+	sendMsg    func(*poolrpc.ClientAuctionMessage) error
 	signer     lndclient.SignerClient
-	msgChan    chan *clmrpc.ServerAuctionMessage
+	msgChan    chan *poolrpc.ServerAuctionMessage
 	quit       <-chan struct{}
 }
 
@@ -45,9 +45,9 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 	// a challenge back. We need to track the subscription from now on so
 	// the goroutine reading the incoming messages knows which subscription
 	// to add the received challenge to.
-	err = s.sendMsg(&clmrpc.ClientAuctionMessage{
-		Msg: &clmrpc.ClientAuctionMessage_Commit{
-			Commit: &clmrpc.AccountCommitment{
+	err = s.sendMsg(&poolrpc.ClientAuctionMessage{
+		Msg: &poolrpc.ClientAuctionMessage_Commit{
+			Commit: &poolrpc.AccountCommitment{
 				CommitHash:   s.commitHash[:],
 				BatchVersion: uint32(order.CurrentVersion),
 			},
@@ -66,7 +66,7 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 				"was received")
 		}
 
-		msg, ok := srvMsg.Msg.(*clmrpc.ServerAuctionMessage_Challenge)
+		msg, ok := srvMsg.Msg.(*poolrpc.ServerAuctionMessage_Challenge)
 		if !ok {
 			return fmt.Errorf("unexpected server message in auth "+
 				"process: %v", msg)
@@ -84,9 +84,9 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		return s.sendMsg(&clmrpc.ClientAuctionMessage{
-			Msg: &clmrpc.ClientAuctionMessage_Subscribe{
-				Subscribe: &clmrpc.AccountSubscription{
+		return s.sendMsg(&poolrpc.ClientAuctionMessage{
+			Msg: &poolrpc.ClientAuctionMessage_Subscribe{
+				Subscribe: &poolrpc.AccountSubscription{
 					TraderKey:   acctPubKey[:],
 					CommitNonce: nonce[:],
 					AuthSig:     sig,

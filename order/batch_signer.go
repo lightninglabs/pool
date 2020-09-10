@@ -6,8 +6,8 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/txscript"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/clmscript"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/lndclient"
 )
 
@@ -55,10 +55,10 @@ func (s *batchSigner) Sign(batch *Batch) (BatchSignature, error) {
 
 		// Gather the remaining components required to sign the
 		// transaction and sign it.
-		traderKeyTweak := clmscript.TraderKeyTweak(
+		traderKeyTweak := poolscript.TraderKeyTweak(
 			acct.BatchKey, acct.Secret, acct.TraderKey.PubKey,
 		)
-		witnessScript, err := clmscript.AccountWitnessScript(
+		witnessScript, err := poolscript.AccountWitnessScript(
 			acct.Expiry, acct.TraderKey.PubKey, acct.AuctioneerKey,
 			acct.BatchKey, acct.Secret,
 		)

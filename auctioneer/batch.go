@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/order"
 )
 
 var (
@@ -66,7 +66,7 @@ func (c *Client) checkPendingBatch() error {
 // finalizedBatchTx retrieves the finalized transaction of a batch according to
 // the auctioneer, i.e., the transaction that will be broadcast to the network.
 func (c *Client) finalizedBatchTx(id order.BatchID) (*wire.MsgTx, error) {
-	req := &clmrpc.RelevantBatchRequest{Id: id[:]}
+	req := &poolrpc.RelevantBatchRequest{Id: id[:]}
 	batch, err := c.client.RelevantBatchSnapshot(context.Background(), req)
 	if err != nil {
 		return nil, err

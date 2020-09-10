@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/lightninglabs/llm/account"
+	"github.com/lightninglabs/pool/account"
 	"go.etcd.io/bbolt"
 )
 

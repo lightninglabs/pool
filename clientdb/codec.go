@@ -8,8 +8,8 @@ import (
 	"reflect"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/order"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"

@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/terms"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 

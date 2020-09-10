@@ -1,4 +1,4 @@
-package llm
+package pool
 
 import (
 	"context"
@@ -11,10 +11,10 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/llm/chaninfo"
-	"github.com/lightninglabs/llm/clientdb"
-	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/pool/chaninfo"
+	"github.com/lightninglabs/pool/clientdb"
+	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -37,7 +37,7 @@ var (
 // matchRejectErr is an error type that is returned from the funding manager if
 // the trader rejects certain orders instead of the whole batch.
 type matchRejectErr struct {
-	rejectedOrders map[order.Nonce]*clmrpc.OrderReject
+	rejectedOrders map[order.Nonce]*poolrpc.OrderReject
 }
 
 // Error returns the underlying error string.
@@ -328,7 +328,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	var (
 		eg                errgroup.Group
 		chanPoints        = make(map[wire.OutPoint]order.Nonce)
-		fundingRejects    = make(map[order.Nonce]*clmrpc.OrderReject)
+		fundingRejects    = make(map[order.Nonce]*poolrpc.OrderReject)
 		fundingRejectsMtx sync.Mutex
 	)
 	partialReject := func(nonce order.Nonce, reason string,
@@ -337,8 +337,8 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 		fundingRejectsMtx.Lock()
 		defer fundingRejectsMtx.Unlock()
 
-		fundingRejects[nonce] = &clmrpc.OrderReject{
-			ReasonCode: clmrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+		fundingRejects[nonce] = &poolrpc.OrderReject{
+			ReasonCode: poolrpc.OrderReject_CHANNEL_FUNDING_FAILED,
 			Reason:     reason,
 		}
 
@@ -705,7 +705,7 @@ func (f *fundingMgr) waitForPeerConnections(ctx context.Context,
 // rejected because they would create channels to peers that the trader already
 // has channels with.
 func (f *fundingMgr) rejectDuplicateChannels(
-	batch *order.Batch) (map[order.Nonce]*clmrpc.OrderReject, error) {
+	batch *order.Batch) (map[order.Nonce]*poolrpc.OrderReject, error) {
 
 	// We gather all peers from the open and pending channels.
 	ctxb := context.Background()
@@ -730,8 +730,8 @@ func (f *fundingMgr) rejectDuplicateChannels(
 	// Gather the list of matches we reject because they are to peers we
 	// already have channels with.
 	const haveChannel = "already have open/pending channel with peer"
-	const rejectCode = clmrpc.OrderReject_DUPLICATE_PEER
-	fundingRejects := make(map[order.Nonce]*clmrpc.OrderReject)
+	const rejectCode = poolrpc.OrderReject_DUPLICATE_PEER
+	fundingRejects := make(map[order.Nonce]*poolrpc.OrderReject)
 	for _, matchedOrders := range batch.MatchedOrders {
 		for _, matchedOrder := range matchedOrders {
 			_, ok := peers[matchedOrder.NodeKey]
@@ -742,7 +742,7 @@ func (f *fundingMgr) rejectDuplicateChannels(
 			fndgLog.Debugf("Rejecting channel to node %x: %v",
 				matchedOrder.NodeKey[:], haveChannel)
 			otherNonce := matchedOrder.Order.Nonce()
-			fundingRejects[otherNonce] = &clmrpc.OrderReject{
+			fundingRejects[otherNonce] = &poolrpc.OrderReject{
 				ReasonCode: rejectCode,
 				Reason:     haveChannel,
 			}
@@ -755,13 +755,13 @@ func (f *fundingMgr) rejectDuplicateChannels(
 // rejectFailedConnections gathers a list of all matched orders that are to
 // peers to which we couldn't connect and want to reject because of that.
 func (f *fundingMgr) rejectFailedConnections(peers map[route.Vertex]struct{},
-	batch *order.Batch) map[order.Nonce]*clmrpc.OrderReject {
+	batch *order.Batch) map[order.Nonce]*poolrpc.OrderReject {
 
 	// Gather the list of matches we reject because the connection to them
 	// failed.
 	const connFailed = "connection not established before timeout"
-	const rejectCode = clmrpc.OrderReject_CHANNEL_FUNDING_FAILED
-	fundingRejects := make(map[order.Nonce]*clmrpc.OrderReject)
+	const rejectCode = poolrpc.OrderReject_CHANNEL_FUNDING_FAILED
+	fundingRejects := make(map[order.Nonce]*poolrpc.OrderReject)
 	for _, matchedOrders := range batch.MatchedOrders {
 		for _, matchedOrder := range matchedOrders {
 			_, ok := peers[matchedOrder.NodeKey]
@@ -772,7 +772,7 @@ func (f *fundingMgr) rejectFailedConnections(peers map[route.Vertex]struct{},
 			fndgLog.Debugf("Rejecting channel to node %x: %v",
 				matchedOrder.NodeKey[:], connFailed)
 			otherNonce := matchedOrder.Order.Nonce()
-			fundingRejects[otherNonce] = &clmrpc.OrderReject{
+			fundingRejects[otherNonce] = &poolrpc.OrderReject{
 				ReasonCode: rejectCode,
 				Reason:     connFailed,
 			}

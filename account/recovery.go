@@ -3,7 +3,7 @@ package account
 import (
 	"context"
 
-	"github.com/lightninglabs/llm/clmscript"
+	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 )
@@ -25,7 +25,7 @@ func GenerateRecoveryKeys(ctx context.Context,
 	acctKeys := make([]*keychain.KeyDescriptor, DefaultAccountKeyWindow)
 	for i := uint32(0); i < DefaultAccountKeyWindow; i++ {
 		key, err := wallet.DeriveKey(ctx, &keychain.KeyLocator{
-			Family: clmscript.AccountKeyFamily,
+			Family: poolscript.AccountKeyFamily,
 			Index:  i,
 		})
 		if err != nil {

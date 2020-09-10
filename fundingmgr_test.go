@@ -1,4 +1,4 @@
-package llm
+package pool
 
 import (
 	"context"
@@ -12,10 +12,10 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm/clientdb"
-	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/internal/test"
-	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/pool/clientdb"
+	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/internal/test"
+	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -358,9 +358,9 @@ func TestFundingManager(t *testing.T) {
 	require.Error(t, err)
 
 	expectedErr := &matchRejectErr{
-		rejectedOrders: map[order.Nonce]*clmrpc.OrderReject{
+		rejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
 			ask.Nonce(): {
-				ReasonCode: clmrpc.OrderReject_DUPLICATE_PEER,
+				ReasonCode: poolrpc.OrderReject_DUPLICATE_PEER,
 				Reason: "already have open/pending channel " +
 					"with peer",
 			},
@@ -376,9 +376,9 @@ func TestFundingManager(t *testing.T) {
 	require.Error(t, err)
 
 	expectedErr = &matchRejectErr{
-		rejectedOrders: map[order.Nonce]*clmrpc.OrderReject{
+		rejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
 			ask.Nonce(): {
-				ReasonCode: clmrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+				ReasonCode: poolrpc.OrderReject_CHANNEL_FUNDING_FAILED,
 				Reason: "connection not established before " +
 					"timeout",
 			},
@@ -434,13 +434,13 @@ func TestFundingManager(t *testing.T) {
 	_, err = h.mgr.batchChannelSetup(batch)
 	require.Error(t, err)
 
-	code := &clmrpc.OrderReject{
-		ReasonCode: clmrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+	code := &poolrpc.OrderReject{
+		ReasonCode: poolrpc.OrderReject_CHANNEL_FUNDING_FAILED,
 		Reason: "timed out waiting for pending open " +
 			"channel notification",
 	}
 	expectedErr = &matchRejectErr{
-		rejectedOrders: map[order.Nonce]*clmrpc.OrderReject{
+		rejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
 			ask.Nonce(): code,
 			bid.Nonce(): code,
 		},
@@ -533,12 +533,12 @@ func TestWaitForPeerConnections(t *testing.T) {
 	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, fakeBatch)
 	require.Error(t, err)
 
-	code := &clmrpc.OrderReject{
-		ReasonCode: clmrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+	code := &poolrpc.OrderReject{
+		ReasonCode: poolrpc.OrderReject_CHANNEL_FUNDING_FAILED,
 		Reason:     "connection not established before timeout",
 	}
 	expectedErr := &matchRejectErr{
-		rejectedOrders: map[order.Nonce]*clmrpc.OrderReject{
+		rejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
 			fakeNonce2: code,
 		},
 	}

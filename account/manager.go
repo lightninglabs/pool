@@ -16,8 +16,8 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcutil/txsort"
 	"github.com/btcsuite/btcwallet/wallet/txrules"
-	"github.com/lightninglabs/llm/account/watcher"
-	"github.com/lightninglabs/llm/clmscript"
+	"github.com/lightninglabs/pool/account/watcher"
+	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
@@ -293,7 +293,7 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	// We'll start by deriving a key for ourselves that we'll use in our
 	// 2-of-2 multi-sig construction.
 	keyDesc, err := m.cfg.Wallet.DeriveNextKey(
-		ctx, int32(clmscript.AccountKeyFamily),
+		ctx, int32(poolscript.AccountKeyFamily),
 	)
 	if err != nil {
 		return nil, err
@@ -484,7 +484,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		// outpoint and store it to disk. This will be the main way we
 		// identify our accounts, and is also required to watch for its
 		// spend.
-		outputIndex, ok := clmscript.LocateOutputScript(
+		outputIndex, ok := poolscript.LocateOutputScript(
 			accountTx, accountOutput.PkScript,
 		)
 		if !ok {
@@ -643,7 +643,7 @@ func (m *Manager) locateTxByOutput(ctx context.Context,
 	}
 
 	for _, tx := range txs {
-		idx, ok := clmscript.LocateOutputScript(tx.Tx, output.PkScript)
+		idx, ok := poolscript.LocateOutputScript(tx.Tx, output.PkScript)
 		if !ok {
 			continue
 		}
@@ -778,13 +778,13 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 	// If the witness is for a spend of the account expiration path, then
 	// we'll mark the account as closed as the account has expired and all
 	// the funds have been withdrawn.
-	case clmscript.IsExpirySpend(spendWitness):
+	case poolscript.IsExpirySpend(spendWitness):
 		break
 
 	// If the witness is for a multi-sig spend, then either an order by the
 	// trader was matched, or the account was closed. If it was closed, then
 	// the account output shouldn't have been recreated.
-	case clmscript.IsMultiSigSpend(spendWitness):
+	case poolscript.IsMultiSigSpend(spendWitness):
 		// If there's a pending batch which has yet to be completed,
 		// we'll mark it as so now. This can happen if the trader is not
 		// connected to the auctioneer when the auctioneer sends them
@@ -829,7 +829,7 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 		if err != nil {
 			return err
 		}
-		_, ok := clmscript.LocateOutputScript(
+		_, ok := poolscript.LocateOutputScript(
 			spendTx, accountOutput.PkScript,
 		)
 		if ok {
@@ -1173,7 +1173,7 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 		if err != nil {
 			return nil, nil, err
 		}
-		idx, ok := clmscript.LocateOutputScript(
+		idx, ok := poolscript.LocateOutputScript(
 			spendPkg.tx, newAccountOutput.PkScript,
 		)
 		if !ok {
@@ -1262,7 +1262,7 @@ func (m *Manager) spendAccountExpiry(ctx context.Context, account *Account,
 		return nil, err
 	}
 
-	spendPkg.tx.TxIn[0].Witness = clmscript.SpendExpiry(
+	spendPkg.tx.TxIn[0].Witness = poolscript.SpendExpiry(
 		spendPkg.witnessScript, spendPkg.ourSig,
 	)
 
@@ -1310,7 +1310,7 @@ func (m *Manager) constructMultiSigWitness(ctx context.Context,
 		return nil, err
 	}
 
-	return clmscript.SpendMultiSig(
+	return poolscript.SpendMultiSig(
 		spendPkg.witnessScript, spendPkg.ourSig, auctioneerSig,
 	), nil
 }
@@ -1405,9 +1405,9 @@ func addBaseAccountModificationWeight(weightEstimator *input.TxWeightEstimator,
 	var accountInputWitnessSize int
 	switch witnessType {
 	case expiryWitness:
-		accountInputWitnessSize = clmscript.ExpiryWitnessSize
+		accountInputWitnessSize = poolscript.ExpiryWitnessSize
 	case multiSigWitness:
-		accountInputWitnessSize = clmscript.MultiSigWitnessSize
+		accountInputWitnessSize = poolscript.MultiSigWitnessSize
 	default:
 		return fmt.Errorf("unknown witness type %v", witnessType)
 	}
@@ -1683,10 +1683,10 @@ func (m *Manager) signAccountInput(ctx context.Context, tx *wire.MsgTx,
 	account *Account, idx int, sigHashType txscript.SigHashType) ([]byte,
 	[]byte, error) {
 
-	traderKeyTweak := clmscript.TraderKeyTweak(
+	traderKeyTweak := poolscript.TraderKeyTweak(
 		account.BatchKey, account.Secret, account.TraderKey.PubKey,
 	)
-	witnessScript, err := clmscript.AccountWitnessScript(
+	witnessScript, err := poolscript.AccountWitnessScript(
 		account.Expiry, account.TraderKey.PubKey, account.AuctioneerKey,
 		account.BatchKey, account.Secret,
 	)

@@ -1,4 +1,4 @@
-package llm
+package pool
 
 import (
 	"bytes"
@@ -14,10 +14,10 @@ import (
 
 	proxy "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/lightninglabs/aperture/lsat"
-	"github.com/lightninglabs/llm/auctioneer"
-	"github.com/lightninglabs/llm/clientdb"
-	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/pool/auctioneer"
+	"github.com/lightninglabs/pool/clientdb"
+	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
@@ -28,7 +28,7 @@ import (
 
 var (
 	// minimalCompatibleVersion is the minimum version and build tags
-	// required in lnd to run llm.
+	// required in lnd to run pool.
 	minimalCompatibleVersion = &verrpc.Version{
 		AppMajor:  0,
 		AppMinor:  11,
@@ -37,7 +37,7 @@ var (
 	}
 )
 
-// Server is the main llmd trader server.
+// Server is the main poold trader server.
 type Server struct {
 	// To be used atomically.
 	started int32
@@ -73,7 +73,7 @@ func NewServer(cfg *Config) *Server {
 	}
 }
 
-// Start runs llmd in daemon mode. It will listen for grpc connections, execute
+// Start runs poold in daemon mode. It will listen for grpc connections, execute
 // commands and pass back auction status information.
 func (s *Server) Start() error {
 	if atomic.AddInt32(&s.started, 1) != 1 {
@@ -124,10 +124,10 @@ func (s *Server) Start() error {
 		),
 	}
 	s.grpcServer = grpc.NewServer(serverOpts...)
-	clmrpc.RegisterTraderServer(s.grpcServer, s.rpcServer)
+	poolrpc.RegisterTraderServer(s.grpcServer, s.rpcServer)
 
 	// Next, start the gRPC server listening for HTTP/2 connections.
-	// If the provided grpcListener is not nil, it means llmd is being
+	// If the provided grpcListener is not nil, it means poold is being
 	// used as a library and the listener might not be a real network
 	// connection (but maybe a UNIX socket or bufconn). So we don't spin up
 	// a REST listener in that case.
@@ -147,7 +147,7 @@ func (s *Server) Start() error {
 		defer cancel()
 		mux := proxy.NewServeMux()
 		proxyOpts := []grpc.DialOption{grpc.WithInsecure()}
-		err = clmrpc.RegisterTraderHandlerFromEndpoint(
+		err = poolrpc.RegisterTraderHandlerFromEndpoint(
 			ctx, mux, s.cfg.RPCListen, proxyOpts,
 		)
 		if err != nil {

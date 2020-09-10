@@ -1,14 +1,13 @@
+# Lightning Pool
 
-# Lightning Liquidity Marketplace (LLM)
-
-The Lightning Lightning Marketplace (LLM) is a non-custodial batched uniform
-clearing-price auction for Channel Liquidity Bonds (CLB). A CLB packages up
-inbound (or outbound!) channel liquidity (ability to send/receive funds) as a
-fixed incoming asset (earning interest over time) with a maturity date
-expressed in blocks. The maturity date of each of the channels is enforced by
-Bitcoin contracts, ensuring that the funds of the maker (the party that sold
-the channel) can't be swept until the maturity height.  All cleared orders
-(purchased channels) are cleared in a single batched on-chain transaction. 
+Lightning Pool is a non-custodial batched uniform clearing-price auction for
+Channel Liquidity Bonds (CLB). A CLB packages up inbound (or outbound!) channel
+liquidity (ability to send/receive funds) as a fixed incoming asset (earning
+interest over time) with a maturity date expressed in blocks. The maturity date
+of each of the channels is enforced by Bitcoin contracts, ensuring that the
+funds of the maker (the party that sold the channel) can't be swept until the
+maturity height.  All cleared orders (purchased channels) are cleared in a
+single batched on-chain transaction. 
 
 The existence of an open auction to acquire/sell channel liquidity provides all
 participants on the network with a more _stable_ income source in addition to
@@ -17,7 +16,7 @@ are able to price their channels to ensure that they're compensated for the
 time-value of their coins within a channel, accounting for worst-case force
 close CSV delays.
 
-The LLM critically allows participants on the network to exchange pricing
+Pool critically allows participants on the network to exchange pricing
 signals to determine where liquidity in the network is most _demanded_. A
 channel opened to an area of the sub-graph that doesn't actually need that
 liquidity will likely remain dormant and not earn any active routing fees.
@@ -26,7 +25,7 @@ being placed where it's most demanded, we can better utilize the allocated
 capital on the network, and also allow new participants to easily identify
 where their capital is most needed.
 
-Amongst several other uses cases, the LLM allows a new participant in the
+Amongst several other uses cases, the Pool allows a new participant in the
 network to easily _boostrap_ their ability to receive funds by paying only a
 percentage of the total amount of inbound funds acquired. As an example, a node
 could acquire 100 million satoshis (1000 units, more on that below) for 100,000
@@ -40,19 +39,19 @@ A non-exhaustive list of use cases includes:
     to Bitcoin entirely, how can she join the Lightning Network without her,
     herself, making any new on-chain Bitcoin transactions? It’s desirable to a
     solution to on boarding new users on to the neowrk which is as as simple as
-    sending coins to a fresh address. The LLM solves this by allowing a third
+    sending coins to a fresh address. The Pool solves this by allowing a third
     party Carol, to purchase a channel _for_ Alice, which includes starting
     _outbound_ liquidity.
 
   * **Demand fueled routing node channel selection**: Another common question
     with regards to the LN is: "where should I open my channels to , such that
-    they'll actually be routed through"?. The LLM provides a new signal for
+    they'll actually be routed through"?. Pool provides a new signal for
     autopilot agents: a market demand signal. The node can offer up its
     liquidity and have it automatically be allocated where it's most demanded.
 
   * **Bootstrapping new services to Lightning**: Any new service launched on
     the Lightning network will likely need to figure out how to obtain inbound
-    channels so they can accept payments. For this LLM provides an elegant
+    channels so they can accept payments. For this Pool provides an elegant
     solution in that a marchant can set up a series of "introduction points"
     negotiated via the market place. The merchant can pay a small percentage of
     the total amount of liquidity allocated towards it, and also ensure that
@@ -63,21 +62,22 @@ A non-exhaustive list of use cases includes:
     soon as they set up a wallet. Some wallet providers have chosen to open new
     inbound channels to users themselves. This gives users the inbound
     bandwidth they need to receive, but can come at a high capital cost to the
-    wallet provider as they need to commit funds with a 1:1 ratio. The LLM
-    allows them to acheive some leverage in a sense, as they can pay only a
-    percentage of the funds to be allocated to a new user. As an eaxmple, they
-    can pay 1000 satohis to have 1 million satoshis be alloacted to a user.
+    wallet provider as they need to commit funds with a 1:1 ratio. The
+    Lightning Pool allows them to acheive some leverage in a sense, as they can
+    pay only a percentage of the funds to be allocated to a new user. As an
+    eaxmple, they can pay 1000 satohis to have 1 million satoshis be alloacted
+    to a user.
 
 ## The Auction Lifecycle
 
 In this section, we'll walk through the typical auction lifecycle, and in the
-process explain some key components of the LLM, and also illustrate how to
-drive your `llmd` on the command line.
+process explain some key components of the Pool, and also illustrate how to
+drive your `poold` on the command line.
 
 ### Accounts  
 
 Like any exchange/auction, before you can start trading, you'll need an
-account! Accounts in the LLM are actually special on-chain contracts. A user
+account! Accounts in the Pool are actually special on-chain contracts. A user
 deposits a certain amount of funds into an account which has a set expiry. By
 having users commit funds to an account in order to place orders, we ensure
 that they're unable to spoof orders (placing an order that they can't fulfil).
@@ -107,9 +107,9 @@ transaction.
 Creating an account has two parameters: the size of the account, and the expiry
 of an account. As you'll see below, both values can be adjusted at any time.
 
-We can create an account using `llm`, like so:
+We can create an account using `pool`, like so:
 ```
-🏔 llm accounts new --amt=50000000 --expiry_height=1773394
+🏔 pool accounts new --amt=50000000 --expiry_height=1773394
 {
         "trader_key": "0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732",
         "outpoint": "c6f62c80095c98a57f2eef485a7ff06611f97dc856754cad330f4eeb538ff514:0",
@@ -131,7 +131,7 @@ to sign orders), and the outpoint of my new account.
 Once at least 3 blocks has passed (in the alpha), the account will be confirmed
 and ready for use:
 ```
-🏔 llm accounts list
+🏔 pool accounts list
 {
         "accounts": [
                 {
@@ -148,7 +148,7 @@ and ready for use:
 
 #### Depositing To An Account
 
-We can add more funds to an account using the `llm accounts deposit` command.
+We can add more funds to an account using the `pool accounts deposit` command.
 Under the hood, we can actually batch _other_ transactions with account
 modifications (make other payments, etc), but for now we expose only the basic
 functionality over the CLI.
@@ -159,7 +159,7 @@ won't be picked up by the auctioneer.
 Let's say I want to deposit an extra 1 million satoshis into my account, I can
 do so with the following command: 
 ```
-🏔 llm accounts deposit --trader_key=0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732 --amt=1000000 --sat_per_vbyte=5
+🏔 pool accounts deposit --trader_key=0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732 --amt=1000000 --sat_per_vbyte=5
 {
         "account": {
                 "trader_key": "0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732",
@@ -173,12 +173,12 @@ do so with the following command:
 }
 ```
 
-I specify my `trader_key` explicitly, as it's possible for `llmd` to manage
+I specify my `trader_key` explicitly, as it's possible for `poold` to manage
 _multiple_ accounts. The response shows my modified account, along side with
 the `txid` that'll be used to service the deposit. Once this transaction has
 confirmed, I'll be able to use my account again.
 
-Note that these funds came from the backing `lnd` node that `llmd` is connected
+Note that these funds came from the backing `lnd` node that `poold` is connected
 to. At a future time we also plan to support a traditional _deposit_ address as
 well.
 
@@ -189,7 +189,7 @@ similar to the deposit command. If I wanted to extract that 1 million from that
 account (let's say it's my profit for the past week) and send elsewhere, I can
 do so with the following command:
 ```
-🏔 llm accounts withdraw --trader_key=0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732 --amt=1000000 --sat_per_vbyte=5 --addr=tb1qe3ueyx8jhlj4h0s6mgywmtl8vlwxqkgkgp3m3s
+🏔 pool accounts withdraw --trader_key=0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732 --amt=1000000 --sat_per_vbyte=5 --addr=tb1qe3ueyx8jhlj4h0s6mgywmtl8vlwxqkgkgp3m3s
 {
         "account": {
                 "trader_key": "0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732",
@@ -209,23 +209,23 @@ Finally, if you wish to send _all_ your funds elsewhere, it's possible to close
 your account out before the main expiration period. We can close out the
 account we created above with the following command: 
 ```
-🏔 llm accounts close --trader_key=0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732
+🏔 pool accounts close --trader_key=0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732
 ```
 
 ### Orders
 
 Now that we have our account set up and funded, it's time to trade some channels!
 
-There're two types of orders in the current version of the LLM: asks, and bids.
+There're two types of orders in the current version of Pool: asks, and bids.
 You submit an ask when you have some coins that you want to _lease out_ as
 inbound liquidity for a maximum period of time (expressed in blocks), at a
 fixed rate compounded per block. You submit a bid when you need to acquire
 inbound liquidity (ability to receive), for a minimum amount of time (again
 expressed in blocks), paying out a fixed rate that compounds per-block.
 
-In the alpha version of LLM, a single lump sum premium is paid after order
-execution. In future versions, we plan on introducing "coupon channels" which
-allow for _streaming interest_ to be paid out.
+In the alpha version of Lightning Pool, a single lump sum premium is paid after
+order execution. In future versions, we plan on introducing "coupon channels"
+which allow for _streaming interest_ to be paid out.
 
 One important aspect of the market is that rather than buy/sell satoshis, we
 use _units_. A unit is imply 100,000 satoshis and represents the _smallest_
@@ -236,7 +236,7 @@ BTC that's been burning a hole in our SD card for the past year. We'll place a
 single order for 10 million satoshis, wanting to receive 0.3% (30 bps)
 over a 3000 block period (a bit under 3 weeks):
 ```
-🏔 llm orders submit ask 10000000 0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732 --interest_rate_percent=0.3 --max_duration_blocks=3000
+🏔 pool orders submit ask 10000000 0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732 --interest_rate_percent=0.3 --max_duration_blocks=3000
 -- Order Details --
 Ask Amount: 0.1 BTC
 Ask Duration: 3000
@@ -276,7 +276,7 @@ orders, and also for authentication purposes.
 
 We can then check out the order we just placed with the following command: 
 ```
-🏔 llm orders list
+🏔 pool orders list
 {
     "asks": [
     {
@@ -308,7 +308,7 @@ min partial match size.
 ### Batched Uniform-Price Clearing
 
 Now that we have orders submitted, how does the rest of the auction actually
-work? As mentioned above, LLM conducts a _discrete_ batch auction every 10
+work? As mentioned above, Pool conducts a _discrete_ batch auction every 10
 minutes. This is distinct from regular continuous exchanges in that orders are
 only cleared every 10 minutes. Orders are also sealed-bid, meaning that other
 traders in the venue are unable to see what others have bid. On top
@@ -339,13 +339,13 @@ allows for thousands of channels to be bought/sold atomically in a single
 block. We call the transaction that executes the orders the Batch Execution
 Transaction. 
 
-The `llm auction` sub-command houses a number of useful commands to explore the
+The `pool auction` sub-command houses a number of useful commands to explore the
 past batches, and examine the current auction parameters.
 
-Once can browse the latest cleared batch using the `llm auction snapshot`
+Once can browse the latest cleared batch using the `pool auction snapshot`
 command: 
 ```
-🏔 llm auction snapshot 
+🏔 pool auction snapshot 
 {
         "version": 0,
         "batch_id": "02824d0cbac65e01712124c50ff2cc74ce22851d7b444c1bf2ae66afefb8eaf27f",
@@ -388,12 +388,12 @@ The command also accept a target `batch_id` as well. Here we can use the
 `prev_batch_id` to examine the _prior_ batch, similar to traversing a
 link-listed/blockchain:
 ```
-🏔 llm auction snapshot --batch_id=03687baa3c7414e800ddba37edacb3281999739303b7290a69bd457f428ecd9b2c
+🏔 pool auction snapshot --batch_id=03687baa3c7414e800ddba37edacb3281999739303b7290a69bd457f428ecd9b2c
 ```
 
 ### Service Level Lifetime Enforcement
 
-In the alpha version of LLM, _script level enforcement_ isn't yet implemented.
+In the alpha version of Pool, _script level enforcement_ isn't yet implemented.
 Script level enforcement would lock the maker's funds in the channel for the
 lease period. This ensures that they can't just collect the premium (before
 coupon channels) and close out the channel instantly. With script enforcement,
@@ -409,16 +409,16 @@ channel, then we'll ban them from the market for a set period of time.
 
 The following section assumes at least Go 1.13 is installed.
 
-To install the primary daemon (`llmd`) and the CLI used to control the daemon,
+To install the primary daemon (`poold`) and the CLI used to control the daemon,
 the following command should be run: 
 ```
 🏔  make install
 ```
 
-Assuming `llmd` is now in your `$PATH`, you can start the daemon with the
+Assuming `poold` is now in your `$PATH`, you can start the daemon with the
 following command (assuming you have a local testnet `lnd` running): 
 ```
-🏔 llmd --network=testnet --auctionserver=clm.testnet.lightningcluster.com:12010 --debuglevel=trace
+🏔 poold --network=testnet --auctionserver=clm.testnet.lightningcluster.com:12010 --debuglevel=trace
 ```
 
 The current server is reachable at `clm.testnet.lightningcluster.com:12010`,

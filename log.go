@@ -1,16 +1,16 @@
 // As this file is very similar in every package, ignore the linter here.
 // nolint:dupl,interfacer
-package llm
+package pool
 
 import (
 	"context"
 
 	"github.com/btcsuite/btclog"
 	"github.com/lightninglabs/aperture/lsat"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/auctioneer"
-	"github.com/lightninglabs/llm/clientdb"
-	"github.com/lightninglabs/llm/order"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/auctioneer"
+	"github.com/lightninglabs/pool/clientdb"
+	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/signal"

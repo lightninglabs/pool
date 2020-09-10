@@ -10,9 +10,9 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/clmrpc"
-	"github.com/lightninglabs/llm/terms"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -496,7 +496,7 @@ type Store interface {
 // an invalid action or information provided by the user.
 type UserError struct {
 	FailMsg string
-	Details *clmrpc.InvalidOrder
+	Details *poolrpc.InvalidOrder
 }
 
 // Error returns the string representation of the underlying failure message.

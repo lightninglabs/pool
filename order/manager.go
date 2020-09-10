@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lightninglabs/llm/account"
-	"github.com/lightninglabs/llm/terms"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -42,7 +42,7 @@ type ManagerConfig struct {
 	AcctStore account.Store
 
 	// Lightning is used to access the main RPC to get information about the
-	// lnd node that llmd is connected to.
+	// lnd node that poold is connected to.
 	Lightning lndclient.LightningClient
 
 	// Wallet is responsible for deriving new keys we need to sign orders.
