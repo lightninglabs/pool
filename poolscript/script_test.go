@@ -1,4 +1,4 @@
-package clmscript
+package poolscript
 
 import (
 	"testing"
