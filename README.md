@@ -29,7 +29,7 @@ Amongst several other uses cases, the Pool allows a new participant in the
 network to easily _boostrap_ their ability to receive funds by paying only a
 percentage of the total amount of inbound funds acquired. As an example, a node
 could acquire 100 million satoshis (1000 units, more on that below) for 100,000
-satoshis for 0.1%. Ultimately the prices will be determined by the open market
+satoshis, or 0.1%. Ultimately the prices will be determined by the open market
 place.
 
 A non-exhaustive list of use cases includes:
@@ -38,7 +38,7 @@ A non-exhaustive list of use cases includes:
     posted concerning the Lightning Network goes something like: Alice is new
     to Bitcoin entirely, how can she join the Lightning Network without her,
     herself, making any new on-chain Bitcoin transactions? It’s desirable to a
-    solution to on boarding new users on to the neowrk which is as as simple as
+    solution to onboarding new users on to the network which is as as simple as
     sending coins to a fresh address. The Pool solves this by allowing a third
     party Carol, to purchase a channel _for_ Alice, which includes starting
     _outbound_ liquidity.
@@ -50,9 +50,9 @@ A non-exhaustive list of use cases includes:
     liquidity and have it automatically be allocated where it's most demanded.
 
   * **Bootstrapping new services to Lightning**: Any new service launched on
-    the Lightning network will likely need to figure out how to obtain inbound
+    the Lightning Network will likely need to figure out how to obtain inbound
     channels so they can accept payments. For this Pool provides an elegant
-    solution in that a marchant can set up a series of "introduction points"
+    solution in that a merchant can set up a series of "introduction points"
     negotiated via the market place. The merchant can pay a small percentage of
     the total amount of liquidity allocated towards it, and also ensure that
     the funds will be committed for a set period of time.
@@ -63,7 +63,7 @@ A non-exhaustive list of use cases includes:
     inbound channels to users themselves. This gives users the inbound
     bandwidth they need to receive, but can come at a high capital cost to the
     wallet provider as they need to commit funds with a 1:1 ratio. The
-    Lightning Pool allows them to acheive some leverage in a sense, as they can
+    Lightning Pool allows them to achieve some leverage in a sense, as they can
     pay only a percentage of the funds to be allocated to a new user. As an
     eaxmple, they can pay 1000 satohis to have 1 million satoshis be alloacted
     to a user.
@@ -80,7 +80,7 @@ Like any exchange/auction, before you can start trading, you'll need an
 account! Accounts in the Pool are actually special on-chain contracts. A user
 deposits a certain amount of funds into an account which has a set expiry. By
 having users commit funds to an account in order to place orders, we ensure
-that they're unable to spoof orders (placing an order that they can't fulfil).
+that they're unable to spoof orders (placing an order that they can't fulfill).
 We also add a cost to attempting to sybil attack the venue as well.
 
 The script for an account is very simple, funds can be moved from the account:
@@ -122,13 +122,13 @@ We can create an account using `pool`, like so:
 
 It's also possible to specify a _relative_ account expiry based on the current
 best block with the `--expiry_blocks` argument. As an example, if I wanted my
-account to expiry in 2 weeks, I would pass: `--expiry_blocks=2016'.
+account to expiry in 2 weeks, I would pass: `--expiry_blocks=2016`.
 
 Here I created an account with 0.5 BTC, that'll expire at height `1773394`. The
 response shows that it's now pending open (unconfirmed), my `trader_key` (used
 to sign orders), and the outpoint of my new account.
 
-Once at least 3 blocks has passed (in the alpha), the account will be confirmed
+Once at least 3 blocks have passed (in the alpha), the account will be confirmed
 and ready for use:
 ```
 🏔 pool accounts list
@@ -174,7 +174,7 @@ do so with the following command:
 ```
 
 I specify my `trader_key` explicitly, as it's possible for `poold` to manage
-_multiple_ accounts. The response shows my modified account, along side with
+_multiple_ accounts. The response shows my modified account, alongside with
 the `txid` that'll be used to service the deposit. Once this transaction has
 confirmed, I'll be able to use my account again.
 
@@ -228,7 +228,7 @@ order execution. In future versions, we plan on introducing "coupon channels"
 which allow for _streaming interest_ to be paid out.
 
 One important aspect of the market is that rather than buy/sell satoshis, we
-use _units_. A unit is imply 100,000 satoshis and represents the _smallest_
+use _units_. A unit is simply 100,000 satoshis and represents the _smallest_
 channel that can be bought or sold on the network.
 
 With that said, let's place some orders to try to earn some yield from this 0.5
@@ -261,7 +261,7 @@ premium = (rate_fixed / billion) * amount * blocks
 
 It's important to note that although internally we use a fixed rate per block
 to compute the final premium, on the command line, we accept the final
-acceptable premium in a _percent_. Therefore, when submitting orders, one
+acceptable premium as a _percentage_. Therefore, when submitting orders, one
 should place the value that they wish to receive or accept at the end of the
 lease period. Internally, we'll then compute the _per block lease rate_ and
 submit the order using _that_.
@@ -299,10 +299,10 @@ We can then check out the order we just placed with the following command:
 The order hasn't been cleared yet (state `ORDER_SUBMITTED`), and it shows up as
 100 units, or 10 million satoshis.
 
-If we instead wanted to _buy_ inbound bandwidth, we could submit a bit instead.
+If we instead wanted to _buy_ inbound bandwidth, we could submit a bid instead.
 A trader can have multiple unfilled bids and asks. Partial matching is possible
 as well, so someone could only purchase 10 of the 100 units we have for sale.
-Over time the orders will gain additional constraints such as kill-or-fill, or
+Over time the orders will gain additional constraints such as fill-or-kill, or
 min partial match size.
 
 ### Batched Uniform-Price Clearing
@@ -322,12 +322,12 @@ can't be made (supply and demand didn't cross). In this case, nothing happens,
 and we just wait for the next batch to come across.
 
 To illustrate how the uniform price clearing works consider the following
-example. Let's say I want to buy 100 million satoshis (1 BTC), for at least 10
-days (1440 blocks) at a price of 5% (using high numbers to make it easy to
-follow). However, the _market clearing price_ (where the supply+demand curves
-cross) is actually 1%. In this case I bid _more_ than the market clearing
-price, but end up paying that price, as it's the best price that was possible
-in that market.
+example. Let's say I want to buy 100 million satoshis (1 BTC, 1000 units), for 
+at least 10 days (1440 blocks) at a price of 5% (using high numbers to make it 
+easy to follow). However, the _market clearing price_ (where the supply+demand
+curves cross) is actually 1%. In this case I bid _more_ than the market 
+clearing price, but end up paying that price, as it's the best price that was 
+possible in that market.
 
 A simple rule of thumb for bids and asks is as follows:
 
@@ -342,7 +342,7 @@ Transaction.
 The `pool auction` sub-command houses a number of useful commands to explore the
 past batches, and examine the current auction parameters.
 
-Once can browse the latest cleared batch using the `pool auction snapshot`
+One can browse the latest cleared batch using the `pool auction snapshot`
 command: 
 ```
 🏔 pool auction snapshot 
