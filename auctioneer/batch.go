@@ -8,8 +8,8 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/pool/account"
-	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/poolrpc"
 )
 
 var (

@@ -3,8 +3,8 @@ package account
 import (
 	"context"
 
-	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 

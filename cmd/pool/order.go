@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli"

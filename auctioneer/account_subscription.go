@@ -5,10 +5,10 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"github.com/lightninglabs/pool/account"
-	"github.com/lightninglabs/pool/poolrpc"
-	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
