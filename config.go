@@ -74,7 +74,7 @@ type Config struct {
 }
 
 const (
-	MainnetServer = "auction.lightning.today:12009"
+	MainnetServer = "pool.lightning.finance:12010"
 	TestnetServer = "test.auction.lightning.today:12009"
 
 	// defaultRPCTimeout is the default number of seconds an unary RPC call
