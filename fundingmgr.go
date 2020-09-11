@@ -217,7 +217,9 @@ func (f *fundingMgr) registerFundingShim(ourOrder order.Order,
 
 // prepChannelFunding preps the backing node to either receive or initiate a
 // channel funding based on the items in the order batch.
-func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
+func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
+	traderBehindTor bool) error {
+
 	fndgLog.Infof("Batch(%x): preparing channel funding for %v orders",
 		batch.ID[:], len(batch.MatchedOrders))
 
@@ -271,21 +273,13 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 			// bidder which will succeed once the connection is
 			// open. But that means, as an asker we don't have
 			// anything to do here.
-			if orderIsAsk {
+			//
+			// However, if we're currently running with a single
+			// Tor address, or all Tor addresses, then we'll also
+			// try to connect out to the taker, as they may not be
+			// able to connect to hidden services.
+			if orderIsAsk && !traderBehindTor {
 				continue
-			}
-
-			// At this point, one of our bids was matched with a
-			// series of asks, so we'll now register all the
-			// expected funding shims so we can execute the next
-			// phase w/o any issues and accept the incoming channel
-			// from the asker.
-			err := f.registerFundingShim(
-				ourOrder, matchedOrder, batch.BatchTX,
-			)
-			if err != nil {
-				return fmt.Errorf("unable to register funding "+
-					"shim: %v", err)
 			}
 
 			// As the bidder, we're the one that needs to make the
@@ -308,6 +302,25 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch) error {
 				)
 				connsInitiated[nodeKey] = struct{}{}
 			}
+
+			// Only bid orders need to register for the shim.
+			if orderIsAsk {
+				continue
+			}
+
+			// At this point, one of our bids was matched with a
+			// series of asks, so we'll now register all the
+			// expected funding shims so we can execute the next
+			// phase w/o any issues and accept the incoming channel
+			// from the asker.
+			err := f.registerFundingShim(
+				ourOrder, matchedOrder, batch.BatchTX,
+			)
+			if err != nil {
+				return fmt.Errorf("unable to register funding "+
+					"shim: %v", err)
+			}
+
 		}
 	}
 

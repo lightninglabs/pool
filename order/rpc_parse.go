@@ -14,6 +14,7 @@ import (
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
+	"github.com/lightningnetwork/lnd/tor"
 )
 
 // ParseRPCOrder parses the incoming raw RPC order into the go native data
@@ -46,6 +47,43 @@ func ParseRPCOrder(version uint32, details *poolrpc.Order) (*Kit, error) {
 	return kit, nil
 }
 
+// parseNodeAddrs parses the set of address in strong format as returned over
+// the RPC layer into a proper interface we can use.
+func parseNodeAddrs(rpcAddrs []*poolrpc.NodeAddress, orderIsAsk bool) ([]net.Addr, error) {
+
+	if len(rpcAddrs) == 0 && orderIsAsk {
+		return nil, fmt.Errorf("ask order doesn't include any node " +
+			"addrs")
+	}
+
+	nodeAddrs := make([]net.Addr, 0, len(rpcAddrs))
+	for _, rpcAddr := range rpcAddrs {
+		var (
+			addr net.Addr
+			err  error
+		)
+
+		switch {
+		case tor.IsOnionHost(rpcAddr.Addr):
+			addr, err = parseOnionAddr(rpcAddr.Addr)
+
+		default:
+			addr, err = net.ResolveTCPAddr(
+				rpcAddr.Network, rpcAddr.Addr,
+			)
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse node "+
+				"addr: %v", err)
+		}
+
+		nodeAddrs = append(nodeAddrs, addr)
+	}
+
+	return nodeAddrs, nil
+}
+
 // ParseRPCServerOrder parses the incoming raw RPC server order into the go
 // native data types used in the order struct.
 func ParseRPCServerOrder(version uint32, details *poolrpc.ServerOrder,
@@ -54,7 +92,6 @@ func ParseRPCServerOrder(version uint32, details *poolrpc.ServerOrder,
 	var (
 		nonce       Nonce
 		nodeKey     [33]byte
-		nodeAddrs   = make([]net.Addr, 0, len(details.NodeAddr))
 		multiSigKey [33]byte
 	)
 
@@ -73,7 +110,7 @@ func ParseRPCServerOrder(version uint32, details *poolrpc.ServerOrder,
 	if nonce == ZeroNonce {
 		preimageBytes, err := randomPreimage()
 		if err != nil {
-			return nil, nodeKey, nodeAddrs, multiSigKey,
+			return nil, nodeKey, nil, multiSigKey,
 				fmt.Errorf("cannot generate nonce: %v", err)
 		}
 		var preimage lntypes.Preimage
@@ -85,23 +122,17 @@ func ParseRPCServerOrder(version uint32, details *poolrpc.ServerOrder,
 
 	nodePubKey, err := btcec.ParsePubKey(details.NodePub, btcec.S256())
 	if err != nil {
-		return nil, nodeKey, nodeAddrs, multiSigKey,
+		return nil, nodeKey, nil, multiSigKey,
 			fmt.Errorf("unable to parse node pub key: %v",
 				err)
 	}
 	copy(nodeKey[:], nodePubKey.SerializeCompressed())
-	if len(details.NodeAddr) == 0 && orderIsAsk {
-		return nil, nodeKey, nodeAddrs, multiSigKey,
-			fmt.Errorf("invalid node addresses")
+
+	nodeAddrs, err := parseNodeAddrs(details.NodeAddr, orderIsAsk)
+	if err != nil {
+		return nil, nodeKey, nil, multiSigKey, err
 	}
-	for _, rpcAddr := range details.NodeAddr {
-		addr, err := net.ResolveTCPAddr(rpcAddr.Network, rpcAddr.Addr)
-		if err != nil {
-			return nil, nodeKey, nodeAddrs, multiSigKey,
-				fmt.Errorf("unable to parse node ddr: %v", err)
-		}
-		nodeAddrs = append(nodeAddrs, addr)
-	}
+
 	multiSigPubkey, err := btcec.ParsePubKey(
 		details.MultiSigKey, btcec.S256(),
 	)
