@@ -41,9 +41,9 @@ var (
 // is rolled back. Once the batch has been finalized/confirmed on-chain, then
 // the stage modifications will be applied atomically as a result of
 // MarkBatchComplete.
-func (db *DB) StorePendingBatch(batchID order.BatchID, batchTx *wire.MsgTx,
-	orders []order.Nonce, orderModifiers [][]order.Modifier,
-	accounts []*account.Account, accountModifiers [][]account.Modifier) error {
+func (db *DB) StorePendingBatch(batch *order.Batch, orders []order.Nonce,
+	orderModifiers [][]order.Modifier, accounts []*account.Account,
+	accountModifiers [][]account.Modifier) error {
 
 	// Catch the most obvious problems first.
 	if len(orders) != len(orderModifiers) {
@@ -85,14 +85,18 @@ func (db *DB) StorePendingBatch(batchID order.BatchID, batchTx *wire.MsgTx,
 		if err != nil {
 			return err
 		}
+
+		var updatedOrders []order.Order
 		for idx, nonce := range orders {
-			err := updateOrder(
+			o, err := updateOrder(
 				ordersBucket, pendingOrdersBucket, nonce,
 				orderModifiers[idx],
 			)
 			if err != nil {
 				return err
 			}
+
+			updatedOrders = append(updatedOrders, o)
 		}
 
 		// Then update the accounts.
@@ -106,26 +110,45 @@ func (db *DB) StorePendingBatch(batchID order.BatchID, batchTx *wire.MsgTx,
 		if err != nil {
 			return err
 		}
+
+		var updatedAccounts []*account.Account
 		for idx, acct := range accounts {
 			accountKey := getAccountKey(acct)
-			err := updateAccount(
+			a, err := updateAccount(
 				accountsBucket, pendingAccountsBucket,
 				accountKey, accountModifiers[idx],
 			)
 			if err != nil {
 				return err
 			}
+
+			updatedAccounts = append(updatedAccounts, a)
 		}
 
 		// Finally, write the ID and transaction of the pending batch.
+		batchID := batch.ID
 		if err := bucket.Put(pendingBatchIDKey, batchID[:]); err != nil {
 			return err
 		}
 		var buf bytes.Buffer
-		if err := WriteElement(&buf, batchTx); err != nil {
+		if err := WriteElement(&buf, batch.BatchTX); err != nil {
 			return err
 		}
-		return bucket.Put(pendingBatchTxKey, buf.Bytes())
+
+		if err = bucket.Put(pendingBatchTxKey, buf.Bytes()); err != nil {
+			return err
+		}
+
+		// Before we are done, we store a snapshot of the this batch,
+		// so we retain this history for later.
+		snapshot, err := NewSnapshot(
+			batch, updatedOrders, updatedAccounts,
+		)
+		if err != nil {
+			return err
+		}
+
+		return storePendingBatchSnapshot(tx, snapshot)
 	})
 }
 
@@ -213,7 +236,9 @@ func (db *DB) DeletePendingBatch() error {
 			return err
 		}
 
-		return nil
+		// Also delete the pending batch snapshot, as it will be stored
+		// together with the pending batch.
+		return deletePendingSnapshot(tx)
 	})
 }
 
@@ -222,10 +247,15 @@ func (db *DB) DeletePendingBatch() error {
 // If a pending batch is not found, account.ErrNoPendingBatch is returned.
 func (db *DB) MarkBatchComplete() error {
 	return db.Update(func(tx *bbolt.Tx) error {
-		if _, err := pendingBatchID(tx); err != nil {
+		pendingID, err := pendingBatchID(tx)
+		if err != nil {
 			return err
 		}
-		return applyBatchUpdates(tx)
+		if err := applyBatchUpdates(tx); err != nil {
+			return err
+		}
+
+		return finalizeBatchSnapshot(tx, pendingID)
 	})
 }
 
@@ -255,7 +285,8 @@ func applyBatchUpdates(tx *bbolt.Tx) error {
 		if len(k) != 33 {
 			return nil
 		}
-		return updateAccount(pendingAccounts, accounts, k, nil)
+		_, err := updateAccount(pendingAccounts, accounts, k, nil)
+		return err
 	})
 	if err != nil {
 		return err
@@ -285,7 +316,8 @@ func applyBatchUpdates(tx *bbolt.Tx) error {
 			return nil
 		}
 		copy(nonce[:], k)
-		return updateOrder(pendingOrders, orders, nonce, nil)
+		_, err := updateOrder(pendingOrders, orders, nonce, nil)
+		return err
 	})
 	if err != nil {
 		return err

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/pool/account"
 )
 
@@ -95,7 +94,7 @@ func (s *mockStore) DelOrder(nonce Nonce) error {
 // is rolled back. Once the batch has been finalized/confirmed on-chain, then
 // the stage modifications will be applied atomically as a result of
 // MarkBatchComplete.
-func (s *mockStore) StorePendingBatch(id BatchID, tx *wire.MsgTx,
+func (s *mockStore) StorePendingBatch(batch *Batch,
 	orders []Nonce, orderModifiers [][]Modifier, accts []*account.Account,
 	acctModifiers [][]account.Modifier) error {
 
@@ -108,7 +107,7 @@ func (s *mockStore) StorePendingBatch(id BatchID, tx *wire.MsgTx,
 		return err
 	}
 
-	s.pendingBatchID = &id
+	s.pendingBatchID = &batch.ID
 	return nil
 }
 

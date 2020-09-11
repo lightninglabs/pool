@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/poolrpc"
@@ -481,7 +480,7 @@ type Store interface {
 	// set of changes is rolled back. Once the batch has been
 	// finalized/confirmed on-chain, then the stage modifications will be
 	// applied atomically as a result of MarkBatchComplete.
-	StorePendingBatch(_ BatchID, _ *wire.MsgTx, orders []Nonce,
+	StorePendingBatch(_ *Batch, orders []Nonce,
 		orderModifiers [][]Modifier, accounts []*account.Account,
 		accountModifiers [][]account.Modifier) error
 

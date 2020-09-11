@@ -57,7 +57,7 @@ func (f FixedRatePremium) LumpSumPremium(amt btcutil.Amount,
 
 // PerBlockPremium calculates the absolute premium in fractions of satoshis for
 // a one block duration from the amount and the specified fee rate in parts per
-// million.
+// billion.
 func PerBlockPremium(amt btcutil.Amount, fixedRate uint32) float64 {
 	return float64(amt) * float64(fixedRate) / FeeRateTotalParts
 }

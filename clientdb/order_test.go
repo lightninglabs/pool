@@ -2,6 +2,7 @@ package clientdb
 
 import (
 	"crypto/rand"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestSubmitOrder(t *testing.T) {
 
 	// Store a dummy order and see if we can retrieve it again.
 	o := &order.Bid{
-		Kit:         *dummyOrder(t, 500000),
+		Kit:         *dummyOrder(500000),
 		MinDuration: 1337,
 	}
 	err := store.SubmitOrder(o)
@@ -93,7 +94,7 @@ func TestUpdateOrders(t *testing.T) {
 
 	// Store two dummy orders that we are going to update later.
 	o1 := &order.Bid{
-		Kit:         *dummyOrder(t, 500000),
+		Kit:         *dummyOrder(500000),
 		MinDuration: 1337,
 	}
 	err := store.SubmitOrder(o1)
@@ -101,7 +102,7 @@ func TestUpdateOrders(t *testing.T) {
 		t.Fatalf("unable to store order: %v", err)
 	}
 	o2 := &order.Ask{
-		Kit:         *dummyOrder(t, 500000),
+		Kit:         *dummyOrder(500000),
 		MaxDuration: 1337,
 	}
 	err = store.SubmitOrder(o2)
@@ -151,10 +152,10 @@ func TestUpdateOrders(t *testing.T) {
 	}
 }
 
-func dummyOrder(t *testing.T, amt btcutil.Amount) *order.Kit {
+func dummyOrder(amt btcutil.Amount) *order.Kit {
 	var testPreimage lntypes.Preimage
 	if _, err := rand.Read(testPreimage[:]); err != nil {
-		t.Fatalf("could not create private key: %v", err)
+		panic(fmt.Sprintf("could not create private key: %v", err))
 	}
 	kit := order.NewKitWithPreimage(testPreimage)
 	kit.Version = order.VersionDefault

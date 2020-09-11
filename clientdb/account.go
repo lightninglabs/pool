@@ -49,7 +49,8 @@ func (db *DB) UpdateAccount(acct *account.Account,
 			return err
 		}
 		accountKey := getAccountKey(acct)
-		return updateAccount(accounts, accounts, accountKey, modifiers)
+		_, err = updateAccount(accounts, accounts, accountKey, modifiers)
+		return err
 	})
 	if err != nil {
 		return err
@@ -65,18 +66,18 @@ func (db *DB) UpdateAccount(acct *account.Account,
 // updateAccount reads an account from the src bucket, applies the given
 // modifiers to it, and store it back into dst bucket.
 func updateAccount(src, dst *bbolt.Bucket, accountKey []byte,
-	modifiers []account.Modifier) error {
+	modifiers []account.Modifier) (*account.Account, error) {
 
 	dbAccount, err := readAccount(src, accountKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, modifier := range modifiers {
 		modifier(dbAccount)
 	}
 
-	return storeAccount(dst, dbAccount)
+	return dbAccount, storeAccount(dst, dbAccount)
 }
 
 // Account retrieves a specific account by trader key or returns
