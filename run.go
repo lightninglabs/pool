@@ -27,7 +27,11 @@ func Run(cfg *Config) error {
 		return err
 	}
 
-	signal.Intercept()
+	err = signal.Intercept()
+	if err != nil {
+		return err
+	}
+
 	trader := NewServer(cfg)
 	err = trader.Start()
 	if err != nil {

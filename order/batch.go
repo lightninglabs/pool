@@ -9,9 +9,11 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
+	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -235,6 +237,106 @@ func (b *Batch) CancelPendingFundingShims(lndClient lnrpc.LightningClient,
 	}
 
 	return nil
+}
+
+// AbandonCanceledChannels removes all channels from lnd's channel database that
+// were created for an iteration of the batch that never made it to chain in its
+// current configuration. This should be called whenever a batch is replaced
+// with an updated version because some traders were offline or rejected the
+// batch. If a non-nil error is returned, something with reading the local order
+// or extracting the channel outpoint went wrong and we should fail hard. If the
+// channel cannot be abandoned for some reason, the error is just logged but not
+// returned.
+func (b *Batch) AbandonCanceledChannels(wallet lndclient.WalletKitClient,
+	lndClient lnrpc.LightningClient, fetchOrder Fetcher) error {
+
+	// Since we support partial matches, a given bid of ours could've been
+	// matched with multiple asks, so we'll iterate through all those to
+	// ensure we remove all channels that never made it to chain.
+	ctxb := context.Background()
+	txHash := b.BatchTX.TxHash()
+	for ourOrderNonce, matchedOrders := range b.MatchedOrders {
+		ourOrder, err := fetchOrder(ourOrderNonce)
+		if err != nil {
+			return err
+		}
+
+		// For each ask order that was matched with this bid, we'll
+		// locate the channel outpoint then abandon it from lnd's
+		// channel database.
+		for _, matchedOrder := range matchedOrders {
+			_, idx, err := b.channelOutput(
+				wallet, ourOrder, matchedOrder,
+			)
+			if err != nil {
+				return fmt.Errorf("error locating channel "+
+					"outpoint: %v", err)
+			}
+
+			channelPoint := &lnrpc.ChannelPoint{
+				OutputIndex: idx,
+				FundingTxid: &lnrpc.ChannelPoint_FundingTxidBytes{
+					FundingTxidBytes: txHash[:],
+				},
+			}
+			_, err = lndClient.AbandonChannel(
+				ctxb, &lnrpc.AbandonChannelRequest{
+					ChannelPoint:           channelPoint,
+					PendingFundingShimOnly: true,
+				},
+			)
+			if err != nil {
+				log.Warnf("Unable to abandon channel "+
+					"(channel_point=%v:%d) for order=%v",
+					txHash, idx, ourOrderNonce)
+			}
+		}
+	}
+
+	return nil
+}
+
+// channelOutput returns the transaction output and output index of the channel
+// created for an order of ours that was matched with another one in the batch.
+func (b *Batch) channelOutput(wallet lndclient.WalletKitClient,
+	ourOrder Order, otherOrder *MatchedOrder) (*wire.TxOut, uint32, error) {
+
+	// Re-derive our multisig key first.
+	ctxt, cancel := context.WithTimeout(
+		context.Background(), deriveKeyTimeout,
+	)
+	defer cancel()
+	ourKey, err := wallet.DeriveKey(
+		ctxt, &ourOrder.Details().MultiSigKeyLocator,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("could not derive our multisig key: "+
+			"%v", err)
+	}
+
+	// Gather the information we expect to find in the batch TX.
+	expectedOutputSize := otherOrder.UnitsFilled.ToSatoshis()
+	_, expectedOut, err := input.GenFundingPkScript(
+		ourKey.PubKey.SerializeCompressed(), otherOrder.MultiSigKey[:],
+		int64(expectedOutputSize),
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("could not create multisig script: "+
+			"%v", err)
+	}
+
+	// Locate the channel output now that we know what to look for.
+	for idx, out := range b.BatchTX.TxOut {
+		if out.Value == expectedOut.Value &&
+			bytes.Equal(out.PkScript, expectedOut.PkScript) {
+
+			// Bingo, this is what we want.
+			return out, uint32(idx), nil
+		}
+	}
+
+	return nil, 0, fmt.Errorf("no channel output found in batch tx for "+
+		"matched order %v", otherOrder.Order.Nonce())
 }
 
 // MatchedOrder is the other side to one of our matched orders. It contains all

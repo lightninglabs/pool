@@ -1,18 +1,14 @@
 package order
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/terms"
-	"github.com/lightningnetwork/lnd/input"
 )
 
 const (
@@ -137,7 +133,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 			// batch transaction that has the multisig script we
 			// expect.
 			err = v.validateChannelOutput(
-				batch.BatchTX, ourOrder, theirOrder,
+				batch, ourOrder, theirOrder,
 			)
 			if err != nil {
 				return newMismatchErr(
@@ -277,43 +273,11 @@ func (v *batchVerifier) validateMatchedOrder(tally *AccountTally,
 // validateChannelOutput makes sure there is a channel output in the batch TX
 // that spends the correct amount for the matched units to the correct multisig
 // script that can be used by us to open the channel.
-func (v *batchVerifier) validateChannelOutput(batchTx *wire.MsgTx,
-	ourOrder Order, otherOrder *MatchedOrder) error {
+func (v *batchVerifier) validateChannelOutput(batch *Batch, ourOrder Order,
+	otherOrder *MatchedOrder) error {
 
-	// Re-derive our multisig key first.
-	ctxt, cancel := context.WithTimeout(
-		context.Background(), deriveKeyTimeout,
-	)
-	defer cancel()
-	ourKey, err := v.wallet.DeriveKey(
-		ctxt, &ourOrder.Details().MultiSigKeyLocator,
-	)
-	if err != nil {
-		return fmt.Errorf("could not derive our multisig key: %v", err)
-	}
-
-	// Gather the information we expect to find in the batch TX.
-	expectedOutputSize := otherOrder.UnitsFilled.ToSatoshis()
-	_, expectedOut, err := input.GenFundingPkScript(
-		ourKey.PubKey.SerializeCompressed(), otherOrder.MultiSigKey[:],
-		int64(expectedOutputSize),
-	)
-	if err != nil {
-		return fmt.Errorf("could not create multisig script: %v", err)
-	}
-
-	// Locate the channel output now that we know what to look for.
-	for _, out := range batchTx.TxOut {
-		if out.Value == expectedOut.Value &&
-			bytes.Equal(out.PkScript, expectedOut.PkScript) {
-
-			// Bingo, this is what we want.
-			return nil
-		}
-	}
-
-	return fmt.Errorf("no channel output found in batch tx for matched "+
-		"order %v", otherOrder.Order.Nonce())
+	_, _, err := batch.channelOutput(v.wallet, ourOrder, otherOrder)
+	return err
 }
 
 // A compile-time constraint to ensure batchVerifier implements BatchVerifier.
