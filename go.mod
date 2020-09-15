@@ -17,6 +17,7 @@ require (
 	github.com/lightninglabs/protobuf-hex-display v1.3.3-0.20191212020323-b444784ce75d
 	// TODO(guggero): Bump to v0.11.1-beta once released.
 	github.com/lightningnetwork/lnd v0.11.0-beta.rc4.0.20200907194312-751b02361e53
+	github.com/lightningnetwork/lnd/cert v1.0.3
 	github.com/stretchr/testify v1.5.1
 	github.com/urfave/cli v1.20.0
 	go.etcd.io/bbolt v1.3.5-0.20200615073812-232d8fc87f50

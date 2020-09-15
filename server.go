@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
-	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -134,6 +135,14 @@ func (s *Server) Start() error {
 	s.grpcServer = grpc.NewServer(serverOpts...)
 	poolrpc.RegisterTraderServer(s.grpcServer, s.rpcServer)
 
+	// We'll need to start the server with TLS and connect the REST proxy
+	// client to it.
+	serverTLSCfg, restClientCreds, err := getTLSConfig(s.cfg)
+	if err != nil {
+		return fmt.Errorf("could not create gRPC server options: %v",
+			err)
+	}
+
 	// Next, start the gRPC server listening for HTTP/2 connections.
 	// If the provided grpcListener is not nil, it means poold is being
 	// used as a library and the listener might not be a real network
@@ -154,9 +163,27 @@ func (s *Server) Start() error {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		mux := proxy.NewServeMux()
-		proxyOpts := []grpc.DialOption{grpc.WithInsecure()}
+		proxyOpts := []grpc.DialOption{
+			grpc.WithTransportCredentials(*restClientCreds),
+		}
+
+		// With TLS enabled by default, we cannot call 0.0.0.0
+		// internally from the REST proxy as that IP address isn't in
+		// the cert. We need to rewrite it to the loopback address.
+		restProxyDest := s.cfg.RPCListen
+		switch {
+		case strings.Contains(restProxyDest, "0.0.0.0"):
+			restProxyDest = strings.Replace(
+				restProxyDest, "0.0.0.0", "127.0.0.1", 1,
+			)
+
+		case strings.Contains(restProxyDest, "[::]"):
+			restProxyDest = strings.Replace(
+				restProxyDest, "[::]", "[::1]", 1,
+			)
+		}
 		err = poolrpc.RegisterTraderHandlerFromEndpoint(
-			ctx, mux, s.cfg.RPCListen, proxyOpts,
+			ctx, mux, restProxyDest, proxyOpts,
 		)
 		if err != nil {
 			return err
@@ -168,6 +195,7 @@ func (s *Server) Start() error {
 			return fmt.Errorf("REST proxy unable to listen on %s",
 				s.cfg.RESTListen)
 		}
+		s.restListener = tls.NewListener(s.restListener, serverTLSCfg)
 		s.restProxy = &http.Server{Handler: mux}
 		s.wg.Add(1)
 		go func() {
@@ -180,6 +208,7 @@ func (s *Server) Start() error {
 			}
 		}()
 	}
+	s.grpcListener = tls.NewListener(s.grpcListener, serverTLSCfg)
 
 	// Start the grpc server.
 	s.wg.Add(1)
@@ -188,6 +217,9 @@ func (s *Server) Start() error {
 
 		log.Infof("RPC server listening on %s", s.grpcListener.Addr())
 		if s.restListener != nil {
+			s.restListener = tls.NewListener(
+				s.restListener, serverTLSCfg,
+			)
 			log.Infof("REST proxy listening on %s",
 				s.restListener.Addr())
 		}
@@ -255,14 +287,13 @@ func (s *Server) setupClient() error {
 
 	// Open the main database.
 	var err error
-	networkDir := filepath.Join(s.cfg.BaseDir, s.cfg.Network)
-	s.db, err = clientdb.New(networkDir)
+	s.db, err = clientdb.New(s.cfg.BaseDir)
 	if err != nil {
 		return err
 	}
 
 	// Setup the LSAT interceptor for the client.
-	s.lsatStore, err = lsat.NewFileStore(networkDir)
+	s.lsatStore, err = lsat.NewFileStore(s.cfg.BaseDir)
 	if err != nil {
 		return err
 	}

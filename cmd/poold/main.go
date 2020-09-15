@@ -43,12 +43,9 @@ func start() error {
 	}
 
 	// Parse ini file.
-	networkDir := filepath.Join(config.BaseDir, config.Network)
-	if err := os.MkdirAll(networkDir, os.ModePerm); err != nil {
-		return err
-	}
+	poolDir := filepath.Join(config.BaseDir, config.Network)
+	configFile := filepath.Join(poolDir, defaultConfigFilename)
 
-	configFile := filepath.Join(networkDir, defaultConfigFilename)
 	if err := flags.IniParse(configFile, &config); err != nil {
 		// If it's a parsing related error, then we'll return
 		// immediately, otherwise we can proceed as possibly the config
@@ -62,6 +59,11 @@ func start() error {
 	// parse.
 	_, err = parser.Parse()
 	if err != nil {
+		return err
+	}
+
+	// Make sure the passed configuration is valid.
+	if err := pool.Validate(&config); err != nil {
 		return err
 	}
 
