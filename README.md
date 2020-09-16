@@ -429,7 +429,7 @@ the following command should be run:
 Assuming `poold` is now in your `$PATH`, you can start the daemon with the
 following command (assuming you have a local testnet `lnd` running): 
 ```
-🏔 poold --network=testnet --auctionserver=clm.testnet.lightningcluster.com:12010 --debuglevel=trace
+🏔 poold --network=testnet --debuglevel=trace
 ```
 
 The current server is reachable at `clm.testnet.lightningcluster.com:12010`,
