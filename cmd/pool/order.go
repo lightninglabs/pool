@@ -21,8 +21,8 @@ const (
 	defaultBidMinDuration = 144
 )
 
-// Default max batch fee rate to 500 sat/vbyte.
-const defaultMaxBatchFeeRateSatPerVByte = 500
+// Default max batch fee rate to 100 sat/vbyte.
+const defaultMaxBatchFeeRateSatPerVByte = 100
 
 var ordersCommands = []cli.Command{
 	{
