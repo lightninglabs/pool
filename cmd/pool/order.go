@@ -22,7 +22,7 @@ const (
 )
 
 // Default max batch fee rate to 500 sat/vbyte.
-var defaultMaxBatchFeeRateSatPerKw = chainfee.SatPerKVByte(500 * 1000).FeePerKWeight()
+const defaultMaxBatchFeeRateSatPerVByte = 500
 
 var ordersCommands = []cli.Command{
 	{
@@ -49,9 +49,9 @@ var ordersCommands = []cli.Command{
 var sharedFlags = []cli.Flag{
 	cli.Uint64Flag{
 		Name: "max_batch_fee_rate",
-		Usage: "the maximum fee rate (sat/kw) to use to for " +
+		Usage: "the maximum fee rate (sat/vbyte) to use to for " +
 			"the batch transaction",
-		Value: uint64(defaultMaxBatchFeeRateSatPerKw),
+		Value: defaultMaxBatchFeeRateSatPerVByte,
 	},
 }
 
@@ -110,7 +110,23 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 		return nil, fmt.Errorf("unable to parse acct_key: %v", err)
 	}
 
-	params.MaxBatchFeeRateSatPerKw = ctx.Uint64("max_batch_fee_rate")
+	// Convert the cmd line flag from sat/vbyte to sat/kw which is used
+	// internally.
+	satPerByte := ctx.Uint64("max_batch_fee_rate")
+	if satPerByte == 0 {
+		return nil, fmt.Errorf("max batch fee rate must be at " +
+			"least 1 sat/vbyte")
+	}
+
+	satPerKw := chainfee.SatPerKVByte(satPerByte * 1000).FeePerKWeight()
+
+	// Because of rounding, we ensure the set rate is at least our fee
+	// floor.
+	if satPerKw < chainfee.FeePerKwFloor {
+		satPerKw = chainfee.FeePerKwFloor
+	}
+
+	params.MaxBatchFeeRateSatPerKw = uint64(satPerKw)
 
 	// We'll map the interest rate specified on the command line to our
 	// internal "rate_fixed" unit.
@@ -165,7 +181,7 @@ func parseAccountKey(ctx *cli.Context, args cli.Args) ([]byte, error) {
 var ordersSubmitAskCommand = cli.Command{
 	Name:  "ask",
 	Usage: "offer channel liquidity",
-	ArgsUsage: "amt acct_key [--rate_fixed=R] [--funding_fee_rate=F] " +
+	ArgsUsage: "amt acct_key [--rate_fixed=R] [--max_batch_fee_rate=F] " +
 		"[--max_duration_blocks=M]",
 	Description: `
 	Create an offer to provide inbound liquidity to an auction participant
