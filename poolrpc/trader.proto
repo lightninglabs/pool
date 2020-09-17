@@ -149,7 +149,7 @@ service Trader {
         };
     };
 
-    /** pool: `listauth`
+    /* pool: `listauth`
     GetLsatTokens returns all LSAT tokens the daemon ever paid for.
     */
     rpc GetLsatTokens (TokensRequest) returns (TokensResponse) {
@@ -157,6 +157,17 @@ service Trader {
             get: "/v1/lsat/tokens"
         };
     }
+
+    /* pool: `auction leases`
+    Leases returns the list of channels that were either purchased or sold by
+    the trader within the auction.
+    */
+    rpc Leases (LeasesRequest) returns (LeasesResponse) {
+        option (google.api.http) = {
+            get: "/v1/pool/leases"
+        };
+    };
+
 }
 
 message InitAccountRequest {
@@ -533,6 +544,65 @@ message AuctionFeeResponse {
     The execution fee charged per matched order.
     */
     ExecutionFee execution_fee = 1;
+}
+
+message Lease {
+    // The outpoint of the channel created.
+    OutPoint channel_point = 1;
+
+    // The amount, in satoshis, of the channel created.
+    uint64 channel_amt_sat = 2;
+
+    // The intended duration, in blocks, of the channel created.
+    uint32 channel_duration_blocks = 3;
+
+    /*
+    The premium, in satoshis, either paid or received for the offered liquidity.
+    */
+    uint64 premium_sat = 4;
+
+    /*
+    The execution fee, in satoshis, charged by the auctioneer for the channel
+    created.
+    */
+    uint64 execution_fee_sat = 5;
+
+    /*
+    The fee, in satoshis, charged by the auctioneer for the batch execution
+    transaction that created this lease.
+    */
+    uint64 chain_fee_sat = 6;
+
+    // The order executed that resulted in the channel created.
+    bytes order_nonce = 7;
+
+    // Whether this channel was purchased from another trader or not.
+    bool purchased = 8;
+}
+
+message LeasesRequest {
+    /*
+    An optional list of batches to retrieve the leases of. If empty, leases
+    throughout all batches are returned.
+    */
+    repeated bytes batch_ids = 1;
+
+    /*
+    An optional list of accounts to retrieve the leases of. If empty, leases
+    for all accounts are returned.
+    */
+    repeated bytes accounts = 2;
+}
+
+message LeasesResponse {
+    // The relevant list of leases purchased or sold within the auction.
+    repeated Lease leases = 1;
+
+    // The total amount of satoshis earned from the leases returned.
+    uint64 total_amt_earned_sat = 2;
+
+    // The total amount of satoshis paid for the leases returned.
+    uint64 total_amt_paid_sat = 3;
 }
 
 message TokensRequest {

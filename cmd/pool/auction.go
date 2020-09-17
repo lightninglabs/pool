@@ -9,6 +9,34 @@ import (
 	"github.com/urfave/cli"
 )
 
+type Lease struct {
+	ChannelPoint          string `json:"channel_point"`
+	ChannelAmtSat         uint64 `json:"channel_amt_sat"`
+	ChannelDurationBlocks uint32 `json:"channel_duration_blocks"`
+	PremiumSat            uint64 `json:"premium_sat"`
+	ExecutionFeeSat       uint64 `json:"execution_fee_sat"`
+	ChainFeeSat           uint64 `json:"chain_fee_sat"`
+	OrderNonce            string `json:"order_nonce"`
+	Purchased             bool   `json:"purchased"`
+}
+
+// NewLeaseFromProto creates a display Lease from its proto.
+func NewLeaseFromProto(a *poolrpc.Lease) *Lease {
+	chanPoint := fmt.Sprintf("%x:%v", a.ChannelPoint.Txid,
+		a.ChannelPoint.OutputIndex)
+
+	return &Lease{
+		ChannelPoint:          chanPoint,
+		ChannelAmtSat:         a.ChannelAmtSat,
+		ChannelDurationBlocks: a.ChannelDurationBlocks,
+		PremiumSat:            a.PremiumSat,
+		ExecutionFeeSat:       a.ExecutionFeeSat,
+		ChainFeeSat:           a.ChainFeeSat,
+		OrderNonce:            hex.EncodeToString(a.OrderNonce),
+		Purchased:             a.Purchased,
+	}
+}
+
 var auctionCommands = []cli.Command{
 	{
 		Name:      "auction",
@@ -18,6 +46,7 @@ var auctionCommands = []cli.Command{
 		Subcommands: []cli.Command{
 			auctionFeeCommand,
 			batchSnapshotCommand,
+			leasesCommand,
 		},
 	},
 }
@@ -106,6 +135,89 @@ func batchSnapshot(ctx *cli.Context) error {
 	}
 
 	printRespJSON(batchSnapshot)
+
+	return nil
+}
+
+var leasesCommand = cli.Command{
+	Name:      "leases",
+	ShortName: "l",
+	Usage:     "returns the list of leases purchased/sold within the auction",
+	Description: `
+	Returns the list of leases (i.e., channels) that were either purchased
+	or sold by the trader within the auction. An optional list of batch IDs
+	and accounts can be specified to filter the leases returned.
+	`,
+	Flags: []cli.Flag{
+		cli.StringSliceFlag{
+			Name: "batch_ids",
+			Usage: "the target batch IDs to obtain leases for, " +
+				"if left blank, leases from all batches are " +
+				"returned",
+		},
+		cli.StringSliceFlag{
+			Name: "accounts",
+			Usage: "the target accounts to obtain leases for, if " +
+				"left blank, leases from all accounts are " +
+				"returned",
+		},
+	},
+	Action: leases,
+}
+
+func leases(ctx *cli.Context) error {
+	hexBatchIDs := ctx.StringSlice("batch_ids")
+	batchIDs := make([][]byte, 0, len(hexBatchIDs))
+	for _, hexBatchID := range hexBatchIDs {
+		batchID, err := hex.DecodeString(hexBatchID)
+		if err != nil {
+			return fmt.Errorf("invalid batch ID %v: %v", hexBatchID,
+				err)
+		}
+		batchIDs = append(batchIDs, batchID)
+	}
+
+	hexAccountKeys := ctx.StringSlice("accounts")
+	accounts := make([][]byte, 0, len(hexAccountKeys))
+	for _, hexAccountKey := range hexAccountKeys {
+		accountKey, err := hex.DecodeString(hexAccountKey)
+		if err != nil {
+			return fmt.Errorf("invalid account key %v: %v",
+				hexAccountKey, err)
+		}
+		accounts = append(accounts, accountKey)
+	}
+
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.Leases(context.Background(), &poolrpc.LeasesRequest{
+		BatchIds: batchIDs,
+		Accounts: accounts,
+	})
+	if err != nil {
+		return err
+	}
+
+	displayLeases := make([]*Lease, 0, len(resp.Leases))
+	for _, lease := range resp.Leases {
+		displayLeases = append(displayLeases, NewLeaseFromProto(lease))
+	}
+
+	leasesResp := struct {
+		Leases            []*Lease `json:"leases"`
+		TotalAmtEarnedSat uint64   `json:"total_amt_earned_sat"`
+		TotalAmtPaidSat   uint64   `json:"total_amt_paid_sat"`
+	}{
+		Leases:            displayLeases,
+		TotalAmtEarnedSat: resp.TotalAmtEarnedSat,
+		TotalAmtPaidSat:   resp.TotalAmtPaidSat,
+	}
+
+	printJSON(leasesResp)
 
 	return nil
 }
