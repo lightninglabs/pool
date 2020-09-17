@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/urfave/cli"
 )
@@ -22,9 +23,10 @@ type Lease struct {
 
 // NewLeaseFromProto creates a display Lease from its proto.
 func NewLeaseFromProto(a *poolrpc.Lease) *Lease {
-	chanPoint := fmt.Sprintf("%x:%v", a.ChannelPoint.Txid,
-		a.ChannelPoint.OutputIndex)
+	var opHash chainhash.Hash
+	copy(opHash[:], a.ChannelPoint.Txid)
 
+	chanPoint := fmt.Sprintf("%v:%d", opHash, a.ChannelPoint.OutputIndex)
 	return &Lease{
 		ChannelPoint:          chanPoint,
 		ChannelAmtSat:         a.ChannelAmtSat,
