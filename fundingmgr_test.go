@@ -23,6 +23,8 @@ import (
 	"github.com/lightningnetwork/lnd/routing/route"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -52,9 +54,10 @@ func (i *openChannelStream) Recv() (*lnrpc.OpenStatusUpdate, error) {
 type peerEventStream struct {
 	lnrpc.Lightning_SubscribePeerEventsClient
 
-	updateChan chan *lnrpc.PeerEvent
-	ctx        context.Context
-	quit       chan struct{}
+	updateChan         chan *lnrpc.PeerEvent
+	ctx                context.Context
+	cancelSubscription chan struct{}
+	quit               chan struct{}
 }
 
 func (i *peerEventStream) Recv() (*lnrpc.PeerEvent, error) {
@@ -62,8 +65,16 @@ func (i *peerEventStream) Recv() (*lnrpc.PeerEvent, error) {
 	case msg := <-i.updateChan:
 		return msg, nil
 
+	// To mimic the real GRPC client, we'll return an error status.
 	case <-i.ctx.Done():
-		return nil, i.ctx.Err()
+		return nil, status.Error(
+			codes.DeadlineExceeded, i.ctx.Err().Error(),
+		)
+
+	case <-i.cancelSubscription:
+		return nil, status.Error(
+			codes.Canceled, "subscription canceled",
+		)
 
 	case <-i.quit:
 		return nil, context.Canceled
@@ -77,6 +88,7 @@ type fundingBaseClientMock struct {
 	useManualPeerList bool
 	manualPeerList    map[route.Vertex]string
 	peerEvents        chan *lnrpc.PeerEvent
+	cancelSub         chan struct{}
 
 	quit chan struct{}
 }
@@ -167,9 +179,10 @@ func (m *fundingBaseClientMock) SubscribePeerEvents(ctx context.Context,
 	lnrpc.Lightning_SubscribePeerEventsClient, error) {
 
 	return &peerEventStream{
-		quit:       m.quit,
-		ctx:        ctx,
-		updateChan: m.peerEvents,
+		quit:               m.quit,
+		ctx:                ctx,
+		cancelSubscription: m.cancelSub,
+		updateChan:         m.peerEvents,
 	}, nil
 }
 
@@ -203,6 +216,7 @@ func newManagerHarness(t *testing.T) *managerHarness {
 		fundingShims:    make(map[[32]byte]*lnrpc.ChanPointShim),
 		manualPeerList:  make(map[route.Vertex]string),
 		peerEvents:      make(chan *lnrpc.PeerEvent),
+		cancelSub:       make(chan struct{}),
 		quit:            quit,
 	}
 	return &managerHarness{
@@ -503,7 +517,8 @@ func TestWaitForPeerConnections(t *testing.T) {
 	require.NoError(t, err)
 
 	// Final test, make sure we get the correct error message back if we
-	// run into a timeout when waiting for the second node to be connected.
+	// run into a timeout or context cancellation when waiting for the
+	// second node to be connected.
 	fakeNonce1, fakeNonce2 := order.Nonce{77, 88}, order.Nonce{88, 99}
 	fakeBatch := &order.Batch{
 		MatchedOrders: map[order.Nonce][]*order.MatchedOrder{
@@ -525,6 +540,8 @@ func TestWaitForPeerConnections(t *testing.T) {
 			}},
 		},
 	}
+
+	// Trigger a deadline exceeded error after a short timeout.
 	ctxt, cancel = context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 	expectedConnections = map[route.Vertex]struct{}{
@@ -543,6 +560,21 @@ func TestWaitForPeerConnections(t *testing.T) {
 			fakeNonce2: code,
 		},
 	}
+	require.Equal(t, expectedErr, err)
+
+	// Do the same again, but now trigger a context cancel. We make the
+	// context expire afterwards, since that will trigger the actual error
+	// return.
+	ctxt, cancel = context.WithTimeout(context.Background(), 2*testTimeout)
+	defer cancel()
+
+	go func() {
+		time.Sleep(testTimeout)
+		close(h.baseClientMock.cancelSub)
+	}()
+
+	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, fakeBatch)
+	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
 }
 

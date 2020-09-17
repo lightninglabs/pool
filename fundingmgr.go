@@ -21,6 +21,8 @@ import (
 	"github.com/lightningnetwork/lnd/routing/route"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -683,14 +685,26 @@ func (f *fundingMgr) waitForPeerConnections(ctx context.Context,
 
 		// Block on reading the next peer event now.
 		msg, err := subscription.Recv()
-		if err == context.Canceled || err == context.DeadlineExceeded {
+		if err != nil {
+			// We must inspect the gprc status to uncover the
+			// actual error.
+			st, ok := status.FromError(err)
+			if !ok {
+				return fmt.Errorf("error reading peer event: "+
+					"%v", err)
+			}
+
 			// We've run into the timeout. Let the code above return
 			// the error, we should now run into the ctx.Done()
 			// case.
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("error reading peer event: %v", err)
+			switch st.Code() {
+			case codes.Canceled, codes.DeadlineExceeded:
+				continue
+
+			default:
+				return fmt.Errorf("error reading peer events, "+
+					"unhandled status: %v", err)
+			}
 		}
 
 		// We're only interested in online events, skip everything else.
