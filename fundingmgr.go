@@ -21,6 +21,8 @@ import (
 	"github.com/lightningnetwork/lnd/routing/route"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -296,7 +298,13 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
 				"%v", nodeKey[:], matchedOrder.Order.Nonce())
 			_, initiated := connsInitiated[nodeKey]
 			if !initiated {
-				f.connectToMatchedTrader(
+				// Since we don't want to block on the
+				// connection attempt to this trader, we start
+				// it in a new go routine, and ignore the error
+				// for now. Instead we will observe later
+				// whether the peer gets connected before the
+				// batch timeout.
+				go f.connectToMatchedTrader(
 					setupCtx, nodeKey,
 					matchedOrder.NodeAddrs,
 				)
@@ -581,8 +589,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 }
 
 // connectToMatchedTrader attempts to connect to a trader that we've had an
-// order matched with. We'll attempt to establish a permanent connection as
-// well, so we can use the connection for any batch retries that may happen.
+// order matched with, on all available addresses.
 func (f *fundingMgr) connectToMatchedTrader(ctx context.Context,
 	nodeKey [33]byte, addrs []net.Addr) {
 
@@ -590,10 +597,7 @@ func (f *fundingMgr) connectToMatchedTrader(ctx context.Context,
 		err := f.lightningClient.Connect(ctx, nodeKey, addr.String())
 		if err != nil {
 			// If we're already connected, then we can stop now.
-			if strings.Contains(
-				err.Error(), "already connected",
-			) {
-
+			if strings.Contains(err.Error(), "already connected") {
 				return
 			}
 
@@ -603,15 +607,10 @@ func (f *fundingMgr) connectToMatchedTrader(ctx context.Context,
 			continue
 		}
 
-		// We connected successfully, not need to try any of the
+		// We connected successfully, no need to try any of the
 		// other addresses.
 		break
 	}
-
-	// Since we specified perm, the error is async, and not fully
-	// communicated to the caller, so we can't really return an error.
-	// Later on, if we can't fund the channel, then we'll fail with a hard
-	// error.
 }
 
 // waitForPeerConnections makes sure the connected lnd has a persistent
@@ -686,14 +685,26 @@ func (f *fundingMgr) waitForPeerConnections(ctx context.Context,
 
 		// Block on reading the next peer event now.
 		msg, err := subscription.Recv()
-		if err == context.Canceled || err == context.DeadlineExceeded {
+		if err != nil {
+			// We must inspect the gprc status to uncover the
+			// actual error.
+			st, ok := status.FromError(err)
+			if !ok {
+				return fmt.Errorf("error reading peer event: "+
+					"%v", err)
+			}
+
 			// We've run into the timeout. Let the code above return
 			// the error, we should now run into the ctx.Done()
 			// case.
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("error reading peer event: %v", err)
+			switch st.Code() {
+			case codes.Canceled, codes.DeadlineExceeded:
+				continue
+
+			default:
+				return fmt.Errorf("error reading peer events, "+
+					"unhandled status: %v", err)
+			}
 		}
 
 		// We're only interested in online events, skip everything else.
