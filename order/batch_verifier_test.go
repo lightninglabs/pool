@@ -137,7 +137,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				delete(b.MatchedOrders, a.nonce)
-				b1.FixedRate = 5000
+				a.FixedRate = b1.FixedRate + 1
 				return v.Verify(b)
 			},
 		},
@@ -184,12 +184,68 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid clearing price",
-			expectedErr: "server sent unexpected ending balance",
+			name:        "invalid clearing price bid",
+			expectedErr: "below clearing price",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
-				b.ClearingPrice *= 2
+				delete(b.MatchedOrders, a.nonce)
+				b1.FixedRate = uint32(b.ClearingPrice) - 1
+				return v.Verify(b)
+			},
+		},
+		{
+			name:        "invalid clearing price ask",
+			expectedErr: "above clearing price",
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
+				// To correctly test this case, we'll need to
+				// create a custom match. Create an ask with a
+				// matching price as the highest bid. These two
+				// will be matched.
+				b.MatchedOrders = make(map[Nonce][]*MatchedOrder)
+				ask := &Ask{
+					Kit: newKitFromTemplate(Nonce{0x04}, &Kit{
+						MultiSigKeyLocator: keychain.KeyLocator{
+							Index: 0,
+						},
+						Units:            4,
+						UnitsUnfulfilled: 4,
+						AcctKey:          acctIDSmall,
+						FixedRate:        b1.FixedRate,
+					}),
+					MaxDuration: 2500,
+				}
+				v.(*batchVerifier).orderStore.(*mockStore).orders[ask.nonce] = ask
+				b.MatchedOrders[ask.nonce] = []*MatchedOrder{
+					{
+						Order:       b1,
+						UnitsFilled: 2,
+						MultiSigKey: deriveRawKey(
+							t, walletKit,
+							b1.MultiSigKeyLocator,
+						),
+					},
+				}
+
+				// Match the next highest bid with the remaining
+				// ask.
+				a.FixedRate = b2.FixedRate
+				b.MatchedOrders[a.nonce] = []*MatchedOrder{
+					{
+						Order:       b2,
+						UnitsFilled: 2,
+						MultiSigKey: deriveRawKey(
+							t, walletKit,
+							b2.MultiSigKeyLocator,
+						),
+					},
+				}
+
+				// Verification should fail as the first match
+				// has an ask with a price greater than the
+				// clearing price.
 				return v.Verify(b)
 			},
 		},
@@ -279,7 +335,7 @@ func TestBatchVerifier(t *testing.T) {
 				Units:            4,
 				UnitsUnfulfilled: 4,
 				AcctKey:          acctIDSmall,
-				FixedRate:        10000,
+				FixedRate:        uint32(clearingPrice) / 2,
 			}),
 			MaxDuration: 2500,
 		}
@@ -291,7 +347,7 @@ func TestBatchVerifier(t *testing.T) {
 				Units:            2,
 				UnitsUnfulfilled: 2,
 				AcctKey:          acctIDBig,
-				FixedRate:        15000,
+				FixedRate:        uint32(clearingPrice) * 2,
 			}),
 			// 1000 * (200_000 * 5000 / 1_000_000_000) = 1000 sats premium
 			MinDuration: 1000,
@@ -304,7 +360,7 @@ func TestBatchVerifier(t *testing.T) {
 				Units:            8,
 				UnitsUnfulfilled: 8,
 				AcctKey:          acctIDBig,
-				FixedRate:        15000,
+				FixedRate:        uint32(clearingPrice),
 			}),
 			// 2000 * (200_000 * 5000 / 1_000_000_000) = 2000 sats premium
 			MinDuration: 2000,

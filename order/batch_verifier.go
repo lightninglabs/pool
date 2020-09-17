@@ -149,6 +149,29 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 			unitsFilled += theirOrder.UnitsFilled
 		}
 
+		// Verify the clearing price satisfies our order.
+		ourOrderPrice := ourOrder.Details().FixedRate
+		clearingPrice := uint32(batch.ClearingPrice)
+		switch {
+		// Bids should always have a price greater than or equal to the
+		// clearing price.
+		case ourOrder.Type() == TypeBid && ourOrderPrice < clearingPrice:
+			return &MismatchErr{
+				msg: fmt.Sprintf("bid order %v has price %v "+
+					"below clearing price %v", nonce,
+					ourOrderPrice, clearingPrice),
+			}
+
+		// Asks should always have a price less than or equal to the
+		// clearing price.
+		case ourOrder.Type() == TypeAsk && ourOrderPrice > clearingPrice:
+			return &MismatchErr{
+				msg: fmt.Sprintf("ask order %v has price %v "+
+					"above clearing price %v", nonce,
+					ourOrderPrice, clearingPrice),
+			}
+		}
+
 		// Last check is to make sure our order has not been over
 		// filled somehow.
 		if unitsFilled > ourOrder.Details().UnitsUnfulfilled {
