@@ -146,7 +146,7 @@ func (m *fundingBaseClientMock) ListPeers(_ context.Context,
 	_ *lnrpc.ListPeersRequest,
 	_ ...grpc.CallOption) (*lnrpc.ListPeersResponse, error) {
 
-	peerList := m.lightningClient.Connections
+	peerList := m.lightningClient.Connections()
 	if m.useManualPeerList {
 		peerList = m.manualPeerList
 	}
@@ -318,8 +318,9 @@ func TestFundingManager(t *testing.T) {
 	// Verify we have the expected connections and funding shims registered.
 	// We expect the bidder to connect to the asker and having registered
 	// the funding shim while the asker is opening the channel.
-	require.Equal(t, 1, len(h.lnMock.Connections))
-	require.Equal(t, addr1.String(), h.lnMock.Connections[node1Key])
+	conns := h.lnMock.Connections()
+	require.Equal(t, 1, len(conns))
+	require.Equal(t, addr1.String(), conns[node1Key])
 	require.Equal(t, 1, len(h.baseClientMock.fundingShims))
 
 	// Validate the shim.

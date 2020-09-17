@@ -54,7 +54,7 @@ func NewMockLightning() *MockLightning {
 		ScbKeyRing:         &ScbKeyRing{},
 		ChainParams:        &chaincfg.TestNet3Params,
 		Invoices:           make(map[lntypes.Hash]*lndclient.Invoice),
-		Connections:        make(map[route.Vertex]string),
+		connections:        make(map[route.Vertex]string),
 	}
 }
 
@@ -71,7 +71,7 @@ type MockLightning struct {
 	// keyed by hash string.
 	Invoices map[lntypes.Hash]*lndclient.Invoice
 
-	Connections map[route.Vertex]string
+	connections map[route.Vertex]string
 
 	Channels         []lndclient.ChannelInfo
 	ChannelsClosed   []lndclient.ClosedChannel
@@ -374,7 +374,21 @@ func (m *MockLightning) CloseChannel(context.Context, *wire.OutPoint,
 
 func (m *MockLightning) Connect(_ context.Context, peer route.Vertex,
 	host string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 
-	m.Connections[peer] = host
+	m.connections[peer] = host
 	return nil
+}
+
+func (m *MockLightning) Connections() map[route.Vertex]string {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	connections := make(map[route.Vertex]string)
+	for k, v := range m.connections {
+		connections[k] = v
+	}
+
+	return connections
 }
