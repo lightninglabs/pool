@@ -52,9 +52,9 @@ var (
 		Value: pool.DefaultTLSCertPath,
 	}
 	macaroonPathFlag = cli.StringFlag{
-		Name: "macaroonpath",
-		Usage: "path to macaroon file, only needed if pool runs " +
-			"in the same process as lnd",
+		Name:  "macaroonpath",
+		Usage: "path to macaroon file",
+		Value: pool.DefaultMacaroonPath,
 	}
 )
 
@@ -172,43 +172,51 @@ func extractPathArgs(ctx *cli.Context) (string, string, error) {
 	}
 
 	// We'll now fetch the basedir so we can make a decision on how to
-	// properly read the cert. This will either be the default, or will have
-	// been overwritten by the end user.
+	// properly read the cert and macaroon. This will either be the default,
+	// or will have been overwritten by the end user.
 	baseDir := lncfg.CleanAndExpandPath(ctx.GlobalString(baseDirFlag.Name))
 	tlsCertPath := lncfg.CleanAndExpandPath(ctx.GlobalString(
 		tlsCertFlag.Name,
 	))
+	macPath := lncfg.CleanAndExpandPath(ctx.GlobalString(
+		macaroonPathFlag.Name,
+	))
 
 	// If a custom base directory was set, we'll also check if custom paths
-	// for the TLS cert file were set as well. If not, we'll override their
-	// paths so they can be found within the custom base directory set. This
-	// allows us to set a custom base directory, along with custom paths to
-	// the TLS cert file.
+	// for the TLS cert and macaroon file were set as well. If not, we'll
+	// override their paths so they can be found within the custom base
+	// directory set. This allows us to set a custom base directory, along
+	// with custom paths to the TLS cert and macaroon file.
 	if baseDir != pool.DefaultBaseDir || networkStr != pool.DefaultNetwork {
 		tlsCertPath = filepath.Join(
 			baseDir, networkStr, pool.DefaultTLSCertFilename,
 		)
+		macPath = filepath.Join(
+			baseDir, networkStr, pool.DefaultMacaroonFilename,
+		)
 	}
 
-	return tlsCertPath, ctx.GlobalString(macaroonPathFlag.Name), nil
+	return tlsCertPath, macPath, nil
 }
 
 func getClientConn(address, tlsCertPath, macaroonPath string) (*grpc.ClientConn,
 	error) {
 
+	// We always need to send a macaroon.
+	macOption, err := readMacaroon(macaroonPath)
+	if err != nil {
+		return nil, err
+	}
+
 	opts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(maxMsgRecvSize),
+		macOption,
 	}
 
 	// TLS cannot be disabled, we'll always have a cert file to read.
 	creds, err := credentials.NewClientTLSFromFile(tlsCertPath, "")
 	if err != nil {
 		fatal(err)
-	}
-
-	// Macaroons are not yet enabled by default.
-	if macaroonPath != "" {
-		opts = append(opts, readMacaroon(macaroonPath))
 	}
 
 	opts = append(opts, grpc.WithTransportCredentials(creds))
@@ -253,16 +261,16 @@ func parseUint64(ctx *cli.Context, argIdx int, flag, cmd string) (uint64, error)
 
 // readMacaroon tries to read the macaroon file at the specified path and create
 // gRPC dial options from it.
-func readMacaroon(macPath string) grpc.DialOption {
+func readMacaroon(macPath string) (grpc.DialOption, error) {
 	// Load the specified macaroon file.
 	macBytes, err := ioutil.ReadFile(macPath)
 	if err != nil {
-		fatal(fmt.Errorf("unable to read macaroon path : %v", err))
+		return nil, fmt.Errorf("unable to read macaroon path : %v", err)
 	}
 
 	mac := &macaroon.Macaroon{}
 	if err = mac.UnmarshalBinary(macBytes); err != nil {
-		fatal(fmt.Errorf("unable to decode macaroon: %v", err))
+		return nil, fmt.Errorf("unable to decode macaroon: %v", err)
 	}
 
 	macConstraints := []macaroons.Constraint{
@@ -282,10 +290,10 @@ func readMacaroon(macPath string) grpc.DialOption {
 	// Apply constraints to the macaroon.
 	constrainedMac, err := macaroons.AddConstraints(mac, macConstraints...)
 	if err != nil {
-		fatal(err)
+		return nil, err
 	}
 
 	// Now we append the macaroon credentials to the dial options.
 	cred := macaroons.NewMacaroonCredential(constrainedMac)
-	return grpc.WithPerRPCCredentials(cred)
+	return grpc.WithPerRPCCredentials(cred), nil
 }

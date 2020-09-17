@@ -435,14 +435,21 @@ following command (assuming you have a local testnet `lnd` running):
 The current server is reachable at `clm.testnet.lightningcluster.com:12010`,
 this may change as the alpha version progresses.
 
-## Transport security
+## Authentication and transport security
 
-The gRPC and REST connections of `poold` are encrypted with TLS the same way
-`lnd` is.
+The gRPC and REST connections of `poold` are encrypted with TLS and secured with
+macaroon authentication the same way `lnd` is.
 
 If no custom base directory is set then the TLS certificate is stored in
-`~/.pool/<network>/tls.cert`.
+`~/.pool/<network>/tls.cert` and the base macaroon in
+`~/.pool/<network>/pool.macaroon`.
 
-The `pool` command will pick up the file automatically on mainnet if no custom
+The `pool` command will pick up these file automatically on mainnet if no custom
 base directory is used. For other networks it should be sufficient to add the
 `--network` flag to tell the CLI in what sub directory to look for the files.
+
+For more information on macaroons,
+[see the macaroon documentation of lnd.](https://github.com/lightningnetwork/lnd/blob/master/docs/macaroons.md)
+
+**NOTE**: pool's macaroons are independent from `lnd`'s. The same macaroon
+cannot be used for both `poold` and `lnd`.

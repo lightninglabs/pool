@@ -22,9 +22,11 @@ import (
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
+	"github.com/lightningnetwork/lnd/macaroons"
 	"github.com/lightningnetwork/lnd/signal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"gopkg.in/macaroon-bakery.v2/bakery"
 )
 
 var (
@@ -63,16 +65,17 @@ type Server struct {
 	// client or an error if none has been established yet.
 	GetIdentity func() (*lsat.TokenID, error)
 
-	cfg          *Config
-	db           *clientdb.DB
-	lsatStore    *lsat.FileStore
-	lndServices  *lndclient.GrpcLndServices
-	lndClient    lnrpc.LightningClient
-	grpcServer   *grpc.Server
-	restProxy    *http.Server
-	grpcListener net.Listener
-	restListener net.Listener
-	wg           sync.WaitGroup
+	cfg             *Config
+	db              *clientdb.DB
+	lsatStore       *lsat.FileStore
+	lndServices     *lndclient.GrpcLndServices
+	lndClient       lnrpc.LightningClient
+	grpcServer      *grpc.Server
+	restProxy       *http.Server
+	grpcListener    net.Listener
+	restListener    net.Listener
+	macaroonService *macaroons.Service
+	wg              sync.WaitGroup
 }
 
 // NewServer creates a new trader server.
@@ -92,10 +95,27 @@ func (s *Server) Start() error {
 	// Print the version before executing either primary directive.
 	log.Infof("Version: %v", Version())
 
+	// Depending on how far we got in initializing the server, we might need
+	// to clean up certain services that were already started. Keep track of
+	// them with this map of service name to shutdown function.
+	shutdownFuncs := make(map[string]func() error)
+	defer func() {
+		for serviceName, shutdownFn := range shutdownFuncs {
+			if err := shutdownFn(); err != nil {
+				log.Errorf("Error shutting down %s service: %v",
+					serviceName, err)
+			}
+		}
+	}()
+
 	var err error
 	s.lndServices, err = getLnd(s.cfg.Network, s.cfg.Lnd)
 	if err != nil {
 		return err
+	}
+	shutdownFuncs["lnd"] = func() error { // nolint:unparam
+		s.lndServices.Close()
+		return nil
 	}
 
 	// As there're some other lower-level operations we may need access to,
@@ -111,11 +131,20 @@ func (s *Server) Start() error {
 		return err
 	}
 
+	// Start the macaroon service and let it create its default macaroon in
+	// case it doesn't exist yet.
+	if err := s.startMacaroonService(); err != nil {
+		return err
+	}
+	shutdownFuncs["macaroon"] = s.stopMacaroonService
+
 	// Setup the auctioneer client and interceptor.
 	err = s.setupClient()
 	if err != nil {
 		return err
 	}
+	shutdownFuncs["clientdb"] = s.db.Close
+	shutdownFuncs["auctioneer"] = s.AuctioneerClient.Stop
 
 	// Instantiate the trader gRPC server and start it.
 	s.rpcServer = newRPCServer(s)
@@ -123,13 +152,19 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
+	shutdownFuncs["rpcServer"] = s.rpcServer.Stop
 
+	// Let's create our interceptor chain, starting with the security
+	// interceptors that will check macaroons for their validity.
+	unaryMacIntercept, streamMacIntercept := s.macaroonInterceptor()
 	serverOpts := []grpc.ServerOption{
-		grpc.StreamInterceptor(
+		grpc.ChainStreamInterceptor(
 			errorLogStreamServerInterceptor(rpcLog),
+			streamMacIntercept,
 		),
-		grpc.UnaryInterceptor(
+		grpc.ChainUnaryInterceptor(
 			errorLogUnaryServerInterceptor(rpcLog),
+			unaryMacIntercept,
 		),
 	}
 	s.grpcServer = grpc.NewServer(serverOpts...)
@@ -155,7 +190,6 @@ func (s *Server) Start() error {
 		if err != nil {
 			return fmt.Errorf("RPC server unable to listen on %s",
 				s.cfg.RPCListen)
-
 		}
 
 		// We'll also create and start an accompanying proxy to serve
@@ -196,6 +230,8 @@ func (s *Server) Start() error {
 				s.cfg.RESTListen)
 		}
 		s.restListener = tls.NewListener(s.restListener, serverTLSCfg)
+		shutdownFuncs["restListener"] = s.restListener.Close
+
 		s.restProxy = &http.Server{Handler: mux}
 		s.wg.Add(1)
 		go func() {
@@ -209,6 +245,7 @@ func (s *Server) Start() error {
 		}()
 	}
 	s.grpcListener = tls.NewListener(s.grpcListener, serverTLSCfg)
+	shutdownFuncs["rpcListener"] = s.grpcListener.Close
 
 	// Start the grpc server.
 	s.wg.Add(1)
@@ -232,7 +269,16 @@ func (s *Server) Start() error {
 
 	// The final thing we'll do on start up is sync the order state of the
 	// auctioneer with what we have on disk.
-	return s.syncLocalOrderState()
+	err = s.syncLocalOrderState()
+	if err != nil {
+		return err
+	}
+
+	// If we got here successfully, there's no need to shutdown anything
+	// anymore.
+	shutdownFuncs = nil
+
+	return nil
 }
 
 // StartAsSubserver is an alternative start method where the RPC server does not
@@ -250,11 +296,33 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 	// Print the version before executing either primary directive.
 	log.Infof("Version: %v", Version())
 
+	// Depending on how far we got in initializing the server, we might need
+	// to clean up certain services that were already started. Keep track of
+	// them with this map of service name to shutdown function.
+	shutdownFuncs := make(map[string]func() error)
+	defer func() {
+		for serviceName, shutdownFn := range shutdownFuncs {
+			if err := shutdownFn(); err != nil {
+				log.Errorf("Error shutting down %s service: %v",
+					serviceName, err)
+			}
+		}
+	}()
+
+	// Start the macaroon service and let it create its default macaroon in
+	// case it doesn't exist yet.
+	if err := s.startMacaroonService(); err != nil {
+		return err
+	}
+	shutdownFuncs["macaroon"] = s.stopMacaroonService
+
 	// Setup the auctioneer client and interceptor.
 	err := s.setupClient()
 	if err != nil {
 		return err
 	}
+	shutdownFuncs["clientdb"] = s.db.Close
+	shutdownFuncs["auctioneer"] = s.AuctioneerClient.Stop
 
 	// Instantiate the trader gRPC server and start it.
 	s.rpcServer = newRPCServer(s)
@@ -262,10 +330,35 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 	if err != nil {
 		return err
 	}
+	shutdownFuncs["rpcServer"] = s.rpcServer.Stop
 
 	// The final thing we'll do on start up is sync the order state of the
 	// auctioneer with what we have on disk.
-	return s.syncLocalOrderState()
+	err = s.syncLocalOrderState()
+	if err != nil {
+		return err
+	}
+
+	// If we got here successfully, there's no need to shutdown anything
+	// anymore.
+	shutdownFuncs = nil
+
+	return nil
+}
+
+// ValidateMacaroon extracts the macaroon from the context's gRPC metadata,
+// checks its signature, makes sure all specified permissions for the called
+// method are contained within and finally ensures all caveat conditions are
+// met. A non-nil error is returned if any of the checks fail. This method is
+// needed to enable poold running as an external subserver in the same process
+// as lnd but still validate its own macaroons.
+func (s *Server) ValidateMacaroon(ctx context.Context,
+	requiredPermissions []bakery.Op, fullMethod string) error {
+
+	// Delegate the call to pool's own macaroon validator service.
+	return s.macaroonService.ValidateMacaroon(
+		ctx, requiredPermissions, fullMethod,
+	)
 }
 
 // setupClient initializes the auctioneer client and its interceptors.
@@ -394,6 +487,9 @@ func (s *Server) Stop() error {
 	}
 	if err := s.db.Close(); err != nil {
 		log.Errorf("Error closing DB: %v", err)
+	}
+	if err := s.macaroonService.Close(); err != nil {
+		log.Errorf("Error stopping macaroon service: %v", err)
 	}
 	s.lndServices.Close()
 	s.wg.Wait()
