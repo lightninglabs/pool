@@ -244,6 +244,8 @@ Total Premium (yield from taker): 0.0003 BTC
 Rate Fixed: 1000
 Rate Per Block: 0.000001000 (0.0001000%)
 Execution Fee:  0.00010001 BTC
+Max batch fee rate: 25000 sat/kw
+Max chain fee: 0.016325 BTC
 Confirm order (yes/no): yes
 {
         "accepted_order_nonce": "f1bebca6047dee6657f82377ebac94d1dc6667097f2a4d463deb63eff6f0dbcf"
@@ -270,6 +272,19 @@ The duration and fixed rate (the percentage) are two important values to pay
 attention to when placing orders. Given the same amount, and fixed rate, you
 earn more by leasing out the funds for a _longer_ period of time. Conversely, a
 taker will pay more if they need the funds for a longer period of time.
+
+Also notice the +*max batch fee** break down, that regulates the _highest_
+chain fee you're willing to pay to get into a batch. When traders are included
+in a batch, they split the channel open fee with the party they're matched
+with, then pay for their account to be spent and re-created. The auctioneer
+then uses this value during match making to ensure that traders don't pay more
+_chain fees_ than they intend to. If your desired chain fee is _below_ the
+current proposed batch chain fee, then your order won't be eligible for
+execution until chain fees come down somewhat. 
+
+Users can use the `--max_batch_fee_rate` value to regulate chain fees. Note
+that the values is expressed in `sat/kw` on the command line. To convert from
+`sat/vbyte` to `sat/kw`, simply _divide_ by `250`.
 
 Take note of the `order_nonce`, it's used through the auction to identify
 orders, and also for authentication purposes. 
@@ -304,6 +319,38 @@ A trader can have multiple unfilled bids and asks. Partial matching is possible
 as well, so someone could only purchase 10 of the 100 units we have for sale.
 Over time the orders will gain additional constraints such as fill-or-kill, or
 min partial match size.
+
+### Channel Leases
+
+Once an order has been matched in an auction, the `pool auction leases` command
+can be used to examine your current set of purchased/sold channel leases. An
+example output looks something like the following: 
+```
+🏔 pool auction leases
+{
+        "leases": [
+                {
+                        "channel_point": "78cc6879c1dc1c00f22b29a06458f1335ed0fdb7d05c01b9077e3155e697bbb9:2",
+                        "channel_amt_sat": 5000000,
+                        "channel_duration_blocks": 144,
+                        "premium_sat": 40000,
+                        "execution_fee_sat": 5001,
+                        "chain_fee_sat": 165,
+                        "order_nonce": "eb972cd21cf1651e251c8b07d69e89c47294bae104fbdc9da26edf9aee335c9a",
+                        "purchased": false
+                }
+        ],
+        "total_amt_earned_sat": 40000,
+        "total_amt_paid_sat": 5166
+}
+```
+
+Here we can see I sold a channel for 40k satoshis, and ended up paying 5k
+satoshis in chain and execution fees, netting a cool 35k satoshi yield. Within
+the actual auction, these numbers will vary based on the chain fee rate, the
+market prices, and also the execution fees. Users can constraint how much chain
+fees they'll pay by setting the `--max_batch_fee_rate` argument when submitting
+orders.
 
 ### Batched Uniform-Price Clearing
 
@@ -383,6 +430,11 @@ a7e3be1ad2103bc6202b694e62a4d890cbb83f3a4dddb964fc500b25f55a38501642a770e3f37ac7
 Here we see a batch where a single order was matched, at a clearing rate of
 `976`, with a single channel being purchased with a lifetime of `1024` blocks,
 or roughly one week.
+
+Note that the `pool auction snapshot` command can be used to determine the past
+marker clearing price, which can be useful when deciding what your bid/ask
+should be. There's no explicit "market buy" function, but submitting a bid/ask
+at a similar `clearing_price_rate` is equivalent.
 
 The command also accept a target `batch_id` as well. Here we can use the
 `prev_batch_id` to examine the _prior_ batch, similar to traversing a
