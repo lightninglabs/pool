@@ -556,28 +556,43 @@ message Lease {
     // The intended duration, in blocks, of the channel created.
     uint32 channel_duration_blocks = 3;
 
+    // The absolute height that this channel lease expires.
+    uint32 channel_lease_expiry = 4;
+
     /*
     The premium, in satoshis, either paid or received for the offered liquidity.
     */
-    uint64 premium_sat = 4;
+    uint64 premium_sat = 5;
 
     /*
     The execution fee, in satoshis, charged by the auctioneer for the channel
     created.
     */
-    uint64 execution_fee_sat = 5;
+    uint64 execution_fee_sat = 6;
 
     /*
     The fee, in satoshis, charged by the auctioneer for the batch execution
     transaction that created this lease.
     */
-    uint64 chain_fee_sat = 6;
+    uint64 chain_fee_sat = 7;
+
+    /*
+    The actual fixed rate expressed in parts per billionth this lease was
+    bought/sold at.
+    */
+    uint64 clearing_rate_price = 8;
+
+    /*
+    The actual fixed rate of the bid/ask, this should always be 'better' than
+    the clearing_rate_price.
+    */
+    uint64 order_fixed_rate = 9;
 
     // The order executed that resulted in the channel created.
-    bytes order_nonce = 7;
+    bytes order_nonce = 10;
 
     // Whether this channel was purchased from another trader or not.
-    bool purchased = 8;
+    bool purchased = 11;
 }
 
 message LeasesRequest {

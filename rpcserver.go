@@ -1525,14 +1525,44 @@ func (s *rpcServer) Leases(ctx context.Context,
 		}
 	}
 
-	return s.prepareLeasesResponse(ctx, accounts, batches)
+	// As the true lease expiry of a channel is only known after tit has
+	// been confirmed, we'll assemble a map from the outpoint of a channel
+	// to the thaw_height which is actually the lease expiry height.
+	openChans, err := s.lndClient.ListChannels(
+		context.Background(), &lnrpc.ListChannelsRequest{},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch set of open "+
+			"channels: %v", err)
+	}
+
+	// We'll map the outpoint string representation of a channel to the
+	// actual lease expiry height which we'll use to partially populate our
+	// response.
+	chanLeaseExpiries := make(map[string]uint32)
+	for _, channel := range openChans.Channels {
+		if channel.ThawHeight == 0 {
+			continue
+		}
+
+		// The thaw height is relative for channels pre
+		// script-enforcement, so we'll add an offset from the
+		// confirmation height of the channel.
+		sid := lnwire.NewShortChanIDFromInt(channel.ChanId)
+		expiryHeight := channel.ThawHeight + sid.BlockHeight
+		chanLeaseExpiries[channel.ChannelPoint] = expiryHeight
+	}
+
+	return s.prepareLeasesResponse(
+		ctx, accounts, batches, chanLeaseExpiries,
+	)
 }
 
 // prepareLeasesResponse prepares a poolrpc.LeasesResponse for the given
 // accounts in the given batches.
 func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
-	accounts map[[33]byte]struct{}, batches []*clientdb.LocalBatchSnapshot) (
-	*poolrpc.LeasesResponse, error) {
+	accounts map[[33]byte]struct{}, batches []*clientdb.LocalBatchSnapshot,
+	chanLeaseExpiries map[string]uint32) (*poolrpc.LeasesResponse, error) {
 
 	// Now we're ready to prepare our response.
 	var (
@@ -1620,6 +1650,11 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 				}
 				totalAmtPaid += exeFee
 
+				chanPointStr := fmt.Sprintf(
+					"%v:%v", batchTxHash, chanOutputIdx,
+				)
+				leaseExpiryHeight := chanLeaseExpiries[chanPointStr]
+
 				purchased := ourOrder.Type() == order.TypeBid
 				rpcLeases = append(rpcLeases, &poolrpc.Lease{
 					ChannelPoint: &poolrpc.OutPoint{
@@ -1628,7 +1663,10 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					},
 					ChannelAmtSat:         uint64(chanAmt),
 					ChannelDurationBlocks: bidDuration,
+					ChannelLeaseExpiry:    leaseExpiryHeight,
 					PremiumSat:            uint64(premium),
+					ClearingRatePrice:     uint64(batch.ClearingPrice),
+					OrderFixedRate:        uint64(ourOrder.Details().FixedRate),
 					ExecutionFeeSat:       uint64(exeFee),
 					OrderNonce:            nonce[:],
 					Purchased:             purchased,
