@@ -63,8 +63,14 @@ func parseNodeAddrs(rpcAddrs []*poolrpc.NodeAddress, orderIsAsk bool) ([]net.Add
 			err  error
 		)
 
+		// Obtain the host to determine if this is a Tor address.
+		host, _, err := net.SplitHostPort(rpcAddr.Addr)
+		if err != nil {
+			host = rpcAddr.Addr
+		}
+
 		switch {
-		case tor.IsOnionHost(rpcAddr.Addr):
+		case tor.IsOnionHost(host):
 			addr, err = parseOnionAddr(rpcAddr.Addr)
 
 		default:

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1719,7 +1720,13 @@ func rpcOrderStateToDBState(state poolrpc.OrderState) (order.State, error) {
 // of active Uris for a node.
 func nodeHasTorAddrs(nodeAddrs []string) bool {
 	for _, nodeAddr := range nodeAddrs {
-		if tor.IsOnionHost(nodeAddr) {
+		// Obtain the host to determine if this is a Tor address.
+		host, _, err := net.SplitHostPort(nodeAddr)
+		if err != nil {
+			host = nodeAddr
+		}
+
+		if tor.IsOnionHost(host) {
 			return true
 		}
 	}
