@@ -147,13 +147,11 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 	copy(multiSigKey[:], nextMultiSigKey.PubKey.SerializeCompressed())
 	info, err := m.cfg.Lightning.GetInfo(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get local "+
-			"node info: %v", err)
+		return nil, fmt.Errorf("unable to get local node info: %v", err)
 	}
 	nodeAddrs, err := parseNodeUris(info.Uris)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse "+
-			"node uris: %v", err)
+		return nil, fmt.Errorf("unable to parse node uris: %v", err)
 	}
 
 	// If the order is a ask, then this means they should be an effective
@@ -376,10 +374,16 @@ func parseNodeUris(uris []string) ([]net.Addr, error) {
 			err  error
 		)
 
+		// Obtain the host to determine if this is a Tor address.
+		host, _, err := net.SplitHostPort(parts[1])
+		if err != nil {
+			host = parts[1]
+		}
+
 		switch {
 		// We'll need to parse onion addresses in a different manner as
 		// the encoding also differ from v2 to v3 addrs.
-		case tor.IsOnionHost(parts[1]):
+		case tor.IsOnionHost(host):
 			addr, err = parseOnionAddr(parts[1])
 			if err != nil {
 				return nil, err
