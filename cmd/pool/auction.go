@@ -14,7 +14,10 @@ type Lease struct {
 	ChannelPoint          string `json:"channel_point"`
 	ChannelAmtSat         uint64 `json:"channel_amt_sat"`
 	ChannelDurationBlocks uint32 `json:"channel_duration_blocks"`
+	ChannelLeaseExpiry    uint32 `json:"channel_lease_expiry"`
 	PremiumSat            uint64 `json:"premium_sat"`
+	ClearingRatePrice     uint64 `json:"clearing_rate_price"`
+	OrderFixedRate        uint64 `json:"order_fixed_rate"`
 	ExecutionFeeSat       uint64 `json:"execution_fee_sat"`
 	ChainFeeSat           uint64 `json:"chain_fee_sat"`
 	OrderNonce            string `json:"order_nonce"`
@@ -31,7 +34,10 @@ func NewLeaseFromProto(a *poolrpc.Lease) *Lease {
 		ChannelPoint:          chanPoint,
 		ChannelAmtSat:         a.ChannelAmtSat,
 		ChannelDurationBlocks: a.ChannelDurationBlocks,
+		ChannelLeaseExpiry:    a.ChannelLeaseExpiry,
 		PremiumSat:            a.PremiumSat,
+		ClearingRatePrice:     a.ClearingRatePrice,
+		OrderFixedRate:        a.OrderFixedRate,
 		ExecutionFeeSat:       a.ExecutionFeeSat,
 		ChainFeeSat:           a.ChainFeeSat,
 		OrderNonce:            hex.EncodeToString(a.OrderNonce),

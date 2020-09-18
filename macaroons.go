@@ -70,6 +70,10 @@ var (
 			Entity: "auction",
 			Action: "read",
 		}},
+		"/poolrpc.Trader/Leases": {{
+			Entity: "auction",
+			Action: "read",
+		}},
 		"/poolrpc.Trader/BatchSnapshot": {{
 			Entity: "auction",
 			Action: "read",

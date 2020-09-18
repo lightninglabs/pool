@@ -853,6 +853,11 @@
           "format": "int64",
           "description": "The intended duration, in blocks, of the channel created."
         },
+        "channel_lease_expiry": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The absolute height that this channel lease expires."
+        },
         "premium_sat": {
           "type": "string",
           "format": "uint64",
@@ -867,6 +872,16 @@
           "type": "string",
           "format": "uint64",
           "description": "The fee, in satoshis, charged by the auctioneer for the batch execution\ntransaction that created this lease."
+        },
+        "clearing_rate_price": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The actual fixed rate expressed in parts per billionth this lease was\nbought/sold at."
+        },
+        "order_fixed_rate": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The actual fixed rate of the bid/ask, this should always be 'better' than\nthe clearing_rate_price."
         },
         "order_nonce": {
           "type": "string",
