@@ -1837,9 +1837,27 @@ func (s *rpcServer) LeaseDurations(ctx context.Context,
 	}, nil
 }
 
+// NodeRatings returns rating information about the target node. This can be
+// used to query the rating of your own node, or other nodes to determine which
+// asks/bids might be filled based on a target min node tier.
 func (s *rpcServer) NodeRatings(ctx context.Context,
 	req *poolrpc.NodeRatingRequest) (*poolrpc.NodeRatingResponse, error) {
-	return nil, nil
+
+	if len(req.NodePubkeys) == 0 {
+		return nil, fmt.Errorf("node pub key must be provided")
+	}
+
+	pubKeys := make([]*btcec.PublicKey, 0, len(req.NodePubkeys))
+	for _, nodeKeyBytes := range req.NodePubkeys {
+		nodeKey, err := btcec.ParsePubKey(nodeKeyBytes, btcec.S256())
+		if err != nil {
+			return nil, err
+		}
+
+		pubKeys = append(pubKeys, nodeKey)
+	}
+
+	return s.auctioneer.NodeRating(ctx, pubKeys...)
 }
 
 // rpcOrderStateToDBState maps the order state as received over the RPC

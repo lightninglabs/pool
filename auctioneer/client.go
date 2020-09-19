@@ -1173,6 +1173,29 @@ func (c *Client) BatchSnapshot(ctx context.Context,
 	})
 }
 
+// NodeRating returns the current up to date ratings information for the target
+// node pubkey.
+func (c *Client) NodeRating(ctx context.Context,
+	nodeKeys ...*btcec.PublicKey) (*poolrpc.NodeRatingResponse, error) {
+
+	pubKeys := make([][]byte, 0, len(nodeKeys))
+	for _, nodeKey := range nodeKeys {
+		pubKeys = append(pubKeys, nodeKey.SerializeCompressed())
+	}
+
+	req := &poolrpc.ServerNodeRatingRequest{
+		NodePubkeys: pubKeys,
+	}
+	serverResp, err := c.client.NodeRating(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &poolrpc.NodeRatingResponse{
+		NodeRatings: serverResp.NodeRatings,
+	}, nil
+}
+
 // MarshallNodeTier maps the node tier integer into the enum used on the RPC
 // interface.
 func MarshallNodeTier(nodeTier order.NodeTier) (poolrpc.NodeTier, error) {
