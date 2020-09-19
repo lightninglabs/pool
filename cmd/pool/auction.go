@@ -15,6 +15,8 @@ type Lease struct {
 	ChannelAmtSat         uint64 `json:"channel_amt_sat"`
 	ChannelDurationBlocks uint32 `json:"channel_duration_blocks"`
 	ChannelLeaseExpiry    uint32 `json:"channel_lease_expiry"`
+	ChannelRemoteNodeKey  string `json:"channel_node_key"`
+	ChannelNodeTier       string `json:"channel_node_tier"`
 	PremiumSat            uint64 `json:"premium_sat"`
 	ClearingRatePrice     uint64 `json:"clearing_rate_price"`
 	OrderFixedRate        uint64 `json:"order_fixed_rate"`
@@ -35,6 +37,8 @@ func NewLeaseFromProto(a *poolrpc.Lease) *Lease {
 		ChannelAmtSat:         a.ChannelAmtSat,
 		ChannelDurationBlocks: a.ChannelDurationBlocks,
 		ChannelLeaseExpiry:    a.ChannelLeaseExpiry,
+		ChannelRemoteNodeKey:  hex.EncodeToString(a.ChannelRemoteNodeKey),
+		ChannelNodeTier:       a.ChannelNodeTier.String(),
 		PremiumSat:            a.PremiumSat,
 		ClearingRatePrice:     a.ClearingRatePrice,
 		OrderFixedRate:        a.OrderFixedRate,
@@ -56,6 +60,7 @@ var auctionCommands = []cli.Command{
 			batchSnapshotCommand,
 			leasesCommand,
 			leaseDurationsCommand,
+			ratingsCommand,
 		},
 	},
 }
@@ -254,6 +259,54 @@ func leaseDurations(ctx *cli.Context) error {
 	}
 
 	printRespJSON(resp)
+
+	return nil
+}
+
+var ratingsCommand = cli.Command{
+	Name:      "ratings",
+	ShortName: "r",
+	Usage:     "query for the current ratings information of a Lightning Node",
+	Description: `
+		Returns the current Node Tier of a node, along with other
+		information.
+		`,
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:  "node_key",
+			Usage: "the node key to look up the rating for",
+		},
+	},
+	Action: ratings,
+}
+
+func ratings(ctx *cli.Context) error {
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	nodeKey := ctx.String("node_key")
+	if nodeKey == "" {
+		return fmt.Errorf("an LN node key must be provided")
+	}
+
+	nodeKeyBytes, err := hex.DecodeString(nodeKey)
+	if err != nil {
+		return fmt.Errorf("unable to decode node key: %v", err)
+	}
+
+	nodeRating, err := client.NodeRatings(
+		context.Background(), &poolrpc.NodeRatingRequest{
+			NodePubkeys: [][]byte{nodeKeyBytes},
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	printRespJSON(nodeRating)
 
 	return nil
 }
