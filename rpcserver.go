@@ -1661,11 +1661,66 @@ func (s *rpcServer) Leases(ctx context.Context,
 	)
 }
 
+// fetchNodeRatings returns an up to date set of ratings for each of the nodes
+// we matched with in the passed batch.
+func fetchNodeRatings(ctx context.Context, batches []*clientdb.LocalBatchSnapshot,
+	auctioneer *auctioneer.Client) (map[[33]byte]poolrpc.NodeTier, error) {
+
+	// As the node ratings call is batched, we'll first do a single query
+	// to fetch all the ratings that we'll want to populate below.
+	//
+	// TODO(roasbeef): capture rating at time of lease? also cache
+	nodeRatings := make(map[[33]byte]poolrpc.NodeTier)
+	for _, batch := range batches {
+		for _, matches := range batch.MatchedOrders {
+			for _, match := range matches {
+				nodeRatings[match.NodeKey] = 0
+			}
+		}
+	}
+
+	nodeKeys := make([]*btcec.PublicKey, 0, len(nodeRatings))
+	for pubKey := range nodeRatings {
+		nodeKey, err := btcec.ParsePubKey(
+			pubKey[:], btcec.S256(),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		nodeKeys = append(nodeKeys, nodeKey)
+	}
+
+	// Query for the latest node ranking information for each of the nodes
+	// we gathered above.
+	nodeRatingsResp, err := auctioneer.NodeRating(ctx, nodeKeys...)
+	if err != nil {
+		return nil, fmt.Errorf("unable to query "+
+			"node tier: %v", err)
+	}
+
+	for _, nodeRating := range nodeRatingsResp.NodeRatings {
+		var pubKey [33]byte
+		copy(pubKey[:], nodeRating.NodePubkey)
+
+		nodeRatings[pubKey] = nodeRating.NodeTier
+	}
+
+	return nodeRatings, nil
+}
+
 // prepareLeasesResponse prepares a poolrpc.LeasesResponse for the given
 // accounts in the given batches.
 func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 	accounts map[[33]byte]struct{}, batches []*clientdb.LocalBatchSnapshot,
 	chanLeaseExpiries map[string]uint32) (*poolrpc.LeasesResponse, error) {
+
+	// First, we'll try to grab our set of node ratings as we want them to
+	// fully populate the lease response.
+	nodeRatings, err := fetchNodeRatings(ctx, batches, s.auctioneer)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch node ratings: %v", err)
+	}
 
 	// Now we're ready to prepare our response.
 	var (
@@ -1759,6 +1814,7 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 				leaseExpiryHeight := chanLeaseExpiries[chanPointStr]
 
 				purchased := ourOrder.Type() == order.TypeBid
+				nodeTier := nodeRatings[match.NodeKey]
 				rpcLeases = append(rpcLeases, &poolrpc.Lease{
 					ChannelPoint: &poolrpc.OutPoint{
 						Txid:        batchTxHash[:],
@@ -1773,6 +1829,8 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					ExecutionFeeSat:       uint64(exeFee),
 					OrderNonce:            nonce[:],
 					Purchased:             purchased,
+					ChannelRemoteNodeKey:  match.NodeKey[:],
+					ChannelNodeTier:       nodeTier,
 				})
 
 				numChans++
