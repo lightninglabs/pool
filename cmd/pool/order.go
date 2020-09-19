@@ -225,7 +225,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 
 	ask := &poolrpc.Ask{
 		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
-		Version:             uint32(order.VersionDefault),
+		Version:             uint32(order.VersionNodeTierMinMatch),
 	}
 
 	params, err := parseCommonParams(ctx, ask.LeaseDurationBlocks)
@@ -367,7 +367,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 
 	bid := &poolrpc.Bid{
 		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
-		Version:             uint32(order.VersionDefault),
+		Version:             uint32(order.VersionNodeTierMinMatch),
 	}
 
 	params, err := parseCommonParams(ctx, bid.LeaseDurationBlocks)

@@ -33,6 +33,10 @@ type Version uint32
 const (
 	// VersionDefault is the default initial version of orders.
 	VersionDefault Version = 0
+
+	// VersionNodeTierMinMatch is the order version that added recognition
+	// of the new node tier and min matchable order size fields.
+	VersionNodeTierMinMatch Version = 1
 )
 
 // Type is the type of an order. We don't use iota for the constants due to the
@@ -302,7 +306,7 @@ func NewKitWithPreimage(preimage lntypes.Preimage) *Kit {
 	return &Kit{
 		nonce:    nonce,
 		Preimage: preimage,
-		Version:  VersionDefault,
+		Version:  VersionNodeTierMinMatch,
 	}
 }
 
@@ -310,7 +314,7 @@ func NewKitWithPreimage(preimage lntypes.Preimage) *Kit {
 func NewKit(nonce Nonce) *Kit {
 	return &Kit{
 		nonce:   nonce,
-		Version: VersionDefault,
+		Version: VersionNodeTierMinMatch,
 	}
 }
 
@@ -340,7 +344,7 @@ func (a *Ask) Digest() ([sha256.Size]byte, error) {
 		result [sha256.Size]byte
 	)
 	switch a.Kit.Version {
-	case VersionDefault:
+	case VersionDefault, VersionNodeTierMinMatch:
 		err := lnwire.WriteElements(
 			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
 			a.Amt, a.LeaseDuration, uint64(a.MaxBatchFeeRate),
@@ -413,12 +417,62 @@ func (a *Ask) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
 	})
 }
 
+// NodeTier an enum-like variable that presents which "tier" a node is in. A
+// higher tier is better. Node tiers are used to allow clients to express their
+// preference w.r.t the "quality" of a node they wish to buy channels from.
+type NodeTier uint32
+
+const (
+	// NodeTierDefault only exists in-memory as allows users to specify
+	// that they want to opt-into the default "node tier". The
+	// DefaultMinNodeTier constant should point to what the current default
+	// node tier is.
+	NodeTierDefault NodeTier = 0
+
+	// NodeTier0 is the tier for nodes which may not be explicitly ranked.
+	// Orders submitted with this min tier express that they don't care
+	// about the "quality" of the node they're matched with.
+	NodeTier0 NodeTier = 1
+
+	// NodeTier1 is the "base" node tier. Nodes on this tier are considered
+	// to be relatively good. We have this be the first value in the enum
+	// so it can be the default within the codebase and for order
+	// submission/matching.
+	NodeTier1 NodeTier = 2
+)
+
+// DefaultMinNodeTier is the default node tier. With this current value, Bids
+// will default to only matching with nodes in the first tier and above.
+const DefaultMinNodeTier = NodeTier1
+
+// String returns the string representation of the target NodeTier.
+func (n NodeTier) String() string {
+	switch n {
+	case NodeTier0:
+		return "NodeTier0"
+
+	case NodeTier1:
+		return "NodeTier1"
+
+	case NodeTierDefault:
+		return "NodeTierDefault"
+
+	default:
+		return fmt.Sprintf("UnknownNodeTier(%v)", uint32(n))
+	}
+}
+
 // Bid is the specific order type representing the willingness of an auction
 // participant to pay for inbound liquidity provided by other auction
 // participants.
 type Bid struct {
 	// Kit contains all the common order parameters.
 	Kit
+
+	// MinNodeTier is the minimum node tier that this order should be
+	// matched with. Only Asks backed by nodes on this tier or above will
+	// be matched with this bid.
+	MinNodeTier NodeTier
 }
 
 // Type returns the order type.
@@ -443,6 +497,16 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 		err := lnwire.WriteElements(
 			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
 			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
+		)
+		if err != nil {
+			return result, err
+		}
+
+	case VersionNodeTierMinMatch:
+		err := lnwire.WriteElements(
+			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
+			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
+			uint32(b.MinNodeTier),
 		)
 		if err != nil {
 			return result, err
