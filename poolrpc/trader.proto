@@ -178,6 +178,15 @@ service Trader {
         };
     };
 
+    /* pool: `auction ratings`
+    Returns the Node Tier information for this target Lightning node, and other
+    related ranking information.
+    */
+    rpc NodeRatings(NodeRatingRequest) returns (NodeRatingResponse) {
+        option (google.api.http) = {
+            get: "/v1/pool/node_ratings"
+        };
+    };
 }
 
 message InitAccountRequest {
@@ -536,6 +545,13 @@ message Bid {
     features are added.
     */
     uint32 version = 3;
+
+
+    /*
+    The minium node tier this order should be matched with. Only asks backed by
+    a node this tier or higher will be eligible for matching with this bid.
+    */
+    NodeTier min_node_tier = 4;
 }
 
 message Ask {
@@ -747,6 +763,12 @@ message Lease {
 
     // Whether this channel was purchased from another trader or not.
     bool purchased = 11;
+
+    // The pubkey of the node that this channel was bought/sold from.
+    bytes channel_remote_node_key = 12;
+
+    // The tier of the node that this channel was bought/sold from.
+    NodeTier channel_node_tier = 13;
 }
 
 message LeasesRequest {
@@ -834,4 +856,14 @@ message LeaseDurationRequest {
 
 message LeaseDurationResponse {
     map<uint32, bool> lease_durations = 1;
+}
+
+message NodeRatingRequest {
+    // The target node to obtain ratings information for.
+    repeated bytes node_pubkeys = 1;
+}
+
+message NodeRatingResponse {
+    // A series of node ratings for each of the queried nodes.
+    repeated NodeRating node_ratings = 1;
 }

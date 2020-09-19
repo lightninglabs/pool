@@ -1826,6 +1826,11 @@ func (s *rpcServer) LeaseDurations(ctx context.Context,
 	}, nil
 }
 
+func (s *rpcServer) NodeRatings(ctx context.Context,
+	req *poolrpc.NodeRatingRequest) (*poolrpc.NodeRatingResponse, error) {
+	return nil, nil
+}
+
 // rpcOrderStateToDBState maps the order state as received over the RPC
 // protocol to the local state that we use in the database.
 func rpcOrderStateToDBState(state poolrpc.OrderState) (order.State, error) {
