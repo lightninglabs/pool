@@ -164,8 +164,14 @@ func (db *DB) GetLocalBatchSnapshot(id order.BatchID) (
 			return fmt.Errorf("snapshot of batch %x not found",
 				id[:])
 		}
+		rootOrderBucket, err := getBucket(tx, ordersBucketKey)
+		if err != nil {
+			return err
+		}
 
-		snapshot, err = fetchLocalBatchSnapshot(seqBucket, seq)
+		snapshot, err = fetchLocalBatchSnapshot(
+			seqBucket, seq, rootOrderBucket,
+		)
 		return err
 	})
 	if err != nil {
@@ -182,12 +188,18 @@ func (db *DB) fetchLocalBatchSnapshots(tx *bbolt.Tx) ([]*LocalBatchSnapshot,
 	if err != nil {
 		return nil, err
 	}
+	rootOrderBucket, err := getBucket(tx, ordersBucketKey)
+	if err != nil {
+		return nil, err
+	}
 
 	// Each entry in the top-level bucket is a sub-bucket index by the
 	// sequence number.
 	var snapshots []*LocalBatchSnapshot
 	err = seqBucket.ForEach(func(seq, v []byte) error {
-		batchSnapshot, err := fetchLocalBatchSnapshot(seqBucket, seq)
+		batchSnapshot, err := fetchLocalBatchSnapshot(
+			seqBucket, seq, rootOrderBucket,
+		)
 		if err != nil {
 			return err
 		}
@@ -203,9 +215,8 @@ func (db *DB) fetchLocalBatchSnapshots(tx *bbolt.Tx) ([]*LocalBatchSnapshot,
 	return snapshots, nil
 }
 
-func fetchLocalBatchSnapshot(seqBucket *bbolt.Bucket, seqNum []byte) (
-	*LocalBatchSnapshot,
-	error) {
+func fetchLocalBatchSnapshot(seqBucket *bbolt.Bucket, seqNum []byte,
+	rootOrderBucket *bbolt.Bucket) (*LocalBatchSnapshot, error) {
 
 	snapshotBucket, err := getNestedBucket(seqBucket, seqNum, false)
 	if err != nil {
@@ -218,7 +229,48 @@ func fetchLocalBatchSnapshot(seqBucket *bbolt.Bucket, seqNum []byte) (
 		return nil, fmt.Errorf("batch not found for snapshot")
 	}
 
-	return deserializeLocalBatchSnapshot(bytes.NewReader(rawBatch))
+	batchSnapshot, err := deserializeLocalBatchSnapshot(
+		bytes.NewReader(rawBatch),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// The snapshot doesn't contain information such as the min node tier,
+	// so we'll go ahead and retrieve that information now.
+	for nonce, o := range batchSnapshot.Orders {
+		// We'll only need to populate the values below for bid orders.
+		bidOrder, ok := o.(*order.Bid)
+		if !ok {
+			continue
+
+		}
+		orderBucket, err := getNestedBucket(
+			rootOrderBucket, nonce[:], false,
+		)
+		if err != nil {
+			return nil, ErrNoOrder
+		}
+
+		minNodeTierBytes := orderBucket.Get(orderTierKey)
+		if minNodeTierBytes == nil {
+			// If not found, then assume the current default value.
+			bidOrder.MinNodeTier = order.DefaultMinNodeTier
+		} else {
+			var minNodeTier order.NodeTier
+			err := ReadElement(
+				bytes.NewReader(minNodeTierBytes),
+				&minNodeTier,
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			bidOrder.MinNodeTier = minNodeTier
+		}
+	}
+
+	return batchSnapshot, nil
 }
 
 func storePendingBatchSnapshot(tx *bbolt.Tx,

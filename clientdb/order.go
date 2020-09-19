@@ -30,24 +30,32 @@ var (
 	//
 	// path: ordersBucketKey -> orderBucket[nonce] -> orderKey
 	orderKey = []byte("order")
+
+	// orderTierKey is a key within the order bucket for an order. It
+	// stores the min node tier for an order. It allows an order to specify
+	// the required minimum node tier for matching and execution.
+	orderTierKey = []byte("order-tier")
 )
 
 // orderCallback is a function type that is used to pass as a callback into the
-// store's fetch functions to deliver the results to the caller.
-type orderCallback func(nonce order.Nonce, rawOrder []byte) error
+// store's fetch functions to deliver the results to the caller. It also
+// includes any auxiliary order information as additional arguments after the
+// raw order bytes.
+type orderCallback func(nonce order.Nonce, rawOrder []byte,
+	minNodeTier uint32) error
 
 // SubmitOrder stores an order by using the orders's nonce as an identifier. If
 // an order with the given nonce already exists in the store, ErrOrderExists is
 // returned.
 //
 // NOTE: This is part of the Store interface.
-func (db *DB) SubmitOrder(o order.Order) error {
+func (db *DB) SubmitOrder(newOrder order.Order) error {
 	return db.Update(func(tx *bbolt.Tx) error {
 		rootBucket, err := getBucket(tx, ordersBucketKey)
 		if err != nil {
 			return err
 		}
-		err = fetchOrderTX(rootBucket, o.Nonce(), nil)
+		err = fetchOrderTX(rootBucket, newOrder.Nonce(), nil)
 		switch err {
 		// No error means there is an order with that nonce in the DB
 		// already.
@@ -66,7 +74,7 @@ func (db *DB) SubmitOrder(o order.Order) error {
 		// Serialize and store the order now that we know it doesn't
 		// exist yet.
 		var w bytes.Buffer
-		err = SerializeOrder(o, &w)
+		err = SerializeOrder(newOrder, &w)
 		if err != nil {
 			return err
 		}
@@ -74,8 +82,24 @@ func (db *DB) SubmitOrder(o order.Order) error {
 		// Create an event for the initial order and store it in the
 		// order's event bucket but also in the global events under an
 		// unique timestamp.
-		evt := NewCreatedEvent(o)
-		return storeOrderTX(rootBucket, o.Nonce(), w.Bytes(), evt)
+		evt := NewCreatedEvent(newOrder)
+		err = storeOrderTX(
+			rootBucket, newOrder.Nonce(), w.Bytes(), evt,
+		)
+		if err != nil {
+			return err
+		}
+
+		// Finally, store the min node tier, but only if this is a Bid
+		// order.
+		if bidOrder, ok := newOrder.(*order.Bid); ok {
+			return storeOrderMinNoderTierTX(
+				rootBucket, newOrder.Nonce(),
+				uint32(bidOrder.MinNodeTier),
+			)
+		}
+
+		return nil
 	})
 }
 
@@ -132,10 +156,24 @@ func (db *DB) GetOrder(nonce order.Nonce) (order.Order, error) {
 	var (
 		o        order.Order
 		err      error
-		callback = func(nonce order.Nonce, rawOrder []byte) error {
+		callback = func(nonce order.Nonce, rawOrder []byte,
+			minNodeTier uint32) error {
+
 			r := bytes.NewReader(rawOrder)
 			o, err = DeserializeOrder(nonce, r)
-			return err
+			if err != nil {
+				return err
+			}
+
+			// TODO(roasbeef): factory func to de-dup w/ all other
+			// instances?
+			if bidOrder, ok := o.(*order.Bid); ok {
+				bidOrder.MinNodeTier = order.NodeTier(
+					minNodeTier,
+				)
+			}
+
+			return nil
 		}
 	)
 	err = db.View(func(tx *bbolt.Tx) error {
@@ -154,12 +192,21 @@ func (db *DB) GetOrder(nonce order.Nonce) (order.Order, error) {
 func (db *DB) GetOrders() ([]order.Order, error) {
 	var (
 		orders   []order.Order
-		callback = func(nonce order.Nonce, rawOrder []byte) error {
+		callback = func(nonce order.Nonce, rawOrder []byte,
+			minNodeTier uint32) error {
+
 			r := bytes.NewReader(rawOrder)
 			o, err := DeserializeOrder(nonce, r)
 			if err != nil {
 				return err
 			}
+
+			if bidOrder, ok := o.(*order.Bid); ok {
+				bidOrder.MinNodeTier = order.NodeTier(
+					minNodeTier,
+				)
+			}
+
 			orders = append(orders, o)
 			return nil
 		}
@@ -237,6 +284,24 @@ func storeOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 	return orderBucket.Put(orderKey, orderBytes)
 }
 
+// storeOrderMinNoderTierTX saves the currnet node tier for a given order to
+// the proper bucket.
+func storeOrderMinNoderTierTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
+	minNodeTier uint32) error {
+
+	orderBucket, err := rootBucket.CreateBucketIfNotExists(nonce[:])
+	if err != nil {
+		return err
+	}
+
+	var b bytes.Buffer
+	if err := WriteElements(&b, minNodeTier); err != nil {
+		return err
+	}
+
+	return orderBucket.Put(orderTierKey, b.Bytes())
+}
+
 // fetchOrderTX fetches the binary data of one order specified by its nonce from
 // the root orders bucket.
 func fetchOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
@@ -257,7 +322,19 @@ func fetchOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 	if callback == nil {
 		return nil
 	}
-	return callback(nonce, orderBytes)
+
+	var minNodeTier uint32
+	nodeTierBytes := orderBucket.Get(orderTierKey)
+	if nodeTierBytes != nil {
+		err := ReadElements(
+			bytes.NewReader(nodeTierBytes), &minNodeTier,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return callback(nonce, orderBytes, minNodeTier)
 }
 
 // updateOrder fetches the binary data of one order specified by its nonce from
@@ -272,12 +349,25 @@ func updateOrder(ordersBucket, dst *bbolt.Bucket, nonce order.Nonce,
 	var (
 		o        order.Order
 		err      error
-		callback = func(nonce order.Nonce, rawOrder []byte) error {
+		callback = func(nonce order.Nonce, rawOrder []byte,
+			minNodeTier uint32) error {
+
 			r := bytes.NewReader(rawOrder)
 			o, err = DeserializeOrder(nonce, r)
-			return err
+			if err != nil {
+				return err
+			}
+
+			if bidOrder, ok := o.(*order.Bid); ok {
+				bidOrder.MinNodeTier = order.NodeTier(
+					minNodeTier,
+				)
+			}
+
+			return nil
 		}
 	)
+
 	// Retrieve the order stored in the database.
 	err = fetchOrderTX(ordersBucket, nonce, callback)
 	if err != nil {
@@ -318,6 +408,15 @@ func updateOrder(ordersBucket, dst *bbolt.Bucket, nonce order.Nonce,
 		return nil, err
 	}
 
+	if bidOrder, ok := o.(*order.Bid); ok {
+		err = storeOrderMinNoderTierTX(
+			dst, nonce, uint32(bidOrder.MinNodeTier),
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return o, nil
 }
 
@@ -325,10 +424,24 @@ func updateOrder(ordersBucket, dst *bbolt.Bucket, nonce order.Nonce,
 // event references are copied, only the order itself.
 func copyOrder(src, dst *bbolt.Bucket, nonce order.Nonce) error {
 	var (
+		o          order.Order
 		orderBytes []byte
+		nodeTier   uint32
 		err        error
-		callback   = func(_ order.Nonce, rawOrder []byte) error {
+		callback   = func(_ order.Nonce, rawOrder []byte,
+			minNodeTier uint32) error {
+
 			orderBytes = rawOrder
+
+			// In order to know if we need the node tier at all,
+			// we'll go ahead and decode fully this order in
+			// question.
+			r := bytes.NewReader(rawOrder)
+			o, err = DeserializeOrder(nonce, r)
+			if err != nil {
+				return err
+			}
+			nodeTier = minNodeTier
 			return nil
 		}
 	)
@@ -339,7 +452,17 @@ func copyOrder(src, dst *bbolt.Bucket, nonce order.Nonce) error {
 		return err
 	}
 
-	return storeOrderTX(dst, nonce, orderBytes, nil)
+	if err := storeOrderTX(dst, nonce, orderBytes, nil); err != nil {
+		return err
+	}
+
+	if _, ok := o.(*order.Bid); ok {
+		return storeOrderMinNoderTierTX(
+			dst, nonce, nodeTier,
+		)
+	}
+
+	return nil
 }
 
 // SerializeOrder binary serializes an order to a writer using the common LN
