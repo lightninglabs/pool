@@ -373,10 +373,16 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		}
 
 	case *order.Bid:
+		nodeTierEnum, err := MarshallNodeTier(castOrder.MinNodeTier)
+		if err != nil {
+			return err
+		}
+
 		serverBid := &poolrpc.ServerBid{
 			Details:             details,
 			LeaseDurationBlocks: castOrder.LeaseDuration,
 			Version:             uint32(castOrder.Version),
+			MinNodeTier:         nodeTierEnum,
 		}
 		rpcRequest.Details = &poolrpc.ServerSubmitOrderRequest_Bid{
 			Bid: serverBid,
@@ -1165,4 +1171,22 @@ func (c *Client) BatchSnapshot(ctx context.Context,
 	return c.client.BatchSnapshot(ctx, &poolrpc.BatchSnapshotRequest{
 		BatchId: targetBatch[:],
 	})
+}
+
+// MarshallNodeTier maps the node tier integer into the enum used on the RPC
+// interface.
+func MarshallNodeTier(nodeTier order.NodeTier) (poolrpc.NodeTier, error) {
+	switch nodeTier {
+	case order.NodeTierDefault:
+		return poolrpc.NodeTier_TIER_DEFAULT, nil
+
+	case order.NodeTier0:
+		return poolrpc.NodeTier_TIER_0, nil
+
+	case order.NodeTier1:
+		return poolrpc.NodeTier_TIER_1, nil
+
+	default:
+		return 0, fmt.Errorf("unknown node tier: %v", nodeTier)
+	}
 }

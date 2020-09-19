@@ -1092,9 +1092,14 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
+		nodeTier, err := unmarshallNodeTier(b.MinNodeTier)
+		if err != nil {
+			return nil, err
+		}
 
 		o = &order.Bid{
-			Kit: *kit,
+			Kit:         *kit,
+			MinNodeTier: nodeTier,
 		}
 
 	default:
@@ -1297,10 +1302,16 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			asks = append(asks, rpcAsk)
 
 		case *order.Bid:
+			nodeTier, err := auctioneer.MarshallNodeTier(o.MinNodeTier)
+			if err != nil {
+				return nil, err
+			}
+
 			rpcBid := &poolrpc.Bid{
 				Details:             details,
 				LeaseDurationBlocks: dbDetails.LeaseDuration,
 				Version:             uint32(o.Version),
+				MinNodeTier:         nodeTier,
 			}
 			bids = append(bids, rpcBid)
 
@@ -1996,4 +2007,22 @@ func nodeHasTorAddrs(nodeAddrs []string) bool {
 	}
 
 	return false
+}
+
+// unmarshallNodeTier maps the RPC node tier enum to the node tier used in
+// memory.
+func unmarshallNodeTier(nodeTier poolrpc.NodeTier) (order.NodeTier, error) {
+	switch nodeTier {
+	case poolrpc.NodeTier_TIER_DEFAULT:
+		return order.DefaultMinNodeTier, nil
+
+	case poolrpc.NodeTier_TIER_0:
+		return order.NodeTier0, nil
+
+	case poolrpc.NodeTier_TIER_1:
+		return order.NodeTier1, nil
+
+	default:
+		return 0, fmt.Errorf("unknown node tier: %v", nodeTier)
+	}
 }
