@@ -94,7 +94,7 @@ func (h *testHarness) assertAccountSubscribed(traderKey *btcec.PublicKey) {
 	defer h.auctioneer.mu.Unlock()
 
 	if _, ok := h.auctioneer.subscribed[rawTraderKey]; !ok {
-		h.t.Fatalf("account %x not subscribed", traderKey)
+		h.t.Fatalf("account %x not subscribed", rawTraderKey)
 	}
 }
 
@@ -108,7 +108,7 @@ func (h *testHarness) assertAccountNotSubscribed(traderKey *btcec.PublicKey) {
 	defer h.auctioneer.mu.Unlock()
 
 	if _, ok := h.auctioneer.subscribed[rawTraderKey]; ok {
-		h.t.Fatalf("account %x is subscribed", traderKey)
+		h.t.Fatalf("account %x is subscribed", rawTraderKey)
 	}
 }
 
@@ -457,9 +457,11 @@ func (h *testHarness) restartManager() {
 
 	h.manager.Stop()
 
+	auctioneer := newMockAuctioneer()
+	h.auctioneer = auctioneer
 	h.manager = NewManager(&ManagerConfig{
 		Store:         h.manager.cfg.Store,
-		Auctioneer:    h.manager.cfg.Auctioneer,
+		Auctioneer:    auctioneer,
 		Wallet:        h.manager.cfg.Wallet,
 		ChainNotifier: h.manager.cfg.ChainNotifier,
 		TxSource:      h.manager.cfg.TxSource,
@@ -1079,4 +1081,50 @@ func TestAccountConsecutiveBatches(t *testing.T) {
 	StateModifier(StateOpen)(account)
 	HeightHintModifier(uint32(confHeight))(account)
 	h.assertAccountExists(account)
+}
+
+// TestAccountUpdateSubscriptionOnRestart ensures that the account manager
+// subscribes accounts in certain states for auction updates after a restart.
+func TestAccountUpdateSubscriptionOnRestart(t *testing.T) {
+	t.Parallel()
+
+	const bestHeight = 100
+
+	h := newTestHarness(t)
+	h.start()
+	defer h.stop()
+
+	account := h.openAccount(
+		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+	)
+
+	// StateOpen case.
+	h.restartManager()
+	h.assertAccountSubscribed(account.TraderKey.PubKey)
+
+	err := h.store.UpdateAccount(account, StateModifier(StatePendingBatch))
+	require.NoError(t, err)
+
+	// StatePendingBatch case.
+	h.restartManager()
+	h.assertAccountSubscribed(account.TraderKey.PubKey)
+
+	err = h.store.UpdateAccount(account, StateModifier(StatePendingUpdate))
+	require.NoError(t, err)
+
+	// StatePendingUpdate case.
+	h.restartManager()
+	h.assertAccountNotSubscribed(account.TraderKey.PubKey)
+
+	// Confirm the account.
+	confHeight := uint32(bestHeight + 6)
+	h.notifier.confChan <- &chainntnfs.TxConfirmation{
+		BlockHeight: confHeight,
+	}
+	account.State = StateOpen
+	account.HeightHint = confHeight
+	h.assertAccountExists(account)
+
+	// It should now be subscribed since it's eligible for batch execution.
+	h.assertAccountSubscribed(account.TraderKey.PubKey)
 }

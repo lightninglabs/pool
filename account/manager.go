@@ -578,6 +578,21 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 				"%v", err)
 		}
 
+		// Only subscribe to auction updates for this account if it's in
+		// the pending batch state, to allow traders to participate in
+		// consecutive batches. This isn't necessary for the pending
+		// update state, as that state is ineligible for batch
+		// execution.
+		if account.State == StatePendingBatch {
+			err = m.cfg.Auctioneer.SubscribeAccountUpdates(
+				ctx, account.TraderKey,
+			)
+			if err != nil {
+				return fmt.Errorf("unable to subscribe for "+
+					"account updates: %v", err)
+			}
+		}
+
 	// In StateOpen, the funding transaction for the account has already
 	// confirmed, so we only need to watch for its spend and expiration and
 	// register for account updates.
