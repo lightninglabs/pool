@@ -27,6 +27,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	testTimeout = 100 * time.Millisecond
+)
+
 var (
 	node1Key = [33]byte{2, 3, 4}
 	node2Key = [33]byte{3, 4, 5}
@@ -85,10 +89,9 @@ type fundingBaseClientMock struct {
 	lightningClient *test.MockLightning
 	fundingShims    map[[32]byte]*lnrpc.ChanPointShim
 
-	useManualPeerList bool
-	manualPeerList    map[route.Vertex]string
-	peerEvents        chan *lnrpc.PeerEvent
-	cancelSub         chan struct{}
+	peerList   map[route.Vertex]string
+	peerEvents chan *lnrpc.PeerEvent
+	cancelSub  chan struct{}
 
 	quit chan struct{}
 }
@@ -158,13 +161,8 @@ func (m *fundingBaseClientMock) ListPeers(_ context.Context,
 	_ *lnrpc.ListPeersRequest,
 	_ ...grpc.CallOption) (*lnrpc.ListPeersResponse, error) {
 
-	peerList := m.lightningClient.Connections()
-	if m.useManualPeerList {
-		peerList = m.manualPeerList
-	}
-
 	resp := &lnrpc.ListPeersResponse{}
-	for nodeKey, addr := range peerList {
+	for nodeKey, addr := range m.peerList {
 		resp.Peers = append(resp.Peers, &lnrpc.Peer{
 			PubKey:  nodeKey.String(),
 			Address: addr,
@@ -214,7 +212,7 @@ func newManagerHarness(t *testing.T) *managerHarness {
 	baseClientMock := &fundingBaseClientMock{
 		lightningClient: lightningClient,
 		fundingShims:    make(map[[32]byte]*lnrpc.ChanPointShim),
-		manualPeerList:  make(map[route.Vertex]string),
+		peerList:        make(map[route.Vertex]string),
 		peerEvents:      make(chan *lnrpc.PeerEvent),
 		cancelSub:       make(chan struct{}),
 		quit:            quit,
@@ -325,13 +323,21 @@ func TestFundingManager(t *testing.T) {
 	txidHash := batchTx.TxHash()
 	pendingChanID := order.PendingChanKey(ask.Nonce(), bid.Nonce())
 
-	// Make sure the channel preparations work as expected.
+	// Make sure the channel preparations work as expected. We expect the
+	// bidder to connect out to the asker so the bidder is waiting for a
+	// connection to the asker's peer to be established.
+	h.baseClientMock.peerList = map[route.Vertex]string{
+		node1Key: "1.1.1.1",
+	}
 	err = h.mgr.prepChannelFunding(batch, false)
 	require.NoError(t, err)
 
 	// Verify we have the expected connections and funding shims registered.
 	// We expect the bidder to connect to the asker and having registered
 	// the funding shim while the asker is opening the channel.
+	require.Eventually(t, func() bool {
+		return len(h.lnMock.Connections()) == 1
+	}, testTimeout, testTimeout/10)
 	conns := h.lnMock.Connections()
 	require.Equal(t, 1, len(conns))
 	require.Equal(t, addr1.String(), conns[node1Key])
@@ -386,7 +392,7 @@ func TestFundingManager(t *testing.T) {
 	// As a last check of the funding preparation, make sure we get a reject
 	// error if the connections to the remote peers couldn't be established.
 	h.mgr.newNodesOnly = false
-	h.baseClientMock.useManualPeerList = true
+	h.baseClientMock.peerList = make(map[route.Vertex]string)
 	err = h.mgr.prepChannelFunding(batch, false)
 	require.Error(t, err)
 
@@ -469,12 +475,9 @@ func TestWaitForPeerConnections(t *testing.T) {
 	h := newManagerHarness(t)
 	defer h.stop()
 
-	const testTimeout = 100 * time.Millisecond
-	h.baseClientMock.useManualPeerList = true
-
 	// First we make sure that if all peer are already connected, no peer
 	// subscription is created.
-	h.baseClientMock.manualPeerList = map[route.Vertex]string{
+	h.baseClientMock.peerList = map[route.Vertex]string{
 		node1Key: "1.1.1.1",
 		node2Key: "2.2.2.2",
 	}
@@ -490,7 +493,7 @@ func TestWaitForPeerConnections(t *testing.T) {
 	// Next, make sure that connections established while waiting are
 	// notified correctly. We simulate one connection already being done and
 	// one finishing while we wait.
-	h.baseClientMock.manualPeerList = map[route.Vertex]string{
+	h.baseClientMock.peerList = map[route.Vertex]string{
 		node1Key: "1.1.1.1",
 	}
 	go func() {
