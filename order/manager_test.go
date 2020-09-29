@@ -46,8 +46,8 @@ func TestValidateOrderAccountIsolation(t *testing.T) {
 			FixedRate:        2_000,
 			MaxBatchFeeRate:  1000,
 			AcctKey:          acctKeyB,
+			LeaseDuration:    144,
 		}),
-		MaxDuration: 144,
 	}
 
 	testTerms := &terms.AuctioneerTerms{
@@ -80,8 +80,8 @@ func TestValidateOrderAccountIsolation(t *testing.T) {
 			FixedRate:        2_000,
 			MaxBatchFeeRate:  1000,
 			AcctKey:          acctKeyA,
+			LeaseDuration:    144,
 		}),
-		MaxDuration: 144,
 	}
 
 	err = orderManager.validateOrder(orderA, &accountA, testTerms)

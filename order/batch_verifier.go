@@ -254,7 +254,7 @@ func (v *batchVerifier) validateMatchedOrder(tally *AccountTally,
 	switch ours := ourOrder.(type) {
 	case *Ask:
 		other := otherOrder.Order.(*Bid)
-		if other.MinDuration > ours.MaxDuration {
+		if other.LeaseDuration != ours.LeaseDuration {
 			return fmt.Errorf("order duration not overlapping " +
 				"for our ask")
 		}
@@ -267,12 +267,13 @@ func (v *batchVerifier) validateMatchedOrder(tally *AccountTally,
 		// This match checks out, deduct it from the account's balance.
 		tally.CalcMakerDelta(
 			executionFee, clearingPrice,
-			otherOrder.UnitsFilled.ToSatoshis(), other.MinDuration,
+			otherOrder.UnitsFilled.ToSatoshis(),
+			other.LeaseDuration,
 		)
 
 	case *Bid:
 		other := otherOrder.Order.(*Ask)
-		if other.MaxDuration < ours.MinDuration {
+		if other.LeaseDuration != ours.LeaseDuration {
 			return fmt.Errorf("order duration not overlapping " +
 				"for our bid")
 		}
@@ -285,7 +286,8 @@ func (v *batchVerifier) validateMatchedOrder(tally *AccountTally,
 		// This match checks out, deduct it from the account's balance.
 		tally.CalcTakerDelta(
 			executionFee, clearingPrice,
-			otherOrder.UnitsFilled.ToSatoshis(), ours.MinDuration,
+			otherOrder.UnitsFilled.ToSatoshis(),
+			ours.LeaseDuration,
 		)
 	}
 

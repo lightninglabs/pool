@@ -105,7 +105,7 @@ func TestBatchVerifier(t *testing.T) {
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
-				a.MaxDuration = 100
+				a.LeaseDuration = 100
 				return v.Verify(b)
 			},
 		},
@@ -126,7 +126,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				delete(b.MatchedOrders, a.nonce)
-				b2.MinDuration = 5000
+				b2.LeaseDuration = 5000
 				return v.Verify(b)
 			},
 		},
@@ -214,8 +214,8 @@ func TestBatchVerifier(t *testing.T) {
 						UnitsUnfulfilled: 4,
 						AcctKey:          acctIDSmall,
 						FixedRate:        b1.FixedRate,
+						LeaseDuration:    1000,
 					}),
-					MaxDuration: 2500,
 				}
 				v.(*batchVerifier).orderStore.(*mockStore).orders[ask.nonce] = ask
 				b.MatchedOrders[ask.nonce] = []*MatchedOrder{
@@ -321,7 +321,7 @@ func TestBatchVerifier(t *testing.T) {
 			TraderKey: &keychain.KeyDescriptor{
 				PubKey: acctKeySmall,
 			},
-			Value:         400_000,
+			Value:         401_000,
 			Expiry:        144,
 			State:         account.StateOpen,
 			BatchKey:      startBatchKey,
@@ -336,8 +336,8 @@ func TestBatchVerifier(t *testing.T) {
 				UnitsUnfulfilled: 4,
 				AcctKey:          acctIDSmall,
 				FixedRate:        uint32(clearingPrice) / 2,
+				LeaseDuration:    1000,
 			}),
-			MaxDuration: 2500,
 		}
 		bid1 := &Bid{
 			Kit: newKitFromTemplate(Nonce{0x02}, &Kit{
@@ -348,9 +348,9 @@ func TestBatchVerifier(t *testing.T) {
 				UnitsUnfulfilled: 2,
 				AcctKey:          acctIDBig,
 				FixedRate:        uint32(clearingPrice) * 2,
+				// 1000 * (200_000 * 5000 / 1_000_000_000) = 1000 sats premium
+				LeaseDuration: 1000,
 			}),
-			// 1000 * (200_000 * 5000 / 1_000_000_000) = 1000 sats premium
-			MinDuration: 1000,
 		}
 		bid2 := &Bid{
 			Kit: newKitFromTemplate(Nonce{0x03}, &Kit{
@@ -361,9 +361,9 @@ func TestBatchVerifier(t *testing.T) {
 				UnitsUnfulfilled: 8,
 				AcctKey:          acctIDBig,
 				FixedRate:        uint32(clearingPrice),
+				// 2000 * (200_000 * 5000 / 1_000_000_000) = 1000 sats premium
+				LeaseDuration: 1000,
 			}),
-			// 2000 * (200_000 * 5000 / 1_000_000_000) = 2000 sats premium
-			MinDuration: 2000,
 		}
 		batchTx := &wire.MsgTx{
 			Version: 2,
@@ -392,9 +392,9 @@ func TestBatchVerifier(t *testing.T) {
 				{
 					// balance - bid1Premium - bid2Premium -
 					// bid1ExecFee - bid2ExecFee - chainFees
-					// 500_000 - 1000 - 2000 -
+					// 500_000 - 1000 - 1000 -
 					// 1_110 - 1_110 - 186
-					Value:    494_594,
+					Value:    495_594,
 					PkScript: scriptForAcct(t, bigAcct),
 				},
 			},
@@ -409,7 +409,7 @@ func TestBatchVerifier(t *testing.T) {
 				AccountKey:    acctKeyBig,
 				EndingState:   stateRecreated,
 				OutpointIndex: 2,
-				EndingBalance: 494_594,
+				EndingBalance: 495_594,
 			},
 			{
 				AccountKeyRaw: acctIDSmall,
@@ -511,6 +511,7 @@ func newKitFromTemplate(nonce Nonce, tpl *Kit) Kit {
 	kit.MultiSigKeyLocator = tpl.MultiSigKeyLocator
 	kit.MaxBatchFeeRate = tpl.MaxBatchFeeRate
 	kit.AcctKey = tpl.AcctKey
+	kit.LeaseDuration = tpl.LeaseDuration
 	return *kit
 }
 

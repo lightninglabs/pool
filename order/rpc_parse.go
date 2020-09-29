@@ -19,7 +19,9 @@ import (
 
 // ParseRPCOrder parses the incoming raw RPC order into the go native data
 // types used in the order struct.
-func ParseRPCOrder(version uint32, details *poolrpc.Order) (*Kit, error) {
+func ParseRPCOrder(version, leaseDuration uint32,
+	details *poolrpc.Order) (*Kit, error) {
+
 	var nonce Nonce
 	copy(nonce[:], details.OrderNonce)
 	kit := NewKit(nonce)
@@ -44,6 +46,7 @@ func ParseRPCOrder(version uint32, details *poolrpc.Order) (*Kit, error) {
 	)
 	kit.Units = NewSupplyFromSats(kit.Amt)
 	kit.UnitsUnfulfilled = kit.Units
+	kit.LeaseDuration = leaseDuration
 	return kit, nil
 }
 
@@ -93,7 +96,7 @@ func parseNodeAddrs(rpcAddrs []*poolrpc.NodeAddress, orderIsAsk bool) ([]net.Add
 // ParseRPCServerOrder parses the incoming raw RPC server order into the go
 // native data types used in the order struct.
 func ParseRPCServerOrder(version uint32, details *poolrpc.ServerOrder,
-	orderIsAsk bool) (*Kit, [33]byte, []net.Addr, [33]byte, error) {
+	orderIsAsk bool, leaseDuration uint32) (*Kit, [33]byte, []net.Addr, [33]byte, error) {
 
 	var (
 		nonce       Nonce
@@ -111,6 +114,7 @@ func ParseRPCServerOrder(version uint32, details *poolrpc.ServerOrder,
 	kit.MaxBatchFeeRate = chainfee.SatPerKWeight(
 		details.MaxBatchFeeRateSatPerKw,
 	)
+	kit.LeaseDuration = leaseDuration
 
 	// If the user didn't provide a nonce, we generate one.
 	if nonce == ZeroNonce {
@@ -161,14 +165,18 @@ func ParseRPCServerAsk(details *poolrpc.ServerAsk) (*MatchedOrder, error) {
 	)
 	kit, o.NodeKey, o.NodeAddrs, o.MultiSigKey, err = ParseRPCServerOrder(
 		details.Version, details.Details, true,
+		details.LeaseDurationBlocks,
 	)
 	if err != nil {
 		return nil, err
 	}
+
+	kit.LeaseDuration = details.LeaseDurationBlocks
+
 	o.Order = &Ask{
-		Kit:         *kit,
-		MaxDuration: details.MaxDurationBlocks,
+		Kit: *kit,
 	}
+
 	return o, nil
 }
 
@@ -182,14 +190,16 @@ func ParseRPCServerBid(details *poolrpc.ServerBid) (*MatchedOrder, error) {
 	)
 	kit, o.NodeKey, o.NodeAddrs, o.MultiSigKey, err = ParseRPCServerOrder(
 		details.Version, details.Details, false,
+		details.LeaseDurationBlocks,
 	)
 	if err != nil {
 		return nil, err
 	}
+
 	o.Order = &Bid{
-		Kit:         *kit,
-		MinDuration: details.MinDurationBlocks,
+		Kit: *kit,
 	}
+
 	return o, nil
 }
 

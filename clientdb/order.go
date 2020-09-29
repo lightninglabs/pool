@@ -348,34 +348,12 @@ func SerializeOrder(o order.Order, w io.Writer) error {
 	kit := o.Details()
 
 	// We don't have to deserialize the nonce as it's the sub bucket name.
-	err := WriteElements(
+	return WriteElements(
 		w, kit.Preimage, kit.Version, o.Type(), kit.State,
 		kit.FixedRate, kit.Amt, kit.Units, kit.MultiSigKeyLocator,
 		kit.MaxBatchFeeRate, kit.AcctKey, kit.UnitsUnfulfilled,
+		kit.LeaseDuration,
 	)
-	if err != nil {
-		return err
-	}
-
-	// Write order type specific fields.
-	switch t := o.(type) {
-	case *order.Ask:
-		err := WriteElement(w, t.MaxDuration)
-		if err != nil {
-			return err
-		}
-
-	case *order.Bid:
-		err := WriteElement(w, t.MinDuration)
-		if err != nil {
-			return err
-		}
-
-	default:
-		return fmt.Errorf("unknown order type: %d", o.Type())
-	}
-
-	return nil
 }
 
 // DeserializeOrder deserializes an order from the binary LN wire format.
@@ -392,6 +370,7 @@ func DeserializeOrder(nonce order.Nonce, r io.Reader) (
 		r, &kit.Preimage, &kit.Version, &orderType, &kit.State,
 		&kit.FixedRate, &kit.Amt, &kit.Units, &kit.MultiSigKeyLocator,
 		&kit.MaxBatchFeeRate, &kit.AcctKey, &kit.UnitsUnfulfilled,
+		&kit.LeaseDuration,
 	)
 	if err != nil {
 		return nil, err
@@ -400,21 +379,14 @@ func DeserializeOrder(nonce order.Nonce, r io.Reader) (
 	// Now read the order type specific fields.
 	switch orderType {
 	case order.TypeAsk:
-		ask := &order.Ask{Kit: *kit}
-		err = ReadElement(r, &ask.MaxDuration)
-		if err != nil {
-			return nil, err
-		}
-		return ask, nil
+		return &order.Ask{
+			Kit: *kit,
+		}, nil
 
 	case order.TypeBid:
-		bid := &order.Bid{Kit: *kit}
-		err = ReadElement(r, &bid.MinDuration)
-		if err != nil {
-			return nil, err
-		}
-		return bid, nil
-
+		return &order.Bid{
+			Kit: *kit,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unknown order type: %d", orderType)
 	}

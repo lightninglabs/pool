@@ -20,6 +20,12 @@ type AuctioneerTerms struct {
 
 	// OrderExecFeeRate is the fee rate in parts per million.
 	OrderExecFeeRate btcutil.Amount
+
+	// LeaseDurations lists the current set of active lease durations in
+	// the market at this instance. The duration in blocks is mapped to a
+	// bool which indicates if this market is actively clearing order or
+	// not.
+	LeaseDurations map[uint32]bool
 }
 
 // FeeSchedule returns the execution fee as a FeeSchedule.

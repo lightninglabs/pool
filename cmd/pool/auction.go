@@ -55,6 +55,7 @@ var auctionCommands = []cli.Command{
 			auctionFeeCommand,
 			batchSnapshotCommand,
 			leasesCommand,
+			leaseDurationsCommand,
 		},
 	},
 }
@@ -226,6 +227,33 @@ func leases(ctx *cli.Context) error {
 	}
 
 	printJSON(leasesResp)
+
+	return nil
+}
+
+var leaseDurationsCommand = cli.Command{
+	Name:      "leasedurations",
+	ShortName: "ld",
+	Usage: "returns the current active set of accepted lease " +
+		"durations for orders",
+	Action: leaseDurations,
+}
+
+func leaseDurations(ctx *cli.Context) error {
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.LeaseDurations(
+		context.Background(), &poolrpc.LeaseDurationRequest{},
+	)
+	if err != nil {
+		return err
+	}
+
+	printRespJSON(resp)
 
 	return nil
 }

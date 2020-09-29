@@ -1076,9 +1076,11 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
+
+		kit.LeaseDuration = a.LeaseDurationBlocks
+
 		o = &order.Ask{
-			Kit:         *kit,
-			MaxDuration: a.MaxDurationBlocks,
+			Kit: *kit,
 		}
 
 	case *poolrpc.SubmitOrderRequest_Bid:
@@ -1087,9 +1089,11 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
+
+		kit.LeaseDuration = b.LeaseDurationBlocks
+
 		o = &order.Bid{
-			Kit:         *kit,
-			MinDuration: b.MinDurationBlocks,
+			Kit: *kit,
 		}
 
 	default:
@@ -1270,17 +1274,17 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 		switch o := dbOrder.(type) {
 		case *order.Ask:
 			rpcAsk := &poolrpc.Ask{
-				Details:           details,
-				MaxDurationBlocks: o.MaxDuration,
-				Version:           uint32(o.Version),
+				Details:             details,
+				LeaseDurationBlocks: dbDetails.LeaseDuration,
+				Version:             uint32(o.Version),
 			}
 			asks = append(asks, rpcAsk)
 
 		case *order.Bid:
 			rpcBid := &poolrpc.Bid{
-				Details:           details,
-				MinDurationBlocks: o.MinDuration,
-				Version:           uint32(o.Version),
+				Details:             details,
+				LeaseDurationBlocks: dbDetails.LeaseDuration,
+				Version:             uint32(o.Version),
 			}
 			bids = append(bids, rpcBid)
 
@@ -1701,9 +1705,9 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 				// specified by the bid order.
 				var bidDuration uint32
 				if ourOrder.Type() == order.TypeBid {
-					bidDuration = ourOrder.(*order.Bid).MinDuration
+					bidDuration = ourOrder.(*order.Bid).LeaseDuration
 				} else {
-					bidDuration = match.Order.(*order.Bid).MinDuration
+					bidDuration = match.Order.(*order.Bid).LeaseDuration
 				}
 
 				// Calculate the premium paid/received to/from

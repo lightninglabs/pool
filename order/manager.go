@@ -198,40 +198,18 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 func (m *Manager) validateOrder(order Order, acct *account.Account,
 	terms *terms.AuctioneerTerms) error {
 
-	// First parse order type specific fields.
-	switch o := order.(type) {
-	case *Ask:
-		if o.MaxDuration < MinimumOrderDurationBlocks {
-			return fmt.Errorf("invalid max duration, must be "+
-				"at least %d", MinimumOrderDurationBlocks)
-		}
-		if o.MaxDuration > terms.MaxOrderDuration {
-			return fmt.Errorf("invalid max duration, must be "+
-				"smaller than or equal to %d",
-				terms.MaxOrderDuration)
-		}
-		if o.MaxDuration%MinimumOrderDurationBlocks != 0 {
-			return fmt.Errorf("invalid max duration, must be "+
-				"multiple of %d", MinimumOrderDurationBlocks)
-		}
-
-	case *Bid:
-		if o.MinDuration < MinimumOrderDurationBlocks {
-			return fmt.Errorf("invalid min duration, must be "+
-				"at least %d", MinimumOrderDurationBlocks)
-		}
-		if o.MinDuration > terms.MaxOrderDuration {
-			return fmt.Errorf("invalid min duration, must be "+
-				"smaller than or equal to %d",
-				terms.MaxOrderDuration)
-		}
-		if o.MinDuration%MinimumOrderDurationBlocks != 0 {
-			return fmt.Errorf("invalid min duration, must be "+
-				"multiple of %d", MinimumOrderDurationBlocks)
-		}
-
-	default:
-		return fmt.Errorf("invalid order type: %v", o)
+	if order.Details().LeaseDuration < MinimumOrderDurationBlocks {
+		return fmt.Errorf("invalid lease duration, must be "+
+			"at least %d", MinimumOrderDurationBlocks)
+	}
+	if order.Details().LeaseDuration > terms.MaxOrderDuration {
+		return fmt.Errorf("invalid lease duration, must be "+
+			"smaller than or equal to %d",
+			terms.MaxOrderDuration)
+	}
+	if order.Details().LeaseDuration%MinimumOrderDurationBlocks != 0 {
+		return fmt.Errorf("invalid lease duration, must be "+
+			"multiple of %d", MinimumOrderDurationBlocks)
 	}
 
 	if order.Details().MaxBatchFeeRate < chainfee.FeePerKwFloor {
