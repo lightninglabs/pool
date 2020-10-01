@@ -285,6 +285,27 @@ func updateOrder(src, dst *bbolt.Bucket, nonce order.Nonce,
 	return o, nil
 }
 
+// copyOrder copies a single order from the source to destination bucket. No
+// event references are copied, only the order itself.
+func copyOrder(src, dst *bbolt.Bucket, nonce order.Nonce) error {
+	var (
+		orderBytes []byte
+		err        error
+		callback   = func(_ order.Nonce, rawOrder []byte) error {
+			orderBytes = rawOrder
+			return nil
+		}
+	)
+
+	// Retrieve the order stored in the database.
+	err = fetchOrderTX(src, nonce, callback)
+	if err != nil {
+		return err
+	}
+
+	return storeOrderTX(dst, nonce, orderBytes)
+}
+
 // SerializeOrder binary serializes an order to a writer using the common LN
 // wire format.
 func SerializeOrder(o order.Order, w io.Writer) error {
