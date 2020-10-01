@@ -1194,33 +1194,9 @@ func (s *rpcServer) ListOrders(ctx context.Context, _ *poolrpc.ListOrdersRequest
 		nonce := dbOrder.Nonce()
 		dbDetails := dbOrder.Details()
 
-		var orderState poolrpc.OrderState
-		switch dbDetails.State {
-
-		case order.StateSubmitted:
-			orderState = poolrpc.OrderState_ORDER_SUBMITTED
-
-		case order.StateCleared:
-			orderState = poolrpc.OrderState_ORDER_CLEARED
-
-		case order.StatePartiallyFilled:
-			orderState = poolrpc.OrderState_ORDER_PARTIALLY_FILLED
-
-		case order.StateExecuted:
-			orderState = poolrpc.OrderState_ORDER_EXECUTED
-
-		case order.StateCanceled:
-			orderState = poolrpc.OrderState_ORDER_CANCELED
-
-		case order.StateExpired:
-			orderState = poolrpc.OrderState_ORDER_EXPIRED
-
-		case order.StateFailed:
-			orderState = poolrpc.OrderState_ORDER_FAILED
-
-		default:
-			return nil, fmt.Errorf("unknown state: %v",
-				dbDetails.State)
+		orderState, err := dbOrderStateToRPCState(dbDetails.State)
+		if err != nil {
+			return nil, err
 		}
 
 		details := &poolrpc.Order{
@@ -1722,36 +1698,61 @@ func (s *rpcServer) BatchSnapshot(ctx context.Context,
 // rpcOrderStateToDBState maps the order state as received over the RPC
 // protocol to the local state that we use in the database.
 func rpcOrderStateToDBState(state poolrpc.OrderState) (order.State, error) {
-
-	var orderState order.State
 	switch state {
-
 	case poolrpc.OrderState_ORDER_SUBMITTED:
-		orderState = order.StateSubmitted
+		return order.StateSubmitted, nil
 
 	case poolrpc.OrderState_ORDER_CLEARED:
-		orderState = order.StateCleared
+		return order.StateCleared, nil
 
 	case poolrpc.OrderState_ORDER_PARTIALLY_FILLED:
-		orderState = order.StatePartiallyFilled
+		return order.StatePartiallyFilled, nil
 
 	case poolrpc.OrderState_ORDER_EXECUTED:
-		orderState = order.StateExecuted
+		return order.StateExecuted, nil
 
 	case poolrpc.OrderState_ORDER_CANCELED:
-		orderState = order.StateCanceled
+		return order.StateCanceled, nil
 
 	case poolrpc.OrderState_ORDER_EXPIRED:
-		orderState = order.StateExpired
+		return order.StateExpired, nil
 
 	case poolrpc.OrderState_ORDER_FAILED:
-		orderState = order.StateFailed
+		return order.StateFailed, nil
 
 	default:
 		return 0, fmt.Errorf("unknown state: %v", state)
 	}
+}
 
-	return orderState, nil
+// dbOrderStateToRPCState maps the order state as stored in the database to the
+// corresponding RPC enum type.
+func dbOrderStateToRPCState(state order.State) (poolrpc.OrderState, error) {
+	switch state {
+	case order.StateSubmitted:
+		return poolrpc.OrderState_ORDER_SUBMITTED, nil
+
+	case order.StateCleared:
+		return poolrpc.OrderState_ORDER_CLEARED, nil
+
+	case order.StatePartiallyFilled:
+		return poolrpc.OrderState_ORDER_PARTIALLY_FILLED, nil
+
+	case order.StateExecuted:
+		return poolrpc.OrderState_ORDER_EXECUTED, nil
+
+	case order.StateCanceled:
+		return poolrpc.OrderState_ORDER_CANCELED, nil
+
+	case order.StateExpired:
+		return poolrpc.OrderState_ORDER_EXPIRED, nil
+
+	case order.StateFailed:
+		return poolrpc.OrderState_ORDER_FAILED, nil
+
+	default:
+		return 0, fmt.Errorf("unknown state: %v", state)
+	}
 }
 
 // nodeHasTorAddrs returns true if there exists a Tor address amongst the set
