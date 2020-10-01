@@ -429,6 +429,11 @@ message SubmitOrderResponse {
 }
 
 message ListOrdersRequest {
+    /*
+    Can be set to true to list the orders including all events, which can be
+    very verbose.
+    */
+    bool verbose = 1;
 }
 message ListOrdersResponse {
     repeated Ask asks = 1;
@@ -461,7 +466,7 @@ message Order {
     Maximum fee rate the trader is willing to pay for the batch transaction,
     expressed in satoshis per 1000 weight units (sat/KW).
     */
-    uint64 max_batch_fee_rate_sat_per_kw= 4;
+    uint64 max_batch_fee_rate_sat_per_kw = 4;
 
     /*
     Order nonce, acts as unique order identifier.
@@ -488,6 +493,15 @@ message Order {
     // The value reserved from the account by this order to ensure the account
     // can pay execution and chain fees in case it gets matched.
     uint64 reserved_value_sat = 9;
+
+    // The unix timestamp in nanoseconds the order was first created/submitted.
+    uint64 creation_timestamp_ns = 10;
+
+    /*
+    A list of events that were emitted for this order. This field is only set
+    when the verbose flag is set to true in the request.
+    */
+    repeated OrderEvent events = 11;
 }
 
 message Bid {
@@ -526,6 +540,131 @@ message Ask {
     features are added.
     */
     uint32 version = 3;
+}
+
+message OrderEvent {
+    /*
+    The unix timestamp in nanoseconds the event was emitted at. This is the
+    primary key of the event and is unique across the database.
+    */
+    int64 timestamp_ns = 1;
+
+    // The human readable representation of the event.
+    string event_str = 2;
+
+    oneof event {
+        // The order was updated in the database.
+        UpdatedEvent state_change = 3;
+
+        // The order was involved in a match making attempt.
+        MatchEvent matched = 4;
+    }
+}
+
+message UpdatedEvent {
+    /*
+    The state of the order previous to the change. This is what the state
+    changed from.
+    */
+    OrderState previous_state = 1;
+
+    /*
+    The new state of the order after the change. This is what the state changed
+    to.
+    */
+    OrderState new_state = 2;
+
+    // The units that were filled at the time of the event.
+    uint32 units_filled = 3;
+}
+
+message MatchEvent {
+    // The state of the match making process the order went through.
+    MatchState match_state = 1;
+
+    // The number of units that would be (or were) filled with this match.
+    uint32 units_filled = 2;
+
+    // The nonce of the order we were matched to.
+    bytes matched_order = 3;
+
+    /*
+    The reason why the trader daemon rejected the order. Is only set if
+    match_state is set to REJECTED.
+    */
+    MatchRejectReason reject_reason = 4;
+}
+
+enum MatchState {
+    /*
+    The OrderMatchPrepare message from the auctioneer was received initially.
+    */
+    PREPARE = 0;
+
+    /*
+    The OrderMatchPrepare message from the auctioneer was processed successfully
+    and the batch was accepted.
+    */
+    ACCEPTED = 1;
+
+    /*
+    The order was rejected by the trader daemon, either as an answer to a
+    OrderMatchSignBegin or OrderMatchFinalize message from the auctioneer.
+    */
+    REJECTED = 2;
+
+    /*
+    The OrderMatchSignBegin message from the auctioneer was processed
+    successfully.
+    */
+    SIGNED = 3;
+
+    /*
+    The OrderMatchFinalize message from the auctioneer was processed
+    successfully.
+    */
+    FINALIZED = 4;
+}
+
+enum MatchRejectReason {
+    // No reject occurred, this is the default value.
+    NONE = 0;
+
+    /*
+    The client didn't come up with the same result as the server and is
+    rejecting the batch because of that.
+    */
+    SERVER_MISBEHAVIOR = 1;
+
+    /*
+    The client doesn't support the current batch verification version the
+    server is using.
+    */
+    BATCH_VERSION_MISMATCH = 2;
+
+    /*
+    The client rejects some of the orders, not the full batch. This reason is
+    set on matches for orders that were in the same batch as partial reject ones
+    but were not themselves rejected.
+    */
+    PARTIAL_REJECT_COLLATERAL = 3;
+
+    /*
+    The trader's client has a preference to only match orders with peers it
+    doesn't already have channels with. The order that is rejected with this
+    reason type comes from a peer that the trader already has channels with.
+    */
+    PARTIAL_REJECT_DUPLICATE_PEER = 4;
+
+    /*
+    The trader's client couldn't connect to the remote node of the matched
+    order or the channel funding could not be initialized for another
+    reason. This could also be the rejecting node's fault if their
+    connection is not stable. Using this code can have a negative impact on
+    the reputation score of both nodes, depending on the number of errors
+    recorded.
+    */
+    PARTIAL_REJECT_CHANNEL_FUNDING_FAILED = 5;
 }
 
 message RecoverAccountsRequest {
