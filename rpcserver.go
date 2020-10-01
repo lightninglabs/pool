@@ -1354,14 +1354,41 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	case errors.Is(failure, order.ErrVersionMismatch):
 		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_BATCH_VERSION_MISMATCH
 
+		// Track this reject by adding an event to our orders.
+		err := s.server.db.StoreBatchEvents(
+			batch, order.MatchStateRejected,
+			poolrpc.MatchRejectReason_BATCH_VERSION_MISMATCH,
+		)
+		if err != nil {
+			rpcLog.Errorf("Could not store match event: %v", err)
+		}
+
 	case errors.Is(failure, order.ErrMismatchErr):
 		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_SERVER_MISBEHAVIOR
+
+		// Track this reject by adding an event to our orders.
+		err := s.server.db.StoreBatchEvents(
+			batch, order.MatchStateRejected,
+			poolrpc.MatchRejectReason_SERVER_MISBEHAVIOR,
+		)
+		if err != nil {
+			rpcLog.Errorf("Could not store match event: %v", err)
+		}
 
 	case errors.As(failure, &partialReject):
 		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_PARTIAL_REJECT
 		msg.Reject.RejectedOrders = make(map[string]*poolrpc.OrderReject)
 		for nonce, reject := range partialReject.rejectedOrders {
 			msg.Reject.RejectedOrders[nonce.String()] = reject
+		}
+
+		// Track this reject by adding an event to our orders with the
+		// specific reject code for each of rejected orders.
+		err := s.server.db.StoreBatchPartialRejectEvents(
+			batch, partialReject.rejectedOrders,
+		)
+		if err != nil {
+			rpcLog.Errorf("Could not store match event: %v", err)
 		}
 
 	default:

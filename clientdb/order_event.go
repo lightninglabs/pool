@@ -421,11 +421,65 @@ func (db *DB) StoreBatchEvents(batch *order.Batch, state order.MatchState,
 	events := make([]OrderEvent, 0, len(batch.MatchedOrders))
 	for nonce, matchedOrders := range batch.MatchedOrders {
 		for _, matchedOrder := range matchedOrders {
-			evt := NewMatchEvent(
+			events = append(events, NewMatchEvent(
 				ts, nonce, state, matchedOrder.UnitsFilled,
 				matchedOrder.Order.Nonce(),
 				uint32(rejectReason),
+			))
+		}
+	}
+
+	if err := db.StoreOrderEvents(events); err != nil {
+		return fmt.Errorf("error storing match events: %w", err)
+	}
+
+	return nil
+}
+
+// StoreBatchPartialRejectEvents creates a reject match event for each of our
+// orders involved in a batch and stores it to the main event store, including
+// the reason for the reject.
+func (db *DB) StoreBatchPartialRejectEvents(batch *order.Batch,
+	partialRejects map[order.Nonce]*poolrpc.OrderReject) error {
+
+	// In case an order itself wasn't rejected but was just in the same
+	// batch as a reject, we mark it in the event as such. If it was, this
+	// default value will be overwritten accordingly.
+	const defaultRejectReason = uint32(
+		poolrpc.MatchRejectReason_PARTIAL_REJECT_COLLATERAL,
+	)
+
+	// The RPC names are so long, we create more shortcuts here to increase
+	// readability.
+	const reasonFundingFailed = uint32(
+		poolrpc.MatchRejectReason_PARTIAL_REJECT_CHANNEL_FUNDING_FAILED,
+	)
+	const reasonDuplicatePeer = uint32(
+		poolrpc.MatchRejectReason_PARTIAL_REJECT_DUPLICATE_PEER,
+	)
+
+	ts := time.Now()
+	events := make([]OrderEvent, 0, len(batch.MatchedOrders))
+	for nonce, matchedOrders := range batch.MatchedOrders {
+		for _, matchedOrder := range matchedOrders {
+			otherNonce := matchedOrder.Order.Nonce()
+			evt := NewMatchEvent(
+				ts, nonce, order.MatchStateRejected,
+				matchedOrder.UnitsFilled, otherNonce,
+				defaultRejectReason,
 			)
+
+			reject, ok := partialRejects[otherNonce]
+			if ok {
+				switch reject.ReasonCode {
+				case poolrpc.OrderReject_CHANNEL_FUNDING_FAILED:
+					evt.RejectReason = reasonFundingFailed
+
+				case poolrpc.OrderReject_DUPLICATE_PEER:
+					evt.RejectReason = reasonDuplicatePeer
+				}
+			}
+
 			events = append(events, evt)
 		}
 	}
