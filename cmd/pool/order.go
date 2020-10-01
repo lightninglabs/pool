@@ -425,7 +425,12 @@ var ordersListCommand = cli.Command{
 	Usage:   "list all existing orders",
 	Description: `
 	List all orders that are stored in the local order database`,
-	Flags:  []cli.Flag{},
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "verbose",
+			Usage: "show verbose output including events",
+		},
+	},
 	Action: ordersList,
 }
 
@@ -437,7 +442,9 @@ func ordersList(ctx *cli.Context) error {
 	defer cleanup()
 
 	resp, err := client.ListOrders(
-		context.Background(), &poolrpc.ListOrdersRequest{},
+		context.Background(), &poolrpc.ListOrdersRequest{
+			Verbose: ctx.Bool("verbose"),
+		},
 	)
 	if err != nil {
 		return err
