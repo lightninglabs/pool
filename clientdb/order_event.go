@@ -7,6 +7,7 @@ import (
 
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
+	"go.etcd.io/bbolt"
 )
 
 // OrderEvent is the main interface for order specific events.
@@ -309,3 +310,102 @@ func (e *MatchEvent) Nonce() order.Nonce {
 // event.Event and order.OrderEvent interface.
 var _ event.Event = (*MatchEvent)(nil)
 var _ OrderEvent = (*MatchEvent)(nil)
+
+// GetOrderEvents returns all events of an order by looking up the event
+// reference keys in the order bucket.
+func (db *DB) GetOrderEvents(o order.Nonce) ([]event.Event, error) {
+	var events []event.Event
+	err := db.View(func(tx *bbolt.Tx) error {
+		ordersBucket, err := getBucket(tx, ordersBucketKey)
+		if err != nil {
+			return err
+		}
+
+		orderBucket := ordersBucket.Bucket(o[:])
+		if orderBucket == nil {
+			return ErrNoOrder
+		}
+
+		eventSubBucket := orderBucket.Bucket(eventRefSubBucket)
+		if eventSubBucket == nil {
+			return fmt.Errorf("order event sub bucket not found")
+		}
+
+		// We first need to collect all timestamps from the order
+		// bucket.
+		eventTimestampMap := make(map[time.Time]struct{})
+		err = eventSubBucket.ForEach(func(k, v []byte) error {
+			// Only look at keys with correct length.
+			if len(k) != event.TimestampLength {
+				return nil
+			}
+
+			// Assert there are no corrupt values, in the reference
+			// key we only store the event's type, not the value
+			// itself.
+			if len(v) != 1 {
+				return fmt.Errorf("unexpected timestamp "+
+					"value length: %d", len(v))
+			}
+
+			ts := time.Unix(0, int64(byteOrder.Uint64(k)))
+			eventTimestampMap[ts] = struct{}{}
+
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		// Now get the events themselves and return them. This is always
+		// sorted by the events' timestamps.
+		predicate := func(ts time.Time, _ event.Type) bool {
+			_, ok := eventTimestampMap[ts]
+			return ok
+		}
+		events, err = getEventsTX(tx, predicate)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return events, nil
+}
+
+// StoreOrderEvents stores a list of individual order events in a single
+// database transaction. The events' timestamps are adjusted on the nanosecond
+// scale to ensure they're unique.
+func (db *DB) StoreOrderEvents(events []OrderEvent) error {
+	// Pre-adjust the timestamps so we get as few collisions later as
+	// possible. We need to convert the type because slices of interfaces
+	// aren't compatible by default.
+	baseEvents := make([]event.Event, len(events))
+	for idx, evt := range events {
+		baseEvents[idx] = evt
+	}
+	event.MakeUniqueTimestamps(baseEvents)
+
+	return db.Update(func(tx *bbolt.Tx) error {
+		ordersBucket, err := getBucket(tx, ordersBucketKey)
+		if err != nil {
+			return err
+		}
+
+		// Each event could be for a different order so we have to look
+		// up the individual order bucket in each iteration.
+		for _, evt := range events {
+			nonce := evt.Nonce()
+			orderBucket := ordersBucket.Bucket(nonce[:])
+			if orderBucket == nil {
+				return ErrNoOrder
+			}
+
+			if err := storeEventTX(orderBucket, evt); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
