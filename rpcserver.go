@@ -376,6 +376,15 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		rpcLog.Infof("Received PrepareMsg for batch=%x, num_orders=%v",
 			batch.ID[:], len(batch.MatchedOrders))
 
+		// Let's store an event for each order in the batch that we did
+		// receive a prepare message.
+		if err := s.server.db.StoreBatchEvents(
+			batch, order.MatchStatePrepare,
+			poolrpc.MatchRejectReason_NONE,
+		); err != nil {
+			rpcLog.Errorf("Unable to store order events: %v", err)
+		}
+
 		// The prepare message can be sent over and over again if the
 		// batch needs adjustment. Clear all previous shims.
 		if s.orderManager.HasPendingBatch() {
@@ -494,6 +503,16 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		err := s.orderManager.BatchFinalize(batchID)
 		if err != nil {
 			return fmt.Errorf("error finalizing batch: %v", err)
+		}
+
+		// We've successfully processed the finalize message, let's
+		// store an event for this for all orders that were involved on
+		// our side.
+		if err := s.server.db.StoreBatchEvents(
+			batch, order.MatchStateFinalized,
+			poolrpc.MatchRejectReason_NONE,
+		); err != nil {
+			rpcLog.Errorf("Unable to store order events: %v", err)
 		}
 
 		// Accounts that were updated in the batch need to start new
@@ -1373,6 +1392,14 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
 	rpcLog.Infof("Accepting batch=%x", batch.ID[:])
 
+	// Let's store an event for each order in the batch that we did accept
+	// the batch.
+	if err := s.server.db.StoreBatchEvents(
+		batch, order.MatchStateAccepted, poolrpc.MatchRejectReason_NONE,
+	); err != nil {
+		rpcLog.Errorf("Unable to store order events: %v", err)
+	}
+
 	// Send the message to the server.
 	return s.auctioneer.SendAuctionMessage(&poolrpc.ClientAuctionMessage{
 		Msg: &poolrpc.ClientAuctionMessage_Accept{
@@ -1456,6 +1483,14 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 	}
 
 	rpcLog.Infof("Sending OrderMatchSign for batch %x", batch.ID[:])
+
+	// We've successfully processed the sign message, let's store an event
+	// for this for all orders that were involved on our side.
+	if err := s.server.db.StoreBatchEvents(
+		batch, order.MatchStateSigned, poolrpc.MatchRejectReason_NONE,
+	); err != nil {
+		rpcLog.Errorf("Unable to store order events: %v", err)
+	}
 
 	return s.auctioneer.SendAuctionMessage(&poolrpc.ClientAuctionMessage{
 		Msg: &poolrpc.ClientAuctionMessage_Sign{

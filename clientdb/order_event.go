@@ -7,6 +7,7 @@ import (
 
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/poolrpc"
 	"go.etcd.io/bbolt"
 )
 
@@ -408,4 +409,30 @@ func (db *DB) StoreOrderEvents(events []OrderEvent) error {
 
 		return nil
 	})
+}
+
+// StoreBatchEvents creates a match event of the given match state for each of
+// our orders involved in a batch and stores it to the main event store. In case
+// of a batch reject the RPC reason enum value can optionally be specified.
+func (db *DB) StoreBatchEvents(batch *order.Batch, state order.MatchState,
+	rejectReason poolrpc.MatchRejectReason) error {
+
+	ts := time.Now()
+	events := make([]OrderEvent, 0, len(batch.MatchedOrders))
+	for nonce, matchedOrders := range batch.MatchedOrders {
+		for _, matchedOrder := range matchedOrders {
+			evt := NewMatchEvent(
+				ts, nonce, state, matchedOrder.UnitsFilled,
+				matchedOrder.Order.Nonce(),
+				uint32(rejectReason),
+			)
+			events = append(events, evt)
+		}
+	}
+
+	if err := db.StoreOrderEvents(events); err != nil {
+		return fmt.Errorf("error storing match events: %w", err)
+	}
+
+	return nil
 }
