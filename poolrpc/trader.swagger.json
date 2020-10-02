@@ -430,6 +430,16 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "verbose",
+            "description": "Can be set to true to list the orders including all events, which can be\nvery verbose.",
+            "in": "query",
+            "required": false,
+            "type": "boolean",
+            "format": "boolean"
+          }
+        ],
         "tags": [
           "Trader"
         ]
@@ -989,6 +999,54 @@
         }
       }
     },
+    "poolrpcMatchEvent": {
+      "type": "object",
+      "properties": {
+        "match_state": {
+          "$ref": "#/definitions/poolrpcMatchState",
+          "description": "The state of the match making process the order went through."
+        },
+        "units_filled": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The number of units that would be (or were) filled with this match."
+        },
+        "matched_order": {
+          "type": "string",
+          "format": "byte",
+          "description": "The nonce of the order we were matched to."
+        },
+        "reject_reason": {
+          "$ref": "#/definitions/poolrpcMatchRejectReason",
+          "description": "The reason why the trader daemon rejected the order. Is only set if\nmatch_state is set to REJECTED."
+        }
+      }
+    },
+    "poolrpcMatchRejectReason": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "SERVER_MISBEHAVIOR",
+        "BATCH_VERSION_MISMATCH",
+        "PARTIAL_REJECT_COLLATERAL",
+        "PARTIAL_REJECT_DUPLICATE_PEER",
+        "PARTIAL_REJECT_CHANNEL_FUNDING_FAILED"
+      ],
+      "default": "NONE",
+      "description": " - NONE: No reject occurred, this is the default value.\n - SERVER_MISBEHAVIOR: The client didn't come up with the same result as the server and is\nrejecting the batch because of that.\n - BATCH_VERSION_MISMATCH: The client doesn't support the current batch verification version the\nserver is using.\n - PARTIAL_REJECT_COLLATERAL: The client rejects some of the orders, not the full batch. This reason is\nset on matches for orders that were in the same batch as partial reject ones\nbut were not themselves rejected.\n - PARTIAL_REJECT_DUPLICATE_PEER: The trader's client has a preference to only match orders with peers it\ndoesn't already have channels with. The order that is rejected with this\nreason type comes from a peer that the trader already has channels with.\n - PARTIAL_REJECT_CHANNEL_FUNDING_FAILED: The trader's client couldn't connect to the remote node of the matched\norder or the channel funding could not be initialized for another\nreason. This could also be the rejecting node's fault if their\nconnection is not stable. Using this code can have a negative impact on\nthe reputation score of both nodes, depending on the number of errors\nrecorded."
+    },
+    "poolrpcMatchState": {
+      "type": "string",
+      "enum": [
+        "PREPARE",
+        "ACCEPTED",
+        "REJECTED",
+        "SIGNED",
+        "FINALIZED"
+      ],
+      "default": "PREPARE",
+      "description": " - PREPARE: The OrderMatchPrepare message from the auctioneer was received initially.\n - ACCEPTED: The OrderMatchPrepare message from the auctioneer was processed successfully\nand the batch was accepted.\n - REJECTED: The order was rejected by the trader daemon, either as an answer to a\nOrderMatchSignBegin or OrderMatchFinalize message from the auctioneer.\n - SIGNED: The OrderMatchSignBegin message from the auctioneer was processed\nsuccessfully.\n - FINALIZED: The OrderMatchFinalize message from the auctioneer was processed\nsuccessfully."
+    },
     "poolrpcMatchedOrderSnapshot": {
       "type": "object",
       "properties": {
@@ -1063,6 +1121,40 @@
           "type": "string",
           "format": "uint64",
           "description": "The value reserved from the account by this order to ensure the account\ncan pay execution and chain fees in case it gets matched."
+        },
+        "creation_timestamp_ns": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The unix timestamp in nanoseconds the order was first created/submitted."
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/poolrpcOrderEvent"
+          },
+          "description": "A list of events that were emitted for this order. This field is only set\nwhen the verbose flag is set to true in the request."
+        }
+      }
+    },
+    "poolrpcOrderEvent": {
+      "type": "object",
+      "properties": {
+        "timestamp_ns": {
+          "type": "string",
+          "format": "int64",
+          "description": "The unix timestamp in nanoseconds the event was emitted at. This is the\nprimary key of the event and is unique across the database."
+        },
+        "event_str": {
+          "type": "string",
+          "description": "The human readable representation of the event."
+        },
+        "state_change": {
+          "$ref": "#/definitions/poolrpcUpdatedEvent",
+          "description": "The order was updated in the database."
+        },
+        "matched": {
+          "$ref": "#/definitions/poolrpcMatchEvent",
+          "description": "The order was involved in a match making attempt."
         }
       }
     },
@@ -1212,6 +1304,24 @@
             "$ref": "#/definitions/poolrpcLsatToken"
           },
           "description": "*\nList of all tokens the daemon knows of, including old/expired tokens."
+        }
+      }
+    },
+    "poolrpcUpdatedEvent": {
+      "type": "object",
+      "properties": {
+        "previous_state": {
+          "$ref": "#/definitions/poolrpcOrderState",
+          "description": "The state of the order previous to the change. This is what the state\nchanged from."
+        },
+        "new_state": {
+          "$ref": "#/definitions/poolrpcOrderState",
+          "description": "The new state of the order after the change. This is what the state changed\nto."
+        },
+        "units_filled": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The units that were filled at the time of the event."
         }
       }
     },

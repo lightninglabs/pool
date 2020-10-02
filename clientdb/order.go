@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
 	"go.etcd.io/bbolt"
 )
@@ -40,13 +41,13 @@ type orderCallback func(nonce order.Nonce, rawOrder []byte) error
 // returned.
 //
 // NOTE: This is part of the Store interface.
-func (db *DB) SubmitOrder(order order.Order) error {
+func (db *DB) SubmitOrder(o order.Order) error {
 	return db.Update(func(tx *bbolt.Tx) error {
 		rootBucket, err := getBucket(tx, ordersBucketKey)
 		if err != nil {
 			return err
 		}
-		err = fetchOrderTX(rootBucket, order.Nonce(), nil)
+		err = fetchOrderTX(rootBucket, o.Nonce(), nil)
 		switch err {
 		// No error means there is an order with that nonce in the DB
 		// already.
@@ -65,11 +66,16 @@ func (db *DB) SubmitOrder(order order.Order) error {
 		// Serialize and store the order now that we know it doesn't
 		// exist yet.
 		var w bytes.Buffer
-		err = SerializeOrder(order, &w)
+		err = SerializeOrder(o, &w)
 		if err != nil {
 			return err
 		}
-		return storeOrderTX(rootBucket, order.Nonce(), w.Bytes())
+
+		// Create an event for the initial order and store it in the
+		// order's event bucket but also in the global events under an
+		// unique timestamp.
+		evt := NewCreatedEvent(o)
+		return storeOrderTX(rootBucket, o.Nonce(), w.Bytes(), evt)
 	})
 }
 
@@ -212,12 +218,18 @@ func (db *DB) DelOrder(nonce order.Nonce) error {
 // storeOrderTX saves a byte serialized order in its specific sub bucket within
 // the root orders bucket.
 func storeOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
-	orderBytes []byte) error {
+	orderBytes []byte, evt event.Event) error {
 
 	// From the root bucket, we'll make a new sub order bucket using
 	// the order nonce.
 	orderBucket, err := rootBucket.CreateBucketIfNotExists(nonce[:])
 	if err != nil {
+		return err
+	}
+
+	// Add the event to the global event store but also add a reference to
+	// it in the order bucket.
+	if err := storeEventTX(orderBucket, evt); err != nil {
 		return err
 	}
 
@@ -249,8 +261,12 @@ func fetchOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 }
 
 // updateOrder fetches the binary data of one order specified by its nonce from
-// the src bucket, applies the modifiers, and stores it back into dst bucket.
-func updateOrder(src, dst *bbolt.Bucket, nonce order.Nonce,
+// the orders bucket, applies the modifiers, and stores it back into dst bucket.
+// The dst bucket can be a different bucket than the orders bucket if an order
+// update should be written to a staging area instead of being applied to the
+// original order directly. Do not use this function for applying the staged
+// changes to the final bucket but use copyOrder instead.
+func updateOrder(ordersBucket, dst *bbolt.Bucket, nonce order.Nonce,
 	modifiers []order.Modifier) (order.Order, error) {
 
 	var (
@@ -263,10 +279,13 @@ func updateOrder(src, dst *bbolt.Bucket, nonce order.Nonce,
 		}
 	)
 	// Retrieve the order stored in the database.
-	err = fetchOrderTX(src, nonce, callback)
+	err = fetchOrderTX(ordersBucket, nonce, callback)
 	if err != nil {
 		return nil, err
 	}
+
+	// Preserve the original state to detect a state change later.
+	prevState := o.Details().State
 
 	// Apply the given modifications to it and store it back.
 	for _, modifier := range modifiers {
@@ -278,11 +297,49 @@ func updateOrder(src, dst *bbolt.Bucket, nonce order.Nonce,
 		return nil, err
 	}
 
-	if err := storeOrderTX(dst, nonce, w.Bytes()); err != nil {
+	// Create an event for the update now. We always store the event
+	// reference to the order in the main order bucket, even if the
+	// destination bucket is the pending orders bucket.
+	evt := NewUpdatedEvent(prevState, o)
+	orderBucket := ordersBucket.Bucket(nonce[:])
+	if orderBucket == nil {
+		return nil, ErrNoOrder
+	}
+
+	// Add the event to the global event store but also add a reference to
+	// it in the order's event reference sub bucket.
+	if err := storeEventTX(orderBucket, evt); err != nil {
+		return nil, err
+	}
+
+	// Store the order to the destination bucket now, skipping the event as
+	// we've already written that to the source bucket.
+	if err := storeOrderTX(dst, nonce, w.Bytes(), nil); err != nil {
 		return nil, err
 	}
 
 	return o, nil
+}
+
+// copyOrder copies a single order from the source to destination bucket. No
+// event references are copied, only the order itself.
+func copyOrder(src, dst *bbolt.Bucket, nonce order.Nonce) error {
+	var (
+		orderBytes []byte
+		err        error
+		callback   = func(_ order.Nonce, rawOrder []byte) error {
+			orderBytes = rawOrder
+			return nil
+		}
+	)
+
+	// Retrieve the order stored in the database.
+	err = fetchOrderTX(src, nonce, callback)
+	if err != nil {
+		return err
+	}
+
+	return storeOrderTX(dst, nonce, orderBytes, nil)
 }
 
 // SerializeOrder binary serializes an order to a writer using the common LN

@@ -61,6 +61,9 @@ func WriteElement(w io.Writer, element interface{}) error {
 	case order.State:
 		return lnwire.WriteElement(w, uint8(e))
 
+	case order.MatchState:
+		return lnwire.WriteElement(w, uint8(e))
+
 	case order.SupplyUnit:
 		return lnwire.WriteElement(w, uint64(e))
 
@@ -152,6 +155,13 @@ func ReadElement(r io.Reader, element interface{}) error { // nolint:gocyclo
 			return err
 		}
 		*e = order.State(s)
+
+	case *order.MatchState:
+		var s uint8
+		if err := lnwire.ReadElement(r, &s); err != nil {
+			return err
+		}
+		*e = order.MatchState(s)
 
 	case *order.SupplyUnit:
 		var s uint64

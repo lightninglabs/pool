@@ -22,6 +22,7 @@ import (
 	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/chaninfo"
 	"github.com/lightninglabs/pool/clientdb"
+	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/poolscript"
@@ -375,6 +376,15 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		rpcLog.Infof("Received PrepareMsg for batch=%x, num_orders=%v",
 			batch.ID[:], len(batch.MatchedOrders))
 
+		// Let's store an event for each order in the batch that we did
+		// receive a prepare message.
+		if err := s.server.db.StoreBatchEvents(
+			batch, order.MatchStatePrepare,
+			poolrpc.MatchRejectReason_NONE,
+		); err != nil {
+			rpcLog.Errorf("Unable to store order events: %v", err)
+		}
+
 		// The prepare message can be sent over and over again if the
 		// batch needs adjustment. Clear all previous shims.
 		if s.orderManager.HasPendingBatch() {
@@ -493,6 +503,16 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		err := s.orderManager.BatchFinalize(batchID)
 		if err != nil {
 			return fmt.Errorf("error finalizing batch: %v", err)
+		}
+
+		// We've successfully processed the finalize message, let's
+		// store an event for this for all orders that were involved on
+		// our side.
+		if err := s.server.db.StoreBatchEvents(
+			batch, order.MatchStateFinalized,
+			poolrpc.MatchRejectReason_NONE,
+		); err != nil {
+			rpcLog.Errorf("Unable to store order events: %v", err)
 		}
 
 		// Accounts that were updated in the batch need to start new
@@ -1168,59 +1188,65 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 // ListOrders returns a list of all orders that is currently known to the trader
 // client's local store. The state of each order is queried on the auction
 // server and returned as well.
-func (s *rpcServer) ListOrders(ctx context.Context, _ *poolrpc.ListOrdersRequest) (
-	*poolrpc.ListOrdersResponse, error) {
+func (s *rpcServer) ListOrders(ctx context.Context,
+	req *poolrpc.ListOrdersRequest) (*poolrpc.ListOrdersResponse, error) {
 
-	// Get all orders from our local store first.
-	dbOrders, err := s.server.db.GetOrders()
+	// Because we made sure every order has a creation timestamp in the
+	// events bucket, we can now access the orders in a sorted way if we
+	// first grab all creation events. This might be a bit less efficient
+	// because we first need to query the events bucket. But this can easily
+	// be solved by adding a write-through cache for the events, then that
+	// bucket serves both as an unique order sequence as well as the event
+	// source and is really fast to access.
+	creationEvents, err := s.server.db.AllEvents(event.TypeOrderCreated)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error querying order creation events: "+
+			"%v", err)
 	}
 
 	// If we cannot query the auctioneer, we just use an empty fee
 	// schedule, as it is only used for calculating the reserved value.
 	var feeSchedule terms.FeeSchedule = terms.NewLinearFeeSchedule(0, 0)
-	terms, err := s.auctioneer.Terms(ctx)
+	auctioneerTerms, err := s.auctioneer.Terms(ctx)
 	if err != nil {
 		log.Warnf("unable to query auctioneer terms: %v", err)
 	} else {
-		feeSchedule = terms.FeeSchedule()
+		feeSchedule = auctioneerTerms.FeeSchedule()
 	}
 
 	// The RPC is split by order type so we have to separate them now.
-	asks := make([]*poolrpc.Ask, 0, len(dbOrders))
-	bids := make([]*poolrpc.Bid, 0, len(dbOrders))
-	for _, dbOrder := range dbOrders {
+	asks := make([]*poolrpc.Ask, 0, len(creationEvents))
+	bids := make([]*poolrpc.Bid, 0, len(creationEvents))
+	for _, evt := range creationEvents {
+		orderCreateEvent, ok := evt.(*clientdb.CreatedEvent)
+		if !ok {
+			return nil, fmt.Errorf("invalid order create event: %v",
+				evt)
+		}
+
+		dbOrder, err := s.server.db.GetOrder(orderCreateEvent.Nonce())
+		if err != nil {
+			return nil, err
+		}
 		nonce := dbOrder.Nonce()
 		dbDetails := dbOrder.Details()
 
-		var orderState poolrpc.OrderState
-		switch dbDetails.State {
+		orderState, err := dbOrderStateToRPCState(dbDetails.State)
+		if err != nil {
+			return nil, err
+		}
 
-		case order.StateSubmitted:
-			orderState = poolrpc.OrderState_ORDER_SUBMITTED
+		var rpcEvents []*poolrpc.OrderEvent
+		if req.Verbose {
+			dbEvents, err := s.server.db.GetOrderEvents(nonce)
+			if err != nil {
+				return nil, err
+			}
 
-		case order.StateCleared:
-			orderState = poolrpc.OrderState_ORDER_CLEARED
-
-		case order.StatePartiallyFilled:
-			orderState = poolrpc.OrderState_ORDER_PARTIALLY_FILLED
-
-		case order.StateExecuted:
-			orderState = poolrpc.OrderState_ORDER_EXECUTED
-
-		case order.StateCanceled:
-			orderState = poolrpc.OrderState_ORDER_CANCELED
-
-		case order.StateExpired:
-			orderState = poolrpc.OrderState_ORDER_EXPIRED
-
-		case order.StateFailed:
-			orderState = poolrpc.OrderState_ORDER_FAILED
-
-		default:
-			return nil, fmt.Errorf("unknown state: %v",
-				dbDetails.State)
+			rpcEvents, err = dbEventsToRPCEvents(dbEvents)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		details := &poolrpc.Order{
@@ -1237,6 +1263,8 @@ func (s *rpcServer) ListOrders(ctx context.Context, _ *poolrpc.ListOrdersRequest
 			ReservedValueSat: uint64(
 				dbOrder.ReservedValue(feeSchedule),
 			),
+			CreationTimestampNs: uint64(evt.Timestamp().UnixNano()),
+			Events:              rpcEvents,
 		}
 
 		switch o := dbOrder.(type) {
@@ -1326,14 +1354,41 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	case errors.Is(failure, order.ErrVersionMismatch):
 		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_BATCH_VERSION_MISMATCH
 
+		// Track this reject by adding an event to our orders.
+		err := s.server.db.StoreBatchEvents(
+			batch, order.MatchStateRejected,
+			poolrpc.MatchRejectReason_BATCH_VERSION_MISMATCH,
+		)
+		if err != nil {
+			rpcLog.Errorf("Could not store match event: %v", err)
+		}
+
 	case errors.Is(failure, order.ErrMismatchErr):
 		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_SERVER_MISBEHAVIOR
+
+		// Track this reject by adding an event to our orders.
+		err := s.server.db.StoreBatchEvents(
+			batch, order.MatchStateRejected,
+			poolrpc.MatchRejectReason_SERVER_MISBEHAVIOR,
+		)
+		if err != nil {
+			rpcLog.Errorf("Could not store match event: %v", err)
+		}
 
 	case errors.As(failure, &partialReject):
 		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_PARTIAL_REJECT
 		msg.Reject.RejectedOrders = make(map[string]*poolrpc.OrderReject)
 		for nonce, reject := range partialReject.rejectedOrders {
 			msg.Reject.RejectedOrders[nonce.String()] = reject
+		}
+
+		// Track this reject by adding an event to our orders with the
+		// specific reject code for each of rejected orders.
+		err := s.server.db.StoreBatchPartialRejectEvents(
+			batch, partialReject.rejectedOrders,
+		)
+		if err != nil {
+			rpcLog.Errorf("Could not store match event: %v", err)
 		}
 
 	default:
@@ -1363,6 +1418,14 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 // nonces that we accept in the batch.
 func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
 	rpcLog.Infof("Accepting batch=%x", batch.ID[:])
+
+	// Let's store an event for each order in the batch that we did accept
+	// the batch.
+	if err := s.server.db.StoreBatchEvents(
+		batch, order.MatchStateAccepted, poolrpc.MatchRejectReason_NONE,
+	); err != nil {
+		rpcLog.Errorf("Unable to store order events: %v", err)
+	}
 
 	// Send the message to the server.
 	return s.auctioneer.SendAuctionMessage(&poolrpc.ClientAuctionMessage{
@@ -1447,6 +1510,14 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 	}
 
 	rpcLog.Infof("Sending OrderMatchSign for batch %x", batch.ID[:])
+
+	// We've successfully processed the sign message, let's store an event
+	// for this for all orders that were involved on our side.
+	if err := s.server.db.StoreBatchEvents(
+		batch, order.MatchStateSigned, poolrpc.MatchRejectReason_NONE,
+	); err != nil {
+		rpcLog.Errorf("Unable to store order events: %v", err)
+	}
 
 	return s.auctioneer.SendAuctionMessage(&poolrpc.ClientAuctionMessage{
 		Msg: &poolrpc.ClientAuctionMessage_Sign{
@@ -1722,36 +1793,150 @@ func (s *rpcServer) BatchSnapshot(ctx context.Context,
 // rpcOrderStateToDBState maps the order state as received over the RPC
 // protocol to the local state that we use in the database.
 func rpcOrderStateToDBState(state poolrpc.OrderState) (order.State, error) {
-
-	var orderState order.State
 	switch state {
-
 	case poolrpc.OrderState_ORDER_SUBMITTED:
-		orderState = order.StateSubmitted
+		return order.StateSubmitted, nil
 
 	case poolrpc.OrderState_ORDER_CLEARED:
-		orderState = order.StateCleared
+		return order.StateCleared, nil
 
 	case poolrpc.OrderState_ORDER_PARTIALLY_FILLED:
-		orderState = order.StatePartiallyFilled
+		return order.StatePartiallyFilled, nil
 
 	case poolrpc.OrderState_ORDER_EXECUTED:
-		orderState = order.StateExecuted
+		return order.StateExecuted, nil
 
 	case poolrpc.OrderState_ORDER_CANCELED:
-		orderState = order.StateCanceled
+		return order.StateCanceled, nil
 
 	case poolrpc.OrderState_ORDER_EXPIRED:
-		orderState = order.StateExpired
+		return order.StateExpired, nil
 
 	case poolrpc.OrderState_ORDER_FAILED:
-		orderState = order.StateFailed
+		return order.StateFailed, nil
 
 	default:
 		return 0, fmt.Errorf("unknown state: %v", state)
 	}
+}
 
-	return orderState, nil
+// dbOrderStateToRPCState maps the order state as stored in the database to the
+// corresponding RPC enum type.
+func dbOrderStateToRPCState(state order.State) (poolrpc.OrderState, error) {
+	switch state {
+	case order.StateSubmitted:
+		return poolrpc.OrderState_ORDER_SUBMITTED, nil
+
+	case order.StateCleared:
+		return poolrpc.OrderState_ORDER_CLEARED, nil
+
+	case order.StatePartiallyFilled:
+		return poolrpc.OrderState_ORDER_PARTIALLY_FILLED, nil
+
+	case order.StateExecuted:
+		return poolrpc.OrderState_ORDER_EXECUTED, nil
+
+	case order.StateCanceled:
+		return poolrpc.OrderState_ORDER_CANCELED, nil
+
+	case order.StateExpired:
+		return poolrpc.OrderState_ORDER_EXPIRED, nil
+
+	case order.StateFailed:
+		return poolrpc.OrderState_ORDER_FAILED, nil
+
+	default:
+		return 0, fmt.Errorf("unknown state: %v", state)
+	}
+}
+
+// dbMatchStateToRPCMatchState maps the match state as stored in the database to
+// the corresponding RPC enum type.
+func dbMatchStateToRPCMatchState(
+	matchState order.MatchState) (poolrpc.MatchState, error) {
+
+	switch matchState {
+	case order.MatchStatePrepare:
+		return poolrpc.MatchState_PREPARE, nil
+
+	case order.MatchStateAccepted:
+		return poolrpc.MatchState_ACCEPTED, nil
+
+	case order.MatchStateRejected:
+		return poolrpc.MatchState_REJECTED, nil
+
+	case order.MatchStateSigned:
+		return poolrpc.MatchState_SIGNED, nil
+
+	case order.MatchStateFinalized:
+		return poolrpc.MatchState_FINALIZED, nil
+
+	default:
+		return 0, fmt.Errorf("unknown match state: %v", matchState)
+	}
+}
+
+// dbEventsToRPCEvents maps the events as stored in the database to the
+// corresponding RPC types.
+func dbEventsToRPCEvents(dbEvents []event.Event) ([]*poolrpc.OrderEvent,
+	error) {
+
+	rpcEvents := make([]*poolrpc.OrderEvent, 0, len(dbEvents))
+	for _, record := range dbEvents {
+		rpcEvent := &poolrpc.OrderEvent{
+			TimestampNs: record.Timestamp().UnixNano(),
+			EventStr:    record.String(),
+		}
+
+		// Decode by type to allow for further kinds of events.
+		switch e := record.(type) {
+		case *clientdb.CreatedEvent:
+			// No additional information other than the timestamp
+			// itself is stored for this event type.
+
+		case *clientdb.UpdatedEvent:
+			prevState, err := dbOrderStateToRPCState(e.PrevState)
+			if err != nil {
+				return nil, err
+			}
+			newState, err := dbOrderStateToRPCState(e.NewState)
+			if err != nil {
+				return nil, err
+			}
+			rpcEvent.Event = &poolrpc.OrderEvent_StateChange{
+				StateChange: &poolrpc.UpdatedEvent{
+					PreviousState: prevState,
+					NewState:      newState,
+					UnitsFilled:   uint32(e.UnitsFilled),
+				},
+			}
+
+		case *clientdb.MatchEvent:
+			matchState, err := dbMatchStateToRPCMatchState(
+				e.MatchState,
+			)
+			if err != nil {
+				return nil, err
+			}
+			rpcEvent.Event = &poolrpc.OrderEvent_Matched{
+				Matched: &poolrpc.MatchEvent{
+					MatchState:   matchState,
+					UnitsFilled:  uint32(e.UnitsFilled),
+					MatchedOrder: e.MatchedOrder[:],
+					RejectReason: poolrpc.MatchRejectReason(
+						e.RejectReason,
+					),
+				},
+			}
+
+		default:
+			return nil, fmt.Errorf("unknown event type: %v", e)
+		}
+
+		rpcEvents = append(rpcEvents, rpcEvent)
+	}
+
+	return rpcEvents, nil
 }
 
 // nodeHasTorAddrs returns true if there exists a Tor address amongst the set

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcwallet/wtxmgr"
+	"github.com/lightninglabs/pool/clientdb/migrations"
 	"go.etcd.io/bbolt"
 )
 
@@ -23,7 +24,7 @@ var (
 	// database version.
 	dbVersionKey = []byte("version")
 
-	// lockIDKey is the daabase key used for storing/retrieving the global
+	// lockIDKey is the database key used for storing/retrieving the global
 	// lock ID to use when leasing outputs from the backing lnd node's
 	// wallet. This is mostly required so that calls to LeaseOutput are
 	// idempotent when attempting to lease an output we already have a lease
@@ -38,9 +39,11 @@ var (
 	// of database don't match with latest version this list will be used
 	// for retrieving all migration function that are need to apply to the
 	// current db.
-	migrations []migration
+	dbVersions = []migration{
+		migrations.AddInitialOrderTimestamps,
+	}
 
-	latestDBVersion = uint32(len(migrations))
+	latestDBVersion = uint32(len(dbVersions))
 )
 
 // getDBVersion retrieves the current database version.
@@ -132,7 +135,7 @@ func syncVersions(db *bbolt.DB) error {
 		for v := currentVersion; v < latestDBVersion; v++ {
 			log.Infof("Applying migration #%v", v+1)
 
-			migration := migrations[v]
+			migration := dbVersions[v]
 			if err := migration(tx); err != nil {
 				log.Infof("Unable to apply migration #%v", v+1)
 				return err

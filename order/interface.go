@@ -137,6 +137,59 @@ func (s State) Archived() bool {
 	}
 }
 
+// MatchState describes the distinct phases an order goes through as seen by the
+// trader daemon. These states are not persisted on the orders themselves but
+// rather as events with timestamps so a user can track what's happening to
+// their orders.
+type MatchState uint8
+
+const (
+	// MatchStatePrepare is the state an order is in after the
+	// OrderMatchPrepare message was received initially.
+	MatchStatePrepare MatchState = 0
+
+	// MatchStatePrepare is the state an order is in after the
+	// OrderMatchPrepare message was processed successfully and the batch
+	// was accepted.
+	MatchStateAccepted MatchState = 1
+
+	// MatchStateRejected is the state an order is in after the trader
+	// rejected it, either as an answer to a OderMatchSignBegin or
+	// OrderMatchFinalize message from the auctioneer.
+	MatchStateRejected MatchState = 2
+
+	// MatchStateSigned is the state an order is in after the
+	// OrderMatchSignBegin message was processed successfully.
+	MatchStateSigned MatchState = 3
+
+	// MatchStateFinalized is the state an order is in after the
+	// OrderMatchFinalize message was processed successfully.
+	MatchStateFinalized MatchState = 4
+)
+
+// String returns a human readable string representation of the match state.
+func (s MatchState) String() string {
+	switch s {
+	case MatchStatePrepare:
+		return "prepare"
+
+	case MatchStateAccepted:
+		return "accepted"
+
+	case MatchStateSigned:
+		return "signed"
+
+	case MatchStateFinalized:
+		return "finalized"
+
+	case MatchStateRejected:
+		return "rejected"
+
+	default:
+		return fmt.Sprintf("unknown<%d>", s)
+	}
+}
+
 var (
 	// ErrInsufficientBalance is the error that is returned if an account
 	// has insufficient balance to perform a requested action.

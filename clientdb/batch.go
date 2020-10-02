@@ -316,8 +316,7 @@ func applyBatchUpdates(tx *bbolt.Tx) error {
 			return nil
 		}
 		copy(nonce[:], k)
-		_, err := updateOrder(pendingOrders, orders, nonce, nil)
-		return err
+		return copyOrder(pendingOrders, orders, nonce)
 	})
 	if err != nil {
 		return err

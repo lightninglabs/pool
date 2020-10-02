@@ -101,7 +101,10 @@ func initDB(filepath string, firstInit bool) (*bbolt.DB, error) {
 		if err != nil {
 			return err
 		}
-
+		_, err = tx.CreateBucketIfNotExists(eventBucketKey)
+		if err != nil {
+			return err
+		}
 		snapshotBucket, err := tx.CreateBucketIfNotExists(
 			batchSnapshotBucketKey,
 		)
