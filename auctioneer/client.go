@@ -763,6 +763,7 @@ func (c *Client) connectServerStream(initialBackoff time.Duration,
 
 	var (
 		backoff = initialBackoff
+		ctxb    = context.Background()
 		ctx     context.Context
 		err     error
 	)
@@ -772,8 +773,10 @@ func (c *Client) connectServerStream(initialBackoff time.Duration,
 		if err != nil {
 			return err
 		}
-		ctx, c.streamCancel = context.WithCancel(context.Background())
-		c.serverStream, err = c.client.SubscribeBatchAuction(ctx)
+
+		// Try connecting by querying a "cheap" RPC that the server can
+		// answer from memory only.
+		_, err = c.client.Terms(ctxb, &poolrpc.TermsRequest{})
 		if err == nil {
 			log.Debugf("Connected successfully to server after "+
 				"%d tries", i+1)
@@ -791,13 +794,24 @@ func (c *Client) connectServerStream(initialBackoff time.Duration,
 		}
 		log.Debugf("Connect failed with error, canceling and backing "+
 			"off for %s: %v", backoff, err)
-		c.streamCancel()
-		log.Infof("Connection to server failed, will try again in %v",
-			backoff)
+
+		if i < numRetries-1 {
+			log.Infof("Connection to server failed, will try again "+
+				"in %v", backoff)
+		}
 	}
 	if err != nil {
 		log.Errorf("Connection to server failed after %d retries",
 			numRetries)
+		return err
+	}
+
+	// Now that we know the connection itself is established, we also re-
+	// connect the long-lived stream.
+	ctx, c.streamCancel = context.WithCancel(ctxb)
+	c.serverStream, err = c.client.SubscribeBatchAuction(ctx)
+	if err != nil {
+		log.Errorf("Subscribing to batch auction failed: %v", err)
 		return err
 	}
 
