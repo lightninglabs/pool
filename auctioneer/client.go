@@ -479,6 +479,7 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		sendMsg: c.SendAuctionMessage,
 		signer:  c.cfg.Signer,
 		msgChan: make(chan *poolrpc.ServerAuctionMessage),
+		errChan: make(chan error),
 		quit:    make(chan struct{}),
 	}
 	c.subscribedAccts[acctPubKey] = sub

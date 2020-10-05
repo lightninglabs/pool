@@ -21,6 +21,7 @@ type acctSubscription struct {
 	sendMsg    func(*poolrpc.ClientAuctionMessage) error
 	signer     lndclient.SignerClient
 	msgChan    chan *poolrpc.ServerAuctionMessage
+	errChan    chan error
 	quit       chan struct{}
 }
 
@@ -58,7 +59,7 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 	}
 
 	// We can't sign anything if we haven't received the server's challenge
-	// yet. So we'll wait for the message to arrive.
+	// yet. So we'll wait for the message or an error to arrive.
 	select {
 	case srvMsg, more := <-s.msgChan:
 		if !more {
@@ -93,6 +94,10 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 				},
 			},
 		})
+
+	case err := <-s.errChan:
+		return fmt.Errorf("error during authentication, before "+
+			"sending subscribe: %v", err)
 
 	case <-ctx.Done():
 		return fmt.Errorf("context canceled before challenge was " +

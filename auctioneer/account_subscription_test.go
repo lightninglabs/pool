@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -186,6 +187,59 @@ func TestAccountSubscriptionAuthenticateContextClose(t *testing.T) {
 	select {
 	case err := <-errChan:
 		if !strings.Contains(err.Error(), "context canceled") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+	case <-time.After(defaultTimeout):
+		t.Fatalf("did not receive commit message before timeout")
+	}
+}
+
+// TestAccountSubscriptionAuthenticateError tests that the 3-way
+// authentication handshake returns an error correctly if the server sends one
+// in the last step.
+func TestAccountSubscriptionAuthenticateError(t *testing.T) {
+	var (
+		msgChan    = make(chan *poolrpc.ClientAuctionMessage)
+		srvMsgChan = make(chan *poolrpc.ServerAuctionMessage)
+		errChan    = make(chan error)
+		sendMsg    = func(msg *poolrpc.ClientAuctionMessage) error {
+			msgChan <- msg
+			return nil
+		}
+		sub = &acctSubscription{
+			acctKey: testAccountDesc,
+			sendMsg: sendMsg,
+			signer:  testSigner,
+			msgChan: srvMsgChan,
+			errChan: make(chan error),
+		}
+	)
+
+	// First, kick off the auth handshake in a goroutine. Every step will
+	// block because we don't use buffered channels.
+	go func() {
+		errChan <- sub.authenticate(context.Background())
+	}()
+
+	// Step 1: We expect a commitment message.
+	select {
+	case msg := <-msgChan:
+		if _, ok := msg.Msg.(*poolrpc.ClientAuctionMessage_Commit); !ok {
+			t.Fatalf("unexpected message type: %v", msg)
+		}
+
+	case <-time.After(defaultTimeout):
+		t.Fatalf("did not receive commit message before timeout")
+	}
+
+	// Step 2: Simulate the server sending an error message next.
+	sub.errChan <- fmt.Errorf("invalid signature")
+
+	// There should be an error in the chan now.
+	select {
+	case err := <-errChan:
+		if !strings.Contains(err.Error(), "invalid signature") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
