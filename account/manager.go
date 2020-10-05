@@ -399,11 +399,6 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		return fmt.Errorf("unable to construct account output: %v", err)
 	}
 
-	terms, err := m.cfg.Auctioneer.Terms(ctx)
-	if err != nil {
-		return fmt.Errorf("could not query auctioneer terms: %v", err)
-	}
-
 	var accountTx *wire.MsgTx
 	switch account.State {
 	// In StateInitiated, we'll attempt to fund our account.
@@ -534,6 +529,11 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		if err != nil {
 			return err
 		}
+		terms, err := m.cfg.Auctioneer.Terms(ctx)
+		if err != nil {
+			return fmt.Errorf("could not query auctioneer terms: "+
+				"%v", err)
+		}
 
 		// Proceed to watch for the account on-chain.
 		numConfs := NumConfsForValue(
@@ -564,6 +564,15 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	// and would therefore not be noticed by us. The account would stay
 	// pending forever in that case.
 	case StatePendingUpdate, StatePendingBatch:
+		// We need to know the maximum account value to scale the number
+		// of confirmations the same way the auctioneer does to avoid
+		// getting the state out of sync.
+		terms, err := m.cfg.Auctioneer.Terms(ctx)
+		if err != nil {
+			return fmt.Errorf("could not query auctioneer terms: "+
+				"%v", err)
+		}
+
 		numConfs := NumConfsForValue(
 			account.Value, terms.MaxAccountValue,
 		)

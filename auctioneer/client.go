@@ -47,6 +47,10 @@ var (
 	// ErrClientShutdown is the error that is returned if the trader client
 	// itself is shutting down.
 	ErrClientShutdown = errors.New("client shutting down")
+
+	// ErrAuthCanceled is returned if the authentication process of a single
+	// account subscription is aborted.
+	ErrAuthCanceled = errors.New("authentication was canceled")
 )
 
 // Config holds the configuration options for the auctioneer client.
@@ -93,6 +97,7 @@ type Client struct {
 	stopped uint32
 
 	StreamErrChan  chan error
+	errChanSwitch  *ErrChanSwitch
 	FromServerChan chan *poolrpc.ServerAuctionMessage
 
 	serverConn *grpc.ClientConn
@@ -116,10 +121,13 @@ func NewClient(cfg *Config) (*Client, error) {
 		return nil, err
 	}
 
+	mainErrChan := make(chan error)
+	errChanSwitch := NewErrChanSwitch(mainErrChan)
 	return &Client{
 		cfg:             cfg,
 		FromServerChan:  make(chan *poolrpc.ServerAuctionMessage),
-		StreamErrChan:   make(chan error),
+		StreamErrChan:   mainErrChan,
+		errChanSwitch:   errChanSwitch,
 		quit:            make(chan struct{}),
 		subscribedAccts: make(map[[33]byte]*acctSubscription),
 	}, nil
@@ -139,6 +147,8 @@ func (c *Client) Start() error {
 
 	c.serverConn = serverConn
 	c.client = poolrpc.NewChannelAuctioneerClient(serverConn)
+
+	c.errChanSwitch.Start()
 
 	return nil
 }
@@ -189,6 +199,7 @@ func (c *Client) Stop() error {
 	}
 	c.wg.Wait()
 	close(c.FromServerChan)
+	c.errChanSwitch.Stop()
 	return c.serverConn.Close()
 }
 
@@ -207,6 +218,7 @@ func (c *Client) closeStream() error {
 
 	// Close all pending subscriptions.
 	for _, subscription := range c.subscribedAccts {
+		close(subscription.quit)
 		close(subscription.msgChan)
 	}
 
@@ -467,6 +479,14 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		}
 	}
 
+	// For the duration this subscription is active, we need to redirect any
+	// errors sent from the auctioneer to a different channel so the
+	// subscription can react to it. Once we're done, we restore the
+	// original channel.
+	tempErrChan := make(chan error)
+	c.errChanSwitch.Divert(tempErrChan)
+	defer c.errChanSwitch.Restore()
+
 	// Before we can expect to receive any updates, we need to perform the
 	// 3-way authentication handshake.
 	sub = &acctSubscription{
@@ -474,7 +494,8 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		sendMsg: c.SendAuctionMessage,
 		signer:  c.cfg.Signer,
 		msgChan: make(chan *poolrpc.ServerAuctionMessage),
-		quit:    c.quit,
+		errChan: tempErrChan,
+		quit:    make(chan struct{}),
 	}
 	c.subscribedAccts[acctPubKey] = sub
 	err := sub.authenticate(ctx)
@@ -536,6 +557,13 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 			return nil, false, fmt.Errorf("unknown message "+
 				"received: %v", srvMsg)
 		}
+
+	case err := <-tempErrChan:
+		return nil, false, fmt.Errorf("error during authentication "+
+			"when waiting for final step: %v", err)
+
+	case <-sub.quit:
+		return nil, false, ErrAuthCanceled
 
 	case <-c.quit:
 		return nil, false, ErrClientShutdown
@@ -718,14 +746,13 @@ func (c *Client) SendAuctionMessage(msg *poolrpc.ClientAuctionMessage) error {
 // wait blocks for a given amount of time but returns immediately if the client
 // is shutting down.
 func (c *Client) wait(backoff time.Duration) error {
-	if backoff > 0 {
-		select {
-		case <-time.After(backoff):
-		case <-c.quit:
-			return ErrClientShutdown
-		}
+	select {
+	case <-time.After(backoff):
+		return nil
+
+	case <-c.quit:
+		return ErrClientShutdown
 	}
-	return nil
 }
 
 // connectServerStream opens the initial connection to the server for the stream
@@ -735,17 +762,22 @@ func (c *Client) connectServerStream(initialBackoff time.Duration,
 
 	var (
 		backoff = initialBackoff
+		ctxb    = context.Background()
 		ctx     context.Context
 		err     error
 	)
 	for i := 0; i < numRetries; i++ {
 		// Wait before connecting in case this is a reconnect trial.
-		err = c.wait(backoff)
-		if err != nil {
-			return err
+		if backoff != 0 {
+			err = c.wait(backoff)
+			if err != nil {
+				return err
+			}
 		}
-		ctx, c.streamCancel = context.WithCancel(context.Background())
-		c.serverStream, err = c.client.SubscribeBatchAuction(ctx)
+
+		// Try connecting by querying a "cheap" RPC that the server can
+		// answer from memory only.
+		_, err = c.client.Terms(ctxb, &poolrpc.TermsRequest{})
 		if err == nil {
 			log.Debugf("Connected successfully to server after "+
 				"%d tries", i+1)
@@ -763,13 +795,24 @@ func (c *Client) connectServerStream(initialBackoff time.Duration,
 		}
 		log.Debugf("Connect failed with error, canceling and backing "+
 			"off for %s: %v", backoff, err)
-		c.streamCancel()
-		log.Infof("Connection to server failed, will try again in %v",
-			backoff)
+
+		if i < numRetries-1 {
+			log.Infof("Connection to server failed, will try again "+
+				"in %v", backoff)
+		}
 	}
 	if err != nil {
 		log.Errorf("Connection to server failed after %d retries",
 			numRetries)
+		return err
+	}
+
+	// Now that we know the connection itself is established, we also re-
+	// connect the long-lived stream.
+	ctx, c.streamCancel = context.WithCancel(ctxb)
+	c.serverStream, err = c.client.SubscribeBatchAuction(ctx)
+	if err != nil {
+		log.Errorf("Subscribing to batch auction failed: %v", err)
 		return err
 	}
 
@@ -813,7 +856,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		// error, usually "transport is closing".
 		case err == io.EOF:
 			select {
-			case c.StreamErrChan <- ErrServerShutdown:
+			case c.errChanSwitch.ErrChan() <- ErrServerShutdown:
 			case <-c.quit:
 			}
 			return
@@ -831,7 +874,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 
 			// Any other error we want to report back.
 			select {
-			case c.StreamErrChan <- err:
+			case c.errChanSwitch.ErrChan() <- err:
 			case <-c.quit:
 			}
 			return
@@ -856,8 +899,8 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 				}
 			}
 			if acctSub == nil {
-				c.StreamErrChan <- fmt.Errorf("no sub"+
-					"scription found for commit hash %x",
+				c.errChanSwitch.ErrChan() <- fmt.Errorf("no "+
+					"subscription found for commit hash %x",
 					commitHash)
 				return
 			}
@@ -874,7 +917,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		case *poolrpc.ServerAuctionMessage_Success:
 			err := c.sendToSubscription(t.Success.TraderKey, msg)
 			if err != nil {
-				c.StreamErrChan <- err
+				c.errChanSwitch.ErrChan() <- err
 				return
 			}
 
@@ -884,7 +927,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		case *poolrpc.ServerAuctionMessage_Account:
 			err := c.sendToSubscription(t.Account.TraderKey, msg)
 			if err != nil {
-				c.StreamErrChan <- err
+				c.errChanSwitch.ErrChan() <- err
 				return
 			}
 
@@ -901,7 +944,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 				err := c.HandleServerShutdown(nil)
 				if err != nil {
 					select {
-					case c.StreamErrChan <- err:
+					case c.errChanSwitch.ErrChan() <- err:
 					case <-c.quit:
 					}
 				}
@@ -917,7 +960,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 					t.Error.TraderKey, msg,
 				)
 				if err != nil {
-					c.StreamErrChan <- err
+					c.errChanSwitch.ErrChan() <- err
 					return
 				}
 
@@ -989,11 +1032,10 @@ func (c *Client) HandleServerShutdown(err error) error {
 	// which requires access to the lock as well.
 	c.streamMutex.Lock()
 	err = c.connectServerStream(c.cfg.MinBackoff, reconnectRetries)
+	c.streamMutex.Unlock()
 	if err != nil {
-		c.streamMutex.Unlock()
 		return err
 	}
-	c.streamMutex.Unlock()
 
 	// With the connection re-established, check whether we need to mark our
 	// pending batch as finalized, or if we need to remove it due to the
