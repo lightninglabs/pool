@@ -47,6 +47,10 @@ var (
 	// ErrClientShutdown is the error that is returned if the trader client
 	// itself is shutting down.
 	ErrClientShutdown = errors.New("client shutting down")
+
+	// ErrAuthCanceled is returned if the authentication process of a single
+	// account subscription is aborted.
+	ErrAuthCanceled = errors.New("authentication was canceled")
 )
 
 // Config holds the configuration options for the auctioneer client.
@@ -207,6 +211,7 @@ func (c *Client) closeStream() error {
 
 	// Close all pending subscriptions.
 	for _, subscription := range c.subscribedAccts {
+		close(subscription.quit)
 		close(subscription.msgChan)
 	}
 
@@ -474,7 +479,7 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		sendMsg: c.SendAuctionMessage,
 		signer:  c.cfg.Signer,
 		msgChan: make(chan *poolrpc.ServerAuctionMessage),
-		quit:    c.quit,
+		quit:    make(chan struct{}),
 	}
 	c.subscribedAccts[acctPubKey] = sub
 	err := sub.authenticate(ctx)
@@ -536,6 +541,9 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 			return nil, false, fmt.Errorf("unknown message "+
 				"received: %v", srvMsg)
 		}
+
+	case <-sub.quit:
+		return nil, false, ErrAuthCanceled
 
 	case <-c.quit:
 		return nil, false, ErrClientShutdown

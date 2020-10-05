@@ -21,7 +21,7 @@ type acctSubscription struct {
 	sendMsg    func(*poolrpc.ClientAuctionMessage) error
 	signer     lndclient.SignerClient
 	msgChan    chan *poolrpc.ServerAuctionMessage
-	quit       <-chan struct{}
+	quit       chan struct{}
 }
 
 // authenticate performs the 3-way authentication handshake between the trader
@@ -99,6 +99,6 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 			"received")
 
 	case <-s.quit:
-		return ErrClientShutdown
+		return ErrAuthCanceled
 	}
 }
