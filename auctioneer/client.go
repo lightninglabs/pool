@@ -989,11 +989,10 @@ func (c *Client) HandleServerShutdown(err error) error {
 	// which requires access to the lock as well.
 	c.streamMutex.Lock()
 	err = c.connectServerStream(c.cfg.MinBackoff, reconnectRetries)
+	c.streamMutex.Unlock()
 	if err != nil {
-		c.streamMutex.Unlock()
 		return err
 	}
-	c.streamMutex.Unlock()
 
 	// With the connection re-established, check whether we need to mark our
 	// pending batch as finalized, or if we need to remove it due to the
