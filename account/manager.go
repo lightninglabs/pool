@@ -16,6 +16,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcutil/txsort"
 	"github.com/btcsuite/btcwallet/wallet/txrules"
+	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account/watcher"
 	"github.com/lightninglabs/pool/poolscript"
@@ -112,6 +113,10 @@ type ManagerConfig struct {
 	// TxFeeEstimator is an estimator that can calculate the total on-chain
 	// fees to send to an account output.
 	TxFeeEstimator TxFeeEstimator
+
+	// TxLabelPrefix is set, then all transactions the account manager
+	// makes will use this string as a prefix for added transaction labels.
+	TxLabelPrefix string
 }
 
 // Manager is responsible for the management of accounts on-chain.
@@ -391,7 +396,7 @@ func (m *Manager) WatchMatchedAccounts(ctx context.Context,
 // resumeAccount performs different operations based on the account's state.
 // This method serves as a way to consolidate the logic of resuming accounts on
 // startup and during normal operation.
-func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
+func (m Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	onRestart bool, onRecovery bool, fundingConfTarget uint32) error {
 
 	accountOutput, err := account.Output()
@@ -460,9 +465,17 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 				return err
 			}
 
+			// If we have a label prefix, then we'll apply that now
+			// and also attach some additional meta data.
+			acctKey := account.TraderKey.PubKey.SerializeCompressed()
+			contextLabel := fmt.Sprintf(" poold -- "+
+				"AccountCreation(acct_key=%x)", acctKey)
+			label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
+
 			// TODO(wilmer): Expose manual controls to bump fees.
 			tx, err := m.cfg.Wallet.SendOutputs(
 				ctx, []*wire.TxOut{accountOutput}, feeSatPerKw,
+				label,
 			)
 			if err != nil {
 				return err
@@ -517,7 +530,15 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 					"transaction %v: %v",
 					account.OutPoint.Hash, err)
 			}
-			err = m.cfg.Wallet.PublishTransaction(ctx, accountTx)
+
+			acctKey := account.TraderKey.PubKey.SerializeCompressed()
+			contextLabel := fmt.Sprintf(" poold -- "+
+				"AccountCreation(acct_key=%x)", acctKey)
+			label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
+
+			err = m.cfg.Wallet.PublishTransaction(
+				ctx, accountTx, label,
+			)
 			if err != nil {
 				return err
 			}
@@ -628,7 +649,14 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	// transaction to confirm so that we can transition the account to its
 	// final state.
 	case StatePendingClosed:
-		err := m.cfg.Wallet.PublishTransaction(ctx, account.LatestTx)
+		acctKey := account.TraderKey.PubKey.SerializeCompressed()
+		contextLabel := fmt.Sprintf(" poold -- "+
+			"AccountClosure(acct_key=%x)", acctKey)
+		label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
+
+		err := m.cfg.Wallet.PublishTransaction(
+			ctx, account.LatestTx, label,
+		)
 		if err != nil {
 			return err
 		}
@@ -1227,7 +1255,17 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 		spendPkg.tx.TxIn[spendPkg.accountInputIdx].Witness = witness
 	}
 
-	if err := m.cfg.Wallet.PublishTransaction(ctx, spendPkg.tx); err != nil {
+	// As this is a generic account modification, we'll add some additional
+	// information to make accounting for this transaction a bit easier.
+	deposit := prevAccountState.Value < account.Value
+	acctKey := account.TraderKey.PubKey.SerializeCompressed()
+	contextLabel := fmt.Sprintf(" poold -- AccountModification(acct_key=%x, "+
+		"expiry=%v, deposit=%v, is_close=%v)", acctKey,
+		witnessType == expiryWitness, deposit, isClose)
+
+	label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
+
+	if err := m.cfg.Wallet.PublishTransaction(ctx, spendPkg.tx, label); err != nil {
 		return nil, nil, err
 	}
 
@@ -1798,4 +1836,30 @@ func NumConfsForValue(value, maxAccountValue btcutil.Amount) uint32 {
 		confs = maxConfs
 	}
 	return uint32(confs)
+}
+
+// makeTxnLabel makes a transaction label for a given account given a static
+// label prefix and a context-specific label.
+func makeTxnLabel(labelPrefix, contextLabel string) string {
+	var label string
+
+	// If we have a label prefix, then we'll apply that now and leave a space
+	// at the end as well to separate it from the contextLabel.
+	if labelPrefix != "" {
+		label += labelPrefix + " "
+	}
+
+	label += contextLabel
+
+	// If after applying our context label, the label is too long (exceeds
+	// the 500 char limit), we'll truncate the label to ensure we continue
+	// operation, and send a warning message to the user.
+	if len(label) > wtxmgr.TxLabelLimit {
+		log.Warnf("label=%v is too long (size=%v, max_size=%v)",
+			label, len(label), wtxmgr.TxLabelLimit)
+
+		label = label[:wtxmgr.TxLabelLimit]
+	}
+
+	return label
 }

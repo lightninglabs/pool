@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,7 +37,7 @@ var (
 
 	// defaultFeeExpr is a fee expression noting that the minimum fee rate
 	// should be used for a wallet output.
-	defaultFeeExpr = &OutputWithFee{
+	defaultFeeExpr = OutputWithFee{
 		FeeRate: chainfee.FeePerKwFloor,
 	}
 )
@@ -487,7 +488,8 @@ func TestNewAccountHappyFlow(t *testing.T) {
 		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
 	)
 
-	h.closeAccount(account, defaultFeeExpr, bestHeight+1)
+	expr := defaultFeeExpr
+	h.closeAccount(account, &expr, bestHeight+1)
 }
 
 // TestResumeAccountAfterRestart ensures we're able to properly create a new
@@ -907,7 +909,8 @@ func TestAccountWithdrawal(t *testing.T) {
 
 	// Finally, close the account to ensure we can process another spend
 	// after the withdrawal.
-	_ = h.closeAccount(account, defaultFeeExpr, bestHeight)
+	expr := defaultFeeExpr
+	_ = h.closeAccount(account, &expr, bestHeight)
 }
 
 // TestAccountDeposit ensures that we can process an account deposit
@@ -1002,7 +1005,8 @@ func TestAccountDeposit(t *testing.T) {
 
 	// Finally, close the account to ensure we can process another spend
 	// after the withdrawal.
-	_ = h.closeAccount(account, defaultFeeExpr, bestHeight)
+	expr := defaultFeeExpr
+	_ = h.closeAccount(account, &expr, bestHeight)
 }
 
 // TestAccountConsecutiveBatches ensures that we can process an account update
@@ -1127,4 +1131,53 @@ func TestAccountUpdateSubscriptionOnRestart(t *testing.T) {
 
 	// It should now be subscribed since it's eligible for batch execution.
 	h.assertAccountSubscribed(account.TraderKey.PubKey)
+}
+
+// TestMakeTxnLabel tests that the label will be formatted properly, and also
+// truncated if needed.
+func TestMakeTxnLabel(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		prefix       string
+		labelContext string
+
+		label string
+	}{
+		// Normal case, prefix present, should add a space.
+		{
+			prefix:       "ok",
+			labelContext: "important stuff",
+			label:        "ok important stuff",
+		},
+
+		// No prefix, should be no leading space.
+		{
+			prefix:       "",
+			labelContext: "important stuff",
+			label:        "important stuff",
+		},
+
+		// No prefix, prefix itself is so long the context can't fit,
+		// should be truncated.
+		{
+			prefix:       strings.Repeat("o", 500),
+			labelContext: "will be left off",
+			label:        strings.Repeat("o", 500),
+		},
+
+		// Prefix itself is too long, it'll be truncated as well.
+		{
+			prefix:       strings.Repeat("o", 501),
+			labelContext: "will be left off",
+			label:        strings.Repeat("o", 500),
+		},
+	}
+	for _, testCase := range testCases {
+		genLabel := makeTxnLabel(
+			testCase.prefix, testCase.labelContext,
+		)
+
+		require.Equal(t, genLabel, testCase.label)
+	}
 }

@@ -111,6 +111,7 @@ func newRPCServer(server *Server) *rpcServer {
 			ChainNotifier:  lnd.ChainNotifier,
 			TxSource:       lnd.Client,
 			TxFeeEstimator: lnd.Client,
+			TxLabelPrefix:  server.cfg.TxLabelPrefix,
 		}),
 		orderManager: order.NewManager(&order.ManagerConfig{
 			Store:     server.db,

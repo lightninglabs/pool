@@ -112,6 +112,8 @@ type Config struct {
 	Profile  string `long:"profile" description:"Enable HTTP profiling on given port -- NOTE port must be between 1024 and 65535"`
 	FakeAuth bool   `long:"fakeauth" description:"Disable LSAT authentication and instead use a fake LSAT ID to identify. For testing only, cannot be set on mainnet."`
 
+	TxLabelPrefix string `long:"txlabelprefix" description:"If set, then every transaction poold makes will be created with a label that has this string as a prefix."`
+
 	Lnd *LndConfig `group:"lnd" namespace:"lnd"`
 
 	// RPCListener is a network listener that can be set if poold should be
