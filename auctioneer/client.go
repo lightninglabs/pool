@@ -746,14 +746,13 @@ func (c *Client) SendAuctionMessage(msg *poolrpc.ClientAuctionMessage) error {
 // wait blocks for a given amount of time but returns immediately if the client
 // is shutting down.
 func (c *Client) wait(backoff time.Duration) error {
-	if backoff > 0 {
-		select {
-		case <-time.After(backoff):
-		case <-c.quit:
-			return ErrClientShutdown
-		}
+	select {
+	case <-time.After(backoff):
+		return nil
+
+	case <-c.quit:
+		return ErrClientShutdown
 	}
-	return nil
 }
 
 // connectServerStream opens the initial connection to the server for the stream
@@ -769,9 +768,11 @@ func (c *Client) connectServerStream(initialBackoff time.Duration,
 	)
 	for i := 0; i < numRetries; i++ {
 		// Wait before connecting in case this is a reconnect trial.
-		err = c.wait(backoff)
-		if err != nil {
-			return err
+		if backoff != 0 {
+			err = c.wait(backoff)
+			if err != nil {
+				return err
+			}
 		}
 
 		// Try connecting by querying a "cheap" RPC that the server can
