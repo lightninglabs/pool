@@ -97,6 +97,7 @@ type Client struct {
 	stopped uint32
 
 	StreamErrChan  chan error
+	errChanSwitch  *ErrChanSwitch
 	FromServerChan chan *poolrpc.ServerAuctionMessage
 
 	serverConn *grpc.ClientConn
@@ -120,10 +121,13 @@ func NewClient(cfg *Config) (*Client, error) {
 		return nil, err
 	}
 
+	mainErrChan := make(chan error)
+	errChanSwitch := NewErrChanSwitch(mainErrChan)
 	return &Client{
 		cfg:             cfg,
 		FromServerChan:  make(chan *poolrpc.ServerAuctionMessage),
-		StreamErrChan:   make(chan error),
+		StreamErrChan:   mainErrChan,
+		errChanSwitch:   errChanSwitch,
 		quit:            make(chan struct{}),
 		subscribedAccts: make(map[[33]byte]*acctSubscription),
 	}, nil
@@ -143,6 +147,8 @@ func (c *Client) Start() error {
 
 	c.serverConn = serverConn
 	c.client = poolrpc.NewChannelAuctioneerClient(serverConn)
+
+	c.errChanSwitch.Start()
 
 	return nil
 }
@@ -193,6 +199,7 @@ func (c *Client) Stop() error {
 	}
 	c.wg.Wait()
 	close(c.FromServerChan)
+	c.errChanSwitch.Stop()
 	return c.serverConn.Close()
 }
 
@@ -472,6 +479,14 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		}
 	}
 
+	// For the duration this subscription is active, we need to redirect any
+	// errors sent from the auctioneer to a different channel so the
+	// subscription can react to it. Once we're done, we restore the
+	// original channel.
+	tempErrChan := make(chan error)
+	c.errChanSwitch.Divert(tempErrChan)
+	defer c.errChanSwitch.Restore()
+
 	// Before we can expect to receive any updates, we need to perform the
 	// 3-way authentication handshake.
 	sub = &acctSubscription{
@@ -479,7 +494,7 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		sendMsg: c.SendAuctionMessage,
 		signer:  c.cfg.Signer,
 		msgChan: make(chan *poolrpc.ServerAuctionMessage),
-		errChan: make(chan error),
+		errChan: tempErrChan,
 		quit:    make(chan struct{}),
 	}
 	c.subscribedAccts[acctPubKey] = sub
@@ -542,6 +557,10 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 			return nil, false, fmt.Errorf("unknown message "+
 				"received: %v", srvMsg)
 		}
+
+	case err := <-tempErrChan:
+		return nil, false, fmt.Errorf("error during authentication "+
+			"when waiting for final step: %v", err)
 
 	case <-sub.quit:
 		return nil, false, ErrAuthCanceled
@@ -822,7 +841,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		// error, usually "transport is closing".
 		case err == io.EOF:
 			select {
-			case c.StreamErrChan <- ErrServerShutdown:
+			case c.errChanSwitch.ErrChan() <- ErrServerShutdown:
 			case <-c.quit:
 			}
 			return
@@ -840,7 +859,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 
 			// Any other error we want to report back.
 			select {
-			case c.StreamErrChan <- err:
+			case c.errChanSwitch.ErrChan() <- err:
 			case <-c.quit:
 			}
 			return
@@ -865,8 +884,8 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 				}
 			}
 			if acctSub == nil {
-				c.StreamErrChan <- fmt.Errorf("no sub"+
-					"scription found for commit hash %x",
+				c.errChanSwitch.ErrChan() <- fmt.Errorf("no "+
+					"subscription found for commit hash %x",
 					commitHash)
 				return
 			}
@@ -883,7 +902,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		case *poolrpc.ServerAuctionMessage_Success:
 			err := c.sendToSubscription(t.Success.TraderKey, msg)
 			if err != nil {
-				c.StreamErrChan <- err
+				c.errChanSwitch.ErrChan() <- err
 				return
 			}
 
@@ -893,7 +912,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		case *poolrpc.ServerAuctionMessage_Account:
 			err := c.sendToSubscription(t.Account.TraderKey, msg)
 			if err != nil {
-				c.StreamErrChan <- err
+				c.errChanSwitch.ErrChan() <- err
 				return
 			}
 
@@ -910,7 +929,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 				err := c.HandleServerShutdown(nil)
 				if err != nil {
 					select {
-					case c.StreamErrChan <- err:
+					case c.errChanSwitch.ErrChan() <- err:
 					case <-c.quit:
 					}
 				}
@@ -926,7 +945,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 					t.Error.TraderKey, msg,
 				)
 				if err != nil {
-					c.StreamErrChan <- err
+					c.errChanSwitch.ErrChan() <- err
 					return
 				}
 
