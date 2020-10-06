@@ -396,7 +396,7 @@ func (m *Manager) WatchMatchedAccounts(ctx context.Context,
 // resumeAccount performs different operations based on the account's state.
 // This method serves as a way to consolidate the logic of resuming accounts on
 // startup and during normal operation.
-func (m Manager) resumeAccount(ctx context.Context, account *Account, // nolint
+func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	onRestart bool, onRecovery bool, fundingConfTarget uint32) error {
 
 	accountOutput, err := account.Output()
