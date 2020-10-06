@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	defaultAskMaxDuration = 210000
-	defaultBidMinDuration = 144
+	defaultAskMaxDuration = 2016
+	defaultBidMinDuration = 2016
 )
 
 // Default max batch fee rate to 100 sat/vbyte.
@@ -182,7 +182,7 @@ var ordersSubmitAskCommand = cli.Command{
 	Name:  "ask",
 	Usage: "offer channel liquidity",
 	ArgsUsage: "amt acct_key [--rate_fixed=R] [--max_batch_fee_rate=F] " +
-		"[--max_duration_blocks=M]",
+		"[--lease_duration_blocks=M]",
 	Description: `
 	Create an offer to provide inbound liquidity to an auction participant
 	by opening a channel to them for a certain time.`,
@@ -203,8 +203,8 @@ var ordersSubmitAskCommand = cli.Command{
 				"liquidity from",
 		},
 		cli.Uint64Flag{
-			Name: "max_duration_blocks",
-			Usage: "the maximum number of blocks that the " +
+			Name: "lease_duration_blocks",
+			Usage: "the number of blocks that the " +
 				"liquidity should be offered for",
 			Value: defaultAskMaxDuration,
 		},
@@ -224,11 +224,11 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 	}
 
 	ask := &poolrpc.Ask{
-		MaxDurationBlocks: uint32(ctx.Uint64("max_duration_blocks")),
-		Version:           uint32(order.VersionDefault),
+		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
+		Version:             uint32(order.VersionDefault),
 	}
 
-	params, err := parseCommonParams(ctx, ask.MaxDurationBlocks)
+	params, err := parseCommonParams(ctx, ask.LeaseDurationBlocks)
 	if err != nil {
 		return fmt.Errorf("unable to parse order params: %v", err)
 	}
@@ -248,7 +248,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 		if err := printOrderDetails(
 			client, btcutil.Amount(ask.Details.Amt),
 			order.FixedRatePremium(ask.Details.RateFixed),
-			ask.MaxDurationBlocks,
+			ask.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
 				ask.Details.MaxBatchFeeRateSatPerKw,
 			), true,
@@ -324,7 +324,7 @@ var ordersSubmitBidCommand = cli.Command{
 	Name:  "bid",
 	Usage: "obtain channel liquidity",
 	ArgsUsage: "amt acct_key [--rate_fixed=R] [--max_batch_fee_rate=F] " +
-		"[--min_duration_blocks=M]",
+		"[--lease_duration_blocks=M]",
 	Description: `
 	Place an offer for acquiring inbound liquidity by lending
 	funding capacity from another participant in the order book.`,
@@ -345,8 +345,8 @@ var ordersSubmitBidCommand = cli.Command{
 				"fees with",
 		},
 		cli.Uint64Flag{
-			Name: "min_duration_blocks",
-			Usage: "the minimum number of blocks that the " +
+			Name: "lease_duration_blocks",
+			Usage: "the number of blocks that the " +
 				"liquidity should be provided for",
 			Value: defaultBidMinDuration,
 		},
@@ -366,11 +366,11 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 	}
 
 	bid := &poolrpc.Bid{
-		MinDurationBlocks: uint32(ctx.Uint64("min_duration_blocks")),
-		Version:           uint32(order.VersionDefault),
+		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
+		Version:             uint32(order.VersionDefault),
 	}
 
-	params, err := parseCommonParams(ctx, bid.MinDurationBlocks)
+	params, err := parseCommonParams(ctx, bid.LeaseDurationBlocks)
 	if err != nil {
 		return fmt.Errorf("unable to parse order params: %v", err)
 	}
@@ -390,7 +390,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 		if err := printOrderDetails(
 			client, btcutil.Amount(bid.Details.Amt),
 			order.FixedRatePremium(bid.Details.RateFixed),
-			bid.MinDurationBlocks,
+			bid.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
 				bid.Details.MaxBatchFeeRateSatPerKw,
 			), false,

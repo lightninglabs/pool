@@ -271,6 +271,10 @@ type Kit struct {
 
 	// AcctKey is key of the account the order belongs to.
 	AcctKey [33]byte
+
+	// LeaseDuration identifies how long this order wishes to acquire or
+	// lease out capital in the Lightning Network for.
+	LeaseDuration uint32
 }
 
 // Nonce is the unique identifier of each order and MUST be created by hashing a
@@ -316,10 +320,6 @@ func NewKit(nonce Nonce) *Kit {
 type Ask struct {
 	// Kit contains all the common order parameters.
 	Kit
-
-	// MaxDuration is the maximum number of blocks the liquidity provider is
-	// willing to provide the channel funds for.
-	MaxDuration uint32
 }
 
 // Type returns the order type.
@@ -343,7 +343,7 @@ func (a *Ask) Digest() ([sha256.Size]byte, error) {
 	case VersionDefault:
 		err := lnwire.WriteElements(
 			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
-			a.Amt, a.MaxDuration, uint64(a.MaxBatchFeeRate),
+			a.Amt, a.LeaseDuration, uint64(a.MaxBatchFeeRate),
 		)
 		if err != nil {
 			return result, err
@@ -405,12 +405,9 @@ func (a *Ask) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
 	// rate, resulting in the smallest gain for the asker.
 	clearingPrice := FixedRatePremium(a.FixedRate)
 
-	// The premium paid to the asker is at its lowest when the min duration
-	// matched is only 144 block.
-	minDuration := uint32(MinimumOrderDurationBlocks)
 	return reservedValue(a, func(amt btcutil.Amount) btcutil.Amount {
 		delta, _, _ := makerDelta(
-			feeSchedule, clearingPrice, amt, minDuration,
+			feeSchedule, clearingPrice, amt, a.LeaseDuration,
 		)
 		return delta
 	})
@@ -422,10 +419,6 @@ func (a *Ask) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
 type Bid struct {
 	// Kit contains all the common order parameters.
 	Kit
-
-	// MinDuration is the minimal duration the channel resulting from this
-	// bid should be kept open, expressed in blocks.
-	MinDuration uint32
 }
 
 // Type returns the order type.
@@ -449,7 +442,7 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 	case VersionDefault:
 		err := lnwire.WriteElements(
 			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
-			b.Amt, b.MinDuration, uint64(b.MaxBatchFeeRate),
+			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
 		)
 		if err != nil {
 			return result, err
@@ -464,17 +457,14 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 // ReservedValue returns the maximum value that could be deducted from a single
 // account if the bid is is matched under the worst case fee conditions.
 func (b *Bid) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
-	// For a bid, the final clearing price is never higher
-	// that the bid's fixed rate, resulting in the highest possible
-	// premium paid bu the bidder.
+	// For a bid, the final clearing price is never higher that the bid's
+	// fixed rate, resulting in the highest possible premium paid bu the
+	// bidder.
 	clearingPrice := FixedRatePremium(b.FixedRate)
 
-	// The bidder always pay a premium based on the
-	// bid's min duration.
-	minDuration := b.MinDuration
 	return reservedValue(b, func(amt btcutil.Amount) btcutil.Amount {
 		delta, _, _ := takerDelta(
-			feeSchedule, clearingPrice, amt, minDuration,
+			feeSchedule, clearingPrice, amt, b.LeaseDuration,
 		)
 		return delta
 	})

@@ -140,6 +140,16 @@ service Trader {
         };
     };
 
+    /* pool: `auction leasedurations`
+    LeaseDurations returns the current set of valid lease duration in the
+    market as is, and also information w.r.t if the market is currently active.
+    */
+    rpc LeaseDurations(LeaseDurationRequest) returns (LeaseDurationResponse) {
+        option (google.api.http) = {
+            get: "/v1/pool/lease_durations"
+        };
+    }
+
     /* pool: `auction snapshot`
     BatchSnapshot returns the snapshot of a past batch identified by its ID.
     */
@@ -511,10 +521,10 @@ message Bid {
     Order details = 1;
 
     /*
-    Required minimum number of blocks that a channel opened as a result of this
-    bid should be kept open.
+    Required number of blocks that a channel opened as a result of this bid
+    should be kept open.
     */
-    uint32 min_duration_blocks = 2;
+    uint32 lease_duration_blocks = 2;
 
     /*
     The version of the order format that is used. Will be increased once new
@@ -530,10 +540,10 @@ message Ask {
     Order details = 1;
 
     /*
-    The maximum number of blocks the liquidity provider is willing to provide
-    the channel funds for.
+    The number of blocks the liquidity provider is willing to provide the
+    channel funds for.
     */
-    uint32 max_duration_blocks = 2;
+    uint32 lease_duration_blocks = 2;
 
     /*
     The version of the order format that is used. Will be increased once new
@@ -812,4 +822,11 @@ message LsatToken {
     file name of the token where it's stored on the file system.
     */
     string storage_name = 8;
+}
+
+message LeaseDurationRequest {
+}
+
+message LeaseDurationResponse {
+    map<uint32, bool> lease_durations = 1;
 }

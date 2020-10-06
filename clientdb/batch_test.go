@@ -341,13 +341,11 @@ func TestPersistBatchResult(t *testing.T) {
 				TxOut: []*wire.TxOut{accountOutput},
 			}
 			ask := &order.Ask{
-				Kit:         *dummyOrder(900000),
-				MaxDuration: 1337,
+				Kit: *dummyOrder(900000, 1337),
 			}
 			ask.State = order.StateSubmitted
 			bid := &order.Bid{
-				Kit:         *dummyOrder(900000),
-				MinDuration: 1337,
+				Kit: *dummyOrder(900000, 1337),
 			}
 			bid.State = order.StateSubmitted
 

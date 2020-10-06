@@ -28,6 +28,12 @@ var testAccount = &account.Account{
 var testNonce1 = order.Nonce([32]byte{1, 1, 1})
 var testNonce2 = order.Nonce([32]byte{2, 2, 2})
 
+func newOrderKit(nonce order.Nonce, duration uint32) *order.Kit {
+	kit := order.NewKit(nonce)
+	kit.LeaseDuration = duration
+	return kit
+}
+
 var testSnapshot = &LocalBatchSnapshot{
 	Version:        5,
 	BatchID:        testBatchID,
@@ -40,12 +46,10 @@ var testSnapshot = &LocalBatchSnapshot{
 	},
 	Orders: map[order.Nonce]order.Order{
 		testNonce1: &order.Bid{
-			Kit:         *order.NewKit(testNonce1),
-			MinDuration: 144,
+			Kit: *newOrderKit(testNonce1, 144),
 		},
 		testNonce2: &order.Ask{
-			Kit:         *order.NewKit(testNonce2),
-			MaxDuration: 1024,
+			Kit: *newOrderKit(testNonce2, 1024),
 		},
 	},
 
@@ -53,8 +57,7 @@ var testSnapshot = &LocalBatchSnapshot{
 		testNonce1: {
 			{
 				Order: &order.Ask{
-					Kit:         *dummyOrder(50000),
-					MaxDuration: 2048,
+					Kit: *dummyOrder(50000, 2048),
 				},
 				MultiSigKey: [33]byte{1, 2, 3},
 				NodeKey:     [33]byte{1, 2, 3},
@@ -68,8 +71,7 @@ var testSnapshot = &LocalBatchSnapshot{
 			},
 			{
 				Order: &order.Ask{
-					Kit:         *dummyOrder(50000),
-					MaxDuration: 2048,
+					Kit: *dummyOrder(50000, 2048),
 				},
 				MultiSigKey: [33]byte{2, 2, 3},
 				NodeKey:     [33]byte{2, 2, 3},
@@ -86,8 +88,7 @@ var testSnapshot = &LocalBatchSnapshot{
 		testNonce2: {
 			{
 				Order: &order.Bid{
-					Kit:         *dummyOrder(50000),
-					MinDuration: 144,
+					Kit: *dummyOrder(50000, 144),
 				},
 				MultiSigKey: [33]byte{1, 2, 3},
 				NodeKey:     [33]byte{1, 2, 3},
@@ -102,8 +103,7 @@ var testSnapshot = &LocalBatchSnapshot{
 			},
 			{
 				Order: &order.Bid{
-					Kit:         *dummyOrder(50000),
-					MinDuration: 2048,
+					Kit: *dummyOrder(50000, 2048),
 				},
 				MultiSigKey: [33]byte{2, 2, 3},
 				NodeKey:     [33]byte{2, 2, 3},

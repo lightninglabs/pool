@@ -266,8 +266,8 @@ func TestFundingManager(t *testing.T) {
 			Units:            4,
 			UnitsUnfulfilled: 4,
 			FixedRate:        10000,
+			LeaseDuration:    2500,
 		}),
-		MaxDuration: 2500,
 	}
 	err := h.db.SubmitOrder(ask)
 	require.NoError(t, err)
@@ -280,8 +280,8 @@ func TestFundingManager(t *testing.T) {
 			Units:            4,
 			UnitsUnfulfilled: 4,
 			FixedRate:        10000,
+			LeaseDuration:    2500,
 		}),
-		MinDuration: 2500,
 	}
 	err = h.db.SubmitOrder(bid)
 	require.NoError(t, err)
@@ -592,5 +592,6 @@ func newKitFromTemplate(nonce order.Nonce, tpl *order.Kit) order.Kit {
 	kit.MultiSigKeyLocator = tpl.MultiSigKeyLocator
 	kit.MaxBatchFeeRate = tpl.MaxBatchFeeRate
 	kit.AcctKey = tpl.AcctKey
+	kit.LeaseDuration = tpl.LeaseDuration
 	return *kit
 }

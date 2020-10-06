@@ -23,8 +23,7 @@ func TestSubmitOrder(t *testing.T) {
 
 	// Store a dummy order and see if we can retrieve it again.
 	o := &order.Bid{
-		Kit:         *dummyOrder(500000),
-		MinDuration: 1337,
+		Kit: *dummyOrder(500000, 1337),
 	}
 	err := store.SubmitOrder(o)
 	if err != nil {
@@ -94,16 +93,14 @@ func TestUpdateOrders(t *testing.T) {
 
 	// Store two dummy orders that we are going to update later.
 	o1 := &order.Bid{
-		Kit:         *dummyOrder(500000),
-		MinDuration: 1337,
+		Kit: *dummyOrder(500000, 1337),
 	}
 	err := store.SubmitOrder(o1)
 	if err != nil {
 		t.Fatalf("unable to store order: %v", err)
 	}
 	o2 := &order.Ask{
-		Kit:         *dummyOrder(500000),
-		MaxDuration: 1337,
+		Kit: *dummyOrder(500000, 1337),
 	}
 	err = store.SubmitOrder(o2)
 	if err != nil {
@@ -152,7 +149,7 @@ func TestUpdateOrders(t *testing.T) {
 	}
 }
 
-func dummyOrder(amt btcutil.Amount) *order.Kit {
+func dummyOrder(amt btcutil.Amount, leaseDuration uint32) *order.Kit {
 	var testPreimage lntypes.Preimage
 	if _, err := rand.Read(testPreimage[:]); err != nil {
 		panic(fmt.Sprintf("could not create private key: %v", err))
@@ -169,5 +166,6 @@ func dummyOrder(amt btcutil.Amount) *order.Kit {
 	kit.MaxBatchFeeRate = chainfee.FeePerKwFloor
 	copy(kit.AcctKey[:], testTraderKey.SerializeCompressed())
 	kit.UnitsUnfulfilled = 741
+	kit.LeaseDuration = leaseDuration
 	return kit
 }

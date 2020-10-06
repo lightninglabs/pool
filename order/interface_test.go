@@ -26,8 +26,8 @@ func TestOrderReservedValue(t *testing.T) {
 					UnitsUnfulfilled: 1,
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
 				},
-				MinDuration: 144,
 			},
 		},
 		{
@@ -38,8 +38,8 @@ func TestOrderReservedValue(t *testing.T) {
 					UnitsUnfulfilled: 1,
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
 				},
-				MaxDuration: 144,
 			},
 		},
 		{
@@ -50,8 +50,8 @@ func TestOrderReservedValue(t *testing.T) {
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
 				},
-				MinDuration: 144,
 			},
 		},
 		{
@@ -62,8 +62,8 @@ func TestOrderReservedValue(t *testing.T) {
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
 				},
-				MaxDuration: 144,
 			},
 		},
 		{
@@ -74,8 +74,8 @@ func TestOrderReservedValue(t *testing.T) {
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
 				},
-				MaxDuration: 144,
 			},
 		},
 		{
@@ -86,8 +86,8 @@ func TestOrderReservedValue(t *testing.T) {
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
 				},
-				MinDuration: 144,
 			},
 		},
 		{
@@ -98,8 +98,8 @@ func TestOrderReservedValue(t *testing.T) {
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
 				},
-				MinDuration: 144,
 			},
 		},
 		{
@@ -110,8 +110,8 @@ func TestOrderReservedValue(t *testing.T) {
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
 				},
-				MaxDuration: 144,
 			},
 		},
 		{
@@ -122,8 +122,8 @@ func TestOrderReservedValue(t *testing.T) {
 					UnitsUnfulfilled: 10,
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
 				},
-				MaxDuration: 144,
 			},
 		},
 		{
@@ -134,8 +134,8 @@ func TestOrderReservedValue(t *testing.T) {
 					UnitsUnfulfilled: 10,
 					FixedRate:        10_000_000,
 					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
 				},
-				MaxDuration: 144,
 			},
 		},
 	}
@@ -159,7 +159,7 @@ func TestOrderReservedValue(t *testing.T) {
 			amt := btcutil.Amount(BaseSupplyUnit)
 			for i := 0; i < numBlocks; i++ {
 				lumpSum := FixedRatePremium(o.FixedRate).
-					LumpSumPremium(amt, o.MinDuration)
+					LumpSumPremium(amt, o.LeaseDuration)
 				exeFee := executionFee(amt, simpleFeeSchedule)
 				chainFee := EstimateTraderFee(
 					1, o.MaxBatchFeeRate,

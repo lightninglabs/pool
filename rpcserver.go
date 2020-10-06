@@ -1073,24 +1073,28 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	switch requestOrder := req.Details.(type) {
 	case *poolrpc.SubmitOrderRequest_Ask:
 		a := requestOrder.Ask
-		kit, err := order.ParseRPCOrder(a.Version, a.Details)
+		kit, err := order.ParseRPCOrder(
+			a.Version, a.LeaseDurationBlocks, a.Details,
+		)
 		if err != nil {
 			return nil, err
 		}
+
 		o = &order.Ask{
-			Kit:         *kit,
-			MaxDuration: a.MaxDurationBlocks,
+			Kit: *kit,
 		}
 
 	case *poolrpc.SubmitOrderRequest_Bid:
 		b := requestOrder.Bid
-		kit, err := order.ParseRPCOrder(b.Version, b.Details)
+		kit, err := order.ParseRPCOrder(
+			b.Version, b.LeaseDurationBlocks, b.Details,
+		)
 		if err != nil {
 			return nil, err
 		}
+
 		o = &order.Bid{
-			Kit:         *kit,
-			MinDuration: b.MinDurationBlocks,
+			Kit: *kit,
 		}
 
 	default:
@@ -1137,6 +1141,15 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	if err != nil {
 		return nil, fmt.Errorf("could not query auctioneer terms: %v",
 			err)
+	}
+
+	// If the market isn't currently accepting orders for this particular
+	// lease duration, then we'll exit here as the order will be rejected.
+	leaseDuration := o.Details().LeaseDuration
+	if _, ok := terms.LeaseDurations[leaseDuration]; !ok {
+		return nil, fmt.Errorf("invalid channel lease duration %v "+
+			"blocks, active durations are: %v",
+			leaseDuration, terms.LeaseDurations)
 	}
 
 	// Collect all the order data and sign it before sending it to the
@@ -1271,17 +1284,17 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 		switch o := dbOrder.(type) {
 		case *order.Ask:
 			rpcAsk := &poolrpc.Ask{
-				Details:           details,
-				MaxDurationBlocks: o.MaxDuration,
-				Version:           uint32(o.Version),
+				Details:             details,
+				LeaseDurationBlocks: dbDetails.LeaseDuration,
+				Version:             uint32(o.Version),
 			}
 			asks = append(asks, rpcAsk)
 
 		case *order.Bid:
 			rpcBid := &poolrpc.Bid{
-				Details:           details,
-				MinDurationBlocks: o.MinDuration,
-				Version:           uint32(o.Version),
+				Details:             details,
+				LeaseDurationBlocks: dbDetails.LeaseDuration,
+				Version:             uint32(o.Version),
 			}
 			bids = append(bids, rpcBid)
 
@@ -1702,9 +1715,9 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 				// specified by the bid order.
 				var bidDuration uint32
 				if ourOrder.Type() == order.TypeBid {
-					bidDuration = ourOrder.(*order.Bid).MinDuration
+					bidDuration = ourOrder.(*order.Bid).LeaseDuration
 				} else {
-					bidDuration = match.Order.(*order.Bid).MinDuration
+					bidDuration = match.Order.(*order.Bid).LeaseDuration
 				}
 
 				// Calculate the premium paid/received to/from
@@ -1789,6 +1802,22 @@ func (s *rpcServer) BatchSnapshot(ctx context.Context,
 	var batchID order.BatchID
 	copy(batchID[:], req.BatchId)
 	return s.auctioneer.BatchSnapshot(ctx, batchID)
+}
+
+// LeaseDurations returns the current set of valid lease duration in the
+// market as is, and also information w.r.t if the market is currently active.
+func (s *rpcServer) LeaseDurations(ctx context.Context,
+	_ *poolrpc.LeaseDurationRequest) (*poolrpc.LeaseDurationResponse, error) {
+
+	terms, err := s.auctioneer.Terms(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
+			err)
+	}
+
+	return &poolrpc.LeaseDurationResponse{
+		LeaseDurations: terms.LeaseDurations,
+	}, nil
 }
 
 // rpcOrderStateToDBState maps the order state as received over the RPC

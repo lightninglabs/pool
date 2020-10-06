@@ -22,14 +22,12 @@ func TestOrderEvents(t *testing.T) {
 
 	// Store two dummy orders that we are going to update later.
 	o1 := &order.Bid{
-		Kit:         *dummyOrder(500000),
-		MinDuration: 1337,
+		Kit: *dummyOrder(500000, 1337),
 	}
 	err := store.SubmitOrder(o1)
 	require.NoError(t, err)
 	o2 := &order.Ask{
-		Kit:         *dummyOrder(500000),
-		MaxDuration: 1337,
+		Kit: *dummyOrder(500000, 1337),
 	}
 	err = store.SubmitOrder(o2)
 	require.NoError(t, err)

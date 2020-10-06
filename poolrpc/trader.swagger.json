@@ -363,6 +363,29 @@
         ]
       }
     },
+    "/v1/pool/lease_durations": {
+      "get": {
+        "summary": "pool: `auction leasedurations`\nLeaseDurations returns the current set of valid lease duration in the\nmarket as is, and also information w.r.t if the market is currently active.",
+        "operationId": "LeaseDurations",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcLeaseDurationResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/pool/leases": {
       "get": {
         "summary": "pool: `auction leases`\nLeases returns the list of channels that were either purchased or sold by\nthe trader within the auction.",
@@ -598,10 +621,10 @@
           "$ref": "#/definitions/poolrpcOrder",
           "description": "The common fields shared between both ask and bid order types."
         },
-        "max_duration_blocks": {
+        "lease_duration_blocks": {
           "type": "integer",
           "format": "int64",
-          "description": "The maximum number of blocks the liquidity provider is willing to provide\nthe channel funds for."
+          "description": "The number of blocks the liquidity provider is willing to provide the\nchannel funds for."
         },
         "version": {
           "type": "integer",
@@ -618,10 +641,10 @@
           "format": "int64",
           "description": "The version of the order."
         },
-        "max_duration_blocks": {
+        "lease_duration_blocks": {
           "type": "integer",
           "format": "int64",
-          "description": "The longest period of time the channel will survive for."
+          "description": "The period of time the channel will survive for."
         },
         "rate_fixed": {
           "type": "integer",
@@ -692,10 +715,10 @@
           "$ref": "#/definitions/poolrpcOrder",
           "description": "The common fields shared between both ask and bid order types."
         },
-        "min_duration_blocks": {
+        "lease_duration_blocks": {
           "type": "integer",
           "format": "int64",
-          "description": "Required minimum number of blocks that a channel opened as a result of this\nbid should be kept open."
+          "description": "Required number of blocks that a channel opened as a result of this bid\nshould be kept open."
         },
         "version": {
           "type": "integer",
@@ -712,10 +735,10 @@
           "format": "int64",
           "description": "The version of the order."
         },
-        "min_duration_blocks": {
+        "lease_duration_blocks": {
           "type": "integer",
           "format": "int64",
-          "description": "The shortest period of time the matched channel should be allocated for."
+          "description": "The period of time the matched channel should be allocated for."
         },
         "rate_fixed": {
           "type": "integer",
@@ -902,6 +925,18 @@
           "type": "boolean",
           "format": "boolean",
           "description": "Whether this channel was purchased from another trader or not."
+        }
+      }
+    },
+    "poolrpcLeaseDurationResponse": {
+      "type": "object",
+      "properties": {
+        "lease_durations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean",
+            "format": "boolean"
+          }
         }
       }
     },

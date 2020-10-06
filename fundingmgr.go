@@ -119,12 +119,12 @@ func (f *fundingMgr) deriveFundingShim(ourOrder order.Order,
 		bidNonce = ourOrder.Nonce()
 		askNonce = matchedOrder.Order.Nonce()
 
-		thawHeight = ourOrder.(*order.Bid).MinDuration
+		thawHeight = ourOrder.(*order.Bid).LeaseDuration
 	} else {
 		bidNonce = matchedOrder.Order.Nonce()
 		askNonce = ourOrder.Nonce()
 
-		thawHeight = matchedOrder.Order.(*order.Bid).MinDuration
+		thawHeight = matchedOrder.Order.(*order.Bid).LeaseDuration
 	}
 
 	pendingChanID := order.PendingChanKey(

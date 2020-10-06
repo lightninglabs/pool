@@ -364,9 +364,9 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 	switch castOrder := o.(type) {
 	case *order.Ask:
 		serverAsk := &poolrpc.ServerAsk{
-			Details:           details,
-			MaxDurationBlocks: castOrder.MaxDuration,
-			Version:           uint32(castOrder.Version),
+			Details:             details,
+			LeaseDurationBlocks: castOrder.LeaseDuration,
+			Version:             uint32(castOrder.Version),
 		}
 		rpcRequest.Details = &poolrpc.ServerSubmitOrderRequest_Ask{
 			Ask: serverAsk,
@@ -374,9 +374,9 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 
 	case *order.Bid:
 		serverBid := &poolrpc.ServerBid{
-			Details:           details,
-			MinDurationBlocks: castOrder.MinDuration,
-			Version:           uint32(castOrder.Version),
+			Details:             details,
+			LeaseDurationBlocks: castOrder.LeaseDuration,
+			Version:             uint32(castOrder.Version),
 		}
 		rpcRequest.Details = &poolrpc.ServerSubmitOrderRequest_Bid{
 			Bid: serverBid,
@@ -1150,6 +1150,7 @@ func (c *Client) Terms(ctx context.Context) (*terms.AuctioneerTerms, error) {
 		MaxOrderDuration: resp.MaxOrderDurationBlocks,
 		OrderExecBaseFee: btcutil.Amount(resp.ExecutionFee.BaseFee),
 		OrderExecFeeRate: btcutil.Amount(resp.ExecutionFee.FeeRate),
+		LeaseDurations:   resp.LeaseDurations,
 	}, nil
 }
 
