@@ -26,6 +26,7 @@ func TestSubmitOrder(t *testing.T) {
 		Kit:         *dummyOrder(500000, 1337),
 		MinNodeTier: 2,
 	}
+	o.Details().MinUnitsMatch = 10
 	err := store.SubmitOrder(o)
 	if err != nil {
 		t.Fatalf("unable to store order: %v", err)
@@ -97,6 +98,7 @@ func TestUpdateOrders(t *testing.T) {
 		Kit:         *dummyOrder(500000, 1337),
 		MinNodeTier: 3,
 	}
+	o1.Details().MinUnitsMatch = 10
 	err := store.SubmitOrder(o1)
 	if err != nil {
 		t.Fatalf("unable to store order: %v", err)
