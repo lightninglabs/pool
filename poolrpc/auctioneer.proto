@@ -737,10 +737,11 @@ message ServerOrder {
     */
     uint64 amt = 3;
 
+    uint64 min_chan_amt = 4;
+
     // TODO(guggero): implement
-    // bool kill_or_fill = 4;
     // repeated bytes must_fill_pub = 5;
-    reserved 4, 5;
+    reserved 5;
 
     /*
     Order nonce of 32 byte length, acts as unique order identifier.

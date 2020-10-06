@@ -526,6 +526,9 @@ message Order {
     when the verbose flag is set to true in the request.
     */
     repeated OrderEvent events = 11;
+
+    // The minimum number of order units that must be matched per order pair.
+    uint32 min_units_match = 12;
 }
 
 message Bid {
