@@ -82,6 +82,10 @@ var (
 			Entity: "auth",
 			Action: "read",
 		}},
+		"/poolrpc.Trader/LeaseDurations": {{
+			Entity: "auction",
+			Action: "read",
+		}},
 	}
 
 	// allPermissions is the list of all existing permissions that exist
