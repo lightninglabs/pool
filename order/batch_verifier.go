@@ -172,9 +172,10 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 			}
 		}
 
-		// Last check is to make sure our order has not been over
+		// Last check is to make sure our order has not been over/under
 		// filled somehow.
-		if unitsFilled > ourOrder.Details().UnitsUnfulfilled {
+		switch {
+		case unitsFilled > ourOrder.Details().UnitsUnfulfilled:
 			return &MismatchErr{
 				msg: fmt.Sprintf("invalid units to be filled "+
 					"for order %v. currently unfulfilled "+
@@ -183,6 +184,15 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 					ourOrder.Details().UnitsUnfulfilled,
 					unitsFilled,
 				),
+			}
+
+		case unitsFilled < ourOrder.Details().MinUnitsMatch:
+			return &MismatchErr{
+				msg: fmt.Sprintf("invalid units to be filled "+
+					"for order %v. matched %d units, but "+
+					"minimum is %d", ourOrder.Nonce(),
+					unitsFilled,
+					ourOrder.Details().MinUnitsMatch),
 			}
 		}
 	}

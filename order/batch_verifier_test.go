@@ -174,6 +174,16 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
+			name:        "invalid min units match",
+			expectedErr: "units, but minimum is",
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
+				a.MinUnitsMatch = b1.MinUnitsMatch * 100
+				return v.Verify(b)
+			},
+		},
+		{
 			name:        "invalid funding TX fee rate",
 			expectedErr: "server sent unexpected ending balance",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
@@ -334,6 +344,7 @@ func TestBatchVerifier(t *testing.T) {
 				},
 				Units:            4,
 				UnitsUnfulfilled: 4,
+				MinUnitsMatch:    1,
 				AcctKey:          acctIDSmall,
 				FixedRate:        uint32(clearingPrice) / 2,
 				LeaseDuration:    1000,
@@ -346,6 +357,7 @@ func TestBatchVerifier(t *testing.T) {
 				},
 				Units:            2,
 				UnitsUnfulfilled: 2,
+				MinUnitsMatch:    1,
 				AcctKey:          acctIDBig,
 				FixedRate:        uint32(clearingPrice) * 2,
 				// 1000 * (200_000 * 5000 / 1_000_000_000) = 1000 sats premium
@@ -359,6 +371,7 @@ func TestBatchVerifier(t *testing.T) {
 				},
 				Units:            8,
 				UnitsUnfulfilled: 8,
+				MinUnitsMatch:    1,
 				AcctKey:          acctIDBig,
 				FixedRate:        uint32(clearingPrice),
 				// 2000 * (200_000 * 5000 / 1_000_000_000) = 1000 sats premium
@@ -508,6 +521,7 @@ func newKitFromTemplate(nonce Nonce, tpl *Kit) Kit {
 	kit.Amt = tpl.Amt
 	kit.Units = tpl.Units
 	kit.UnitsUnfulfilled = tpl.UnitsUnfulfilled
+	kit.MinUnitsMatch = tpl.MinUnitsMatch
 	kit.MultiSigKeyLocator = tpl.MultiSigKeyLocator
 	kit.MaxBatchFeeRate = tpl.MaxBatchFeeRate
 	kit.AcctKey = tpl.AcctKey
