@@ -253,13 +253,16 @@ func (w *mockWallet) DeriveSharedKey(ctx context.Context,
 	return sharedSecret, nil
 }
 
-func (w *mockWallet) PublishTransaction(ctx context.Context, tx *wire.MsgTx) error {
+func (w *mockWallet) PublishTransaction(ctx context.Context, tx *wire.MsgTx,
+	label string) error {
+
 	w.publishChan <- tx
 	return nil
 }
 
 func (w *mockWallet) SendOutputs(ctx context.Context, outputs []*wire.TxOut,
-	feeRate chainfee.SatPerKWeight) (*wire.MsgTx, error) {
+	feeRate chainfee.SatPerKWeight,
+	label string) (*wire.MsgTx, error) {
 
 	if w.sendOutputs != nil {
 		return w.sendOutputs(ctx, outputs, feeRate)

@@ -95,7 +95,7 @@ func (m *MockWalletKit) NextAddr(context.Context) (btcutil.Address, error) {
 }
 
 func (m *MockWalletKit) PublishTransaction(_ context.Context,
-	tx *wire.MsgTx) error {
+	tx *wire.MsgTx, label string) error {
 
 	m.AddTx(tx)
 	m.TxPublishChannel <- tx
@@ -103,7 +103,7 @@ func (m *MockWalletKit) PublishTransaction(_ context.Context,
 }
 
 func (m *MockWalletKit) SendOutputs(_ context.Context, outputs []*wire.TxOut,
-	_ chainfee.SatPerKWeight) (*wire.MsgTx, error) {
+	_ chainfee.SatPerKWeight, label string) (*wire.MsgTx, error) {
 
 	var inputTxHash chainhash.Hash
 
