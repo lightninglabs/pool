@@ -390,11 +390,11 @@ func reservedValue(o Order,
 	}
 
 	// The situation where the trader needs to pay the largest amount of
-	// fees is when the order gets partially matched by the base supply
-	// unit per batch. This situation results in the most chain and
+	// fees is when the order gets partially matched by its minimum possible
+	// units per batch. This situation results in the most chain and
 	// execution fees possible.
-	minMatchSize := btcutil.Amount(BaseSupplyUnit)
-	maxNumMatches := btcutil.Amount(o.Details().UnitsUnfulfilled)
+	minMatchSize := o.Details().MinUnitsMatch.ToSatoshis()
+	maxNumMatches := o.Details().UnitsUnfulfilled.ToSatoshis() / minMatchSize
 
 	// We'll calculate the worst case possible wrt. fees paid by the
 	// account if the order is filled by minimum size matched.

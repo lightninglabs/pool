@@ -27,6 +27,7 @@ func TestOrderReservedValue(t *testing.T) {
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
 					LeaseDuration:    144,
+					MinUnitsMatch:    1,
 				},
 			},
 		},
@@ -39,6 +40,7 @@ func TestOrderReservedValue(t *testing.T) {
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
 					LeaseDuration:    144,
+					MinUnitsMatch:    1,
 				},
 			},
 		},
@@ -51,6 +53,7 @@ func TestOrderReservedValue(t *testing.T) {
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
 					LeaseDuration:    144,
+					MinUnitsMatch:    1,
 				},
 			},
 		},
@@ -63,6 +66,7 @@ func TestOrderReservedValue(t *testing.T) {
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
 					LeaseDuration:    144,
+					MinUnitsMatch:    1,
 				},
 			},
 		},
@@ -75,6 +79,7 @@ func TestOrderReservedValue(t *testing.T) {
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
 					LeaseDuration:    144,
+					MinUnitsMatch:    1,
 				},
 			},
 		},
@@ -87,6 +92,7 @@ func TestOrderReservedValue(t *testing.T) {
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
 					LeaseDuration:    144,
+					MinUnitsMatch:    1,
 				},
 			},
 		},
@@ -99,6 +105,7 @@ func TestOrderReservedValue(t *testing.T) {
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
 					LeaseDuration:    144,
+					MinUnitsMatch:    1,
 				},
 			},
 		},
@@ -111,6 +118,7 @@ func TestOrderReservedValue(t *testing.T) {
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
 					LeaseDuration:    144,
+					MinUnitsMatch:    1,
 				},
 			},
 		},
@@ -123,6 +131,7 @@ func TestOrderReservedValue(t *testing.T) {
 					FixedRate:        10000,
 					MaxBatchFeeRate:  1000,
 					LeaseDuration:    144,
+					MinUnitsMatch:    1,
 				},
 			},
 		},
@@ -135,6 +144,33 @@ func TestOrderReservedValue(t *testing.T) {
 					FixedRate:        10_000_000,
 					MaxBatchFeeRate:  1000,
 					LeaseDuration:    144,
+					MinUnitsMatch:    1,
+				},
+			},
+		},
+		{
+			name: "ask 10 units 4 min units match",
+			order: &Ask{
+				Kit: Kit{
+					State:            StateSubmitted,
+					UnitsUnfulfilled: 10,
+					FixedRate:        10_000_000,
+					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
+					MinUnitsMatch:    4,
+				},
+			},
+		},
+		{
+			name: "bid 10 units 4 min units match",
+			order: &Bid{
+				Kit: Kit{
+					State:            StateSubmitted,
+					UnitsUnfulfilled: 10,
+					FixedRate:        10_000_000,
+					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
+					MinUnitsMatch:    4,
 				},
 			},
 		},
@@ -153,10 +189,10 @@ func TestOrderReservedValue(t *testing.T) {
 				break
 			}
 
-			// For bids the taker pays the most fees if only one
-			// unit can get matched every block.
-			numBlocks := int(o.UnitsUnfulfilled)
-			amt := btcutil.Amount(BaseSupplyUnit)
+			// For bids the taker pays the most fees if the min
+			// units get matched every block.
+			numBlocks := int(o.UnitsUnfulfilled / o.MinUnitsMatch)
+			amt := o.MinUnitsMatch.ToSatoshis()
 			for i := 0; i < numBlocks; i++ {
 				lumpSum := FixedRatePremium(o.FixedRate).
 					LumpSumPremium(amt, o.LeaseDuration)
@@ -176,10 +212,10 @@ func TestOrderReservedValue(t *testing.T) {
 				break
 			}
 
-			// For asks the maker pays the most fees if only one
-			// unit can get matched every blocks.
-			numBlocks := int(o.UnitsUnfulfilled)
-			amt := btcutil.Amount(BaseSupplyUnit)
+			// For asks the maker pays the most fees if min units
+			// get matched every block.
+			numBlocks := int(o.UnitsUnfulfilled / o.MinUnitsMatch)
+			amt := o.MinUnitsMatch.ToSatoshis()
 			for i := 0; i < numBlocks; i++ {
 				// In the worst case, the maker will be paid
 				// only one lump sum for a 144 block duration,
