@@ -430,6 +430,10 @@ var ordersListCommand = cli.Command{
 			Name:  "verbose",
 			Usage: "show verbose output including events",
 		},
+		cli.BoolFlag{
+			Name:  "active_only",
+			Usage: "only show active orders",
+		},
 	},
 	Action: ordersList,
 }
@@ -443,7 +447,8 @@ func ordersList(ctx *cli.Context) error {
 
 	resp, err := client.ListOrders(
 		context.Background(), &poolrpc.ListOrdersRequest{
-			Verbose: ctx.Bool("verbose"),
+			Verbose:    ctx.Bool("verbose"),
+			ActiveOnly: ctx.Bool("active_only"),
 		},
 	)
 	if err != nil {
