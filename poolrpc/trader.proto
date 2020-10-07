@@ -444,6 +444,11 @@ message ListOrdersRequest {
     very verbose.
     */
     bool verbose = 1;
+
+    /*
+    Only list orders that are still active.
+    */
+    bool active_only = 2;
 }
 message ListOrdersResponse {
     repeated Ask asks = 1;
