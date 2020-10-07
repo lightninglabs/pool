@@ -1245,6 +1245,12 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 		nonce := dbOrder.Nonce()
 		dbDetails := dbOrder.Details()
 
+		// Skip order if it is archived and only active orders are
+		// requested.
+		if dbDetails.State.Archived() && req.ActiveOnly {
+			continue
+		}
+
 		orderState, err := dbOrderStateToRPCState(dbDetails.State)
 		if err != nil {
 			return nil, err
