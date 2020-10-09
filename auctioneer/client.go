@@ -373,10 +373,16 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		}
 
 	case *order.Bid:
+		nodeTierEnum, err := MarshallNodeTier(castOrder.MinNodeTier)
+		if err != nil {
+			return err
+		}
+
 		serverBid := &poolrpc.ServerBid{
 			Details:             details,
 			LeaseDurationBlocks: castOrder.LeaseDuration,
 			Version:             uint32(castOrder.Version),
+			MinNodeTier:         nodeTierEnum,
 		}
 		rpcRequest.Details = &poolrpc.ServerSubmitOrderRequest_Bid{
 			Bid: serverBid,
@@ -1165,4 +1171,45 @@ func (c *Client) BatchSnapshot(ctx context.Context,
 	return c.client.BatchSnapshot(ctx, &poolrpc.BatchSnapshotRequest{
 		BatchId: targetBatch[:],
 	})
+}
+
+// NodeRating returns the current up to date ratings information for the target
+// node pubkey.
+func (c *Client) NodeRating(ctx context.Context,
+	nodeKeys ...*btcec.PublicKey) (*poolrpc.NodeRatingResponse, error) {
+
+	pubKeys := make([][]byte, 0, len(nodeKeys))
+	for _, nodeKey := range nodeKeys {
+		pubKeys = append(pubKeys, nodeKey.SerializeCompressed())
+	}
+
+	req := &poolrpc.ServerNodeRatingRequest{
+		NodePubkeys: pubKeys,
+	}
+	serverResp, err := c.client.NodeRating(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &poolrpc.NodeRatingResponse{
+		NodeRatings: serverResp.NodeRatings,
+	}, nil
+}
+
+// MarshallNodeTier maps the node tier integer into the enum used on the RPC
+// interface.
+func MarshallNodeTier(nodeTier order.NodeTier) (poolrpc.NodeTier, error) {
+	switch nodeTier {
+	case order.NodeTierDefault:
+		return poolrpc.NodeTier_TIER_DEFAULT, nil
+
+	case order.NodeTier0:
+		return poolrpc.NodeTier_TIER_0, nil
+
+	case order.NodeTier1:
+		return poolrpc.NodeTier_TIER_1, nil
+
+	default:
+		return 0, fmt.Errorf("unknown node tier: %v", nodeTier)
+	}
 }

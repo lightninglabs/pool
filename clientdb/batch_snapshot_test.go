@@ -11,6 +11,7 @@ import (
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/terms"
+	"github.com/stretchr/testify/require"
 	"go.etcd.io/bbolt"
 )
 
@@ -164,6 +165,12 @@ func TestGetLocalBatchSnapshots(t *testing.T) {
 
 	if len(snapshots) != 0 {
 		t.Fatalf("expected no snapshots, found %v", len(snapshots))
+	}
+
+	// Storing a batch snapshot requires its orders to be stored as well.
+	for _, order := range testSnapshot.Orders {
+		err := store.SubmitOrder(order)
+		require.NoError(t, err)
 	}
 
 	// Store the same batch 10 times, only changing the batch ID each time.

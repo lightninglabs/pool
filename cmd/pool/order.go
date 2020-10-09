@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcutil"
+	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
@@ -225,7 +226,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 
 	ask := &poolrpc.Ask{
 		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
-		Version:             uint32(order.VersionDefault),
+		Version:             uint32(order.VersionNodeTierMinMatch),
 	}
 
 	params, err := parseCommonParams(ctx, ask.LeaseDurationBlocks)
@@ -350,6 +351,14 @@ var ordersSubmitBidCommand = cli.Command{
 				"liquidity should be provided for",
 			Value: defaultBidMinDuration,
 		},
+		cli.Uint64Flag{
+			Name: "min_node_tier",
+			Usage: "the min node tier this bid should be matched " +
+				"with, tier 1 nodes are considered 'good', if set " +
+				"to tier 0, then all nodes will be considered " +
+				"regardless of 'quality'",
+			Value: uint64(order.NodeTierDefault),
+		},
 		cli.BoolFlag{
 			Name:  "force",
 			Usage: "skip order placement confirmation",
@@ -365,9 +374,17 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 		return nil
 	}
 
+	nodeTier, err := auctioneer.MarshallNodeTier(
+		order.NodeTier(ctx.Uint64("min_node_tier")),
+	)
+	if err != nil {
+		return nil
+	}
+
 	bid := &poolrpc.Bid{
 		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
-		Version:             uint32(order.VersionDefault),
+		Version:             uint32(order.VersionNodeTierMinMatch),
+		MinNodeTier:         nodeTier,
 	}
 
 	params, err := parseCommonParams(ctx, bid.LeaseDurationBlocks)

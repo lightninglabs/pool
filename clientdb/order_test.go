@@ -23,7 +23,8 @@ func TestSubmitOrder(t *testing.T) {
 
 	// Store a dummy order and see if we can retrieve it again.
 	o := &order.Bid{
-		Kit: *dummyOrder(500000, 1337),
+		Kit:         *dummyOrder(500000, 1337),
+		MinNodeTier: 2,
 	}
 	err := store.SubmitOrder(o)
 	if err != nil {
@@ -93,7 +94,8 @@ func TestUpdateOrders(t *testing.T) {
 
 	// Store two dummy orders that we are going to update later.
 	o1 := &order.Bid{
-		Kit: *dummyOrder(500000, 1337),
+		Kit:         *dummyOrder(500000, 1337),
+		MinNodeTier: 3,
 	}
 	err := store.SubmitOrder(o1)
 	if err != nil {

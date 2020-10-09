@@ -231,7 +231,7 @@ func (m *Manager) validateOrder(order Order, acct *account.Account,
 	feeSchedule := terms.FeeSchedule()
 	reserved := order.ReservedValue(feeSchedule)
 	for _, o := range dbOrders {
-		// Only tally the reserved balance if this order waas submited
+		// Only tally the reserved balance if this order was submitted
 		// by this account.
 		if o.Details().AcctKey != acctKey {
 			continue

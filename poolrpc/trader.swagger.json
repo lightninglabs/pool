@@ -435,6 +435,43 @@
         ]
       }
     },
+    "/v1/pool/node_ratings": {
+      "get": {
+        "summary": "pool: `auction ratings`\nReturns the Node Tier information for this target Lightning node, and other\nrelated ranking information.",
+        "operationId": "NodeRatings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcNodeRatingResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "node_pubkeys",
+            "description": "The target node to obtain ratings information for.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "byte"
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/pool/orders": {
       "get": {
         "summary": "pool: `orders list`\nListOrders returns a list of all active and archived orders that are\ncurrently known to the trader daemon.",
@@ -732,6 +769,10 @@
           "type": "integer",
           "format": "int64",
           "description": "The version of the order format that is used. Will be increased once new\nfeatures are added."
+        },
+        "min_node_tier": {
+          "$ref": "#/definitions/poolrpcNodeTier",
+          "description": "The minium node tier this order should be matched with. Only asks backed by\na node this tier or higher will be eligible for matching with this bid."
         }
       }
     },
@@ -933,6 +974,15 @@
           "type": "boolean",
           "format": "boolean",
           "description": "Whether this channel was purchased from another trader or not."
+        },
+        "channel_remote_node_key": {
+          "type": "string",
+          "format": "byte",
+          "description": "The pubkey of the node that this channel was bought/sold from."
+        },
+        "channel_node_tier": {
+          "$ref": "#/definitions/poolrpcNodeTier",
+          "description": "The tier of the node that this channel was bought/sold from."
         }
       }
     },
@@ -1117,6 +1167,42 @@
           "description": "The total number of units that were matched."
         }
       }
+    },
+    "poolrpcNodeRating": {
+      "type": "object",
+      "properties": {
+        "node_pubkey": {
+          "type": "string",
+          "format": "byte",
+          "description": "The pubkey for the node these ratings belong to."
+        },
+        "node_tier": {
+          "$ref": "#/definitions/poolrpcNodeTier",
+          "description": "The tier of the target node."
+        }
+      }
+    },
+    "poolrpcNodeRatingResponse": {
+      "type": "object",
+      "properties": {
+        "node_ratings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/poolrpcNodeRating"
+          },
+          "description": "A series of node ratings for each of the queried nodes."
+        }
+      }
+    },
+    "poolrpcNodeTier": {
+      "type": "string",
+      "enum": [
+        "TIER_DEFAULT",
+        "TIER_0",
+        "TIER_1"
+      ],
+      "default": "TIER_DEFAULT",
+      "description": " - TIER_DEFAULT: The default node tier. This value will be determined at run-time by the\ncurrent order version.\n - TIER_0: Tier 0, bid with this tier are opting out of the smaller \"higher\nquality\" pool of nodes to match their bids. Nodes in this tier are\nconsidered to have \"no rating\".\n - TIER_1: Tier 1, the \"base\" node tier. Nodes in this tier are shown to have a\nhigher degree of up time and route-ability compared to the rest of the\nnodes in the network. This is the current default node tier when\nsubmitting bid orders."
     },
     "poolrpcOrder": {
       "type": "object",

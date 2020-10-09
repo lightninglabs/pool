@@ -49,6 +49,9 @@ func WriteElements(w io.Writer, elements ...interface{}) error {
 // accommodate additional data.
 func WriteElement(w io.Writer, element interface{}) error {
 	switch e := element.(type) {
+	case order.NodeTier:
+		return lnwire.WriteElement(w, uint32(e))
+
 	case account.State:
 		return lnwire.WriteElement(w, uint8(e))
 
@@ -128,6 +131,13 @@ func ReadElements(r io.Reader, elements ...interface{}) error {
 // ReadElement is a one-stop utility function to deserialize any data structure.
 func ReadElement(r io.Reader, element interface{}) error { // nolint:gocyclo
 	switch e := element.(type) {
+	case *order.NodeTier:
+		var v uint32
+		if err := lnwire.ReadElement(r, &v); err != nil {
+			return err
+		}
+		*e = order.NodeTier(v)
+
 	case *account.State:
 		var s uint8
 		if err := lnwire.ReadElement(r, &s); err != nil {

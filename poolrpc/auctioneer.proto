@@ -15,6 +15,7 @@ service ChannelAuctioneer {
     rpc Terms (TermsRequest) returns (TermsResponse);
     rpc RelevantBatchSnapshot (RelevantBatchRequest) returns (RelevantBatch);
     rpc BatchSnapshot (BatchSnapshotRequest) returns (BatchSnapshotResponse);
+    rpc NodeRating(ServerNodeRatingRequest) returns (ServerNodeRatingResponse);
 }
 
 message ReserveAccountRequest {
@@ -788,6 +789,23 @@ message ServerOrder {
     uint64 max_batch_fee_rate_sat_per_kw = 13;
 }
 
+enum NodeTier {
+    // The default node tier. This value will be determined at run-time by the
+    // current order version.
+    TIER_DEFAULT = 0;
+
+    // Tier 0, bid with this tier are opting out of the smaller "higher
+    // quality" pool of nodes to match their bids. Nodes in this tier are
+    // considered to have "no rating".
+    TIER_0 = 1;
+
+    // Tier 1, the "base" node tier. Nodes in this tier are shown to have a
+    // higher degree of up time and route-ability compared to the rest of the
+    // nodes in the network. This is the current default node tier when
+    // submitting bid orders.
+    TIER_1 = 2;
+}
+
 message ServerBid {
     /*
     The common fields shared between both ask and bid order types.
@@ -809,6 +827,12 @@ message ServerBid {
     features are added.
     */
     uint32 version = 4;
+
+    /*
+    The minium node tier this order should be matched with. Only asks backed by
+    a node this tier or higher will be eligible for matching with this bid.
+    */
+    NodeTier min_node_tier = 5;
 }
 
 message ServerAsk {
@@ -1095,4 +1119,22 @@ message BatchSnapshotResponse {
 
     // The batch transaction including all witness data.
     bytes batch_tx = 6;
+}
+
+message ServerNodeRatingRequest {
+    // The target node to obtain ratings information for.
+    repeated bytes node_pubkeys = 1;
+}
+
+message NodeRating {
+    // The pubkey for the node these ratings belong to.
+    bytes node_pubkey = 1;
+
+    // The tier of the target node.
+    NodeTier node_tier = 2;
+}
+
+message ServerNodeRatingResponse {
+    // A series of node ratings for each of the queried nodes.
+    repeated NodeRating node_ratings = 1;
 }
