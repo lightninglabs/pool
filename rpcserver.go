@@ -33,6 +33,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
+	"github.com/lightningnetwork/lnd/signal"
 	"github.com/lightningnetwork/lnd/tor"
 )
 
@@ -308,11 +309,7 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 			if err != nil && !errors.Is(err, order.ErrMismatchErr) {
 				rpcLog.Errorf("Error handling server message: %v",
 					err)
-				err := s.server.Stop()
-				if err != nil {
-					rpcLog.Errorf("Error shutting down: %v",
-						err)
-				}
+				signal.RequestShutdown()
 			}
 
 		case err := <-s.auctioneer.StreamErrChan:
@@ -337,11 +334,7 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 			if err != nil {
 				rpcLog.Errorf("Unable to receive block "+
 					"notification: %v", err)
-				err := s.server.Stop()
-				if err != nil {
-					rpcLog.Errorf("Error shutting down: %v",
-						err)
-				}
+				signal.RequestShutdown()
 			}
 
 		// In case the server is shutting down.
