@@ -49,9 +49,9 @@ func TestBatchStorer(t *testing.T) {
 		State:     account.StateOpen,
 		BatchKey:  startBatchKey,
 	}
-	ask := &Ask{Kit: newKit(Nonce{0x01}, 4)}
-	bid1 := &Bid{Kit: newKit(Nonce{0x02}, 2)}
-	bid2 := &Bid{Kit: newKit(Nonce{0x03}, 8)}
+	ask := &Ask{Kit: newKit(Nonce{0x01}, 4, 1)}
+	bid1 := &Bid{Kit: newKit(Nonce{0x02}, 3, 1)}
+	bid2 := &Bid{Kit: newKit(Nonce{0x03}, 3, 2)}
 	batchTx := &wire.MsgTx{
 		Version: 2,
 		TxOut: []*wire.TxOut{{
@@ -129,28 +129,28 @@ func TestBatchStorer(t *testing.T) {
 	// performed on the actual instances, which makes it easy to check.
 	// Check the order states first.
 	if ask.State != StateExecuted {
-		t.Fatalf("invalid order state, got %d wanted %d",
+		t.Fatalf("invalid order state, got %v wanted %v",
 			ask.State, StateExecuted)
 	}
 	if ask.UnitsUnfulfilled != 0 {
 		t.Fatalf("invalid units unfulfilled, got %d wanted %d",
 			ask.UnitsUnfulfilled, 0)
 	}
-	if bid1.State != StateExecuted {
-		t.Fatalf("invalid order state, got %d wanted %d",
-			bid1.State, StateExecuted)
+	if bid1.State != StatePartiallyFilled {
+		t.Fatalf("invalid order state, got %v wanted %v",
+			bid1.State, StatePartiallyFilled)
 	}
-	if bid1.UnitsUnfulfilled != 0 {
+	if bid1.UnitsUnfulfilled != 1 {
 		t.Fatalf("invalid units unfulfilled, got %d wanted %d",
-			bid1.UnitsUnfulfilled, 0)
+			bid1.UnitsUnfulfilled, 1)
 	}
-	if bid2.State != StatePartiallyFilled {
-		t.Fatalf("invalid order state, got %d wanted %d",
-			bid2.State, StatePartiallyFilled)
+	if bid2.State != StateExecuted {
+		t.Fatalf("invalid order state, got %v wanted %v",
+			bid2.State, StateExecuted)
 	}
-	if bid2.UnitsUnfulfilled != 6 {
+	if bid2.UnitsUnfulfilled != 1 {
 		t.Fatalf("invalid units unfulfilled, got %d wanted %d",
-			bid2.UnitsUnfulfilled, 6)
+			bid2.UnitsUnfulfilled, 1)
 	}
 
 	// Check the account states next.
@@ -190,10 +190,11 @@ func TestBatchStorer(t *testing.T) {
 	}
 }
 
-func newKit(nonce Nonce, units SupplyUnit) Kit {
+func newKit(nonce Nonce, units, minUnitsMatch SupplyUnit) Kit {
 	kit := NewKit(nonce)
 	kit.Units = units
 	kit.UnitsUnfulfilled = units
+	kit.MinUnitsMatch = minUnitsMatch
 	kit.State = StateSubmitted
 	return *kit
 }

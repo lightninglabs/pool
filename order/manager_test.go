@@ -47,6 +47,7 @@ func TestValidateOrderAccountIsolation(t *testing.T) {
 			MaxBatchFeeRate:  1000,
 			AcctKey:          acctKeyB,
 			LeaseDuration:    144,
+			MinUnitsMatch:    100,
 		}),
 	}
 
@@ -81,6 +82,7 @@ func TestValidateOrderAccountIsolation(t *testing.T) {
 			MaxBatchFeeRate:  1000,
 			AcctKey:          acctKeyA,
 			LeaseDuration:    144,
+			MinUnitsMatch:    100,
 		}),
 	}
 

@@ -279,6 +279,10 @@ type Kit struct {
 	// LeaseDuration identifies how long this order wishes to acquire or
 	// lease out capital in the Lightning Network for.
 	LeaseDuration uint32
+
+	// MinUnitsMatch signals the minimum number of units that must be
+	// matched against an order.
+	MinUnitsMatch SupplyUnit
 }
 
 // Nonce is the unique identifier of each order and MUST be created by hashing a
@@ -344,10 +348,20 @@ func (a *Ask) Digest() ([sha256.Size]byte, error) {
 		result [sha256.Size]byte
 	)
 	switch a.Kit.Version {
-	case VersionDefault, VersionNodeTierMinMatch:
+	case VersionDefault:
 		err := lnwire.WriteElements(
 			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
 			a.Amt, a.LeaseDuration, uint64(a.MaxBatchFeeRate),
+		)
+		if err != nil {
+			return result, err
+		}
+
+	case VersionNodeTierMinMatch:
+		err := lnwire.WriteElements(
+			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
+			a.Amt, a.LeaseDuration, uint64(a.MaxBatchFeeRate),
+			uint32(a.MinUnitsMatch),
 		)
 		if err != nil {
 			return result, err
@@ -376,11 +390,11 @@ func reservedValue(o Order,
 	}
 
 	// The situation where the trader needs to pay the largest amount of
-	// fees is when the order gets partially matched by the base supply
-	// unit per batch. This situation results in the most chain and
+	// fees is when the order gets partially matched by its minimum possible
+	// units per batch. This situation results in the most chain and
 	// execution fees possible.
-	minMatchSize := btcutil.Amount(BaseSupplyUnit)
-	maxNumMatches := btcutil.Amount(o.Details().UnitsUnfulfilled)
+	minMatchSize := o.Details().MinUnitsMatch.ToSatoshis()
+	maxNumMatches := o.Details().UnitsUnfulfilled.ToSatoshis() / minMatchSize
 
 	// We'll calculate the worst case possible wrt. fees paid by the
 	// account if the order is filled by minimum size matched.
@@ -506,7 +520,7 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 		err := lnwire.WriteElements(
 			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
 			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
-			uint32(b.MinNodeTier),
+			uint32(b.MinNodeTier), uint32(b.MinUnitsMatch),
 		)
 		if err != nil {
 			return result, err

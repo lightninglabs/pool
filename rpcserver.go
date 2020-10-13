@@ -1283,6 +1283,7 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			),
 			CreationTimestampNs: uint64(evt.Timestamp().UnixNano()),
 			Events:              rpcEvents,
+			MinUnitsMatch:       uint32(dbOrder.Details().MinUnitsMatch),
 		}
 
 		switch o := dbOrder.(type) {

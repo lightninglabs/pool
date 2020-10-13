@@ -229,6 +229,7 @@ func fetchLocalBatchSnapshot(seqBucket *bbolt.Bucket, seqNum []byte,
 		return nil, fmt.Errorf("batch not found for snapshot")
 	}
 
+	// Deserialize it.
 	batchSnapshot, err := deserializeLocalBatchSnapshot(
 		bytes.NewReader(rawBatch),
 	)
@@ -236,20 +237,37 @@ func fetchLocalBatchSnapshot(seqBucket *bbolt.Bucket, seqNum []byte,
 		return nil, err
 	}
 
-	// The snapshot doesn't contain information such as the min node tier,
-	// so we'll go ahead and retrieve that information now.
+	// The snapshot doesn't contain all the order information needed, so
+	// we'll retrieve the missing data.
 	for nonce, o := range batchSnapshot.Orders {
-		// We'll only need to populate the values below for bid orders.
-		bidOrder, ok := o.(*order.Bid)
-		if !ok {
-			continue
-
-		}
 		orderBucket, err := getNestedBucket(
 			rootOrderBucket, nonce[:], false,
 		)
 		if err != nil {
 			return nil, ErrNoOrder
+		}
+
+		minUnitsMatchBytes := orderBucket.Get(orderMinUnitsMatchKey)
+		if minUnitsMatchBytes == nil {
+			// Assume a base unit minimum match for older orders
+			// which were not aware of the field.
+			o.Details().MinUnitsMatch = 1
+		} else {
+			var minUnitsMatch order.SupplyUnit
+			err := ReadElement(
+				bytes.NewReader(minUnitsMatchBytes),
+				&minUnitsMatch,
+			)
+			if err != nil {
+				return nil, err
+			}
+			o.Details().MinUnitsMatch = minUnitsMatch
+		}
+
+		// We'll only need to populate the values below for bid orders.
+		bidOrder, ok := o.(*order.Bid)
+		if !ok {
+			continue
 		}
 
 		minNodeTierBytes := orderBucket.Get(orderTierKey)
@@ -265,7 +283,6 @@ func fetchLocalBatchSnapshot(seqBucket *bbolt.Bucket, seqNum []byte,
 			if err != nil {
 				return nil, err
 			}
-
 			bidOrder.MinNodeTier = minNodeTier
 		}
 	}

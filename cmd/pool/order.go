@@ -106,6 +106,30 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 		return nil, fmt.Errorf("unable to decode amount: %v", err)
 	}
 
+	// If the minimum channel amount flag wasn't provided, use a default of
+	// 10%.
+	minChanAmt := btcutil.Amount(ctx.Uint64("min_chan_amt"))
+	if minChanAmt == 0 {
+		minChanAmt = amt / 10
+	}
+
+	// Verify the minimum channel amount flag has been properly set.
+	minOrderChanAmt := btcutil.Amount(order.BaseSupplyUnit)
+	switch {
+	case minChanAmt%minOrderChanAmt != 0:
+		return nil, fmt.Errorf("minimum channel amount %v must be "+
+			"a multiple of %v", minChanAmt, minOrderChanAmt)
+
+	case minChanAmt < minOrderChanAmt:
+		return nil, fmt.Errorf("minimum channel amount %v is below "+
+			"required value of %v", minChanAmt, minOrderChanAmt)
+
+	case minChanAmt > btcutil.Amount(params.Amt):
+		return nil, fmt.Errorf("minimum channel amount %v is above "+
+			"order amount %v", minChanAmt, btcutil.Amount(params.Amt))
+	}
+	params.MinUnitsMatch = uint32(minChanAmt / minOrderChanAmt)
+
 	params.TraderKey, err = parseAccountKey(ctx, args)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse acct_key: %v", err)
@@ -209,6 +233,11 @@ var ordersSubmitAskCommand = cli.Command{
 				"liquidity should be offered for",
 			Value: defaultAskMaxDuration,
 		},
+		cli.Uint64Flag{
+			Name: "min_chan_amt",
+			Usage: "the minimum amount of satohis that a resulting " +
+				"channel from this order must have",
+		},
 		cli.BoolFlag{
 			Name:  "force",
 			Usage: "skip order placement confirmation",
@@ -248,6 +277,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 	if !ctx.Bool("force") {
 		if err := printOrderDetails(
 			client, btcutil.Amount(ask.Details.Amt),
+			order.SupplyUnit(ask.Details.MinUnitsMatch).ToSatoshis(),
 			order.FixedRatePremium(ask.Details.RateFixed),
 			ask.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
@@ -278,9 +308,10 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 	return nil
 }
 
-func printOrderDetails(client poolrpc.TraderClient, amt btcutil.Amount,
-	rate order.FixedRatePremium, leaseDuration uint32,
-	maxBatchFeeRate chainfee.SatPerKWeight, isAsk bool) error {
+func printOrderDetails(client poolrpc.TraderClient, amt,
+	minChanAmt btcutil.Amount, rate order.FixedRatePremium,
+	leaseDuration uint32, maxBatchFeeRate chainfee.SatPerKWeight,
+	isAsk bool) error {
 
 	auctionFee, err := client.AuctionFee(
 		context.Background(), &poolrpc.AuctionFeeRequest{},
@@ -305,7 +336,7 @@ func printOrderDetails(client poolrpc.TraderClient, amt btcutil.Amount,
 
 	premium := rate.LumpSumPremium(amt, leaseDuration)
 
-	maxNumMatches := amt / btcutil.Amount(order.BaseSupplyUnit)
+	maxNumMatches := amt / minChanAmt
 	chainFee := maxNumMatches * order.EstimateTraderFee(1, maxBatchFeeRate)
 
 	fmt.Println("-- Order Details --")
@@ -359,6 +390,11 @@ var ordersSubmitBidCommand = cli.Command{
 				"regardless of 'quality'",
 			Value: uint64(order.NodeTierDefault),
 		},
+		cli.Uint64Flag{
+			Name: "min_chan_amt",
+			Usage: "the minimum amount of satohis that a resulting " +
+				"channel from this order must have",
+		},
 		cli.BoolFlag{
 			Name:  "force",
 			Usage: "skip order placement confirmation",
@@ -406,6 +442,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 	if !ctx.Bool("force") {
 		if err := printOrderDetails(
 			client, btcutil.Amount(bid.Details.Amt),
+			order.SupplyUnit(bid.Details.MinUnitsMatch).ToSatoshis(),
 			order.FixedRatePremium(bid.Details.RateFixed),
 			bid.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(

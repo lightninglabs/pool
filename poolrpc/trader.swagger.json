@@ -1262,6 +1262,11 @@
             "$ref": "#/definitions/poolrpcOrderEvent"
           },
           "description": "A list of events that were emitted for this order. This field is only set\nwhen the verbose flag is set to true in the request."
+        },
+        "min_units_match": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The minimum number of order units that must be matched per order pair."
         }
       }
     },
