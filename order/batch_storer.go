@@ -57,6 +57,15 @@ func (s *batchStorer) StorePendingBatch(batch *Batch, bestHeight uint32) error {
 				UnitsFulfilledModifier(0),
 			}
 
+		// The order has not been fully filled, but it cannot be matched
+		// again due to its remaining unfulfilled units being below its
+		// allowed minimum, so we'll archive it.
+		case unitsUnfulfilled < ourOrder.Details().MinUnitsMatch:
+			orderModifiers[orderIndex] = []Modifier{
+				StateModifier(StateExecuted),
+				UnitsFulfilledModifier(unitsUnfulfilled),
+			}
+
 		// Some units were not yet filled.
 		default:
 			orderModifiers[orderIndex] = []Modifier{
