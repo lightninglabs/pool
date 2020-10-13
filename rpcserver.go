@@ -1162,9 +1162,14 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	// around in that case.
 	err = s.auctioneer.SubmitOrder(ctx, o, serverParams)
 	if err != nil {
-		// TODO(guggero): Put in state failed instead of removing?
-		if err2 := s.server.db.DelOrder(o.Nonce()); err2 != nil {
-			rpcLog.Errorf("Could not delete failed order: %v", err2)
+		// The server rejected the order. We keep it around for now,
+		// failed orders can be filtered by specifying --active_only
+		// when listing orders.
+		err2 := s.server.db.UpdateOrder(
+			o.Nonce(), order.StateModifier(order.StateFailed),
+		)
+		if err2 != nil {
+			rpcLog.Errorf("Could not update failed order: %v", err2)
 		}
 
 		// If there was something wrong with the information the user
