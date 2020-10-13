@@ -593,9 +593,6 @@ type Store interface {
 	// GetOrders returns all orders that are currently known to the store.
 	GetOrders() ([]Order, error)
 
-	// DelOrder removes the order with the given nonce from the local store.
-	DelOrder(Nonce) error
-
 	// StorePendingBatch atomically stages all modified orders/accounts as a
 	// result of a pending batch. If any single operation fails, the whole
 	// set of changes is rolled back. Once the batch has been
