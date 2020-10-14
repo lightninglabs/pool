@@ -411,9 +411,20 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 		return nil
 	}
 
-	nodeTier, err := auctioneer.MarshallNodeTier(
-		order.NodeTier(ctx.Uint64("min_node_tier")),
-	)
+	// The node tier values are a bit un-intuitive. We need to convert
+	// between the human interpretation of "tier 1" (value 1) to the
+	// internal representation of "tier 1" (value order.NodeTier1=2).
+	cliNodeTier := order.NodeTierDefault
+	if ctx.IsSet("min_node_tier") {
+		if ctx.Uint64("min_node_tier") == 0 {
+			cliNodeTier = order.NodeTier0
+		}
+		if ctx.Uint64("min_node_tier") == 1 {
+			cliNodeTier = order.NodeTier1
+		}
+	}
+
+	nodeTier, err := auctioneer.MarshallNodeTier(cliNodeTier)
 	if err != nil {
 		return nil
 	}
