@@ -1,46 +1,25 @@
-# Auction Batch Execution Lifecycle
-
+# Batch Execution
 
 ## Batched Uniform-Price Clearing
 
-Now that we have orders submitted, how does the rest of the auction actually
-work? As mentioned above, Pool conducts a _discrete_ batch auction every 10
-minutes. This is distinct from regular continuous exchanges in that orders are
-only cleared every 10 minutes. Orders are also sealed-bid, meaning that other
-traders in the venue are unable to see what others have bid. On top
-of this, we utilize a uniform-clearing price algorithm to give all traders in
-the batch the _same_ interest rate. This is the same mechanism used by the U.S
-Treasury for its bonds, and is intended to promote fairness as your order will
-only be matched with a price better than your initial ask/bid.
+Now that we have orders submitted, how does the rest of the auction actually work? As mentioned above, Pool conducts a _discrete_ batch auction every 10 minutes. This is distinct from regular continuous exchanges in that orders are only cleared every 10 minutes. Orders are also sealed-bid, meaning that other traders in the venue are unable to see what others have bid. On top of this, we utilize a uniform-clearing price algorithm to give all traders in the batch the _same_ interest rate. This is the same mechanism used by the U.S Treasury for its bonds, and is intended to promote fairness as your order will only be matched with a price better than your initial ask/bid.
 
-Note that it's possible that after the 10 minutes interval has passed a market
-can't be made (supply and demand didn't cross). In this case, nothing happens,
-and we just wait for the next batch to come across.
+Note that it's possible that after the 10 minutes interval has passed a market can't be made \(supply and demand didn't cross\). In this case, nothing happens, and we just wait for the next batch to come across.
 
-To illustrate how the uniform price clearing works consider the following
-example. Let's say I want to buy 100 million satoshis (1 BTC, 1000 units), for 
-at least 10 days (1440 blocks) at a price of 5% (using high numbers to make it 
-easy to follow). However, the _market clearing price_ (where the supply+demand
-curves cross) is actually 1%. In this case I bid _more_ than the market 
-clearing price, but end up paying that price, as it's the best price that was 
-possible in that market.
+To illustrate how the uniform price clearing works consider the following example. Let's say I want to buy 100 million satoshis \(1 BTC, 1000 units\), for at least 10 days \(1440 blocks\) at a price of 5% \(using high numbers to make it easy to follow\). However, the _market clearing price_ \(where the supply+demand curves cross\) is actually 1%. In this case I bid _more_ than the market clearing price, but end up paying that price, as it's the best price that was possible in that market.
 
 A simple rule of thumb for bids and asks is as follows:
 
-  * When I submit a bid, I'll either pay that amount or less.
-  * When I submit an ask, I'll either receive that amount or more.
+* When I submit a bid, I'll either pay that amount or less.
+* When I submit an ask, I'll either receive that amount or more.
 
-All orders in a batch are executed in a _single_ on-chain transaction. This
-allows for thousands of channels to be bought/sold atomically in a single
-block. We call the transaction that executes the orders the Batch Execution
-Transaction. 
+All orders in a batch are executed in a _single_ on-chain transaction. This allows for thousands of channels to be bought/sold atomically in a single block. We call the transaction that executes the orders the Batch Execution Transaction.
 
-The `pool auction` sub-command houses a number of useful commands to explore the
-past batches, and examine the current auction parameters.
+The `pool auction` sub-command houses a number of useful commands to explore the past batches, and examine the current auction parameters.
 
-One can browse the latest cleared batch using the `pool auction snapshot`
-command: 
-```
+One can browse the latest cleared batch using the `pool auction snapshot` command:
+
+```text
 🏔 pool auction snapshot 
 {
         "version": 0,
@@ -76,18 +55,13 @@ c0eb2966b3900343b6ac0347304402207b0344aa98878e5aa40dc0fb712beff9b11d7fba3671f847
 a7e3be1ad2103bc6202b694e62a4d890cbb83f3a4dddb964fc500b25f55a38501642a770e3f37ac7364038a341bb16800000000"
 ```
 
-Here we see a batch where a single order was matched, at a clearing rate of
-`976`, with a single channel being purchased with a lifetime of `1024` blocks,
-or roughly one week.
+Here we see a batch where a single order was matched, at a clearing rate of `976`, with a single channel being purchased with a lifetime of `1024` blocks, or roughly one week.
 
-Note that the `pool auction snapshot` command can be used to determine the past
-marker clearing price, which can be useful when deciding what your bid/ask
-should be. There's no explicit "market buy" function, but submitting a bid/ask
-at a similar `clearing_price_rate` is equivalent.
+Note that the `pool auction snapshot` command can be used to determine the past marker clearing price, which can be useful when deciding what your bid/ask should be. There's no explicit "market buy" function, but submitting a bid/ask at a similar `clearing_price_rate` is equivalent.
 
-The command also accept a target `batch_id` as well. Here we can use the
-`prev_batch_id` to examine the _prior_ batch, similar to traversing a
-link-listed/blockchain:
-```
+The command also accept a target `batch_id` as well. Here we can use the `prev_batch_id` to examine the _prior_ batch, similar to traversing a link-listed/blockchain:
+
+```text
 🏔 pool auction snapshot --batch_id=03687baa3c7414e800ddba37edacb3281999739303b7290a69bd457f428ecd9b2c
 ```
+
