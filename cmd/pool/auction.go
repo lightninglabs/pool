@@ -287,7 +287,15 @@ func ratings(ctx *cli.Context) error {
 	}
 	defer cleanup()
 
-	nodeKey := ctx.String("node_key")
+	var nodeKey string
+	switch {
+	case ctx.Args().Present():
+		nodeKey = ctx.Args().First()
+
+	default:
+		nodeKey = ctx.String("node_key")
+	}
+
 	if nodeKey == "" {
 		return fmt.Errorf("an LN node key must be provided")
 	}
