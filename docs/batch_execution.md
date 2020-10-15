@@ -145,3 +145,67 @@ link-listed/blockchain:
 🏔 pool auction snapshot --batch_id=03687baa3c7414e800ddba37edacb3281999739303b7290a69bd457f428ecd9b2c
 ```
 
+## Fees
+
+There are various fees paid and accumulated during a successful batch
+execution. The easiest way to get an overview of the total impact of fees on
+ones account is to run
+
+```text
+🏔 pool auction leases
+{
+        "leases": [
+                {
+                        "channel_point": "82c74922552670868e445541e7be5d31b3d27a020a004ea2fbab78cf39d0248b:0",
+                        "channel_amt_sat": 1200000,
+                        "channel_duration_blocks": 2016,
+                        "channel_lease_expiry": 1864927,
+                        "channel_node_key": "02ae4b61245c0baafaf273c3420bd2fbd289f3b81912d570367e15bf404ad410de",
+                        "channel_node_tier": "TIER_1",
+                        "premium_sat": 59998,
+                        "clearing_rate_price": 24801,
+                        "order_fixed_rate": 4960,
+                        "execution_fee_sat": 1201,
+                        "chain_fee_sat": 165,
+                        "order_nonce": "8f85509e500d5978120729cb43e4a6db7de79c9548d92bac93c984cbf93c8dac",
+                        "purchased": false
+                },
+                ...
+                <removed>
+                ...
+                {
+                        "channel_point": "9f8142e50e9fac09a6a3fa2487b2b5dcc0a3a6bf2385adc6475492a3f4c5e1a4:2",
+                        "channel_amt_sat": 1200000,
+                        "channel_duration_blocks": 2016,
+                        "channel_lease_expiry": 1864948,
+                        "channel_node_key": "021c97a90a411ff2b10dc2a8e32de2f29d2fa49d41bfbb52bd416e460db0747d0d",
+                        "channel_node_tier": "TIER_1",
+                        "premium_sat": 11999,
+                        "clearing_rate_price": 4960,
+                        "order_fixed_rate": 4960,
+                        "execution_fee_sat": 1201,
+                        "chain_fee_sat": 165,
+                        "order_nonce": "63ebb5c69c0e2fa4907b034663c8697d5ed1255d29221106ae413cc015349d6a",
+                        "purchased": true
+                }
+        ],
+        "total_amt_earned_sat": 59998,
+        "total_amt_paid_sat": 75037
+}
+```
+
+Here you can see a summary of all matches you've been part of and that resulted
+in a channel being opened. In the first example the trader sold a 1,200,000 sat
+channel and got paid a premium of 59,998 sats for this liquidity. To be part of
+this batch, the trader paid an execution fee of 1201 sats, and a chain fee of
+165 sats, netting 59998-1201-165 = 58632 sats that got paid to its account.
+
+In the last example in the list above, the trader this time around bought a
+channel of 1,200,000 sats, and paid a premium of 11999 to the seller. Also this
+time around the trader paid an execution fee and chain fee, resulting in a
+total cost of 11999+1201+165 = 13365 sats.
+
+Finally, a total tally of fees earned and paid is given. The command takes
+optional account and batch id arguments in case you want to filter the leases
+returned.
+
