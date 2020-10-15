@@ -1,7 +1,5 @@
 # Batch Execution
 
-## Batched Uniform-Price Clearing
-
 Now that we have orders submitted, how does the rest of the auction actually
 work? As mentioned above, Pool conducts a _discrete_ batch auction every 10
 minutes. This is distinct from regular continuous exchanges in that orders are
@@ -15,6 +13,64 @@ matched with a price better than your initial ask/bid.
 Note that it's possible that after the 10 minutes interval has passed a market
 can't be made \(supply and demand didn't cross\). In this case, nothing
 happens, and we just wait for the next batch to come across.
+
+### Matchmaking
+
+The first stage in batch execution is the matchmaking that is done by the
+auctioneer. Before actual matchmaking is performed, the auctioneer looks at the
+current fee climate and decides what fee rate should be used for the final
+Batch Execution Transaction, in order for the transaction to confirm in a
+timely manner. All orders that have their `max_batch_fee_rate` set to a value
+lower than the chosen fee rate are ignored from the auction this time around,
+but will be reconsidered if the fee climate changes before the next auction.
+This allows traders with a low time preference to submit orders that will stay
+around on the order book and only be considered for matchmaking in times of low
+chain fees.
+
+Now that the transaction fee rate has been chosen, all orders still on the
+order book are considered, and the auctioneer matches asks with bids that pay
+at least the desired rate. The unsigned Batch Execution Transaction (BET) is
+assembled and presented to all traders that had their orders matched, along
+with information about the node they matched with.
+
+### Batch Signing
+
+When the trader's client receives a notification about a batch that is under
+execution, it checks that every part of the BET that affects the trader meets
+its requirements. This includes checking that the premium paid to the maker
+matches the batch clearing price, and that the chain fee deducted from the
+trader's account doesn't violate the max fee rate the trader agreed to.
+
+Each match the trader was part of results in a channel output on the BET, and
+the trader will also ensure this is well formed, and of the expected amount.
+When that has been verified, the trader connects to the node on the other side
+of the match, and starts the channel opening process with the channel peer.
+Technically this is done by setting up a _funding shim_ with the backing `lnd`
+node, which prepares `lnd` for a funding transaction setting up a channel with
+the given parameters to be broadcast.
+
+Only when all these checks are satisfactory and the channel funding shim has
+been successfully set up, the trader signs its input to the batch transaction
+and responds to the auctioneer. This ensures the trader is always _fully in
+custody of its own funds_, and never signs a transaction that would send the
+funds to an output it doesn't control.
+
+Note that the trader can reject signing the batch for any reason, even when the
+BET is well formed. For instance, connecting to the channel peer can fail,
+resulting in the channel not being ready to be funded. The trader will reject
+this match, and matchmaking can start over, making sure the trader won't be
+matched with this channel peer again.
+
+### Batch Publication
+
+When all participating traders have signed their inputs in the Batch Execution
+Transaction, the auctioneer can sign the final input and broadcast the
+transaction. This transaction can be large, and serve as the funding
+transaction for potentially hundres of channels! The participating traders only
+pay chain fees for their inputs and outputs in the transaction, so everybody is
+saving substantially on fees compared to individually funding channels.
+
+## Batched Uniform-Price Clearing
 
 To illustrate how the uniform price clearing works consider the following
 example. Let's say I want to buy 100 million satoshis \(1 BTC, 1000 units\),
