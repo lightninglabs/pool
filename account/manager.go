@@ -393,6 +393,21 @@ func (m *Manager) WatchMatchedAccounts(ctx context.Context,
 	return nil
 }
 
+// maybeBroadcastTx attempts to broadcast the transaction only if all of its
+// inputs have been signed for.
+func (m *Manager) maybeBroadcastTx(ctx context.Context, tx *wire.MsgTx,
+	label string) error {
+
+	// If any of the transaction inputs aren't signed, don't broadcast.
+	for _, txIn := range tx.TxIn {
+		if len(txIn.Witness) == 0 && len(txIn.SignatureScript) == 0 {
+			return nil
+		}
+	}
+
+	return m.cfg.Wallet.PublishTransaction(ctx, tx, label)
+}
+
 // resumeAccount performs different operations based on the account's state.
 // This method serves as a way to consolidate the logic of resuming accounts on
 // startup and during normal operation.
@@ -536,9 +551,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 				"AccountCreation(acct_key=%x)", acctKey)
 			label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
 
-			err = m.cfg.Wallet.PublishTransaction(
-				ctx, accountTx, label,
-			)
+			err = m.maybeBroadcastTx(ctx, accountTx, label)
 			if err != nil {
 				return err
 			}
@@ -654,9 +667,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 			"AccountClosure(acct_key=%x)", acctKey)
 		label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
 
-		err := m.cfg.Wallet.PublishTransaction(
-			ctx, account.LatestTx, label,
-		)
+		err := m.maybeBroadcastTx(ctx, account.LatestTx, label)
 		if err != nil {
 			return err
 		}
@@ -1265,7 +1276,7 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 
 	label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
 
-	if err := m.cfg.Wallet.PublishTransaction(ctx, spendPkg.tx, label); err != nil {
+	if err := m.maybeBroadcastTx(ctx, spendPkg.tx, label); err != nil {
 		return nil, nil, err
 	}
 
