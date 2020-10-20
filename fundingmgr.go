@@ -33,7 +33,7 @@ var (
 	// defaultMsgTimeout on the server side otherwise nodes might get kicked
 	// out of the match making process for timing out even though it was
 	// their peer's fault.
-	defaultBatchStepTimeout = 8 * time.Second
+	defaultBatchStepTimeout = 15 * time.Second
 )
 
 // matchRejectErr is an error type that is returned from the funding manager if
