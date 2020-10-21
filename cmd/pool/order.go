@@ -22,7 +22,7 @@ const (
 	defaultBidMinDuration = 2016
 )
 
-// Default max batch fee rate to 100 sat/vbyte.
+// Default max batch fee rate to 100 sat/vByte.
 const defaultMaxBatchFeeRateSatPerVByte = 100
 
 var ordersCommands = []cli.Command{
@@ -50,7 +50,7 @@ var ordersCommands = []cli.Command{
 var sharedFlags = []cli.Flag{
 	cli.Uint64Flag{
 		Name: "max_batch_fee_rate",
-		Usage: "the maximum fee rate (sat/vbyte) to use to for " +
+		Usage: "the maximum fee rate (sat/vByte) to use to for " +
 			"the batch transaction",
 		Value: defaultMaxBatchFeeRateSatPerVByte,
 	},
@@ -135,12 +135,12 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 		return nil, fmt.Errorf("unable to parse acct_key: %v", err)
 	}
 
-	// Convert the cmd line flag from sat/vbyte to sat/kw which is used
+	// Convert the cmd line flag from sat/vByte to sat/kw which is used
 	// internally.
 	satPerByte := ctx.Uint64("max_batch_fee_rate")
 	if satPerByte == 0 {
 		return nil, fmt.Errorf("max batch fee rate must be at " +
-			"least 1 sat/vbyte")
+			"least 1 sat/vByte")
 	}
 
 	satPerKw := chainfee.SatPerKVByte(satPerByte * 1000).FeePerKWeight()
@@ -219,7 +219,7 @@ var ordersSubmitAskCommand = cli.Command{
 		},
 		cli.Uint64Flag{
 			Name: "amt",
-			Usage: "the amount to offer for channel creation in" +
+			Usage: "the amount to offer for channel creation in " +
 				"satoshis",
 		},
 		cli.StringFlag{
@@ -235,8 +235,8 @@ var ordersSubmitAskCommand = cli.Command{
 		},
 		cli.Uint64Flag{
 			Name: "min_chan_amt",
-			Usage: "the minimum amount of satohis that a resulting " +
-				"channel from this order must have",
+			Usage: "the minimum amount of satoshis that a " +
+				"resulting channel from this order must have",
 		},
 		cli.BoolFlag{
 			Name:  "force",
@@ -346,7 +346,8 @@ func printOrderDetails(client poolrpc.TraderClient, amt,
 	fmt.Printf("Rate Fixed: %v\n", rate)
 	fmt.Printf("Rate Per Block: %.9f (%.7f%%)\n", ratePerMil, ratePerMil*100)
 	fmt.Println("Execution Fee: ", exeFee)
-	fmt.Println("Max batch fee rate:", maxBatchFeeRate)
+	fmt.Printf("Max batch fee rate: %d sat/vByte\n",
+		maxBatchFeeRate.FeePerKVByte()/1000)
 	fmt.Println("Max chain fee:", chainFee)
 
 	return nil
@@ -385,15 +386,15 @@ var ordersSubmitBidCommand = cli.Command{
 		cli.Uint64Flag{
 			Name: "min_node_tier",
 			Usage: "the min node tier this bid should be matched " +
-				"with, tier 1 nodes are considered 'good', if set " +
-				"to tier 0, then all nodes will be considered " +
-				"regardless of 'quality'",
+				"with, tier 1 nodes are considered 'good', if " +
+				"set to tier 0, then all nodes will be " +
+				"considered regardless of 'quality'",
 			Value: uint64(order.NodeTierDefault),
 		},
 		cli.Uint64Flag{
 			Name: "min_chan_amt",
-			Usage: "the minimum amount of satohis that a resulting " +
-				"channel from this order must have",
+			Usage: "the minimum amount of satoshis that a " +
+				"resulting channel from this order must have",
 		},
 		cli.BoolFlag{
 			Name:  "force",
@@ -410,9 +411,20 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 		return nil
 	}
 
-	nodeTier, err := auctioneer.MarshallNodeTier(
-		order.NodeTier(ctx.Uint64("min_node_tier")),
-	)
+	// The node tier values are a bit un-intuitive. We need to convert
+	// between the human interpretation of "tier 1" (value 1) to the
+	// internal representation of "tier 1" (value order.NodeTier1=2).
+	cliNodeTier := order.NodeTierDefault
+	if ctx.IsSet("min_node_tier") {
+		if ctx.Uint64("min_node_tier") == 0 {
+			cliNodeTier = order.NodeTier0
+		}
+		if ctx.Uint64("min_node_tier") == 1 {
+			cliNodeTier = order.NodeTier1
+		}
+	}
+
+	nodeTier, err := auctioneer.MarshallNodeTier(cliNodeTier)
 	if err != nil {
 		return nil
 	}
