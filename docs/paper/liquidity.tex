@@ -52,7 +52,7 @@ keys]{cryptocode}
 \title{\texttt{\detokenize{Lightning Pool:}} \\
     A Non-Custodial Channel Lease Marketplace}
 \author{
-    Olaoluwa Osuntokun \\ 
+    Olaoluwa Osuntokun \\
     \small{roasbeef@lightning.engineering}
     \and
     Conner Fromknecht \\
@@ -76,7 +76,7 @@ keys]{cryptocode}
 % The Lightning Network is an off-chain Layer 2 payment network built on the
 % Bitcoin blockchain. As the network is fully collateralized, participants must
 % commit capital to the network in the form of channels in order to use the
-% network. 
+% network.
 
 In this paper we examine the core inbound liquidity bootstrapping problem the
 Lightning Network faces, and frame it as a resource allocation problem to be
@@ -92,7 +92,7 @@ the marketplace, The duration of such a contract is enforced on-chain using
 Bitcoin Script. We construct \textbf{Lightning Pool}, using a novel design for
 constructing overlay applications on top of Bitcoin: a shadow chain. Shadow
 chains allow users to remain in full custody of their funds at all times while
-also participating in higher level cut-throughable applications. 
+also participating in higher level cut-throughable applications.
 
 \end{abstract}
 
@@ -118,7 +118,7 @@ typically referred to as \emph{inbound liquidity} or \emph{inbound bandwidth}.
 A would-be user of the network must somehow convince \emph{others} to allocate
 capital towards them in order to receive funds on the network, the inbound
 bandwidth problems remains a significant barrier to the adoption and
-bootstrapping of the Lightning Network. 
+bootstrapping of the Lightning Network.
 
 \textbf{Routing Node Capital Requirements}.  In order to incentivize users to
 commit capital to the network to help other users of the network send/receive
@@ -135,7 +135,7 @@ collected by the routing node, with the following constraint being met $F =
 N_{out} - N_{in}$. Due to this requirement of having sufficient inbound
 \emph{and} outbound bandwidth, even those nodes which exist solely to help
 other nodes send/receive themselves must face the inbound bandwidth allocation
-problem, the fundamental bootstrapping issue that the LN faces. 
+problem, the fundamental bootstrapping issue that the LN faces.
 
 \textbf{Market Design Resource Allocation Problems}. The field of market design
 is a sub-field of economics which is concerned primarily with the efficient
@@ -151,7 +151,7 @@ pricing information, resource allocation, and preference expressions (cite).
 Our first insight is framing the solution to the inbound bandwidth
 bootstrapping problem within the lense of market design. In the context of the
 LN, the scarce resource we aim to more efficiently allocate is: inbound channel
-bandwidth, which is commonly referred to as inbound liquidity. 
+bandwidth, which is commonly referred to as inbound liquidity.
 
 \textbf{LN Bootstrapping as Resource Allocation Problem}. In the absence of a
 proper venue, those that need inbound capital to operate their Lightning
@@ -180,7 +180,7 @@ a non-custodial channel lease marketplace that draws on modern auction theory
 to construct an auction that enables participants to buy/sell inbound channel
 bandwidth. Participants of the marketplace buy/sell channel capital obligations
 which we call a Lightning Channel Lease (LCL). An LCL is similar to a
-traditional bond in that one party acquires capital form another for productive
+traditional bond in that one party acquires capital from another for productive
 usage, with the party parting with their capital being compensated for their
 cost of capital. However as the funds within an LCL can only be used in the
 Lightning Network for sending/receiving, an LCL is analogous to the creation of
@@ -197,7 +197,7 @@ single batch execution transaction that updates all involved accounts, and
 delivers the purchased channels to all parties in an atomic manner. Lightning
 Pool and the LCL solve the inbound bandwidth problem by allowing participants
 on the network to effectively exchange pricing signals to determine exactly
-\emph{where} in the network capital should be allocated. 
+\emph{where} in the network capital should be allocated.
 
 
 \textbf{Shadow Chains as an Application Framework}. Lightning Pool is the first
@@ -215,7 +215,7 @@ indistinguishable from a normal Bitcoin transaction. Shadow chains are able to
 multi-party transaction cut-through (cite). As participants of a shadow-chain
 remain in custody of their funds at all times, complex fraud proofs or exit
 games are unnecessary, significantly simplifying the implementation of a given
-shadow chain. We note that the shadow chain itself is also of independent use. 
+shadow chain. We note that the shadow chain itself is also of independent use.
 
 \subsection{Our Contributions}
 
@@ -233,14 +233,14 @@ In summary we make the following contributions: \begin{itemize} \item We
         execution that allow parties to exchange LCL contracts in an atomic
         manner.  \item We design a new Bitcoin application design framework,
 the shadow chain, which is of independent use.  \end{itemize}
- 
- 
- \textbf{Organization}. Fill in final organization. 
- 
+
+
+ \textbf{Organization}. Fill in final organization.
+
 
 \section{Preliminnaries}
 
-not needed? 
+not needed?
 
 % hash function
 % signature
@@ -261,9 +261,9 @@ we introduce the field of market design, specifically the sub+field of auction
 design to demonstrate how auction design can be used to solve resource
 allocation problems in the real world. Next, we provide some brief background
 on money markets in the traditional financial system, and how this relates to
-our concept of channel leases. 
+our concept of channel leases.
 
-\subsection{Payment Channels \& the Lightning Network} 
+\subsection{Payment Channels \& the Lightning Network}
 
 \begin{center}
 \textbf{Basic Payment Channels}
@@ -358,7 +358,7 @@ $1/1000$ of the base satoshi unit.
  weren't actually demanded at all. This information asymmetry (where new
  channels are actually demanded) and the current inability for today's network
  participants to exchange these key demand signals lies as the crux of the
- bootstrapping problems of the Lightning Network. 
+ bootstrapping problems of the Lightning Network.
 
 
 \subsection{Boostrapping Problems in the Lightning Network}
@@ -366,7 +366,7 @@ $1/1000$ of the base satoshi unit.
 In this section, building on the background provided above, we aim to detail
 the various bootstrapping problems that exist in the Lightning Network today.
 These problems will serve motivation for our solution, the Channel Lease
-Marketplace, and a specific instantiation of such a construct: Lightning Pool. 
+Marketplace, and a specific instantiation of such a construct: Lightning Pool.
 
 
 \subsection{New Routing Node Boostrapping}
@@ -384,17 +384,17 @@ difference of the two amounts, $F= P_{sat_out} -  P_{sat_in}$ being collected
 as a forwarding fee upon payment completion. This \emph{pair-wise} capital
 commitment requirement is commonly cited as a major barrier to Lightning
 Network adoption (cite), as well as why large "hubs" are inherently
-economically inefficient (cite joseph SB montreal). 
+economically inefficient (cite joseph SB montreal).
 
 A routing node faces two key questions when attempting to join the network in a
 productive manner, while also attempting to optimize for \emph{capital}
-efficiency: 
+efficiency:
 
 \begin{enumerate}
         \item \emph{Where} should I open channels to (thereby committing
             outbound capital) within the network in order to \emph{maximize}
             the velocity of my channels, and correspondingly my total fee
-            revenue $F_r$? 
+            revenue $F_r$?
 
         \item \emph{How} can I attract \emph{other} routing nodes to commit
             capital to myself such that I can actually forward payments to earn
@@ -414,7 +414,7 @@ more utility than the paid premium $P_premium$, as otherwise, such a
 transaction would not be economically rationale. Thus, the existence of a
 marketplace that allows routing nodes to efficiently commit their outbound
 capital, as well as \emph{purchase} new inbound capital is a key component to
-solving the boostrapping problem for routing nodes. 
+solving the boostrapping problem for routing nodes.
 
 
 \subsection{New Service Boostrapping}
@@ -426,7 +426,7 @@ a payment \emph{sink}, in that it is primarily \emph{receiving} over the the
 LN. In theory, it's possible for a service to send \emph{and} receiving,
 resulting in a net-flow of zero, but today in the network, most flows are
 uni-directional (cite), creating the need for on/off chain bridges such as
-Lightning Loop (cite). 
+Lightning Loop (cite).
 
 \begin{center}
 	\textbf{Demand for Incoming Bandwidth}
@@ -438,11 +438,11 @@ Bitcoin to be committed as inbound capital, with $S_b > N$. Otherwise, assuming
 only channel churn (cite bryan blog post), all inbound bandwidth will become
 saturated, rendering a service unable to receive additional Bitcoin over the
 LN. Therefore, the operative question a service needs to ask itself when
-attempting to join the network is: 
+attempting to join the network is:
 
 \begin{itemize}
         \item How can I solicit enough inbound bandwidth within the network to
-            be able to receive up to $S_b$ Bitcoin? 
+            be able to receive up to $S_b$ Bitcoin?
 \end{itemize}
 
 
@@ -463,7 +463,7 @@ service}:
 
 \begin{itemize}
         \item How can I solicit enough \emph{high quality} inbound bandwidth
-            within the network to be able to receive up to $S_b$ Bitcoin? 
+            within the network to be able to receive up to $S_b$ Bitcoin?
 \end{itemize}
 
 \begin{center}
@@ -481,13 +481,13 @@ long} the inbound bandwidth will be available for receiving payments. As a
 result, it's critical that the Lightning Service has a hard guarantee with
 respect to \emph{how long} capital will be committed to their node. Taking this
 new criteria into account, we further revisit our new service boostrapping
-problem statement: 
+problem statement:
 
 \begin{itemize}
         \item How can I solicit enough \emph{high quality} inbound bandwidth
             within the network to be able to receive up to $S_b$ Bitcoin, that
-            will be committed for \emph{at least} time $T_blocks$? 
-\end{itemize} 
+            will be committed for \emph{at least} time $T_blocks$?
+\end{itemize}
 
 Summarizing, in addition to the existence of a marketplace for buying/selling
 capital commitment obligations, a woiuld-be buyer requires some sort of
@@ -495,7 +495,7 @@ capital commitment obligations, a woiuld-be buyer requires some sort of
 nodes from the lemons), and also requires that any capital committed must be
 committed for a period of $T_blocks$. These new requirements argue for the
 existence of a Node Rating agency, as well as somewhere to ensure capital will
-be committed for a set period of time in a trust-minimized manner. 
+be committed for a set period of time in a trust-minimized manner.
 
 
 \subsection{End User Boostrapping}
@@ -512,7 +512,7 @@ Lightning Network presents additional challenges. The core challenge is created
 by the constraint that in order for a user to send $K_s$ Bitcoin, they also
 need $K$ Bitcoin committed within the network. Similarly, in order to receive
 up to $K_r$ Bitcoin, they need up to $K_r$ Bitcoin committed as inbound
-bandwidth. 
+bandwidth.
 
 From the perspective of attempting to achieve a similar level of
 user-experience as a base Layer 1 system, the receiving constraint is the most
@@ -525,14 +525,14 @@ providing this inbound bandwidth to users, the wallet becomes more attractive
 as it enables both sending and receiving. However, just receiving isn't enough,
 a user also needs to be able to send \emph{and} receive. In addition to this
 required symmetry, a typical user also has all the same quality of service, and
-time committed capital requirement as well. 
+time committed capital requirement as well.
 
 With this background, we can phrase the end user boostrapping problem as
-follows: 
+follows:
 
 \begin{itemize}
         \item How join the Lighting Network, in a manner that allows them to
-            both send and receive to relevant destinations in the network? 
+            both send and receive to relevant destinations in the network?
 \end{itemize}
 
 
@@ -553,7 +553,7 @@ wireless spectrum auctions by the Federal Communications Comission (FCC)
 airpots (cite), real-time electricity markets (cite), and also carbon credits
 (cite). Market design brides both theory and practice in order to solve
 real-world resource allocation constraints (cite
-http://www.cramton.umd.edu/papers2010-2014/cramton-market-design.pdf). 
+http://www.cramton.umd.edu/papers2010-2014/cramton-market-design.pdf).
 
 
 A commonly used tool in the field of market design are \emph{auctions}.
@@ -562,7 +562,7 @@ who gets what goods, and at which price. The design of a proper auction for a
 particular resource allocation problem has a vast design space. For example,
 should a first or second price auction be used (cite)? How frequently should
 the auction run? What \emph{type} of auction should be used? Should
-participants be able to see the bids of other participants? And so on. 
+participants be able to see the bids of other participants? And so on.
 
 Building off the series of boostrapping problems posed above, we turn to market
 design as a tool to efficiently allocate our scare resource in question:
@@ -571,11 +571,11 @@ dealing with the allocation of capital, there are inherent opportunity costs:
 why should a routing node commit capital to the Lightning Network, compared to
 some other asset that has a similar risk adjusted rate of return (cite)? In
 this context, our end solution may take the form of a \emph{money market},
-which is used by entities to trade short-term debt instruments. 
+which is used by entities to trade short-term debt instruments.
 
 %add a sub-section on transportation systems?
 
-\subsection{Money Markets \& Capital Leases} % Capital Markets & Channel Leases? 
+\subsection{Money Markets \& Capital Leases} % Capital Markets & Channel Leases?
 
 In traditional financial markets, money markets are used to allow entities to
 trade short term debt instruments. Examples of such instruments include U.S
@@ -583,7 +583,7 @@ Treasury Bills (cite), certificates of deposits (site), and repos or repurchase
 agreements (cite). Capital markets on the other hand, are the long-term
 analogue of money markets, in that they deal with longer time frames, and also
 are more heavily traded on secondary markets with retail traders being more
-involved. 
+involved.
 
 In the context of the Lightning Network, our concept of capital obligations
 appears is similar to a bond in that we require a a prior period of time in
@@ -596,21 +596,21 @@ the issuer of a bond to \emph{default}, thereby failing to repay the borrowed
 money, in the context of the LN, there is \emph{no inherent default risk}.
 Instead, arguably the concept of channel leases can be viewed as a risk free
 rate of return (cite), in the context of Bitcoin, and specifically the
-Lightning Network. 
+Lightning Network.
 
 The existence of a \emph{channel lease} serves to provide routing nodes with an
 additional monetary incentive (in the form of a premium paid by the lessor of
 the coins) to operate a routing node. As a result, we can modify the revenue
 $R_c$ earned by a routing node within the context of a specific channel $C$,
-for a period of $t$ blocks to be: 
+for a period of $t$ blocks to be:
 
 \begin{equation}
-R_c(t) = (P_c * t) + (F_c* P_{f_c}) % mak Pr[x] instead? 
+R_c(t) = (P_c * t) + (F_c* P_{f_c}) % mak Pr[x] instead?
 \end{equation}
 
 where $P_c$ is the current \emph{per-block} interest rate, and ($F_c *
 P_{f_c}$) is the \emph{expected} routing fee revenue of the channel within that
-interval \\ 
+interval \\
 
 We reference an \emph{expectation} in fee revenue, as fees are effectively a
 \emph{speculative} component of the routing revenue of a node. If a channel was
@@ -620,7 +620,7 @@ routing node would derive most of its revenue from the yield earned by leasing
 a channel. In this manner, the existence of a concept such as a channel lease,
 actually serves to \emph{reduce} the variance of a routing nodes revenue,
 similar to how joining a mining pool can reduce the variance of a hasher's
-earnings (cite). 
+earnings (cite).
 
 Finally, we argue that the existence of a channel lease that pays a premium
 based on a \emph{per-block} interest rate would result in a novel low-risk
@@ -631,9 +631,9 @@ varying durations ${D_1, ..., D_n}$ a \emph{yield} curve conveying the relative
 short and long term interest rates of channel yields would be constructed. Such
 an instrument would then potentially serve as the basis for higher level
 structured products and derivates built on top of the base channel lease
-instrument. 
+instrument.
 
-%also add a solution overview here? 
+%also add a solution overview here?
 
 \section{Bootstrapping Problems as Solved by CLM}
 
@@ -641,7 +641,7 @@ Prior to outlining our design for channel liquidity markets we seek to provide
 a set of illuminating use-cases in order to demonstrate the need for such
 markets on the Lightning Network. Each of these use cases are empirical
 real-world problems related to the Lightning Network, and prior to the
-publication of this document, no known solution has been presented. 
+publication of this document, no known solution has been presented.
 
 \subsection{Bootstrapping New Users via Sidecar Channels}
 
@@ -663,7 +663,7 @@ Carol, to engage in a protocol with an existing routing node on the network,
 Bob, to provide \emph{both} inbound and outbound liquidity for Alice. Carol is
 able to provide liquidity either with an off-chain, or on-chain payment. At the
 end of the engagement, Carol has provided channel liquidity to Alice via Bob,
-who himself is compensated accordingly for his role in the protocol. 
+who himself is compensated accordingly for his role in the protocol.
 
 \subsection{Demand Fueled Routing Node Channel Selection}
 
@@ -688,9 +688,9 @@ determine what the \emph{time value} of his liquidity is on the network. New
 services such as exchanges or merchant on the network can bid for the node's
 liquidity in order to serve their prospective customers, with the node earning
 a small interest rate up-front for committing his liquidity in the first place
-(scaled by the worst-case CSV delay). 
+(scaled by the worst-case CSV delay).
 
-\subsection{Bootstrapping New Services to Lightning} 
+\subsection{Bootstrapping New Services to Lightning}
 
 Any new service that wishes join the Lightning Network faces the same problem:
 "How can I incentivize nodes to create \emph{inbound} channels to me in order
@@ -698,7 +698,7 @@ to be able to accept payments?". CLM's provide an elegant solution. The
 merchant/exchange/service uses their existing on-chain funds to enter the
 liquidity market place in order to exchange their on-chain coins for off-chain
 coins. Once the trade has been atomically executed, the merchant immediately
-has usable inbound liquidity that can be used to accept payments from users. 
+has usable inbound liquidity that can be used to accept payments from users.
 
 The merchant can then its prior market place exchange partners as
 "introduction" points. As it's undesirable for all users to connect directly to
@@ -706,9 +706,9 @@ the merchant for payment connectivity, users can instead establish channels to
 the prior swapping partners of the service. As the merchant acquires more
 liquidity in the future, they further contribute to the path diversity and
 strength of the network, allowing users to pay via several introduction points
-using AMP \cite{amp}. 
+using AMP \cite{amp}.
 
-\subsection{Cross-Chain Market Maker Liquidity Sourcing} 
+\subsection{Cross-Chain Market Maker Liquidity Sourcing}
 
 As traders are becoming more aware of the counter-party risk of trading on
 centralized exchanges, they look to non-custodial exchange venues. The
@@ -718,7 +718,7 @@ execution speeds to that of centralized exchanges. Additionally, channel based
 non-custodial exchanges are not vulnerable to front-running tactics executed by
 miners. Instead, the trade execution and even the prior trade history are
 \emph{only} known to the participants a, providing a greater degree of
-financial privacy. 
+financial privacy.
 
 Once again, we encounter a bootstrapping issue. How is a market maker on a
 payment channel based non-custodial exchange meant to gather an initial pool of
@@ -729,7 +729,7 @@ to other market makers. A balanced distribution of liquidity amongst market
 makers allows for new traders to participate in the exchange, knowing that
 their flows are balanced, meaning they can receive as much as the can send via
 the market maker, allowing them to instantly start to execute cross-chain
-atomic swaps. 
+atomic swaps.
 
 \subsection{Instant Lightning Wallet User On Boarding}
 
@@ -751,14 +751,14 @@ transfer of payments as well as earn fees over time with successfully completed
 payments. However, if a node isn?t regularly routing payments (thereby earning
 a forwarding fee), then they aren?t compensated for the various (though minor)
 risks they expose their capital to. With Pool, routing node operators are able
-to ensure that they?re consistently compensated for their cost of capital. 
+to ensure that they?re consistently compensated for their cost of capital.
 
-\section{The Channel Lease Marketplace} %definiation 
+\section{The Channel Lease Marketplace} %definiation
 
 In this section, we present an overview of the Channel Lease Marketplace
 architectural design. In section 6, we make a brief detour to define the
 \emph{Shadow Chain} application frame work, before presenting a concrete
-instantiation of a CLM, in the form of \textbf{Lightning Pool}. 
+instantiation of a CLM, in the form of \textbf{Lightning Pool}.
 
 \subsection{High-Level Description}
 
@@ -883,14 +883,14 @@ clearing.
 \textbf{Liquidity Maker \& Taker}
 \end{center}
 
-We begin by introducing the concept of a \texttt{Liquidity Taker}: 
+We begin by introducing the concept of a \texttt{Liquidity Taker}:
 
 \theoremstyle{definition}
 
-\begin{definition}{(Liquidity Taker).} % call Lease instead? also define CLM earlier in the process? 
+\begin{definition}{(Liquidity Taker).} % call Lease instead? also define CLM earlier in the process?
     A Liquidity Taker is an agent in a Channel Liquidity Market seeking to
     \emph{obtain} new \emph{inbound} channel liquidity of size $A_{sat}$ for a
-    period of $T_{block}$ Bitcoin blocks. 
+    period of $T_{block}$ Bitcoin blocks.
 \end{definition}
 
 A taker is prepared to either boostrap the inbound liquidity with their own
@@ -898,34 +898,34 @@ on-chain coins, or pay a \emph{premium} in order to receive a "lease" of
 liquidity from another agent in the market. Takers populate the \emph{demand}
 side of our market. They require new inbound liquidity in order to be able to
 immediately receive payments on the network, or to better position themselves
-as a routing node within the network. 
+as a routing node within the network.
 
 A natural companion to the Liquidity Taker agent within a \texttt{CLM} is the
-\texttt{Liquidity Maker}: 
+\texttt{Liquidity Maker}:
 
 \theoremstyle{definition}
 \begin{definition}{(Liquidity Maker).}
 
 A Liquidity Taker is an agent in a Channel Liquidity Market seeking to earn
 \emph{yield} by deploying up to $A_{sat}$ Bitcoin into the Lightning Network
-for up to a period of $T_{block}$ Bitcoin blocks, earning a profit $\alpha$. 
+for up to a period of $T_{block}$ Bitcoin blocks, earning a profit $\alpha$.
 
 \end{definition}
 
 Notice that we utilize Bitcoin block-time rather than wall-clock (Median Past
 Time (cite)) in these definitions, as we seek to enforce thee durations using
 Bitcoin Script and using block-time rather than wall-clock time is more
-objective compared to wall-clock time. 
+objective compared to wall-clock time.
 
-The profit ($\alpha$) earned by a \texttt{Liquidity Maker} takes two forms: 
+The profit ($\alpha$) earned by a \texttt{Liquidity Maker} takes two forms:
 \begin{itemize}
    \item A one-time \emph{premium}, $R_{premium}$, commanded by the Maker which
        reflects the latent demand and time-value of regular coins vs "lifted
-       coins" (coins placed in channels). 
+       coins" (coins placed in channels).
 
    \item Ongoing reoccurring revenue, $F_c$,  in the form of forwarding fees
-       earned by facilitating payments to their matched taker. 
-\end{itemize} 
+       earned by facilitating payments to their matched taker.
+\end{itemize}
 
 
 We argue that the existence of such Channel Liquidity Markets will increase the
@@ -933,18 +933,18 @@ We argue that the existence of such Channel Liquidity Markets will increase the
 agents to signal the relative demand of lifted coins compared to non-lifted
 coins. Additionally, such markets also allow an existing routing node on the
 network to \emph{re-allocate} lifted coins from a low-velocity section of the
-sub-graph, to one of higher velocity: 
+sub-graph, to one of higher velocity:
 
-\begin{theorem}[Channel velocity revenue] % remove? never used in a proof or anything 
+\begin{theorem}[Channel velocity revenue] % remove? never used in a proof or anything
 Holding all channel liquidity equal, channels allocated to a higher velocity
 section of the sub-graph will yield a higher $F_c$  than channel allocated to a
-low-velocity section of the sub-graph. 
+low-velocity section of the sub-graph.
 \end{theorem}
 
 Intuitively, if each payment flow sourced at an incoming channel $C_i$ and sunk
 at at outgoing channel $C_o$ pays and equal forwarding fee per flow, then for a
 fixed unit of time, a higher velocity channel will result in higher total
-revenue in a time slice. 
+revenue in a time slice.
 
 The role of Channel Liquidity Markets in a payment channel network is to reduce
 information asymmetry by allowing agents to signal their preferences for lifted
@@ -957,9 +957,9 @@ where their liquidity if most demanded on the network. % remove?
 \end{center}
 
 With our two primary agents, defined, we now move on to the definition of a
-Lightning Channel Lease: 
+Lightning Channel Lease:
 
-\begin{definition}{(Lightning Channel Lease).} 
+\begin{definition}{(Lightning Channel Lease).}
     A Lightning Channel lease is defined as, $\Gamma = \{P_{T,} P_{M}, A_{sat},
     D_{block}, r_{i} \}$, where:
 \end{definition}
@@ -967,7 +967,7 @@ Lightning Channel Lease:
 \begin{itemize}
     \item $P_{T}$ is the \texttt{secp256k1} public key (cite) of the
 \texttt{Liquidity Taker}, $P_{M}$ the public key for the \texttt{Liquidity
-Maker}. 
+Maker}.
     \item $A_{sat}$ is the total amount of Bitcoin within the contract.
     \item $D_{block}$ is the duration of the contract expressed in Blocks.
     \item $r_{i}$ is the per-block interest rate as discovered in the $i$th
@@ -995,7 +995,7 @@ A marketplace account is a \emph{non-custodial} account defined as, $\Psi =
 
 \begin{itemize}
     \item $K_{sat}$ is the total amount of Bitcoin available within the account.
-    \item $T_{blocks}$ is the absolute expiry height of the account. 
+    \item $T_{blocks}$ is the absolute expiry height of the account.
     \item $P_{acct}$ is a \texttt{secp256k1} public key  that \emph{uniqely} identifies the account.
     \item $\Omega_{nodes}$ is a set of Lighting Network nodes controlled by the account.
 \end{itemize}
@@ -1007,14 +1007,14 @@ auctioneer to close, deposit, or withdraw funds from their account. In the case
 of the \texttt{Liquidity Taker}, the funds within the account $K_{sat}$, must
 be enough to pay for any desired premium, Conversely for the \texttt{Liquidity
 Maker}, we require all funds they wish to lease out to be deposited into the
-account. 
+account.
 
 This structure, which forces all participants to fully commit all funds they
 wish to use within the marketplace into a non-custodial account is similar to
 the concept of Fidelity Bonds (cite). This structure has a number of desirable
 properties including:
 
-\begin{itemize} % what else? 
+\begin{itemize} % what else?
     \item \textbf{Order spoofing mitigation}: Within the CLM, as all orders
         must be "fully backed", it isn't possible to place a "fake" order that
         cannot be filled.
@@ -1022,20 +1022,20 @@ properties including:
     \item \textbf{Time value opportunity cost}: By forcing all agents to
         suspend funds they wish to use within the market, those funds cannot be
         used elsewhere, thereby adding an implicit cost to joining the
-        marketplace. 
+        marketplace.
 
     \item \textbf{Deterministic batch execution construction}: As we'll see in
         later sections, the existence of a fixed account for each agent
         simplified the clearing and execution process within the auction
-        lifecycle. 
+        lifecycle.
 
 \end{itemize}
 
 These accounts in the abstract may take many forms, but as we focus on Bitcoin,
 as detailed in later sections, these accounts will take the form of a multi-sig
-output, with one key belonging to the auctioneer. 
+output, with one key belonging to the auctioneer.
 
-% define other operations for Deposit(), Withdraw(), Renew(), Close() or leave to the section below 
+% define other operations for Deposit(), Withdraw(), Renew(), Close() or leave to the section below
 
 \subsection{Order Structure \& Verification}
 
@@ -1051,7 +1051,7 @@ submitted
 \textbf{Order Structure}
 \end{center}
 
-We define an \texttt{Order} within the context of a \texttt{CLM} as follows: 
+We define an \texttt{Order} within the context of a \texttt{CLM} as follows:
 
 \theoremstyle{definition}
 \begin{definition}{(Order).}
@@ -1074,7 +1074,7 @@ We define an \texttt{Order} within the context of a \texttt{CLM} as follows:
         parse any newly added fields, as well as compute the digest required to
         check the authentication tag attached to an order.
 
-    \item $P_{acct}$ is the public key that uniquely identifies this account. 
+    \item $P_{acct}$ is the public key that uniquely identifies this account.
 
     \item The set of base order details is: \\ $\Delta_{base} = \{
         \alpha_{rate}, A_{sat}, M_{pub}, L_{pub}, A_{addr}, C_{type},
@@ -1265,7 +1265,7 @@ due to the existence of the $\Delta_{aux}$ portion of an order's structure. \\
 
 % state the specified constraints as a linear program??
 
- 
+
 \texttt{MarketClearingPrice($\Phi_b$)} $\rightarrow$ $c_{price}$. The
 \texttt{MarketClearingPrice} algorithm accepts the set of orders matched by the
 \texttt{MatchMake} algorithm and returns the \emph{market clearing price} of
@@ -1275,9 +1275,9 @@ last-accepted-bid (cite) likely being used. Utilizing of a single market
 clearing price is intended to promote fairness (cite) (all traders pay the same
 price!) and also  \\
 
-% give example of FRB and/or LAB here? 
+% give example of FRB and/or LAB here?
 
-% iamge of LAB clearing price here? 
+% iamge of LAB clearing price here?
 
 \texttt{ClearMarket($\Psi_{A}, \Phi_b, \{\Psi_0, \dots, \Psi_n\}, c_{price}$)}
 $\rightarrow$ $(\Psi_{A}^\prime, \{\Gamma_0, \dots, \Gamma_n\},
@@ -1299,7 +1299,7 @@ clearing.
 \end{itemize}
 
 % takes the set of matched orders, and accounts, creates set of new accounts
-% (diffs) 
+% (diffs)
 
 \begin{center}
     \textbf{Batch Execution}
@@ -1308,7 +1308,7 @@ clearing.
 Once we've been able to make a market, and have the description of the
 resulting market state (the accounts, and the channel leases to be created), we
 can now move on to \emph{executing} the resulting batch. We use the following
-algorithms to do so:  \\ 
+algorithms to do so:  \\
 
 \texttt{ConstructBatch($\Delta_i$)} $\rightarrow$ $B_{t_i}$. The
 \texttt{ConstructBatch} algorithm takes a valid market clearing (which can be
@@ -1328,25 +1328,25 @@ can be used as inputs to additional iterations of the auction life cycle.
 
 
 \iffalse
-shadow chain section: 
-  * define as state machine that returns tate, then later define state in specific section to the the input of all the utxos and other state 
-  
+shadow chain section:
+  * define as state machine that returns tate, then later define state in specific section to the the input of all the utxos and other state
+
  ShadowChain:
-    * Init() -> lambda params, w/e w/e 
+    * Init() -> lambda params, w/e w/e
     * state = InitState(auctioneerUtxo)
-    * state = stateStep(state, stateDelta) -- a qurom needed to state step, 
-    * propose set of updates to all 
+    * state = stateStep(state, stateDelta) -- a qurom needed to state step,
+    * propose set of updates to all
         * for account := range accounts {
-            proopse state 
+            proopse state
          }
-     * state_i = UpgradeState(state_i) 
+     * state_i = UpgradeState(state_i)
      * state = {operatorKey, k_1, .., k_n}
      * state = stateFunc(state, proposal, executionEnv)
-          * env can change off-chain, no need to on-chain upgrades, identified by hash/identifier 
-     * order of execution func as way to impl soft-forks?  
+          * env can change off-chain, no need to on-chain upgrades, identified by hash/identifier
+     * order of execution func as way to impl soft-forks?
      * state = coasalce(state_,1, ..., state_n) (transaction cut thru)
-     * quorum = propose(masterKey, accounts) 
-     * ^ then state func 
+     * quorum = propose(masterKey, accounts)
+     * ^ then state func
 \fi
 
 \section{The Shadowchain: A Bitcoin Overlay Application Framework}
@@ -1365,7 +1365,7 @@ shadowchain.
 \subsection{High-Level Description}
 
 First, we provide a high-level description of the shadow chain application
-framework. 
+framework.
 
 \textbf{The Shadowchain Usecase}. A shadowchain can be used to to implement
 non-custodial smart contract systems on top of the base Bitcoin blockchain.
@@ -1383,7 +1383,7 @@ initialization parameters, and upgrade mechanisms. A user is able to join a
 shadowchain by "lifting" their UTXOs \emph{into} the higher-level shadowchain.
 The process of lifting (defined further below) entails the user placing funds
 within a time-lock released multi-sig output between itself and the shadowchain
-orchestrator. 
+orchestrator.
 
 \textbf{Shadowchain Operation}. The shadowchain orchestrator accepts
 transaction data from users, then periodically proposes a new \emph{shadowchain
@@ -1476,7 +1476,7 @@ Block hash of a normal blockchain.
 Next, we define the \texttt{Lifted UTXO} which is the representation of a
 user's state within a given shadow chain:
 
-\begin{definition}{(Lifted UTXO).} A \texttt{Lifted UTXO} is a tuple, 
+\begin{definition}{(Lifted UTXO).} A \texttt{Lifted UTXO} is a tuple,
     $ \phi = (A_{sat}, T_{expiry}, P_{u}, P_{o})$, where:
 \end{definition}
 
@@ -1519,7 +1519,7 @@ itself.
     \textbf{Shadowchain Components}
 \end{center}
 
-First, we define the core components of the shadowchain. 
+First, we define the core components of the shadowchain.
 
 \begin{definition}{(Shadowchain).} An instantiation of a \texttt{Shadowchain}
     is defined as a tuple: $\Sigma = (U_{L}, U_{O}, \Delta, E_{exe},
@@ -1592,24 +1592,24 @@ interested in two algorithms within the context of such a scheme $\Sigma =
 generation and verification algorithms.
 
 
-Once the Maker has determined the two parmaters to the auction, he constructs a special \emph{auction} script which will allow him to auction off his liquidity to the bidder that pays the highest \emph{premium}. This script will allow him to enter the auction phase, where either the auction will timeout (providing him with a refund), or the auction is successful, leading to creation of a next channel on the network (a successful exchange). The (unoptimized) auction Script template is as follows: 
+Once the Maker has determined the two parmaters to the auction, he constructs a special \emph{auction} script which will allow him to auction off his liquidity to the bidder that pays the highest \emph{premium}. This script will allow him to enter the auction phase, where either the auction will timeout (providing him with a refund), or the auction is successful, leading to creation of a next channel on the network (a successful exchange). The (unoptimized) auction Script template is as follows:
 \begin{verbatim}
 OP_IF
     <T> OP_CHECKLOCKTIMEVERIFY
-    <maker refund key> 
+    <maker refund key>
     OP_CHECKSIG
 OP_ELSE
     <maker multi-sig key> 2 OP_CHECKMULTISIG
 OP_ENDIF
 \end{verbatim}
- 
- The first clause is the timeout clause, it allows the Maker to simply wait out an auction and obtain a refund if the market conditions are undesirable, or he wishes to start a new auction with a fresh set of coins. The role of the timeout clause is to show potential Takers that the Maker has \emph{skin in the game}: by sending his coins to a time-locked output he provides a strong signal to the marketplace of his willingness to participate. A valid witness to execute this clause is (omitting the witness script for brevity) 
+
+ The first clause is the timeout clause, it allows the Maker to simply wait out an auction and obtain a refund if the market conditions are undesirable, or he wishes to start a new auction with a fresh set of coins. The role of the timeout clause is to show potential Takers that the Maker has \emph{skin in the game}: by sending his coins to a time-locked output he provides a strong signal to the marketplace of his willingness to participate. A valid witness to execute this clause is (omitting the witness script for brevity)
 \begin{verbatim}
 <refund sig> <1>
 \end{verbatim}
 
- 
- 
+
+
  The second clause is the auction \emph{execution} clause. This clause will be executed in the scenario that the Maker finds a Taker willing to pay the premium that he dictates. Notice that the multi-sig clause only specifies a \emph{single} key. We'll use this little-trick to bind the Taker to the channel at auction execution time. A valid witness to execute this clause is (omitting the witness script again for brevity):
  \begin{verbatim}
 <taker sig> <maker sig> <2> <taker key> <nil>
