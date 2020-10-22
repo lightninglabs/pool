@@ -1333,11 +1333,30 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 	var nonce order.Nonce
 	copy(nonce[:], req.OrderNonce)
 
+	o, err := s.server.db.GetOrder(nonce)
+	if err != nil {
+		return nil, err
+	}
+
+	switch o.Details().State {
+	// The order has already been canceled, just return now.
+	case order.StateCanceled:
+		return &poolrpc.CancelOrderResponse{}, nil
+
+	// The order has reached a terminal state so there's no point in
+	// canceling it.
+	case order.StateExecuted, order.StateExpired, order.StateFailed:
+		return nil, fmt.Errorf("unable to cancel order in terminal "+
+			"state %v", o.Details().State)
+	default:
+		break
+	}
+
 	rpcLog.Infof("Cancelling order_nonce=%v", nonce)
 
 	// We cancel an order in two phases. First, we'll cancel the order on
 	// the server-side.
-	err := s.auctioneer.CancelOrder(ctx, nonce)
+	err = s.auctioneer.CancelOrder(ctx, o.Details().Preimage)
 	if err != nil {
 		return nil, err
 	}

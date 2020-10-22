@@ -21,6 +21,7 @@ import (
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lntypes"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -414,9 +415,9 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 }
 
 // CancelOrder sends an order cancellation message to the server.
-func (c *Client) CancelOrder(ctx context.Context, nonce order.Nonce) error {
+func (c *Client) CancelOrder(ctx context.Context, noncePreimage lntypes.Preimage) error {
 	_, err := c.client.CancelOrder(ctx, &poolrpc.ServerCancelOrderRequest{
-		OrderNonce: nonce[:],
+		OrderNoncePreimage: noncePreimage[:],
 	})
 	return err
 }
