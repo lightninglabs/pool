@@ -88,8 +88,6 @@ func promptForConfirmation(msg string) bool {
 // server will do that on the RPC level anyway.
 func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, error) {
 	var (
-		err    error
-		amt    btcutil.Amount
 		args   = ctx.Args()
 		params = &poolrpc.Order{}
 	)
@@ -98,23 +96,26 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 	case ctx.IsSet("amt"):
 		params.Amt = ctx.Uint64("amt")
 	case args.Present():
-		amt, err = parseAmt(args.First())
+		amt, err := parseAmt(args.First())
+		if err != nil {
+			return nil, fmt.Errorf("unable to decode amount: %v", err)
+		}
 		params.Amt = uint64(amt)
 		args = args.Tail()
 	}
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode amount: %v", err)
-	}
 
 	// If the minimum channel amount flag wasn't provided, use a default of
-	// 10%.
+	// 10%, but make sure it doesn't dip below the minimum allowed.
+	minOrderChanAmt := btcutil.Amount(order.BaseSupplyUnit)
 	minChanAmt := btcutil.Amount(ctx.Uint64("min_chan_amt"))
 	if minChanAmt == 0 {
-		minChanAmt = amt / 10
+		minChanAmt = btcutil.Amount(params.Amt) / 10
+		if minChanAmt < minOrderChanAmt {
+			minChanAmt = minOrderChanAmt
+		}
 	}
 
 	// Verify the minimum channel amount flag has been properly set.
-	minOrderChanAmt := btcutil.Amount(order.BaseSupplyUnit)
 	switch {
 	case minChanAmt%minOrderChanAmt != 0:
 		return nil, fmt.Errorf("minimum channel amount %v must be "+
@@ -130,6 +131,7 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 	}
 	params.MinUnitsMatch = uint32(minChanAmt / minOrderChanAmt)
 
+	var err error
 	params.TraderKey, err = parseAccountKey(ctx, args)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse acct_key: %v", err)
