@@ -105,7 +105,7 @@ also participating in higher level cut-throughable applications.
 \section{Introduction}
 
 \textbf{Lightning Network Bootstrapping Challenges}. The Lightning Network
-(cite) is the largest deployed Layer 2 payment channel network (cite). A
+(cite) is the largest deployed Layer 2 payment channel network (cite https://lightning.network/lightning-network-paper.pdf). A
 payment channel network comprises of a series of individual payment channels,
 which when strung together, enable rapid low-latency payments between
 participants on the network. Due to the off-chain nature of these payments
@@ -121,22 +121,22 @@ receiver. A participant can only send and receive up to the total amount of
 Bitcoin in a channel committed by both parties. This allocation of capital by
 one party in order to enable another party to receive funds on the network is
 typically referred to as \emph{inbound liquidity} or \emph{inbound bandwidth}.
-A would-be user of the network must somehow convince \emph{others} to allocate
+Because a would-be user of the network must somehow convince \emph{others} to allocate
 capital towards them in order to receive funds on the network, the inbound
-bandwidth problems remains a significant barrier to the adoption and
+bandwidth problem remains a significant barrier to the adoption and
 bootstrapping of the Lightning Network. 
 
 \textbf{Routing Node Capital Requirements}.  In order to incentivize users to
 commit capital to the network to help other users of the network send/receive
 payments, each time a node forwards a payment successfully they receive a fee
 dictated by themselves. As commonly implemented this fee has a fixed base
-amount to be paid for all forward independent of payment size, and a fee rate
+amount to be paid for all forwards independent of payment size, and a fee rate
 or proportional amount that must be paid for each millionth of a satoshi
 forwarded (cite). We refer to nodes that join in order to facilitate payments
-and collect forwarding fees: \emph{routing nodes}. In order to forward a
+and collect forwarding fees as \emph{routing nodes}. In order to forward a
 payment of size $N$ on the network, a routing node needs to have $N_{in} - F$
 Bitcoin allocated \emph{towards} it as inbound bandwidth, and $N_{out}$ Bitcoin
-allocated to another node as inbound bandwidth. The factor of $F$ is the fee
+allocated to another node as outbound bandwidth. The factor of $F$ is the fee
 collected by the routing node, with the following constraint being met $F =
 N_{out} - N_{in}$. Due to this requirement of having sufficient inbound
 \emph{and} outbound bandwidth, even those nodes which exist solely to help
@@ -155,7 +155,7 @@ usage, and wireless spectrum auctions (cite) (cite) (cite). In each of these
 examples, market design is used to allow more effective communication of
 pricing information, resource allocation, and preference expressions (cite).
 Our first insight is framing the solution to the inbound bandwidth
-bootstrapping problem within the lense of market design. In the context of the
+bootstrapping problem within the lens of market design. In the context of the
 LN, the scarce resource we aim to more efficiently allocate is: inbound channel
 bandwidth, which is commonly referred to as inbound liquidity. 
 
@@ -167,10 +167,10 @@ facilitate network operation and gain routing fees must guess as to exactly
 where their capital is most demanded. As node operators may not necessarily
 know where their capital is most demanded, they risk opening channels where
 they aren?t actually demanded, leading to poor resource utilization and capital
-opportunity costs. It?s as if node operators are speculatively building roads
-that no one will use (why isn?t my node forwarding?), and those seeking to
-receive aren?t able to flag their service as an attractive destination to be
-connected to internal network ?highways?. Lightning Pool solves this resource
+opportunity costs. It's as if node operators are speculatively building roads
+that no one will use (why isn't my node forwarding?), and those seeking to
+receive aren't able to flag their service as an attractive destination to be
+connected to internal network "highways". Lightning Pool solves this resource
 allocation problem by creating a new auction that matches up those seeking to
 deploy capital (open channels) to those that need these channels in order to
 operate their Lightning service or business. With each executed batch, the
@@ -186,7 +186,7 @@ a non-custodial channel lease marketplace that draws on modern auction theory
 to construct an auction that enables participants to buy/sell inbound channel
 bandwidth. Participants of the marketplace buy/sell channel capital obligations
 which we call a Lightning Channel Lease (LCL). An LCL is similar to a
-traditional bond in that one party acquires capital form another for productive
+traditional bond in that one party acquires capital from another for productive
 usage, with the party parting with their capital being compensated for their
 cost of capital. However as the funds within an LCL can only be used in the
 Lightning Network for sending/receiving, an LCL is analogous to the creation of
@@ -209,7 +209,7 @@ on the network to effectively exchange pricing signals to determine exactly
 \textbf{Shadow Chains as an Application Framework}. Lightning Pool is the first
 application built on top of Bitcoin that utilizes the \emph{Shadow Chain}
 paradigm to construct an application-specific overlay system on top of existing
-Bitcoin unspent transaction outputs (UTXOs). A user joins a shadow chain my
+Bitcoin unspent transaction outputs (UTXOs). A user joins a shadow chain by
 creating a special multi-sig based output using a public key of the target
 shadow chain manager. Once a user has joined the shadow chain, proposed state
 transitions are packaged up (in the form of a block) by the shadow chain
@@ -244,7 +244,7 @@ the shadow chain, which is of independent use.  \end{itemize}
  \textbf{Organization}. Fill in final organization. 
  
 
-\section{Preliminnaries}
+\section{Preliminaries}
 
 not needed? 
 
@@ -259,11 +259,11 @@ not needed?
 
 In this section, we aim to introduce some necessary background which will be
 built upon in later chapters to construct our solution. First, we'll describe
-multi+hop payment channels and the Lightning Network as deployed today. Next,
+multi-hop payment channels and the Lightning Network as deployed today. Next,
 we'll explore the nature of the inbound bandwidth bootstrapping problem the
 Lightning Network faces today. Along the way we'll explain the dynamics of
 routing nodes in the network, as they're a key component of the system. Next,
-we introduce the field of market design, specifically the sub+field of auction
+we introduce the field of market design, specifically the sub-field of auction
 design to demonstrate how auction design can be used to solve resource
 allocation problems in the real world. Next, we provide some brief background
 on money markets in the traditional financial system, and how this relates to
@@ -275,8 +275,8 @@ our concept of channel leases.
 \textbf{Basic Payment Channels}
 \end{center}
 
-A payment channel (cite) in its simplest form (cite) is an on+chain 2+of~2
-multi+sig output between to parties $A$ and $B$. One, or both parties deposit
+A payment channel (cite) in its simplest form (cite) is an on-chain 2-of-2
+multi-sig output between two parties $A$ and $B$. One, or both parties deposit
 funds into a script hash Bitcoin Script output constructed using two public
 keys $P_{a}$ and $P_{b}$. The transaction which creates this multi-sig output
 is referred to as the \emph{funding transaction}. Assuming a fix for
@@ -315,7 +315,7 @@ objective statement of contract violation by the opposing party. \\
 \end{center}
 
 
-The final component of modern mult-hop payment channels is the Hash Time Locked
+The final component of modern multi-hop payment channels is the Hash Time Locked
 Contract, or the HTLC. The HTLC enables payments to travel over a \emph{series}
 of payment channels, allowing set of interlinked payment channels to be
 composed into a logical \emph{payment network}. An HTLC can be viewed as a
@@ -331,7 +331,7 @@ timeout $T$ has elapsed. This construct can be chained by several parties (up
 to 20 in the modern Lightning Network (cite)) to create a multi-hop payment
 within the network. For security properties, each party must ensure that their
 outgoing hash lock puzzle's absolute timelock $T_o$ is offset from the incoming
-absolute timelock $T_i$ by a value of $C_delta$. This value $C_{delta}$ is
+absolute timelock $T_i$ by a value of $C_{delta}$. This value $C_{delta}$ is
 commonly referred to as the CLTV delta (cite bolt). This value $C_{delta}$ is
 an important security parameter, as if $C_{delta}$ blocks passes and the
 outgoing hash lock isn't fully resolved, then a \emph{race condition} occurs as
@@ -383,10 +383,10 @@ Bitcoin charged into payment channels on the network. Routing nodes however are
 in a unique situation, as they need to both \emph{commit} their own capital to
 the network, as well as \emph{solicit} committed capital from \emph{other}
 routing nodes. This is due to the fact that in order to be able to forward a
-payment of size $P_{sat}$, the routing node must first have $P_{sat_out}$
+payment of size $P_{sat}$, the routing node must first have $P_{sat_{out}}$
 satoshis committed as \emph{outbound} payment bandwidth (to use for sending)
-and $P_{sat_in}$ committed as \emph{inbound} payment bandwidth, with the
-difference of the two amounts, $F= P_{sat_out} -  P_{sat_in}$ being collected
+and $P_{sat_{in}}$ committed as \emph{inbound} payment bandwidth, with the
+difference of the two amounts, $F= P_{sat_{out}} -  P_{sat_{in}}$ being collected
 as a forwarding fee upon payment completion. This \emph{pair-wise} capital
 commitment requirement is commonly cited as a major barrier to Lightning
 Network adoption (cite), as well as why large "hubs" are inherently
@@ -415,9 +415,9 @@ to an undesirable location (possibly over served) will have low channel
 velocity $C_{v}$, and result in an overall lower total fee revenue $F_r$. In
 order to maximize both $C_v$ and $F_fr$, a routing node should only open
 channels to where they're \emph{most demanded}. If an agent is willing to pay
-up to $P_premium$ Bitcoin for inbound bandwidth, the rationally, they must gain
-more utility than the paid premium $P_premium$, as otherwise, such a
-transaction would not be economically rationale. Thus, the existence of a
+up to $P_{premium}$ Bitcoin for inbound bandwidth, then they must gain
+more utility than the paid premium $P_{premium}$, as otherwise, such a
+transaction would not be economically rational. Thus, the existence of a
 marketplace that allows routing nodes to efficiently commit their outbound
 capital, as well as \emph{purchase} new inbound capital is a key component to
 solving the boostrapping problem for routing nodes. 
@@ -429,7 +429,7 @@ If routing nodes are the the backbone or highway of the Lightning Network, then
 so called Lightning Services, are the primary \emph{destinations} of a given
 payment. For simplicity, we assume that at given Lightning Service is primarily
 a payment \emph{sink}, in that it is primarily \emph{receiving} over the the
-LN. In theory, it's possible for a service to send \emph{and} receiving,
+LN. In theory, it's possible for a service to be balanced in terms of sending \emph{and} receiving,
 resulting in a net-flow of zero, but today in the network, most flows are
 uni-directional (cite), creating the need for on/off chain bridges such as
 Lightning Loop (cite). 
@@ -438,8 +438,8 @@ Lightning Loop (cite).
 	\textbf{Demand for Incoming Bandwidth}
 \end{center}
 
-Focusing on the case of a Lightning Service that's pirimrilary a \emph{payment
-sink}, on order to receive up to $N$ Bitcoin, the service requires $S_b$
+Focusing on the case of a Lightning Service that's primarily a \emph{payment
+sink}, in order to receive up to $N$ Bitcoin, the service requires $S_b$
 Bitcoin to be committed as inbound capital, with $S_b > N$. Otherwise, assuming
 only channel churn (cite bryan blog post), all inbound bandwidth will become
 saturated, rendering a service unable to receive additional Bitcoin over the
@@ -460,7 +460,7 @@ It's important to note, that as operating an \emph{valid} routing node on the
 network requires a degree of skill and commitment (cite bryan blog post), some
 routing nodes are able to provide a more \emph{effective} service than others.
 As an example, imagine a routing node $Bob$, who has sufficient capital
-committed to his not in both the inbound and outbound directions, but who is
+committed to his node in both the inbound and outbound directions, but who is
 chronically \emph{offline}. As a node must be \emph{online} in order to be able
 to forward payments, any capital $C_Bob$ committed by $Bob$, can essentially be
 considered dead weight. With this insight in mind, we revisit the bootstrapping
@@ -473,16 +473,16 @@ service}:
 \end{itemize}
 
 \begin{center}
-	\textbf{Time Committed Incoming bandwidth}
+	\textbf{Time Committed Incoming Bandwidth}
 \end{center}
 
 
 However, from the point of view of an active Lightning Service, just having
 sufficient high quality inbound bandwidth may not be enough. Consider that a
 high quality node $Carol$ may erroneously decide to commit capital elsewhere,
-resulting in over all lower channel velocity $C_v$ for their channels. This
-type of fair-weather behavior serves as a detriment to our Lightning Services,
-as they're unable to properly plan for the future, as they don't know \emph{how
+resulting in overall lower channel velocity $C_v$ for their channels. This
+type of fair-weather behavior serves as a detriment to our Lightning Services;
+they're unable to properly plan for the future, as they don't know \emph{how
 long} the inbound bandwidth will be available for receiving payments. As a
 result, it's critical that the Lightning Service has a hard guarantee with
 respect to \emph{how long} capital will be committed to their node. Taking this
@@ -492,14 +492,14 @@ problem statement:
 \begin{itemize}
         \item How can I solicit enough \emph{high quality} inbound bandwidth
             within the network to be able to receive up to $S_b$ Bitcoin, that
-            will be committed for \emph{at least} time $T_blocks$? 
+            will be committed for \emph{at least} time $T_{blocks}$? 
 \end{itemize} 
 
 Summarizing, in addition to the existence of a marketplace for buying/selling
-capital commitment obligations, a woiuld-be buyer requires some sort of
+capital commitment obligations, a would-be buyer requires some sort of
 \emph{rating-system} to reduce information asymmetry (distinguish the good
 nodes from the lemons), and also requires that any capital committed must be
-committed for a period of $T_blocks$. These new requirements argue for the
+committed for a period of $T_{blocks}$. These new requirements argue for the
 existence of a Node Rating agency, as well as somewhere to ensure capital will
 be committed for a set period of time in a trust-minimized manner. 
 
@@ -512,7 +512,7 @@ are the highways in our payment transportation network, the the Lightning
 Services popular destinations, then users trigger \emph{payment flows} that
 traverse the backbone created by routing nodes, to arrive at the Lightning
 Services. Note that within our model, we permit end users to both send
-\emph{and} receiver. Compared to boostrapping a new user to a Layer 1 system
+\emph{and} receive. Compared to boostrapping a new user to a Layer 1 system
 such as the Bitcoin blockchain, boostrapping to a Layer 2 system like the
 Lightning Network presents additional challenges. The core challenge is created
 by the constraint that in order for a user to send $K_s$ Bitcoin, they also
@@ -537,7 +537,7 @@ With this background, we can phrase the end user boostrapping problem as
 follows: 
 
 \begin{itemize}
-        \item How join the Lighting Network, in a manner that allows them to
+        \item How can a new user join the Lighting Network in a manner that allows them to
             both send and receive to relevant destinations in the network? 
 \end{itemize}
 
@@ -592,7 +592,7 @@ are more heavily traded on secondary markets with retail traders being more
 involved. 
 
 In the context of the Lightning Network, our concept of capital obligations
-appears is similar to a bond in that we require a a prior period of time in
+appears similar to a bond in that we require a a prior period of time in
 which the capital is allocated, but unlike a bond in that the committed funds
 can only be used on the Lightning Network to provide a new type of service: the
 \emph{propensity} to receive or send funds on the network. As a result, we
@@ -654,8 +654,8 @@ publication of this document, no known solution has been presented.
 A common question posed concerning the Lightning Network goes something like:
 Alice is new to Bitcoin entirely, how can she join the Lightning Network
 without her, herself, making any new \emph{on-chain} Bitcoin transactions? It's
-desirable to present a solution to such a use-case as on-boarding for on-chain
-transaction is as simple as sending coins to a fresh address. In order for
+desirable to present a solution to such a use-case as on-boarding for an on-chain
+user is as simple as sending coins to a fresh address. In order for
 off-chain payment channel networks to achieve wide-spread usage, a similar,
 seamless on-boarding workflow must be created.
 
@@ -706,7 +706,7 @@ liquidity market place in order to exchange their on-chain coins for off-chain
 coins. Once the trade has been atomically executed, the merchant immediately
 has usable inbound liquidity that can be used to accept payments from users. 
 
-The merchant can then its prior market place exchange partners as
+The merchant can then use its prior market place exchange partners as
 "introduction" points. As it's undesirable for all users to connect directly to
 the merchant for payment connectivity, users can instead establish channels to
 the prior swapping partners of the service. As the merchant acquires more
@@ -723,17 +723,17 @@ candidate of such a venue: channels allow for non-custodial trading at similar
 execution speeds to that of centralized exchanges. Additionally, channel based
 non-custodial exchanges are not vulnerable to front-running tactics executed by
 miners. Instead, the trade execution and even the prior trade history are
-\emph{only} known to the participants a, providing a greater degree of
+\emph{only} known to the participants, providing a greater degree of
 financial privacy. 
 
 Once again, we encounter a bootstrapping issue. How is a market maker on a
-payment channel based non-custodial exchange meant to gather an initial pool of
+payment channel-based non-custodial exchange meant to gather an initial pool of
 liquidity to service orders? We see CLMs as a natural solution. The market
 maker can seek out liquidity of relevant trading pairs by purchasing inbound
 channel liquidity, in addition to putting up its own outbound channel liquidity
 to other market makers. A balanced distribution of liquidity amongst market
 makers allows for new traders to participate in the exchange, knowing that
-their flows are balanced, meaning they can receive as much as the can send via
+their flows are balanced, meaning they can receive as much as they can send via
 the market maker, allowing them to instantly start to execute cross-chain
 atomic swaps. 
 
@@ -748,16 +748,16 @@ lower their customer acquisition costs, as they can pay only a percentage of
 the funds to be allocated to a new user. Just like the merchant purchasing
 inbound in the above segment, a wallet could pay 1k satoshis to have 1mm
 satoshis be allocated to a user, instead of fronting the whole 1mm satoshis
-themselves
+themselves.
 
 \subsection{Variance Reduction in Routing Node Revenue}
 
 Today routing node operators aim to join the network in order to facilitate the
 transfer of payments as well as earn fees over time with successfully completed
-payments. However, if a node isn?t regularly routing payments (thereby earning
-a forwarding fee), then they aren?t compensated for the various (though minor)
+payments. However, if a node isn't regularly routing payments (thereby earning
+a forwarding fee), then they aren't compensated for the various (though minor)
 risks they expose their capital to. With Pool, routing node operators are able
-to ensure that they?re consistently compensated for their cost of capital. 
+to ensure that they're consistently compensated for their cost of capital. 
 
 \section{The Channel Lease Marketplace} %definiation 
 
@@ -779,7 +779,7 @@ utilize a discrete interval frequent batched auction in order to mitigate
 front-running and other undesirable aspects. Rather than participants paying
 what they bid (commonly called a pay-as-you-bid auction (cite)(cite)), all
 participants will instead pay the say \emph{uniform clearing price} (cite).
-Finally, all operations that result from a sackful auction are batched and
+Finally, all operations that result from a successful auction are batched and
 committed in a \emph{single} atomic blockchain transaction.
 
 \clearpage
@@ -826,12 +826,12 @@ a series of corresponding channel leases.
     \textbf{Account Creation}
 \end{center}
 
-Before being able to particiapte in the marketplace, we require that an agent
+Before being able to participate in the marketplace, we require that an agent
 first create a \texttt{Marketplace Account}. A \texttt{Marketplace Account} is
 a non-custodial account that forces an agent to commit capital in the form of
 Bitcoin to the market for a period of time. As we require agents to fully back
 all orders within an account, we eliminate a number of order spoofing vectors.
-Additionally the time-locked non-custodial nature of the account ensures a user
+Additionally, the time-locked non-custodial nature of the account ensures a user
 is able to recover their funds fully without any additional on-chain
 transactions (aside from the sweeping transaction).
 
@@ -918,10 +918,9 @@ for up to a period of $T_{block}$ Bitcoin blocks, earning a profit $\alpha$.
 
 \end{definition}
 
-Notice that we utilize Bitcoin block-time rather than wall-clock (Median Past
-Time (cite)) in these definitions, as we seek to enforce thee durations using
-Bitcoin Script and using block-time rather than wall-clock time is more
-objective compared to wall-clock time. 
+Notice that we utilize Bitcoin block-time rather than wall-clock time (Median Past
+Time (cite)) in these definitions, as we seek to enforce these durations using
+Bitcoin Script and using block-time is more objective compared to wall-clock time. 
 
 The profit ($\alpha$) earned by a \texttt{Liquidity Maker} takes two forms: 
 \begin{itemize}
@@ -966,7 +965,7 @@ With our two primary agents, defined, we now move on to the definition of a
 Lightning Channel Lease: 
 
 \begin{definition}{(Lightning Channel Lease).} 
-    A Lightning Channel lease is defined as, $\Gamma = \{P_{T,} P_{M}, A_{sat},
+    A Lightning Channel Lease is defined as, $\Gamma = \{P_{T}, P_{M}, A_{sat},
     D_{block}, r_{i} \}$, where:
 \end{definition}
 
@@ -982,7 +981,7 @@ Maker}.
 
 Note that the premium $R_{P}$ as referenced above is parametrized in using the
 \emph{lease duration} $D_{blocks}$: $R_{P}(D_{blocks}) = r_i * D_{blocks}$ as
-we deal in simple, rather than compounding interest.  The duration of the
+we deal in simple, rather than compounding, interest.  The duration of the
 contract $D_{blocks}$ is of great interest as similar to U.S Treasury auctions,
 a \emph{yield-curve} (cite) can be constructed based on the matched contents of
 a given auction iteration. % mention t-bills
@@ -990,7 +989,7 @@ a given auction iteration. % mention t-bills
 
 \subsection{Non-Custodial Auction Accounts}
 
-In order to participate in the we require all participants to deposit their
+In order to participate in the auction, we require all participants to deposit their
 trading balance into a Marketplace Account:
 
 \theoremstyle{definition}
@@ -1011,12 +1010,12 @@ of time $T_{blocks}$ the agent is able to freely remove the funds from their
 account. Before this period has passed, an agent may require the aide of the
 auctioneer to close, deposit, or withdraw funds from their account. In the case
 of the \texttt{Liquidity Taker}, the funds within the account $K_{sat}$, must
-be enough to pay for any desired premium, Conversely for the \texttt{Liquidity
+be enough to pay for any desired premium. Conversely for the \texttt{Liquidity
 Maker}, we require all funds they wish to lease out to be deposited into the
 account. 
 
 This structure, which forces all participants to fully commit all funds they
-wish to use within the marketplace into a non-custodial account is similar to
+wish to use within the marketplace into a non-custodial account, is similar to
 the concept of Fidelity Bonds (cite). This structure has a number of desirable
 properties including:
 
@@ -1051,7 +1050,7 @@ their \emph{preferences} with respect to what they wish to buy and sell.
 Importantly, all orders within the market must be backed by a valid non-expired
 account, and must carry an \emph{authentication tag} which prevents order
 spoofing, and also ensure proper integrity of a given order once it has been
-submitted
+submitted.
 
 \begin{center}
 \textbf{Order Structure}
@@ -1090,7 +1089,7 @@ We define an \texttt{Order} within the context of a \texttt{CLM} as follows:
 
         \item $\alpha_{rate}$ is the desired \emph{per-block} rate that the owner
             of the order wishes to buy/sell a channel lease at. Further below, this
-            may be referred to ass the \texttt{BPY} or block percentage yield.
+            may be referred to as the \texttt{BPY} or block percentage yield.
 
         \item $A_{sat}$ is the total contract size expressed in lease \emph{units}.
             Restricting orders to whole units simplifies preference matching within
@@ -1099,8 +1098,8 @@ We define an \texttt{Order} within the context of a \texttt{CLM} as follows:
         \item $M_{pub}$ is the multi-sig public key to be used when creating
             the funding output (cite) of the tranction. % abstract out more?
 
-        \item $L_{pub}$ is the identitiy public key (cite) of the Lightning
-            Node that wishes to buy/sel lthis channel.
+        \item $L_{pub}$ is the identity public key (cite) of the Lightning
+            Node that wishes to buy/sell this channel.
 
         \item $A_{addr}$ is the network address to be used to connect to the
             backing $L_{pub}$ to initiate the channel funding process if this
@@ -1111,7 +1110,7 @@ We define an \texttt{Order} within the context of a \texttt{CLM} as follows:
 
         \item $D_{blocks}$ is the target \emph{lease duration} of the contract.
 
-        \item $F_{chain_max}$ is the max chain fee expressed in $sat/byte$ that
+        \item $F_{chain_{max}}$ is the max chain fee expressed in $sat/byte$ that
             the own of said order is willing to pay within a batch.
 
     \end{itemize}
@@ -1158,9 +1157,9 @@ auctioneer of the market place.
 \subsection{Auction Design}
 
 In this section, we describe the abstract definition of a \texttt{Channel
-Liquidity Marketplace}, which addressee each of the issues presented in the
+Liquidity Marketplace}, which addresses each of the issues presented in the
 bootstrapping section of the background, by creating a new form of batched
-auction which allows \texttt{Liquidity Takers}, and \texttt{Liquidity Makers}
+auction which allows \texttt{Liquidity Takers} and \texttt{Liquidity Makers}
 to buy/sell Lightning Channel Leases in a non-custodial manner.
 
 \subsubsection{Auction Specification}
@@ -1264,8 +1263,8 @@ algorithms: \\
 $\Phi_b = \{(\Theta_{b_0}, \Theta_{a_0}), \cdots, (\Theta_{b_n}, \Theta_{a_n})\}$. The
 \texttt{MatchMake} algorithm takes as input the set of valid orders submitted
 during the past batch interval and outputs a series of tuples which reflect
-properly matched orders matched orders. $\Theta_a$ represents an order who's
-$O_{type} = \texttt{Ask}$, while $\Theta_b$ represents an order who's $O_{type}
+properly matched orders matched orders. $\Theta_a$ represents an order whose
+$O_{type} = \texttt{Ask}$, while $\Theta_b$ represents an order whose $O_{type}
 = \texttt{Bid}$. Note that since we allow \emph{partial} matches, a given order
 may appear multiple times in the final match set. We require that a valid
 implementation be able to perform proper \emph{multi-attribute} (cite) matching
@@ -1281,7 +1280,7 @@ the prior batch. The precise market clearing price algorithm is left as a free
 parameter, with algorithms such as first-rejected-bid (cite) or
 last-accepted-bid (cite) likely being used. Utilizing of a single market
 clearing price is intended to promote fairness (cite) (all traders pay the same
-price!) and also  \\
+price!).  \\
 
 % give example of FRB and/or LAB here? 
 
@@ -1360,31 +1359,31 @@ shadow chain section:
 \section{The Shadowchain: A Bitcoin Overlay Application Framework}
 
 In this section, we present the concept of a \texttt{Shadowchain}, a
-non-custodial application overlay framework that we'll used to construct a
+non-custodial application overlay framework that we'll use to construct a
 concrete instantiation of a \texttt{CLM}. We note that shadowchains may also be
 of independent interest, as they're a novel way to layer more complex
-interactions on top of the base Bitcoin blcockahin. We note that shadow chains
+interactions on top of the base Bitcoin blockchain. We note that shadowchains
 as we present them can be implemented on the base Bitcoin blockchain today
-without any additional changes or enchainments. However, further extensions to
+without any additional changes or enhancements. However, further extensions to
 Bticoin such as non-interactive signature aggregation (cite) and covenants
-(cite) can sever to dramatically increase the scalability traits of a
+(cite) can serve to dramatically increase the scalability traits of a
 shadowchain.
 
 \subsection{High-Level Description}
 
-First, we provide a high-level description of the shadow chain application
+First, we provide a high-level description of the shadowchain application
 framework. 
 
-\textbf{The Shadowchain Usecase}. A shadowchain can be used to to implement
+\textbf{The Shadowchain Usecase}. A shadowchain can be used to implement
 non-custodial smart contract systems on top of the base Bitcoin blockchain.
 Typically one would opt for a shadowchain if the complexity of the state
-transiting logic of the smart counteract system cannot be fully expressed using
+transition logic of the smart counteract system cannot be fully expressed using
 the base Bitcoin Script.  Shadowchains allow an application designer to use the
 Bitcoin blockchain for what it's best for: censorship resistant settlement,
 pushing the more complex portions of the application (state, logic, etc)
 \emph{off-chain}.
 
-\textbf{Shadowchain Roles \& Lifted UTXOs}. A shadow chain has two primary
+\textbf{Shadowchain Roles \& Lifted UTXOs}. A shadowchain has two primary
 classes of agents: users, and the orchestrator.  The orchestrator defines the
 state transition function of the shadowchain, a set of non-trusted
 initialization parameters, and upgrade mechanisms. A user is able to join a
@@ -1398,30 +1397,30 @@ transaction data from users, then periodically proposes a new \emph{shadowchain
 block}. A shadowchain block takes as input the set of \texttt{Lifted UTXO}s
 which accepted the latest block proposals, and produces a set of \emph{new}
 UTXOs, which are the end state after the state transition function has been
-evaluated. A shadowchain even permitted to use \emph{multiple} distinct state
+evaluated. A shadowchain is even permitted to use \emph{multiple} distinct state
 transition functions. As the funds of an end user cannot move without both
 multi-sig signatures, users are able to fully validate (possibly using
-techniques such as zero knowledge proofs (cite shafi)) to validate that the
+techniques such as zero knowledge proofs (cite shafi)) that the
 resulting UTXO state was properly derived from the known state transition
 function.  Note that due to this structure complex "exit-games", or fraud
 proofs are not required as as a user simply won't sign off on a fraudulent
 state, and a user's UTXO is always manifested (in a base form) on the main
 blockchain.
 
-\textbf{Ephemeral Lifted UTXOs}. In the scenario that shadowchain operators
+\textbf{Ephemeral Lifted UTXOs}. In the scenario that the shadowchain orchestrator
 disappears, or is unresponsive, users are able convert their lifted UTXO into a
 regular one, by spending their coins after the time-lock has expired. This
-construct of an \emph{ephemeral} lifted UTXO has a number of desirable prop
-ties on the application level, as the time-locked commitment of funds can serve
+construct of an \emph{ephemeral} lifted UTXO has a number of desirable properties
+on the application level, as the time-locked commitment of funds can serve
 to mitigate a number of application-level issues such as spam or sybil
 resistance.
 
 \textbf{Shadowchain Cut-Through} As the evolution of a state transition
 function happens \emph{off-chain}, it's possible to coalesce several distinct
-shadowchain blocks into a single block which is the compositions of the
+shadowchain blocks into a single block which is the composition of the
 successive invocations of the state transition function. This technique is
 similar to transaction cut-through (cite), but performed in a multi-party
-setting. Leveraging this technique, as shadowchain operator can optimistically
+setting. Leveraging this technique, the shadowchain orchestrator can optimistically
 treat the current latest shadowchain transaction in the mempool as an in-memory
 data structure to be updated off-chain (via transaction replacement techniques
 (cite)), with the state being "written to disk" once confirmed. As a result,
@@ -1435,7 +1434,7 @@ manner. In other words, it's possible for a shadowchain orchestrator to
 transition to enable new behavior. Notably, the operator can do this in a
 de-synchronized manner as only those wishing to use features in the new state
 transition function need to adhere to the new rules. Additionally, an operator
-can opt to also introduces new backwards incompatible state transition funcs.
+can opt to also introduces new backwards incompatible state transition functions.
 Due to the inherent batched nature of Bitcoin transaction, an operator can
 commit multiple logical shadowchain blocks (with distinct state transition
 functions) in a single atomic Bitcoin transaction.
@@ -1518,9 +1517,9 @@ malicious users to interact with the shadow chain.
 
 \subsubsection{The Shadowchain}
 
-In this section, we present the abstract definition of a shadow chain, building
-upon the definition provided above. In addition to this, we describer the
-typical Shadowchain life cycle using the aide of some additional helper
+In this section, we present the abstract definition of a shadowchain, building
+upon the definition provided above. In addition to this, we describe the
+typical shadowchain life cycle using the aid of some additional helper
 functions, which are also intended to be supplied by the core application logic
 itself.
 
@@ -1537,15 +1536,15 @@ First, we define the core components of the shadowchain.
 
 \begin{itemize}
     \item $U_{L} = \{\phi_i, \cdots, \phi_n\}$ is the set of non-expired
-        \texttt{Lifted UTXO}s observed by the Orchestrator.
+        \texttt{Lifted UTXO}s observed by the orchestrator.
 
-    \item $U_{0}$ is the current UTXO Orchestrator, where they may accrue
+    \item $U_{0}$ is the current UTXO orchestrator, where they may accrue
         application level fees.
 
     \item $\Delta_F =  \{ \Delta_{f_0}, \cdots, \Delta_{f_n} \}$ is the set of
         current state transition functions.
 
-    \item $E_{exe}$ is the abstract execution environment of the Shadowchain
+    \item $E_{exe}$ is the abstract execution environment of the shadowchain
         which all participants will use to verify the correctness of a proposed
         state transition.
 
@@ -1558,7 +1557,7 @@ First, we define the core components of the shadowchain.
     \textbf{Shadowchain Algorithms}
 \end{center}
 
-Given the above components, we define the operation of a Shadowchain using a
+Given the above components, we define the operation of a shadowchain using a
 series of polynomial-time algorithms segmented into the following logical
 categories:
 
@@ -1578,14 +1577,14 @@ With behavior and semantics as expressed below. \\
     \textbf{System Initialization}
 \end{center}
 
-Before a Shadowchain can be used for a given application, it is required that
+Before a shadowchain can be used for a given application, it is required that
 the system be initialized to obtain the long-term public key of the auctioneer,
 as well as the execution environment, and set of state transition functions: \\
 
 \texttt{InitChain($1^{\lambda}$)} $\rightarrow$ $(U_{0}, P_{0}, \Delta_F,
 E_{exe})$. Given the security parameter $\lambda$ (expressed in unary), the
 \texttt{InitChain} method returns the initial self-lifted UTXO of the
-Orchestrator, the long-term public key of the Orchestrator, and the set of
+orchestrator, the long-term public key of the orchestrator, and the set of
 initial state transition functions along with the starting execution
 environment.
 
@@ -1595,9 +1594,9 @@ environment.
     \textbf{UTXO Management}
 \end{center}
 
-Once the chain has been initialized, given the parameters of the Shadowchain,
-users can being lifting their UTXO to be able to patriotic pate in Shadowchain
-blocks and operation. The process of entering the shadowchain is referred to as
+Once the chain has been initialized, given the parameters of the shadowchain,
+users can being lifting their UTXO to be able to participate in shadowchain
+blocks and operations. The process of entering the shadowchain is referred to as
 UTXO Lifting, while exiting is the reverse process: \\
 
 \texttt{LiftUTXO($T_{expiry}, \{U_{N_0}, \ldots, U_{N_n}\}, P_{0}$)}
@@ -1618,7 +1617,7 @@ they wish to exit the chain, with the Operator no longer being responsive. \\
 \texttt{UnliftUTXO} method create a new normal un-lifted UTXO output
 which returns all funds to the user. This is the optimistic version of the
 \texttt{ExitChain} algorithm, in that it requires cooperation from the
-Orchestrator as the time-release clause of the Lifted UTXO's script is not yet
+orchestrator as the time-release clause of the Lifted UTXO's script is not yet
 unlocked.
 
 % add section for transaction submission?
@@ -1627,7 +1626,7 @@ unlocked.
     \textbf{Block Proposal \& Validation}
 \end{center}
 
-Once a Shadowchain has a sufficient number of lifted UTXOs, and the system has
+Once a shadowchain has a sufficient number of lifted UTXOs, and the system has
 been fully initialized, block proposal and validation can commence. This
 process is similar to the process of nodes broadcasting transactions, and
 miners ordering them within blocks in the base Bitcoin system: \\
@@ -1637,7 +1636,7 @@ miners ordering them within blocks in the base Bitcoin system: \\
 $B_S$. Given inputs of the set of 'live' Lifted UTXOs, the set of transaction
 belonging to the live UTXOs, the execution environment, and the current set of
 valid state transition
-functions, the \texttt{ConstructBlock} outputs a valid Shadowchain block to
+functions, the \texttt{ConstructBlock} outputs a valid shadowchain block to
 extend the current machine chain. Where: 
 \begin{itemize}
     \item $\phi_{live} = live(\{\phi_{U_0}, \cdots, \phi_{U_N}\}$ is the set of
@@ -1645,27 +1644,27 @@ extend the current machine chain. Where:
             like protocol to detect the current set of active users.
 
     \item $T_{xn}$ is the application-specific transaction format used within
-        the Shadowchain.
+        the shadowchain.
 
     \item $B_S = (T_{xn}, \{\phi_{U_0}, \cdots, \phi_{U_N}\}, \Delta_{f},
         \{\phi_{U_0}^\prime, \cdots, \phi_{U_N}^\prime\}, U_{A})$, is the
-        Shadowchain block itself, which is composed of the set of application
+        shadowchain block itself, which is composed of the set of application
         transaction, input Lifted UTXOs, the resulting output UTXOs after
         applying the set of state transition functions, and $U_{A}$ any new
         application-specific UTXOs produced as a result of the state transition
         function.
 \end{itemize}
 
-Once a block has been constructed, the Operator of the Shadowchain now must
-proposed said block to the set of live Lifted UTXOs before we can move onto the
-next phase of Shadowchain operation. As a given user may reject a block, either
+Once a block has been constructed, the operator of the shadowchain now must
+propose said block to the set of live Lifted UTXOs before we can move onto the
+next phase of shadowchain operation. As a given user may reject a block, either
 implicitly due to being offline, or explicitly due to a violation of the
-Shadowchain consensus rules, then this phase may be repeated a number of times.
-The Operator will use the following algorithm to propose blocks: \\
+shadowchain consensus rules, then this phase may be repeated a number of times.
+The operator will use the following algorithm to propose blocks: \\
 
 \texttt{ProposeBlock($B_S, \phi_{live}$)} $\rightarrow$ $b$. The
-\texttt{ProposeBlock} attempts to proposed the given Shadowchain block to the
-set of live Lifted UTXOs. The algorithm returns $b=1$ is all of the
+\texttt{ProposeBlock} attempts to propose the given shadowchain block to the
+set of live Lifted UTXOs. The algorithm returns $b=1$ if all of the
 participants accept the block. Once all participants have accepted the block,
 we can now proceed to the execution and block commitment phase.
 
@@ -1675,42 +1674,41 @@ we can now proceed to the execution and block commitment phase.
     \textbf{Chain Execution}
 \end{center}
 
-Once the Operator has esatblshed a stable set of participants which accept the
-proposed Shadowchain block, it can move unt to executing the block as well as
-committing it in the base Bitcoin blockchain: \\
+Once the operator has esatblshed a stable set of participants which accept the
+proposed shadowchain block, it can execute the block and commit it in the base Bitcoin blockchain: \\
 
 \texttt{CommitBlock($B_S$)} $\rightarrow$ $(b, TX_{id})$. The
-\texttt{CommitBlock} takes a valid Shadowchain block, and attempts to obtain
+\texttt{CommitBlock} takes a valid shadowchain block, and attempts to obtain
 all necessary witnesses to unlock the Lifted UTXOs to re-create them post state
 function application along with any new application-specific UTXOs. The
-algorithm returns $b=1$ if the Operator was able to succesfully obtain all
-necessayr witneses, and brodcast the Bitcoin transaction which commits the
-Shadowchain block. Otherwise, the Operator may need to re-propose a new block
+algorithm returns $b=1$ if the operator was able to succesfully obtain all
+necessary witnesses, and brodcast the Bitcoin transaction which commits the
+shadowchain block. Otherwise, the operator may need to re-propose a new block
 to a sub-set of the live Lifted UTXOs.
 
 \begin{center}
     \textbf{Block Cut-Through}
 \end{center}
 
-Given the sturcutre of a Shadowchain block, and the state transition function
-itself, it's possilbe for a Shadowchain operator to compres several disticnt
-Shadowchain blocks into a single instance that is equivalent to the succesive
-state transtion funciton application on each distinct shadowchain block: \\
+Given the sturcutre of a shadowchain block, and the state transition function
+itself, it's possible for a shadowchain operator to compress several distinct
+shadowchain blocks into a single instance that is equivalent to the succesive
+state transtion function application on each distinct shadowchain block: \\
 
 \texttt{CoalesceBlocks($\{B_{S_0}, \cdots, B_{S_N}\}$)} $\rightarrow$
-$B_{S}^\prime$. Given a series of \emph{consecutive} Shadowchain blocks, the
-\texttt{CoalesceBlocks} algorithms compresses each consqeutive block into a
+$B_{S}^\prime$. Given a series of \emph{consecutive} shadowchain blocks, the
+\texttt{CoalesceBlocks} algorithms compresses each consecutive block into a
 single block $B_{S_N}$ which has an equivalent output state to the serial
-appliation of the state transition functino on each induvidual Shadowchain
+appliation of the state transition functino on each individual shadowchain
 block. \\
 
 The \texttt{CoalesceBlocks} algorithm is similar to the concept of transaction
 cut-through (cite) for UTXO-based blockchains. Using this algorithm, the
-Operator is able to propose a new equivalent block which produces the same set
+operator is able to propose a new equivalent block which produces the same set
 of net Lifted UTXO outputs, along with any other application specific outputs
 produced by any of the intermediate blocks. This can be done post-facto, and
 also in an optimsitic manner in order to coalesce several unconfirmed
-Shadowchain blocks into a single one.
+shadowchain blocks into a single one.
 
 % diagram for cut thru
 
@@ -1722,25 +1720,25 @@ Shadowchain blocks into a single one.
     \textbf{Chain Upgrade}
 \end{center}
 
-The process of upgrading the chain in term sof the \emph{types} of
+The process of upgrading the chain in terms of the \emph{types} of
 application-level transactions offered, or the set of valid state transition
-functinos can be done entirely off-chin in a de-syhcnronied manner. In order to
-update the environment, state transition functions, or the apicatin-level
-transactions, the Operator simply needs to utilize the following algorithm: \\
+functions can be done entirely off-chain in a de-synchronized manner. In order to
+update the environment, state transition functions, or the applicatoin-level
+transactions, the operator simply needs to utilize the following algorithm: \\
 
 \texttt{UpgradeChain($\Delta_{new}, E_{exe}^\prime, T_{xn}^\prime$)}
-$\rightarrow$ $\bot$. The \texttt{UpgradeChain} is a algorithm that's executed
-entirely in an off-chain manner, than lets the Operator of the shadowchain
-upgrade some or all of: the applciation transaciton data, the execution
+$\rightarrow$ $\bot$. The \texttt{UpgradeChain} is an algorithm that's executed
+entirely in an off-chain manner, than lets the operator of the shadowchain
+upgrade some or all of: the application transaction data, the execution
 environment, and the set of state transition functions. Due to the nature of
-the shadowchain, in order to uitlize thsi new functinlaity each user must
-update thieir local state. However, note that the Lifted UTXO remains the same,
-as the Operator's long-term public key hasn't changed.
+the shadowchain, in order to utilize this new functionality each user must
+update their local state. However, note that the Lifted UTXO remains the same,
+as the operator's long-term public key hasn't changed.
 
 \subsubsection{Shadowchain Operation}
 
-In this section, we'll put together the above algorithms to out-line the main
-execution loop of the Shadowchain from the perspective of the Operator as well
+In this section, we'll put together the above algorithms to outline the main
+execution loop of the shadowchain from the perspective of the operator as well
 as participants. Shadowchain operation can be viewed as a linear deterministic
 state machine that uses the main Bitcoin blockchain in order to transition to
 certain states.
@@ -1753,10 +1751,10 @@ certain states.
 
 The main Operator State Machine loop first attempts to process any new UTXO
 lifting requests, then will optimistically attempt to merge in any existing
-unconfirmed Shadowchain blocks that can be coalesced. Independent of either of
-these clauses, we'll then enter into our main loop where the Operator attempts
+unconfirmed shadowchain blocks that can be coalesced. Independent of either of
+these clauses, we'll then enter into our main loop where the operator attempts
 to construct a new block given the set of live transaction, propose the block
-to the set of live UTXOs, filter our any participants that rejected the block,
+to the set of live UTXOs, filter out any participants that rejected the block,
 before finally attempting to commit the new block within the chain.
 
 %\procedureblock[syntaxhighlight=auto]{OrchestrateChain(utxos, env, funcs)}{
@@ -1802,10 +1800,10 @@ before finally attempting to commit the new block within the chain.
     \textbf{Participant State Machine}
 \end{center}
 
-The main state machine if each Shadowchain participant is essentially a mirror
-of the Orchestrator state machine. First we'll process any requests to modify
-our existing lifted UTXO, gather up any unconfirmed transactions, then await a
-new block proposal by the Shadowchain operator.
+The main state machine if each shadowchain participant is essentially a mirror
+of the orchestrator state machine. First we'll process any requests to modify
+our existing Lifted UTXO, gather up any unconfirmed transactions, then await a
+new block proposal by the orchestrator.
 
 \begin{pchstack}[boxed,center, space=1em]
     \procedure[linenumbering, syntaxhighlight=auto, addkeywords={await}]{\texttt{ExtendChain($\phi_{U}, \Delta_{F}, E_{exe}$)}}{
@@ -1838,12 +1836,12 @@ new block proposal by the Shadowchain operator.
 \section{Lightning Pool: A Channel Liquidity Marketplace as a Shadow Chain}
 
 In this section, we build upon the prior sections outlining the abstract
-\texttt{Channel Lease Marketplace} definition, as well as Shadowchain
+\texttt{Channel Lease Marketplace} definition, as well as shadowchain
 operation, and construct out \textbf{Lightning Pool} implementation at a
 low-level. We first being by detailing our implementation of the \texttt{CLM}
 algorithms, as well as our choice of certain free parameters. With this
 concrete structure in place, we'll then go up a layer of abstraction to
-demonstrate how Lightning Pool can be operated as a Shadowchain on Bitcoin
+demonstrate how Lightning Pool can be operated as a shadowchain on Bitcoin
 today, without any further modifications enhancements.
 
 \subsection{Instantiating a CLM}
@@ -1987,7 +1985,7 @@ for a given trader:
 
 % make sure to double check the above!
 
-The above script can either be spent via the timee out clause using the
+The above script can either be spent via the time out clause using the
 following witness stack, using \texttt{nil} value passes an empty signature to
 force execution of the timeout clause.
 \begin{verbatim}
@@ -2059,7 +2057,7 @@ utilizing the timeout clause within the account script of a trader's account.
 
 \subsubsection{Channel Leases in the Lightning Network}
 
-Now that we have our concrete account structure, we'll move onto presenting a
+Now that we have our concrete account structure, we'll move on to presenting a
 concrete instantiation of a Channel Lease based on today's widely used payment
 channel implementation within Lightning Network. \\
 
@@ -2141,10 +2139,10 @@ OP_ENDIF
 OP_CHECKSIG
 \end{verbatim} 
 
-A lesser less trust-minimized versing of channel lease duration enforcement is
+A less trust-minimized version of channel lease duration enforcement is
 possible simply by having the \texttt{Liquidity Taker} refuse a cooperative
 channel closure until the lease duration has expired. With this non-script
-based enfrocement, the only direct option the \texttt{Liquidity Maker} has is
+based enforcement, the only direct option the \texttt{Liquidity Maker} has is
 to \emph{force-close} their channel. However, the operator of an auction venue
 can request additional information along-side orders before batch execution (as
 detailed below) to identify premature force closes on-chain in order to
@@ -2156,8 +2154,8 @@ penalize the renegading party.
     \textbf{Channel Lease Funding Protocol}
 \end{center}
 
-Given the existence of a new modified chanenl $C_{L}$ that supports the ch
-annel lease protocol, we require a new way to fund the channels as a channel
+Given the existence of a new modified chanenl $C_{L}$ that supports the channel
+lease protocol, we require a new way to fund the channels as a channel
 lease itself will \emph{partially-bind} the following paramters of a given
 channel:
 \begin{itemize}
@@ -2169,23 +2167,23 @@ channel:
 Rather than modifying the base funding protocol of the Lightning Network, we've
 opted to instead provide a \emph{new} "side-loadable" partial funding binding
 API we call a channel shim (cite). A channel shim allows a party $A$ to
-\emph{expect} certain parameeters of the channel itself. Given the
+\emph{expect} certain parameters of the channel itself. Given the
 \texttt{pendingChanID} which is used to identify an unfinalized channel within
 the Lightinng Network (cite), an algorithm \texttt{RegisterChannelShim($\Gamma,
-P_{a}$, outPoint)} instructs a Lightning Node to use a \emph{prearragned} public key as
+P_{a}$, outPoint)} instructs a Lightning Node to use a \emph{prearranged} public key as
 specified within channel lease $\Gamma$ for its portion of the multi-sig output
-used wtihin the ultimate channel.
+used within the ultimate channel.
 
-The existnce of the channel shim API allows a node to proceed in the set up of
+The existence of the channel shim API allows a node to proceed in the set up of
 a channel for which it may not yet know the \emph{full} funding transaction to.
 Given the lease, and the expected outpoint, both sides can fully sign the
-commitment transaction in a manneer that doesn't incur any risk as due to the
-account structure, they'll need to sign of on the batch funding trsnaction
-itrself before it can br broadcast.
+commitment transaction in a manner that doesn't incur any risk as due to the
+account structure, they'll need to sign off on the batch funding transaction
+itself before it can be broadcast.
 
 \subsubsection{Order Structure}
 
-With our concrete account structure and channel lease semsntics in place, we'll
+With our concrete account structure and channel lease semantics in place, we'll
 now outline the precise structure of orders as implemented in \textbf{Lightning
 Pool}. As a \texttt{CLM} is a \emph{sealed-bid} auction, the set of active
 orders within an auction epoch isn't known to a given participant within the
@@ -2205,29 +2203,29 @@ additional order attributes.
 \end{center}
 
 Next, we specifying order tag generation and validation. Before verifying an
-order the order $\Theta$ itself is serialized in order to generate the message
-digest of the order.  This is done by concatenating each items of the order
+order, the order $\Theta$ itself is serialized in order to generate the message
+digest of the order.  This is done by concatenating each item of the order
 into a single byte stream, with the set of $\Delta_{aux}$ attributes specifying
 a custom serialization mechanism. 
 
-For our tag generation, we opt to utilize an \seufcma signature scheme. As we
-target the base Bitcoin blockchain, \texttt{Lightning Pool} utilizes schnorr
+For our tag generation, we opt to utilize an \seufcma \enspace signature scheme. As we
+target the base Bitcoin blockchain, \texttt{Lightning Pool} utilizes Schnorr
 signatures implemented over the \texttt{secp256k1} elliptic curve. In addition
 to having the trader that submits an order sign the order message digest, we
-also require that all the backing Lightning nodes of the also include as
+also require that all the backing Lightning nodes of the order also include a
 signature as well.  As the number of backing nodes for a given account may be
-numerous, rather than accepting individual signatures for each node, we isntead
+numerous, rather than accepting individual signatures for each node, we instead
 require the account operator and all backing nodes to present a \emph{single}
-schnorr signature. As we also want have our order tagging scheme be secure
+Schnorr signature. As we also want have our order tagging scheme be secure
 against key rogue-key attacks (cite), we select the \texttt{MuSig}
 multi-signature scheme. \\
 
-Given the \texttt{MuSig} multi-signature scheme, we define thee following
+Given the \texttt{MuSig} multi-signature scheme, we define the following
 algorithms used in our order tagging scheme:
 \begin{itemize}
     \item Let \texttt{Sign($\{P_{0}, \dots, P_{i}\}, M$)} $\rightarrow$
         $\sigma$, be an algorithm that returns a valid \texttt{MuSig}
-        multi-signature signed by the s et of public keys on message $M$.
+        multi-signature signed by the set of public keys on message $M$.
 
     \item Let \texttt{Verify($\{P_{0}, \dots, P_{i}\}, \sigma, M$)}
         $\rightarrow$ $b$ be an algorithm that returns $b=1$ if the passed
