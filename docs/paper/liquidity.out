@@ -1,6 +1,6 @@
 \BOOKMARK [1][-]{section.1}{Introduction}{}% 1
 \BOOKMARK [2][-]{subsection.1.1}{Our Contributions}{section.1}% 2
-\BOOKMARK [1][-]{section.2}{Preliminnaries}{}% 3
+\BOOKMARK [1][-]{section.2}{Preliminaries}{}% 3
 \BOOKMARK [1][-]{section.3}{Background}{}% 4
 \BOOKMARK [2][-]{subsection.3.1}{Payment Channels \046 the Lightning Network}{section.3}% 5
 \BOOKMARK [2][-]{subsection.3.2}{Boostrapping Problems in the Lightning Network}{section.3}% 6
@@ -37,16 +37,17 @@
 \BOOKMARK [3][-]{subsubsection.7.1.2}{Lightning Pool Accounts}{subsection.7.1}% 37
 \BOOKMARK [3][-]{subsubsection.7.1.3}{Channel Leases in the Lightning Network}{subsection.7.1}% 38
 \BOOKMARK [3][-]{subsubsection.7.1.4}{Order Structure}{subsection.7.1}% 39
-\BOOKMARK [3][-]{subsubsection.7.1.5}{Uniform Price Market Clearing \046 Matching}{subsection.7.1}% 40
-\BOOKMARK [3][-]{subsubsection.7.1.6}{The Batch Execution Transaction}{subsection.7.1}% 41
-\BOOKMARK [2][-]{subsection.7.2}{the Lightning Pool Shadowchain}{section.7}% 42
-\BOOKMARK [3][-]{subsubsection.7.2.1}{Lightning Pool Accounts as Lifted UTXOs}{subsection.7.2}% 43
-\BOOKMARK [3][-]{subsubsection.7.2.2}{Auction Batch Proposal}{subsection.7.2}% 44
-\BOOKMARK [3][-]{subsubsection.7.2.3}{Shadowchain Batch Execution}{subsection.7.2}% 45
-\BOOKMARK [3][-]{subsubsection.7.2.4}{Unconfirmed Batch Cut-Through}{subsection.7.2}% 46
-\BOOKMARK [3][-]{subsubsection.7.2.5}{Auction Upgrades}{subsection.7.2}% 47
-\BOOKMARK [1][-]{section.8}{Security Analysis}{}% 48
-\BOOKMARK [1][-]{section.9}{Future Directions}{}% 49
-\BOOKMARK [1][-]{section.10}{Related Work}{}% 50
-\BOOKMARK [1][-]{section.11}{Conclusion}{}% 51
-\BOOKMARK [1][-]{section.12}{Acknowledgments}{}% 52
+\BOOKMARK [3][-]{subsubsection.7.1.5}{Node Rating Agencies}{subsection.7.1}% 40
+\BOOKMARK [3][-]{subsubsection.7.1.6}{Uniform Price Market Clearing \046 Matching}{subsection.7.1}% 41
+\BOOKMARK [3][-]{subsubsection.7.1.7}{The Batch Execution Transaction}{subsection.7.1}% 42
+\BOOKMARK [2][-]{subsection.7.2}{the Lightning Pool Shadowchain}{section.7}% 43
+\BOOKMARK [3][-]{subsubsection.7.2.1}{Lightning Pool Accounts as Lifted UTXOs}{subsection.7.2}% 44
+\BOOKMARK [3][-]{subsubsection.7.2.2}{Auction Batch Proposal}{subsection.7.2}% 45
+\BOOKMARK [3][-]{subsubsection.7.2.3}{Shadowchain Batch Execution}{subsection.7.2}% 46
+\BOOKMARK [3][-]{subsubsection.7.2.4}{Unconfirmed Batch Cut-Through}{subsection.7.2}% 47
+\BOOKMARK [3][-]{subsubsection.7.2.5}{Auction Upgrades}{subsection.7.2}% 48
+\BOOKMARK [1][-]{section.8}{Security Analysis}{}% 49
+\BOOKMARK [1][-]{section.9}{Future Directions}{}% 50
+\BOOKMARK [1][-]{section.10}{Related Work}{}% 51
+\BOOKMARK [1][-]{section.11}{Conclusion}{}% 52
+\BOOKMARK [1][-]{section.12}{Acknowledgments}{}% 53

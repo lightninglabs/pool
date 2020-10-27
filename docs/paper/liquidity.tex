@@ -2139,6 +2139,8 @@ OP_ENDIF
 OP_CHECKSIG
 \end{verbatim} 
 
+% ^ make these into funcs instead
+
 A less trust-minimized version of channel lease duration enforcement is
 possible simply by having the \texttt{Liquidity Taker} refuse a cooperative
 channel closure until the lease duration has expired. With this non-script
@@ -2250,14 +2252,128 @@ implementations:
     }
 \end{pchstack}
 
-\paragraph{Node Rating Agencies}
+We omit the implementations of \texttt{SubmitOrder} and \texttt{CancelOrder} as
+the depend on the specific environment in which the auctioneer is implemented
+in. We only add that the pre-image to an order nonce $K_{nonce}^\prime$ is
+known only to the agent that places the order. As we touch on within the future
+direction section, this commitment structure also has a number of independent
+uses outside of order cancellation.
 
-% rating agency, purpose and impls
-% rating as aux variable in bos score
+\subsubsection{Node Rating Agencies}
 
-\paragraph{Batch Fee Rate Preference}
+Recalling the set of initial requirements that were set our in section 4, it's
+critical that Lightning Pool reduces information symmetry for the buyer by
+allowing them to gauge the quality of the node selling a channel lease before
+they enter into an agreement. In order to achieve this, we introduce the
+concept of a Node Rating Agency. An rating's agency will allow the buyer of a
+lease to either query the agency in an ad-hoc manner, or specify that they only
+wish to be matched with nodes that reside on a certain \emph{tier}. \\
+
+
+Let $\hat{T_{node}} = \{\hat{t_0}, \dots, \hat{t_n} \}$ be the set of possible
+ratings that can be given to a Lightning Node with $\hat{t_0}$ containing
+\emph{all} known Lightning Nodes, and $|\hat{t_i}| > |\hat{t_{i+1}}| \enspace
+\forall \enspace i < n$, where $n$ is the number of available tiers. In other
+words, we create a series of node sets, with the higher node tiers having less
+nodes than lower tiers.  This creates a natural system of concentric circles
+where as the tier index increases, the set of nodes shrinks, and eventually
+only higher quality nodes remain.
+
+Building off this notion of tiered node sets, we define the following algorithm
+for our node rating agency:
+\begin{pchstack}[boxed,center, space=1em]
+    \procedure[syntaxhighlight=auto, addkeywords={map}]{NodeTier($L_{pub}$)}{
+        \texttt{nodeMap} \gets map(\hat{T_{node}}) \\
+        t_{node} = \texttt{nodeMap[$L_{pub}$]} \\
+        return t_{node}
+    }
+\end{pchstack}
+
+Given this algorithm, we now specify our of the additional auxiliary order
+attribute $\Delta_{aux}$ as:
+\[
+    (N_{tier}, \dots) = \Delta_{aux}
+\]
+
+During match making, we then require the constraint that a given bid order
+$\Theta_{bid}$ will only be matched with an ask order $\Theta_{ask}$ if the
+following constraint is met:
+\[
+    \Theta_{bid}.N_{tier} >= \texttt{NodeTier($\Theta_{ask}.L_{pub}$)}
+\]
+
+% use arg min above? 
 
 \subsubsection{Uniform Price Market Clearing \& Matching}
+
+With our order structure, and the notion of the Node Rating Agency outlined, we
+now move on to the concrete market clearing and match making within Lightning
+Pool.
+
+\begin{center}
+    \textbf{Order Matching}
+\end{center}
+
+As mentioned, due to the set of additional constraints outside of simply the
+posted price and available supply, we employ a multi-attribute mach making
+algorithm. Specifically we opt to utilize a greedy algorithm for the purpose of
+match making, rather than attempt to find an optimal solution using
+techniques such as mixed integer linear programming. In this section, we focus
+primarily on the set of base attributes, leaving the consideration of a
+trader's axillary attribute preferences to later work. \\
+
+% add above don't do it since can be expensive
+
+First, we define an abstract algorithm which will be used to determine if a
+given ask order $\Theta_{ask}$ is compatible preference-wise to a given bid
+order $\Theta_{bid}$:
+\begin{itemize}
+    \item \texttt{MatchPossible($\Theta_{bid}, \Theta_{ask}$)} $\rightarrow$
+        $(b, n_{unit})$. This algorithm returns $b=1$ if the given ask and bid
+        are compatible from a match making perspective. If the orders are
+        compatible, then $n_{unit}$ represents the number of units that can be
+        matched across the two orders.
+\end{itemize}
+
+% algo for MakeMake to queue accumulate until able to be matched
+
+Given this function we define our implementation of the \texttt{MatchMake}
+algorithm:
+\begin{pchstack}[boxed,center, space=1em]
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{MatchMake(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+        \texttt{matchSet} \gets \{\} \\
+        \texttt{asks} \gets filter(O, \Theta_{i}.O_{type} == Ask) \\
+        \texttt{bids} \gets filter(O, \Theta_{i}.O_{type} == Bid) \\
+        for bid in bids: \\
+        \t for ask in asks: \\
+        \t \t if \texttt{MatchPossible(bid, ask)}: \\
+        \t \t \t \texttt{matchSet} = \texttt{matchSet} \cup (ask, bid) \\
+        return \texttt{matchSet}
+    }
+\end{pchstack}
+
+We note that several optimizations here are possible to reduce the worst-case
+running time of the algorithm which we leave open for future work.
+
+\begin{center}
+    \textbf{Uniform Price Clearing}
+\end{center}
+
+Once we've had our set of candidate matches, we'll now move on to the market
+clearing phase. During the market clearing phase, two distinct operations are
+carried out:
+\begin{itemize}
+    \item A trader's account state is updated to reflect any lease premiums
+        earned due to matches, chain fees paid in the  batch execution
+        transaction, fees paid to the auctioneer, and finally the debit for any
+        sold channels from their account.
+
+    \item We determine the uniform clearing price for a given potential batch.
+\end{itemize}
+
+These two actions comprise the \texttt{ClearMarket} and
+\texttt{MarketClearingPrice} algorithms. For our market clearing price, we
+select the Last Accepted Bid market clearing rule (cite).
 
 % matching, multi-attribute
 % series of matching predicates?
@@ -2265,6 +2381,41 @@ implementations:
 % selection of LAB, flash some theory
 
 \subsubsection{The Batch Execution Transaction}
+
+Once we've laired the market, we'll now move onto the batch execution phase.
+During this phase, we'll construct the batch transaction which executes a given
+batch, and also gather all the necessary witnesses for each participant of the
+batch so we can properly spend their on-chain account outputs. Remember
+that due to the non-custodial structure, a trader will fully validate a given
+batch before they sign off on it.
+
+\begin{center}
+    \textbf{Batch Transaction Construction}
+\end{center}
+
+A given batch transaction contains the following inputs:
+\begin{itemize}
+    \item The set of trader account inputs involved in the batch.
+    \item The input of the master auctioneer itself.
+\end{itemize}
+
+As well as the following outputs:
+\begin{itemize}
+    \item A trader's new incremented account output which reflects the market
+        clearing.
+
+    \item The set of channels created as part of the channel lease.
+
+    \item The incremented auctioneer account.
+\end{itemize}
+
+We now define the complete \texttt{ConstructBatch} and \texttt{ExecuteBatch}
+methods:
+
+\begin{center}
+    \textbf{Batch Transaction Execution}
+\end{center}
+
 
 % need to also describe side-car channel as well?
 % batch execution
@@ -2282,30 +2433,124 @@ implementations:
 
 \subsection{the Lightning Pool Shadowchain}
 
+In this section, we complete the Lightning Pool system by demonstrating out its
+implemetnation of a Channel LEase Marketplace can be impleneted using our
+shadowchain application overlay framework.
+
 % auctioneer is the orcewstrator, etc fill in thos meethods now
 % execution env is golang code
 % define the state transition function: takes in orders and updates all other state likely use funcs from above
 
 \subsubsection{Lightning Pool Accounts as Lifted UTXOs}
 
+First, we link the concept of our non-custodial accounts in the CLM realm to a
+lifted UTXO. The process of lifting and unlifting a UTXO is simply a serie sof
+operations required to create, modify or close an account:
+\begin{pcvstack}[boxed,center, space=1em]
+    \begin{pchstack}[boxed,center, space=1em]
+        \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{LiftUTXO(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+        }
+
+        \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{UnliftUTXO(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+        }
+    \end{pchstack}
+
+    \begin{center}
+        \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{ExitChain(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+        }
+    \end{center}
+\end{pcvstack}
+
 % compare them, state how same idea, define exit chain method, and lift+unlift
 
 \subsubsection{Auction Batch Proposal}
+
+Next, we move unto patch proposal and acceptance. An auction batch within a CLM
+maps 1:1 to the concept of blocks in the shadowchain domain. Given this
+insight, we now dfine the \texttt{ConstructBlock} and \texttt{ProposeBlock}
+algorithms:
+\begin{pchstack}[boxed,center, space=1em]
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{ConstructBlock(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+    }
+
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{ProposeBlock(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+    }
+\end{pchstack}
 
 % define server construction
 % client verification of function
 
 \subsubsection{Shadowchain Batch Execution}
 
+Now that we're able to lift/unlift UTXOs and propse blocks within our
+shadowchain, we now define the series of methods that will be utilized to allow
+clients to execute the their local version of the state transition function to
+accept new proposed batches:
+\begin{pchstack}[boxed,center, space=1em]
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{CommitBlock(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+    }
+\end{pchstack}
+
 % fill in the rests of the algos
 
 \subsubsection{Unconfirmed Batch Cut-Through}
 
+Recall that a shadowchain block can also be optimistically aggregated into a
+single block. In the domain of the Lightning Pool shadowchain, combining blocks
+requires ensuring that all produced channel leases will still exist in the
+final combined blocks, and the end state of each accoutn refelcts any
+conseqeutive market clearing opportunities:
+\begin{pchstack}[boxed,center, space=1em]
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{CoalesceBlocks(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+    }
+\end{pchstack}
+
 \subsubsection{Auction Upgrades}
+
+Finally, we define the process by which we upgrade the CLM shadowchain itself.
+As this is an off-chain process, each participant of the shadowchain is able to
+call the followin algorithm to update in a de-synchronized manner:
+\begin{pchstack}[boxed,center, space=1em]
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{UpgradeChain(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+    }
+\end{pchstack}
 
 \section{Security Analysis}
 
-lift shadow chain stuff from blog post
+Similar to Loop, the Pool backend server is closed source, but clients are able
+to fully verify and audit each phase of the auction. At a high level, Pool can
+be seen as a “shadow chain” anchored in the base Bitcoin blockchain. The shadow
+chain validates modifications to a subset of the UTXO set (the Pool accounts)
+with the auctioneer acting as a block proposer to extend the chain. State
+transitions are validated and accepted by those that are involved in a new
+block (the auction batch). Newer clients are even able to audit the prior
+history of the system in order to ensure proper operation. Pool uses the
+Bitcoin blockchain for what it’s best for: global censorship resistant batch
+execution.
+
+Leveraging this shadow chain structure, users remain in control of their funds
+at all times, and will only enter into agreements that they’re able to fully
+verify, ensuring that channels are properly constructed and that the market is
+operating as expected. Compared to existing centralized exchanges with
+off-chain order execution, Pool has a number of attractive security properties:
+\begin{itemize}
+
+    \item As a non-custodial system, users are in control of their funds at all
+        times.
+
+    \item A purchased LCL will result in the creation of a channel with parameters
+        that capture the preferences expressed in the initial order.
+
+    \item If the auctioneer server is hacked, the breach doesn’t unilaterally
+        compromise user funds.
+
+    \item Orders by one trader cannot be used to spoof orders by another trader.
+
+    \item Clients are able to verify and audit all operations carried out by the
+        server during batch construction including proper order matching.
+
+\end{itemize}
+
 
 \section{Future Directions}
 
@@ -2317,9 +2562,34 @@ linear progamming constraints for order matching
 
 coupon channels
 
+As is clients verify each Shadowchain blocks within the CLM system, but they
+have no assurance that their order was actually included in the mach making
+function. In this manner, the auctioneer can silently ignore a set of orders.
+To remedy this, it is possible for tha auctioneer to publish an order
+transpeacny authenticated data structure to give users a mrkle leaf receipt of
+proper order inclusion.
+
+Rather than sending over a full block, the auctioneer can instead send over a
+ZKP (cite) of proper block validity. This would imporve the privacy of the
+system.
+
+As is, the maker rerecivees thier pereimum all at once. However it may bne
+possible to set up another uni-directional channel in order to stream the
+interest in real-time. It may further be possbile to allow others to buy/sell
+the future cash flows of the "coupon channels".
+
 \section{Related Work}
 
 \section{Conclusion}
+
+In this work, we've put forth a new sbatraction over capital aobligations on
+teh Lightning Netowkr, that we call channel leases. Channel lease can be bought
+and sold on a Channle Liqudiity Marketplace diretyl solving a series of
+bootrapping challenges the networkj faces. To implmenet a Channle LEase
+marketpalce in a secure manner, we put forth the concetp of a shadowchain
+application framework. In conjunction with the concept of a node rageting's
+agency, the Channel Lease Marketplace is a new way for routing node operators
+to earn yield  within the Lightning Netowrk.
 
 \section{Acknowledgments}
 
