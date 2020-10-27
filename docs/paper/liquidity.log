@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.21 (TeX Live 2020) (preloaded format=pdflatex 2020.10.16)  22 OCT 2020 13:25
+This is pdfTeX, Version 3.14159265-2.6-1.40.21 (TeX Live 2020) (preloaded format=pdflatex 2020.10.16)  26 OCT 2020 22:30
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -912,91 +912,100 @@ LaTeX Font Info:    Trying to load font information for U+msb on input line 73.
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 ) [1
 
-{/usr/local/texlive/2020basic/texmf-var/fonts/map/pdftex/updmap/pdftex.map}] [2
-]
-[3] [4]
-Underfull \hbox (badness 10000) in paragraph at lines 272--285
+{/usr/local/texlive/2020basic/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]
+(./liquidity.toc
+Overfull \hbox (7.84819pt too wide) in paragraph at lines 34--34
+ [] [][]\OT1/cmr/bx/n/12 Lightning Pool: A Chan-nel Liq-uid-ity Mar-ket-place a
+s a Shadow 
+ []
+
+[2])
+\tf@toc=\write5
+\openout5 = `liquidity.toc'.
+
+ [3] [4] [5] [6]
+Underfull \hbox (badness 10000) in paragraph at lines 278--291
 
  []
 
-[5]
-Underfull \hbox (badness 10000) in paragraph at lines 290--306
+[7]
+Underfull \hbox (badness 10000) in paragraph at lines 296--312
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 312--334
+Underfull \hbox (badness 10000) in paragraph at lines 318--340
 
  []
 
-[6] [7] [8] [9] [10]
-Overfull \hbox (8.50488pt too wide) in paragraph at lines 541--557
+[8] [9] [10] [11] [12]
+Overfull \hbox (8.50488pt too wide) in paragraph at lines 547--563
 \OT1/cmr/m/n/12 http://www.cramton.umd.edu/papers2010-2014/cramton-market-desig
 n.pdf). 
  []
 
-[11]
-Underfull \hbox (badness 10000) in paragraph at lines 611--614
+[13]
+Underfull \hbox (badness 10000) in paragraph at lines 617--620
 
  []
 
-[12] [13]
+[14] [15]
 
-LaTeX Warning: Citation `autopilot' on page 14 undefined on input line 680.
+LaTeX Warning: Citation `autopilot' on page 16 undefined on input line 686.
 
-[14]
+[16]
 
-LaTeX Warning: Citation `amp' on page 15 undefined on input line 709.
+LaTeX Warning: Citation `amp' on page 17 undefined on input line 715.
 
-[15] [16] [17
+[17] [18] [19
 
-] [18] [19] [20] [21] [22] [23]
-Underfull \hbox (badness 10000) in paragraph at lines 1176--1177
-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 1182--1185
-
- []
-
-[24]
-Underfull \hbox (badness 10000) in paragraph at lines 1201--1204
+] [20] [21] [22] [23] [24] [25]
+Underfull \hbox (badness 10000) in paragraph at lines 1182--1183
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 1205--1210
+Underfull \hbox (badness 10000) in paragraph at lines 1188--1191
+
+ []
+
+[26]
+Underfull \hbox (badness 10000) in paragraph at lines 1207--1210
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 1229--1234
-
- []
-
-[25]
-Underfull \hbox (badness 10000) in paragraph at lines 1235--1240
+Underfull \hbox (badness 10000) in paragraph at lines 1211--1216
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 1251--1254
+Underfull \hbox (badness 10000) in paragraph at lines 1237--1242
+
+ []
+
+[27]
+Underfull \hbox (badness 10000) in paragraph at lines 1243--1248
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 1255--1265
+Underfull \hbox (badness 10000) in paragraph at lines 1259--1262
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 1269--1277
+Underfull \hbox (badness 10000) in paragraph at lines 1263--1273
 
  []
 
 
-Overfull \hbox (30.3216pt too wide) in paragraph at lines 1282--1292
+Underfull \hbox (badness 10000) in paragraph at lines 1277--1285
+
+ []
+
+
+Overfull \hbox (30.3216pt too wide) in paragraph at lines 1290--1300
 []\OT1/cmtt/m/n/12 ClearMarket($\OT1/cmr/m/n/12 	[]\OML/cmm/m/it/12 ; \OT1/cmr/
 m/n/12 ^^H[]\OML/cmm/m/it/12 ; \OMS/cmsy/m/n/12 f\OT1/cmr/m/n/12 	[]\OML/cmm/m/
 it/12 ; [] ; \OT1/cmr/m/n/12 	[]\OMS/cmsy/m/n/12 g\OML/cmm/m/it/12 ; c[]$\OT1/c
@@ -1006,78 +1015,200 @@ cmsy/m/n/12 f\OT1/cmr/m/n/12 ^^@[]\OML/cmm/m/it/12 ; [] ; \OT1/cmr/m/n/12 ^^@[]
 cmm/m/it/12 ; [] ; \OT1/cmr/m/n/12 	[]\OMS/cmsy/m/n/12 g\OT1/cmr/m/n/12 )$.
  []
 
-[26]
-Underfull \hbox (badness 10000) in paragraph at lines 1308--1312
+[28]
+Underfull \hbox (badness 10000) in paragraph at lines 1316--1320
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 1313--1317
+Underfull \hbox (badness 10000) in paragraph at lines 1321--1325
 
  []
 
-[27] [28] [29]
-Overfull \hbox (41.55829pt too wide) in paragraph at lines 1479--1481
+[29] [30] [31]
+Overfull \hbox (48.66086pt too wide) in paragraph at lines 1487--1489
 [][]\OT1/cmr/bx/n/12 Definition 6.2. []\OT1/cmr/m/n/12 (Lifted UTXO). A \OT1/cm
-tt/m/n/12 Lifted UTXO \OT1/cmr/m/n/12 is a tu-ple, $\OML/cmm/m/it/12 ^^^ \OT1/c
-mr/m/n/12 = (\OML/cmm/m/it/12 A[]; T[]; P[]; P[]\OT1/cmr/m/n/12 )$,
+tt/m/n/12 Lifted UTXO \OT1/cmr/m/n/12 is a tu-ple, $\OML/cmm/m/it/12 ^^^[] \OT1
+/cmr/m/n/12 = (\OML/cmm/m/it/12 A[]; T[]; P[]; P[]\OT1/cmr/m/n/12 )$,
  []
 
 
-Overfull \hbox (6.85005pt too wide) in paragraph at lines 1487--1490
+Overfull \hbox (6.85005pt too wide) in paragraph at lines 1495--1498
 \OT1/cmr/m/n/12 able to uni-lat-er-ally move the funds back to the "base" Bit-c
 oin blockchain. 
  []
 
-[30] [31] [32]
-No file liquidity.bbl.
+[32]
+Underfull \hbox (badness 10000) in paragraph at lines 1575--1576
+
+ []
+
 [33]
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 1628.
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 1628.
+Underfull \hbox (badness 10000) in paragraph at lines 1581--1584
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1598--1602
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1603--1610
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1611--1616
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1630--1634
+
+ []
+
+[34]
+Overfull \hbox (5.78873pt too wide) in paragraph at lines 1650--1657
+[]$\OML/cmm/m/it/12 B[] \OT1/cmr/m/n/12 = (\OML/cmm/m/it/12 T[]; \OMS/cmsy/m/n/
+12 f\OML/cmm/m/it/12 ^^^[]; []  ; ^^^[]\OMS/cmsy/m/n/12 g\OML/cmm/m/it/12 ; \OT
+1/cmr/m/n/12 ^^A[]\OML/cmm/m/it/12 ; \OMS/cmsy/m/n/12 f\OML/cmm/m/it/12 ^^^[]; 
+[]  ; ^^^[]\OMS/cmsy/m/n/12 g\OML/cmm/m/it/12 ; U[]\OT1/cmr/m/n/12 )$, is the S
+had-owchain
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1659--1665
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1678--1681
+
+ []
+
+[35]
+Underfull \hbox (badness 10000) in paragraph at lines 1695--1699
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1700--1706
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1725--1730
+
+ []
+
+[36] [37] [38]
+Overfull \hbox (3.36722pt too wide) in paragraph at lines 1840--1848
+\OT1/cmr/m/n/12 In this sec-tion, we build upon the prior sec-tions out-lin-ing
+ the ab-stract \OT1/cmtt/m/n/12 Channel
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1857--1863
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1864--1870
+
+ []
+
+[39]
+Underfull \hbox (badness 10000) in paragraph at lines 1872--1873
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1903--1910
+
+ []
+
+[40]
+Underfull \hbox (badness 10000) in paragraph at lines 1926--1933
+
+ []
+
+[41]
+Underfull \hbox (badness 10000) in paragraph at lines 2003--2009
+
+ []
+
+[42] [43]
+Underfull \hbox (badness 10000) in paragraph at lines 2062--2065
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2088--2094
+
+ []
+
+[44] [45] [46]
+Underfull \hbox (badness 10000) in paragraph at lines 2213--2224
+
+ []
+
+
+Overfull \hbox (25.82823pt too wide) in paragraph at lines 2253--2253
+ [] 
+ []
+
+[47]
+No file liquidity.bbl.
+[48] [49]
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 2333.
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 2333.
  (./liquidity.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 1628.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 1628.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 2333.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 2333.
 
 Package rerunfilecheck Info: File `liquidity.out' has not changed.
-(rerunfilecheck)             Checksum: 5BD7B1CDC608A8F7468EB9C7E8388984;2834.
+(rerunfilecheck)             Checksum: 6E99436BEC75710E6141B3EABBA771C6;4030.
 
 
 LaTeX Warning: There were undefined references.
 
-Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 1628.
+Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 2333.
  ) 
 Here is how much of TeX's memory you used:
- 22600 strings out of 482056
- 432488 string characters out of 5937674
- 718461 words of memory out of 5000000
- 37751 multiletter control sequences out of 15000+600000
- 545927 words of font info for 77 fonts, out of 8000000 for 9000
+ 22832 strings out of 482056
+ 436087 string characters out of 5937674
+ 1208295 words of memory out of 5000000
+ 37770 multiletter control sequences out of 15000+600000
+ 546404 words of font info for 79 fonts, out of 8000000 for 9000
  319 hyphenation exceptions out of 8191
- 57i,16n,68p,915b,1498s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 69i,21n,68p,915b,1764s stack positions out of 5000i,500n,10000p,200000b,80000s
  </Users/roasbeef/Library/texlive/2020basic/texmf-var/fonts/pk/ljfour/jknappe
 n/ec/tcrm1200.600pk></usr/local/texlive/2020basic/texmf-dist/fonts/type1/public
 /amsfonts/cm/cmbx10.pfb></usr/local/texlive/2020basic/texmf-dist/fonts/type1/pu
 blic/amsfonts/cm/cmbx12.pfb></usr/local/texlive/2020basic/texmf-dist/fonts/type
-1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2020basic/texmf-dist/fonts/
-type1/public/amsfonts/cm/cmmi12.pfb></usr/local/texlive/2020basic/texmf-dist/fo
-nts/type1/public/amsfonts/cm/cmmi6.pfb></usr/local/texlive/2020basic/texmf-dist
-/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/local/texlive/2020basic/texmf-d
-ist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2020basic/texm
-f-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/local/texlive/2020basic/t
-exmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/local/texlive/2020basi
-c/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/local/texlive/2020ba
-sic/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local/texlive/2020
-basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/
-2020basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/texli
-ve/2020basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr/local/t
-exlive/2020basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmti12.pfb></usr/loc
-al/texlive/2020basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfb></usr
-/local/texlive/2020basic/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.
-pfb>
-Output written on liquidity.pdf (33 pages, 289773 bytes).
+1/public/amsfonts/cm/cmbx8.pfb></usr/local/texlive/2020basic/texmf-dist/fonts/t
+ype1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2020basic/texmf-dist/fon
+ts/type1/public/amsfonts/cm/cmmi12.pfb></usr/local/texlive/2020basic/texmf-dist
+/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/local/texlive/2020basic/texmf-d
+ist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/local/texlive/2020basic/texm
+f-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2020basic/t
+exmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/local/texlive/2020basi
+c/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/local/texlive/2020b
+asic/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/local/texlive/202
+0basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local/texlive/2
+020basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texli
+ve/2020basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/te
+xlive/2020basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr/loca
+l/texlive/2020basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmti12.pfb></usr/
+local/texlive/2020basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></
+usr/local/texlive/2020basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pf
+b></usr/local/texlive/2020basic/texmf-dist/fonts/type1/public/amsfonts/symbols/
+msbm10.pfb>
+Output written on liquidity.pdf (49 pages, 370679 bytes).
 PDF statistics:
- 413 PDF objects out of 1000 (max. 8388607)
- 356 compressed objects within 4 object streams
- 88 named destinations out of 1000 (max. 500000)
- 317 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 825 PDF objects out of 1000 (max. 8388607)
+ 746 compressed objects within 8 object streams
+ 296 named destinations out of 1000 (max. 500000)
+ 429 words of extra memory for PDF output out of 10000 (max. 10000000)
 

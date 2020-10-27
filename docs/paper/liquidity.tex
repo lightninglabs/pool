@@ -88,13 +88,19 @@ buy/sell capital obligations on the network. We call these capital obligations
 traditional fixed-income asset and an internet peering agreement. Channel
 leases allow nodes on the network with idle capital to earn yield (based on a
 derived \emph{per-block} interest rate) by selling a channel to an agent within
-the marketplace, The duration of such a contract is enforced on-chain using
+the marketplace. The duration of such a contract is enforced on-chain using
 Bitcoin Script. We construct \textbf{Lightning Pool}, using a novel design for
 constructing overlay applications on top of Bitcoin: a shadow chain. Shadow
 chains allow users to remain in full custody of their funds at all times while
 also participating in higher level cut-throughable applications. 
 
-\end{abstract}
+\end{abstract} 
+
+\newpage
+
+\tableofcontents
+
+\vfill
 
 \section{Introduction}
 
@@ -1129,7 +1135,7 @@ they're looking to buy/sell.
 
 Returning back to our tag $T_{auth}$, we will now specify how such a tag is to
 be computed, and verified. In the abstract, we require that the tagging scheme
-is \seufcma secure (cite). Given this security requirement, we define
+is \seufcma \enspace secure (cite). Given this security requirement, we define
 two polynomial-time algorithms: (\texttt{GenOrderTag}, \texttt{VerifyOrderTag})
 with the following requirements:
 
@@ -1208,10 +1214,12 @@ auctioneer's public key, and outputs a new account for the new agent within the
 marketplace. We require that all resulting accounts within the marketplace be
 \emph{unique}. We permit a single logical agent to have multiple accounts. \\
 
-\texttt{ModifyAccount($\Psi, P_{auction_p}$)} $\rightarrow$ $\Psi^\prime$. The % als needs the auctioneer's priv?
-\texttt{ModifyAccount} algorithm takes an existing valid account $\Psi$ and the
-auctioneer's public key and performs an account modification. An account
-modification can either:
+\texttt{ModifyAccount($\Psi, P_{auction_p}$)} $\rightarrow$ ($b, \Psi^\prime$).
+The \texttt{ModifyAccount} algorithm takes an existing valid account $\Psi$ and
+the auctioneer's public key and performs an account modification. The algorithm
+returns $b=1$ if the modification was successfully, and $b=0$ otherwise. An
+account modification may fail if the target account is already part of a
+pending batch. An account modification can either:
 \begin{itemize}
     \item Deposit new coins into the account.
     \item Withdraw coins from the account.
@@ -1219,8 +1227,8 @@ modification can either:
 \end{itemize}
 
 Note that as each of these operations require an on-chain transaction, they can
-freely be batched with other on-chain transactions, or even the transaction that
-executes an auction's batch.
+freely be batched with other on-chain transactions, or even the transaction
+that executes an auction's batch.
 
 \begin{center}
     \textbf{Order Book Maintenance}
@@ -1477,7 +1485,7 @@ Next, we define the \texttt{Lifted UTXO} which is the representation of a
 user's state within a given shadow chain:
 
 \begin{definition}{(Lifted UTXO).} A \texttt{Lifted UTXO} is a tuple, 
-    $ \phi = (A_{sat}, T_{expiry}, P_{u}, P_{o})$, where:
+    $ \phi_{U} = (A_{sat}, T_{expiry}, P_{u}, P_{o})$, where:
 \end{definition}
 
 \begin{itemize}
@@ -1501,8 +1509,9 @@ user's state within a given shadow chain:
 % actually don't use LO here after all?
 
 The construct of a \texttt{Lifted UTXO} is similar to the existing concept of a
-Fidelity Bond (cite), yet with an application specific twist. The time-lock
-release nature of the UTXO means a user can always recover funds if the
+Fidelity Bond (cite), yet with an application specific twist. This process is
+akin to creation a new 'account' within a Shadowchain. The time-lock release
+nature of the UTXO means a user can always recover funds if the
 \texttt{Orchestrator} becomes unresponsive. In addition to this, a natural cost
 in the form of chain fees is added which increases the barrier for potentially
 malicious users to interact with the shadow chain.
@@ -1522,7 +1531,7 @@ itself.
 First, we define the core components of the shadowchain. 
 
 \begin{definition}{(Shadowchain).} An instantiation of a \texttt{Shadowchain}
-    is defined as a tuple: $\Sigma = (U_{L}, U_{O}, \Delta, E_{exe},
+    is defined as a tuple: $\Sigma = (U_{L}, U_{O}, \Delta_F, E_{exe},
     A_{T})$, where:
 \end{definition}
 
@@ -1533,7 +1542,7 @@ First, we define the core components of the shadowchain.
     \item $U_{0}$ is the current UTXO Orchestrator, where they may accrue
         application level fees.
 
-    \item $\Delta =  \{ \Delta_{F_0}, \cdots, \Delta_{F_n} \}$ is the set of
+    \item $\Delta_F =  \{ \Delta_{f_0}, \cdots, \Delta_{f_n} \}$ is the set of
         current state transition functions.
 
     \item $E_{exe}$ is the abstract execution environment of the Shadowchain
@@ -1555,75 +1564,772 @@ categories:
 
 \begin{itemize}
     \item System Initialization: \texttt{InitChain}
-    \item UTXO Management: (\texttt{LiftUTXO}, \texttt{ExitChain})
+    \item UTXO Management: (\texttt{LiftUTXO}, \texttt{UnliftUTXO}, \texttt{ExitChain})
     \item Block Proposal \& Validation: (\texttt{ConstructBlock}, \texttt{ProposeBlock})
-    \item Block Cut-Through: \texttt{CoalesceBlock}
     \item Chain Execution: \texttt{CommitBlock}
+    \item Block Cut-Through: \texttt{CoalesceBlocks}
     \item Chain Upgrade: \texttt{UpgradeChain}
 \end{itemize}
 
-% also shadowchain definition: (utxos, operator, env, stateFuncs)
 
-% definition of state transition function
+With behavior and semantics as expressed below. \\
 
-% algorithm description
+\begin{center}
+    \textbf{System Initialization}
+\end{center}
 
-% shadowchain applicatin life cycle
+Before a Shadowchain can be used for a given application, it is required that
+the system be initialized to obtain the long-term public key of the auctioneer,
+as well as the execution environment, and set of state transition functions: \\
+
+\texttt{InitChain($1^{\lambda}$)} $\rightarrow$ $(U_{0}, P_{0}, \Delta_F,
+E_{exe})$. Given the security parameter $\lambda$ (expressed in unary), the
+\texttt{InitChain} method returns the initial self-lifted UTXO of the
+Orchestrator, the long-term public key of the Orchestrator, and the set of
+initial state transition functions along with the starting execution
+environment.
+
+% need to define the function signature ok
+
+\begin{center}
+    \textbf{UTXO Management}
+\end{center}
+
+Once the chain has been initialized, given the parameters of the Shadowchain,
+users can being lifting their UTXO to be able to patriotic pate in Shadowchain
+blocks and operation. The process of entering the shadowchain is referred to as
+UTXO Lifting, while exiting is the reverse process: \\
+
+\texttt{LiftUTXO($T_{expiry}, \{U_{N_0}, \ldots, U_{N_n}\}, P_{0}$)}
+$\rightarrow$ $\phi_{U}$. The \texttt{LiftUTXO} algorithm takes a series of
+normal UTXOs ($U_N$), the absolute expiration height of the UTXO, and the
+long-term public key of the Orchestrator $P_{0}$ and outputs a new
+\texttt{Lifted UTXO} for the target user. The sum of the set of input UTXOs
+must be greater-than-or-equal to the size of the resulting \texttt{Lifted
+UTXO}. \\
+
+\texttt{ExitChain($\phi_{U}, B_{height}$)} $\rightarrow$ $U_{N}$. Given a lifted
+UTXO with expiration height $T_{expiry} > B_{height}$, where $B_{height}$, the
+\texttt{ExitChain} method spends an existing lifted UTXO and resolves the
+user's funds in a regular unencumbered UTXO. Users will use this algorithm if
+they wish to exit the chain, with the Operator no longer being responsive. \\ 
+
+\texttt{UnliftUTXO($\phi_{U}$)} $\rightarrow$ $U_{N}$. Given a lifted UTXO the
+\texttt{UnliftUTXO} method create a new normal un-lifted UTXO output
+which returns all funds to the user. This is the optimistic version of the
+\texttt{ExitChain} algorithm, in that it requires cooperation from the
+Orchestrator as the time-release clause of the Lifted UTXO's script is not yet
+unlocked.
+
+% add section for transaction submission?
+
+\begin{center}
+    \textbf{Block Proposal \& Validation}
+\end{center}
+
+Once a Shadowchain has a sufficient number of lifted UTXOs, and the system has
+been fully initialized, block proposal and validation can commence. This
+process is similar to the process of nodes broadcasting transactions, and
+miners ordering them within blocks in the base Bitcoin system: \\
+
+% set of lifted utxos, set of transactions, exe env, state transition funcs
+\texttt{ConstructBlock($\phi_{live}, T_{xn}, E_{exe}, \Delta_F$)} $\rightarrow$
+$B_S$. Given inputs of the set of 'live' Lifted UTXOs, the set of transaction
+belonging to the live UTXOs, the execution environment, and the current set of
+valid state transition
+functions, the \texttt{ConstructBlock} outputs a valid Shadowchain block to
+extend the current machine chain. Where: 
+\begin{itemize}
+    \item $\phi_{live} = live(\{\phi_{U_0}, \cdots, \phi_{U_N}\}$ is the set of
+            'live' Lifted UTXOs where the $live$ algorithm uses a heart-beat
+            like protocol to detect the current set of active users.
+
+    \item $T_{xn}$ is the application-specific transaction format used within
+        the Shadowchain.
+
+    \item $B_S = (T_{xn}, \{\phi_{U_0}, \cdots, \phi_{U_N}\}, \Delta_{f},
+        \{\phi_{U_0}^\prime, \cdots, \phi_{U_N}^\prime\}, U_{A})$, is the
+        Shadowchain block itself, which is composed of the set of application
+        transaction, input Lifted UTXOs, the resulting output UTXOs after
+        applying the set of state transition functions, and $U_{A}$ any new
+        application-specific UTXOs produced as a result of the state transition
+        function.
+\end{itemize}
+
+Once a block has been constructed, the Operator of the Shadowchain now must
+proposed said block to the set of live Lifted UTXOs before we can move onto the
+next phase of Shadowchain operation. As a given user may reject a block, either
+implicitly due to being offline, or explicitly due to a violation of the
+Shadowchain consensus rules, then this phase may be repeated a number of times.
+The Operator will use the following algorithm to propose blocks: \\
+
+\texttt{ProposeBlock($B_S, \phi_{live}$)} $\rightarrow$ $b$. The
+\texttt{ProposeBlock} attempts to proposed the given Shadowchain block to the
+set of live Lifted UTXOs. The algorithm returns $b=1$ is all of the
+participants accept the block. Once all participants have accepted the block,
+we can now proceed to the execution and block commitment phase.
+
+% need to add ValidteBlock for the end user
+
+\begin{center}
+    \textbf{Chain Execution}
+\end{center}
+
+Once the Operator has esatblshed a stable set of participants which accept the
+proposed Shadowchain block, it can move unt to executing the block as well as
+committing it in the base Bitcoin blockchain: \\
+
+\texttt{CommitBlock($B_S$)} $\rightarrow$ $(b, TX_{id})$. The
+\texttt{CommitBlock} takes a valid Shadowchain block, and attempts to obtain
+all necessary witnesses to unlock the Lifted UTXOs to re-create them post state
+function application along with any new application-specific UTXOs. The
+algorithm returns $b=1$ if the Operator was able to succesfully obtain all
+necessayr witneses, and brodcast the Bitcoin transaction which commits the
+Shadowchain block. Otherwise, the Operator may need to re-propose a new block
+to a sub-set of the live Lifted UTXOs.
+
+\begin{center}
+    \textbf{Block Cut-Through}
+\end{center}
+
+Given the sturcutre of a Shadowchain block, and the state transition function
+itself, it's possilbe for a Shadowchain operator to compres several disticnt
+Shadowchain blocks into a single instance that is equivalent to the succesive
+state transtion funciton application on each distinct shadowchain block: \\
+
+\texttt{CoalesceBlocks($\{B_{S_0}, \cdots, B_{S_N}\}$)} $\rightarrow$
+$B_{S}^\prime$. Given a series of \emph{consecutive} Shadowchain blocks, the
+\texttt{CoalesceBlocks} algorithms compresses each consqeutive block into a
+single block $B_{S_N}$ which has an equivalent output state to the serial
+appliation of the state transition functino on each induvidual Shadowchain
+block. \\
+
+The \texttt{CoalesceBlocks} algorithm is similar to the concept of transaction
+cut-through (cite) for UTXO-based blockchains. Using this algorithm, the
+Operator is able to propose a new equivalent block which produces the same set
+of net Lifted UTXO outputs, along with any other application specific outputs
+produced by any of the intermediate blocks. This can be done post-facto, and
+also in an optimsitic manner in order to coalesce several unconfirmed
+Shadowchain blocks into a single one.
+
+% diagram for cut thru
+
+% re-phrase using function composition?
+
+% add a real algorithm that details the process of it
+
+\begin{center}
+    \textbf{Chain Upgrade}
+\end{center}
+
+The process of upgrading the chain in term sof the \emph{types} of
+application-level transactions offered, or the set of valid state transition
+functinos can be done entirely off-chin in a de-syhcnronied manner. In order to
+update the environment, state transition functions, or the apicatin-level
+transactions, the Operator simply needs to utilize the following algorithm: \\
+
+\texttt{UpgradeChain($\Delta_{new}, E_{exe}^\prime, T_{xn}^\prime$)}
+$\rightarrow$ $\bot$. The \texttt{UpgradeChain} is a algorithm that's executed
+entirely in an off-chain manner, than lets the Operator of the shadowchain
+upgrade some or all of: the applciation transaciton data, the execution
+environment, and the set of state transition functions. Due to the nature of
+the shadowchain, in order to uitlize thsi new functinlaity each user must
+update thieir local state. However, note that the Lifted UTXO remains the same,
+as the Operator's long-term public key hasn't changed.
+
+\subsubsection{Shadowchain Operation}
+
+In this section, we'll put together the above algorithms to out-line the main
+execution loop of the Shadowchain from the perspective of the Operator as well
+as participants. Shadowchain operation can be viewed as a linear deterministic
+state machine that uses the main Bitcoin blockchain in order to transition to
+certain states.
+
+% insert shadowchain diagram here
+
+\begin{center}
+    \textbf{Operator State Machine}
+\end{center}
+
+The main Operator State Machine loop first attempts to process any new UTXO
+lifting requests, then will optimistically attempt to merge in any existing
+unconfirmed Shadowchain blocks that can be coalesced. Independent of either of
+these clauses, we'll then enter into our main loop where the Operator attempts
+to construct a new block given the set of live transaction, propose the block
+to the set of live UTXOs, filter our any participants that rejected the block,
+before finally attempting to commit the new block within the chain.
+
+%\procedureblock[syntaxhighlight=auto]{OrchestrateChain(utxos, env, funcs)}{
+%    until \neg s
+%}
+        % run loop
+        % process account lifting
+        % try to coaclse any blocks
+        % construct block
+        % propose block 
+        % take those that accept then construct block with
+        % commit block
+
+\begin{pchstack}[boxed,center, space=1em]
+    \procedure[linenumbering, syntaxhighlight=auto]{\texttt{OrchestrateChain($\Delta_{F}, E_{exe}$)}}{
+        repeat \\
+        \t if \texttt{haveNewLiftReqs()} \\
+        \t \t \{\phi_{new}\} \gets \texttt{liftNewUTXOs($P_{O}$)} \\
+        \t \t \{\phi_{U}\} \gets \phi_{U} \cup \phi_{new} \\
+        \t if \texttt{numUnconfBlocks()}>1 \\
+        \t \t B_{S}^\prime \gets \texttt{CoalesceBlocks(unconfBlocks())} \\
+        \t \t (b, txid) \gets \texttt{CommitBlock($B_{S}^\prime$)} \\
+        \t T_{xn} \gets \texttt{liveTransactions()} \\
+        \t \phi_{live} \gets \texttt{liveLiftedUTxos()} \\
+        \t b \gets 0 \\
+        \t while b==0 \& len(\phi_{live}) > 0 \\
+        \t \t B_{S} \gets \texttt{ConstructBlock($\phi_{live}, T_{xn}, E_{exe}, \Delta_{F}$)} \\
+        \t \t b \gets \texttt{ProposeBlock($\phi_{live}, B_{S}$)} \\
+        \t \t if b== 0 \\
+        \t \t \t \phi_{live} \gets \texttt{filterRejects($\phi_{live}$)} \\
+        \t \t if b==1 \\
+        \t \t \t (b^\prime, TX_{id}) \gets \texttt{CommitBlock($B_{S}$)} \\
+     }
+
+     \procedure [linenumbering, mode=text ]{ Oracle $O$}{
+         some code \\
+         more code
+     }
+\end{pchstack}
+
+
+\begin{center}
+    \textbf{Participant State Machine}
+\end{center}
+
+The main state machine if each Shadowchain participant is essentially a mirror
+of the Orchestrator state machine. First we'll process any requests to modify
+our existing lifted UTXO, gather up any unconfirmed transactions, then await a
+new block proposal by the Shadowchain operator.
+
+\begin{pchstack}[boxed,center, space=1em]
+    \procedure[linenumbering, syntaxhighlight=auto, addkeywords={await}]{\texttt{ExtendChain($\phi_{U}, \Delta_{F}, E_{exe}$)}}{
+        repeat \\
+        \t T_{xn}^\prime \gets \texttt{unconfTxns()} \\ 
+        \t \texttt{submitTxns($T_{xn}$)} \\ 
+        \t B_{S}^\prime \gets await \quad \texttt{recvBlockProposal()} \\
+        \t b \gets \texttt{ValidateBlock($B_{S}^\prime$)} \\
+        \t if b == 1 \\
+        \t \t \texttt{sendWitnesses($U_{O}$)} \\ 
+        \t\t b^\prime \gets await \quad \texttt{blockFinalize} \\
+        \t\t if b^\prime == 1 \\
+        \t\t \t \texttt{localCommitBlock()}
+     }
+
+     \procedure [linenumbering, mode=text ]{ Oracle $O$}{
+         some code \\
+         more code
+     }
+ \end{pchstack}
+
+% lift utxo if non empty
+% read off txn queue, submit operation to operator
+% wait for proposal
+% validate proposal, accept
+% sign for lifted utxo accept block
+% go to top
 
 
 \section{Lightning Pool: A Channel Liquidity Marketplace as a Shadow Chain}
 
-tag of that order. This is done by concatenating each items of the order into
-a single byte stream, and then generating a valid signature using our
-\texttt{Sign} algorithm:
+In this section, we build upon the prior sections outlining the abstract
+\texttt{Channel Lease Marketplace} definition, as well as Shadowchain
+operation, and construct out \textbf{Lightning Pool} implementation at a
+low-level. We first being by detailing our implementation of the \texttt{CLM}
+algorithms, as well as our choice of certain free parameters. With this
+concrete structure in place, we'll then go up a layer of abstraction to
+demonstrate how Lightning Pool can be operated as a Shadowchain on Bitcoin
+today, without any further modifications enhancements.
 
-\procedureblock[syntaxhighlight=auto]{GenOrderTag($P_{acct}$, $\Theta$)}{
-    b \gets K_{nonce} \| V_{ver} \| P_{acct} \| \Delta_{base} \concat \Delta_{aux} \\
-    tag \gets Sign(P_{acct}, b) \\
-    return tag
-}
+\subsection{Instantiating a CLM}
 
-% code for validate order here in full later
+\subsubsection{System Initialization}
+
+\begin{center}
+    \textbf{Batch Key Parameter}
+\end{center}
+
+Before an instance of Lightning Pool can be used by willing agents, the system
+must first be initialized. This operation can be performed only by by the
+Orchestrator of the auctioneer. Within the system, we'll utilize incremented
+Elliptic Curve point which we refer to as the \texttt{batchID} for several
+operations. The \texttt{batchID} serves to uniquely identified a given batch,
+and is incremented after each successful batch. \\
+
+The \texttt{batchID} itself is a nothing up my sleeve (NUMs) point which has
+been generated in a manner that no one, not even the auctioneer knows the
+discrete log to. The raw serialized \texttt{batchID} (for the very first batch)
+within the \textbf{Lightning Pool} system can be expressed in the following
+syntax (displayed using hex-encoding of a compressed key encoding of the batch
+key itself): \\
+\[
+    B_{k_0} = NUMS_{gen}(1^\lambda)
+\] \\
+
+Let the current \textbf{batchID} for the $n^{\text{th}}$ batch be $B_{k_i}$.
+Let $G$ be a cyclic group of order $N=pq$, generated by an element $g$.  We now
+define two helper functions to allow us to "seek" round the \textbf{batchID}
+key-space:
+\begin{pcvstack}[boxed,center, space=1em]
+     \begin{pchstack}
+        \procedure[linenumbering, syntaxhighlight=auto]{\texttt{IncrementBatchKey($B_{k_i}$)}}{
+            return B_{k_i} + g
+         }
+
+         \procedure[linenumbering, syntaxhighlight=auto]{\texttt{DecrementBatchKey($B_{k_i}$)}}{
+            return B_{k_i} - g
+         }
+     \end{pchstack}
+
+     \begin{center}
+     \procedure[linenumbering, syntaxhighlight=auto]{\texttt{InitBatchKey}}{
+        return B_{k_0}
+     }
+     \end{center}
+\end{pcvstack} % lol kinda overkill here?, also fix the above formal EC definitions
+
+With the system initializtion , we'll now move onto specifying the structure of
+a \texttt{Marketplace Account} within \textbf{Lightning Pool}.
+
+\begin{center}
+    \textbf{Auctioneer State Initialization}
+\end{center}
+
+Now that we have defined the set of initialization and manipulation methods for
+our batch key parameter, we'll move onto the initialization of the remaining
+system. In order to prevent key-reuse across the entire system, we employ a
+similar key-derivation scheme to that of the Lightning Network's current
+commitment transaction format (cite). This key derivation will be used within
+all account scripts within the system, as well as the auctioneer's main
+account. \\
+
+First, we define a helper function for deriving the auctioneer's current key
+parameterized by the current \texttt{batchID}. As noted above, the
+\texttt{batchID} serves as both a public key within the system as well as a
+counter. The \texttt{batchID} may be expressed as a normal compressed public
+key, or as an integer $N_{b}$ which denotes the scalar multiple off-set from
+the starting batch key $B_{k_0}$: $[B_{k_0}]N_{b}$. We define the
+\texttt{auctioneerScript} as follows: 
+
+\begin{pcvstack}[boxed,center, space=1em]
+    \procedure[linenumbering, syntaxhighlight=auto]{\texttt{auctioneerScript($A_{pk}, B_{k_i}$)}}{
+        A_{pk_i} \gets A_{pk} + H(A_{pk} \concat B_{k_i}) \\
+        return \texttt{OP\_CHECKSIG $A_{pk_i}$}
+    }
+\end{pcvstack} 
+
+The script itself is a simple script that simply verifies a proper auctioneer
+signature given a particular \texttt{batchID}. In order to make all scripts
+uniform (as the account scripts are \texttt{P2WSH} outputs, we wrap this script
+in a \texttt{P2WSH} layer of indirection as well. With this algorithm defined,
+we can now define the \texttt{SystemInit} implementation for \textbf{Lightning
+Pool} that derives the first batch key along with the starting script of the
+auctioneer. \\
+
+\begin{pcvstack}[boxed,center, space=1em]
+    \procedure[linenumbering, syntaxhighlight=auto]{\texttt{SystemInit($1^{\lambda}, \Upsilon_{min}$)}}{
+        batchKey \gets \texttt{InitBatchKey()} \\
+        A_{sk} \sample \mathbb{Z}_{p} \\
+        A_{pk} \gets G A_{sk} \\
+        aScript \gets \texttt{auctioneerScript($A_{pk}$, batchKey)}\\ 
+        pkScript \gets \texttt{p2wsh(aScript)} \\ 
+        return (A_{sk}, A_{pk}, \texttt{utxo(pkScript, seedSats)})
+     }
+\end{pcvstack} 
+
+Once the third return value, auctioneer's master account has been confirmed.
+Participants are able to open accounts, submit orders, and finally participate
+in auction batches.
 
 
-For the sake of this section, we're only
-interested in two algorithms within the context of such a scheme $\Sigma =
-(Sign, Ver)$. Using these two algorithms, we now C
-generation and verification algorithms.
+\subsubsection{Lightning Pool Accounts}
 
+Next, we move onto the \texttt{Marketplace Account} structure for agents within
+the \texttt{Lightning Pool} marketplace itself. Similar to the auctioneer's
+master account, we apply a key derivation scheme that combines the auctioneer's
+key, the batch key, a key supplied by the trader, and a distinct trader
+specific secret to ensure, that: 
+\begin{itemize}
+    \item A \texttt{P2WSH} output script is \emph{never} re-used.
+    \item Traders rotate keys with each batch.
+    \item The set of trader keys using within a batch itself is
+        indistinguishable w.r.t the input keys referenced and newly created
+        outputs keys.
+\end{itemize}
 
-Once the Maker has determined the two parmaters to the auction, he constructs a special \emph{auction} script which will allow him to auction off his liquidity to the bidder that pays the highest \emph{premium}. This script will allow him to enter the auction phase, where either the auction will timeout (providing him with a refund), or the auction is successful, leading to creation of a next channel on the network (a successful exchange). The (unoptimized) auction Script template is as follows: 
+Let $P_{t}$ be a trader's base key, $S_{t} \sample \mathbb{Z}_{p}$ be an
+account-specific secret generated by the trader, and $P_{A}$ be the
+auctioneer's long-term public key.We define a new algorithm
+\texttt{traderAccountScript} which will be used to derive the \texttt{pkScript}
+for a given trader:
+
+\begin{pcvstack}[boxed,center, space=1em]
+    \procedure[linenumbering, syntaxhighlight=auto]{\texttt{traderAcctScript($P_{t}, S_{t}, P_{A}, B_{k_i}$)}}{
+        t \gets H(B_{k_i} \concat S_{t} \concat P_{t}) \\
+        P_{t}^\prime \gets P_{t} + (t * G) \\
+        P_{A}^\prime \gets P_{A} + H(P_{t}^\prime \concat P_{A}) * G \\
+        \texttt{witnessScript} \gets \{ \\
+            \t P_{t}^\prime \enspace \texttt{OP\_CHECKSIGVERIFY} \\
+            \t P_{A}^\prime \enspace \texttt{OP\_CHECKSIG} \\
+            \t \texttt{OP\_IFDUP} \\
+            \t \texttt{OP\_NOTIF} \\
+            \t \t T_{blocks} \enspace \texttt{OP\_CHECKLOCKTIMEVERIFY} \\
+            \t \texttt{OP\_ENDIF} \\
+        \} \\
+        return \texttt{witnessScript}
+     }
+\end{pcvstack} 
+
+% make sure to double check the above!
+
+The above script can either be spent via the timee out clause using the
+following witness stack, using \texttt{nil} value passes an empty signature to
+force execution of the timeout clause.
+\begin{verbatim}
+nil traderSig witnessScript
+\end{verbatim}
+
+Or via the normal spend path way which will be used to authorized batches,
+account closing, and any other account modifications:
+\begin{verbatim}
+auctioneerSig traderSig witnessScript
+\end{verbatim}
+
+Note that each trader starts using the current batch key at the time they
+joined the marketplace. However, as we'll see below in the execution section, a
+trader's key gets rotated with each batch they participate in, meaning that the
+set of batch keys used within a trader's account output script will eventually
+become de-synchronized across the market unless all trader's participate in all
+batches, which is unlikely. \\
+
+Given the \texttt{traderAccountScript} algorithm, we'll now define our
+implementation of the set of \texttt{Account Operations} methods:
+% missing params like amt as well, etc
+\begin{pcvstack}[boxed,center,space=1em]
+    \procedure[linenumbering, syntaxhighlight=auto, addkeywords={await}]{\texttt{NewAccount($1^{\lambda}, P_{auction_p}$)}}{
+        k_{t} \sample \mathbb{Z}_{p} \\
+        P_{t} \gets k_{t} * G \\
+        \texttt{acctScript} \gets \texttt{traderAcctScript($P_{t}, S_{t}, P_{A}, B_{k_i}$)} \\ 
+        \texttt{accountTxn} \gets \texttt{makeTxn(acctScript)} \\
+        \texttt{traderSignTxn(accountTxn)}\\ 
+        \texttt{broadcastTxn(accountTxn)} \\
+        \Psi \gets await \quad \texttt{confirmation(accountTxn)} \\
+        return \Psi
+     }
+
+     \procedure[linenumbering, syntaxhighlight=auto, addkeywords={await, readInput, match, not}]{\texttt{ModifyAccount($\Psi, P_{auction_p}$)}}{
+        if \texttt{inPendingBatch($\Psi$)} \\
+        \t return (0, \Psi) \\ \\
+        B_{k_i+1} \gets \texttt{IncrementBatchKey($\Psi, B_{k_i}$)} \\
+        \texttt{acctScript} \gets \texttt{traderAcctScript($P_{t}, S_{t}, P_{A}, B_{k_i+1}$)} \\ \\
+        txInputs \gets readInput \enspace \texttt{clientStream} \\
+        txOutputs \gets readInput \enspace \texttt{clientStream} \\ 
+        \texttt{action} = \bot \\
+        match: \\
+        \t \t \texttt{acctScript} \enspace not in txOutputs: \\
+        \t \t \t \texttt{action} = \texttt{CLOSE} \\
+        \t \t txOutputs.acctOutput.Value > \Psi.Value: \\
+        \t \t \t \texttt{action} = \texttt{DEPOSIT} \\
+        \t \t txOutputs.acctOutput.Value < \Psi.Value: \\
+        \t \t \t \texttt{action} = \texttt{WITHDRAW} \\ \\
+        \texttt{accountTxn} \gets \texttt{makeTxn(acctScript, action, txInputs, txOutputs)} \\
+        \texttt{traderSignTxn(accounTxn)} \\  
+        \texttt{broadcastTxn(accounTxn)} \\ \\
+        \Psi^\prime \gets await \enspace \texttt{confirmation(accounTxn)} \\ 
+        return \Psi^\prime
+     }
+\end{pcvstack} 
+
+Notice how the \texttt{batchKey} is incremented for all account modification
+operations. In this manner, the \texttt{batchKey} also serves as a sequence
+number within the scripts to ensure that no scripts are re-used within the
+system. 
+
+Users are able to recover their accounts themselves if data has been lost by
+scanning the chain for the above instances of \texttt{newAcctScript} and
+utilizing the timeout clause within the account script of a trader's account.
+
+% also mention account recovery?
+% also need to specify the batchkey and the rest above as well?
+
+\subsubsection{Channel Leases in the Lightning Network}
+
+Now that we have our concrete account structure, we'll move onto presenting a
+concrete instantiation of a Channel Lease based on today's widely used payment
+channel implementation within Lightning Network. \\
+
+\begin{center}
+    \textbf{Channel Lease Duration Enforcement}
+\end{center}
+
+The unique component that sets apart a regular channel from one that was
+created via a channel lease contract is \emph{duration} enforcement. As a
+channel lease contracts states the capital must be committed to the network for
+a minimum period of time, in order to implement this in a trust-minimized
+manner, we must enhance the existing channel format (cite) used in the
+Lightning Network today. Our tool of choice for creating minimum duration
+enforced channels is the \texttt{OP\_CHECKLOCKTIMEVERIFY} (cite) op-code.
+Minimally, we need to enforce the following conditions:
+\begin{itemize}
+    \item The \texttt{Liquidity Maker} involved in a channel lease cannot sweep
+        the funds in their settled commitment output as manifested on their
+        commitment or the commitment of the remote party until $D_{block}$
+        Bitcoin blocks has passed since the creation of the channel lease.
+    \item The \texttt{Liquidity Maker} also cannot fully sweep any funds that
+        are suspended within HTLC outputs until $D_{block}$ Bitcoin blocks has
+        passed.
+\end{itemize}
+
+The second item is of great importance to ensure that the seller of a channel
+lease can't just move all the committed funds into HTLCs, then close the
+channel and be fully refunded, netting the lease premium in the process.
+Instead, we need to ensure that the node is able to resolve any HTLCs on-chain
+if needed, while still being forced to commit the funds in ancestors of the
+multi-sig funding output, until the lease duration has expired. \\
+
+We now make a small modification first to the settled local output of the
+\texttt{Liquidity Maker}:
 \begin{verbatim}
 OP_IF
-    <T> OP_CHECKLOCKTIMEVERIFY
-    <maker refund key> 
-    OP_CHECKSIG
+    <revoke key> 
 OP_ELSE
-    <maker multi-sig key> 2 OP_CHECKMULTISIG
+    <lease duration in blocks>
+    OP_CHECKLOCKTIMEVERIFY
+    OP_DROP
+ 
+    <delay in blocks>
+    OP_CHECKSEQUENCEVERIFY
+    OP_DROP
+    
+    <delay key> 
 OP_ENDIF
-\end{verbatim}
- 
- The first clause is the timeout clause, it allows the Maker to simply wait out an auction and obtain a refund if the market conditions are undesirable, or he wishes to start a new auction with a fresh set of coins. The role of the timeout clause is to show potential Takers that the Maker has \emph{skin in the game}: by sending his coins to a time-locked output he provides a strong signal to the marketplace of his willingness to participate. A valid witness to execute this clause is (omitting the witness script for brevity) 
-\begin{verbatim}
-<refund sig> <1>
-\end{verbatim}
 
+OP_CHECKSIG
+\end{verbatim} 
+
+Next, we make a similar modification to the settled remote output of the
+\texttt{Liquidity Maker}, assuming anchor output based channels (cite) are
+used: 
+\begin{verbatim}
+<localKey> OP_CHECKSIGVERIFY
+<lease duration> OP_CHECKLOCKTIMEVERIFY
+1 OP_CHECKSEQUENCEVERIFY
+\end{verbatim} 
+
+Finally, we modify the offered HTLC outputs of the \texttt{Liquidity Maker} for
+their local commitment transaction:
+\begin{verbatim}
+ OP_IF
+    <revoke key> 
+OP_ELSE
+    <lease duration in blocks>
+    OP_CHECKLOCKTIMEVERIFY
+    OP_DROP
  
- 
- The second clause is the auction \emph{execution} clause. This clause will be executed in the scenario that the Maker finds a Taker willing to pay the premium that he dictates. Notice that the multi-sig clause only specifies a \emph{single} key. We'll use this little-trick to bind the Taker to the channel at auction execution time. A valid witness to execute this clause is (omitting the witness script again for brevity):
- \begin{verbatim}
-<taker sig> <maker sig> <2> <taker key> <nil>
-\end{verbatim}
+    <delay in blocks>
+    OP_CHECKSEQUENCEVERIFY
+    OP_DROP
+    
+    <delay key> 
+OP_ENDIF
+
+OP_CHECKSIG
+\end{verbatim} 
+
+A lesser less trust-minimized versing of channel lease duration enforcement is
+possible simply by having the \texttt{Liquidity Taker} refuse a cooperative
+channel closure until the lease duration has expired. With this non-script
+based enfrocement, the only direct option the \texttt{Liquidity Maker} has is
+to \emph{force-close} their channel. However, the operator of an auction venue
+can request additional information along-side orders before batch execution (as
+detailed below) to identify premature force closes on-chain in order to
+penalize the renegading party.
+
+% also need to handle the remote script as well?
+
+\begin{center}
+    \textbf{Channel Lease Funding Protocol}
+\end{center}
+
+Given the existence of a new modified chanenl $C_{L}$ that supports the ch
+annel lease protocol, we require a new way to fund the channels as a channel
+lease itself will \emph{partially-bind} the following paramters of a given
+channel:
+\begin{itemize}
+    \item The size of the channel itself.
+    \item The two multi-sig scripts used within the channel.
+    \item The duration of the channel lease itself.
+\end{itemize}
+
+Rather than modifying the base funding protocol of the Lightning Network, we've
+opted to instead provide a \emph{new} "side-loadable" partial funding binding
+API we call a channel shim (cite). A channel shim allows a party $A$ to
+\emph{expect} certain parameeters of the channel itself. Given the
+\texttt{pendingChanID} which is used to identify an unfinalized channel within
+the Lightinng Network (cite), an algorithm \texttt{RegisterChannelShim($\Gamma,
+P_{a}$, outPoint)} instructs a Lightning Node to use a \emph{prearragned} public key as
+specified within channel lease $\Gamma$ for its portion of the multi-sig output
+used wtihin the ultimate channel.
+
+The existnce of the channel shim API allows a node to proceed in the set up of
+a channel for which it may not yet know the \emph{full} funding transaction to.
+Given the lease, and the expected outpoint, both sides can fully sign the
+commitment transaction in a manneer that doesn't incur any risk as due to the
+account structure, they'll need to sign of on the batch funding trsnaction
+itrself before it can br broadcast.
+
+\subsubsection{Order Structure}
+
+With our concrete account structure and channel lease semsntics in place, we'll
+now outline the precise structure of orders as implemented in \textbf{Lightning
+Pool}. As a \texttt{CLM} is a \emph{sealed-bid} auction, the set of active
+orders within an auction epoch isn't known to a given participant within the
+auction. Instead, bids are submitted directly to the auctioneer, and may
+optionally be cancelled between batch epochs as well. Using the fundamental
+\texttt{unit} notion for expressing the \emph{quantity} of an order, we permit
+partial matching in addition to specifying a \emph{minumum} matchable amount by
+adding a new field $M_{match}$ to an order within the $\Delta_{aux}$ set of
+additional order attributes.
+
+% orders
+% order verification w/ the tag, EUF-CMA
+% mention min node tier as aux, batch fee rate as aux
+
+\begin{center}
+    \textbf{Order Tag Generation \& Validation}
+\end{center}
+
+Next, we specifying order tag generation and validation. Before verifying an
+order the order $\Theta$ itself is serialized in order to generate the message
+digest of the order.  This is done by concatenating each items of the order
+into a single byte stream, with the set of $\Delta_{aux}$ attributes specifying
+a custom serialization mechanism. 
+
+For our tag generation, we opt to utilize an \seufcma signature scheme. As we
+target the base Bitcoin blockchain, \texttt{Lightning Pool} utilizes schnorr
+signatures implemented over the \texttt{secp256k1} elliptic curve. In addition
+to having the trader that submits an order sign the order message digest, we
+also require that all the backing Lightning nodes of the also include as
+signature as well.  As the number of backing nodes for a given account may be
+numerous, rather than accepting individual signatures for each node, we isntead
+require the account operator and all backing nodes to present a \emph{single}
+schnorr signature. As we also want have our order tagging scheme be secure
+against key rogue-key attacks (cite), we select the \texttt{MuSig}
+multi-signature scheme. \\
+
+Given the \texttt{MuSig} multi-signature scheme, we define thee following
+algorithms used in our order tagging scheme:
+\begin{itemize}
+    \item Let \texttt{Sign($\{P_{0}, \dots, P_{i}\}, M$)} $\rightarrow$
+        $\sigma$, be an algorithm that returns a valid \texttt{MuSig}
+        multi-signature signed by the s et of public keys on message $M$.
+
+    \item Let \texttt{Verify($\{P_{0}, \dots, P_{i}\}, \sigma, M$)}
+        $\rightarrow$ $b$ be an algorithm that returns $b=1$ if the passed
+        signature is a valid \texttt{MuSig} multi-signature signed by the set
+        of public keys for the message $M$. 
+\end{itemize}
+
+Given these algorithms, we now define our order tag generation and validation
+implementations:
+
+\begin{pchstack}[boxed,center, space=1em]
+    \procedure[syntaxhighlight=auto]{GenOrderTag($P_{acct}$, $\Theta$)}{
+        m \gets K_{nonce} \| V_{ver} \| P_{acct} \| \Delta_{base} \concat \Delta_{aux} \\
+        tag \gets \texttt{Sign$(\{\Theta.L_{pub}, \Theta.M_{pub}\dots \}, m$)} \\
+        return tag
+    }
+
+    \procedure[syntaxhighlight=auto]{VerifyOrderTag($P_{acct}$, $\Theta$)}{
+        m \gets K_{nonce} \| V_{ver} \| P_{acct} \| \Delta_{base} \concat \Delta_{aux} \\
+        b \gets \texttt{Verify($\{P_{acct}, P_{M_pub_0}, \dots, P_{M_pub_i} \}, m$)} \\
+        return b
+    }
+\end{pchstack}
+
+\paragraph{Node Rating Agencies}
+
+% rating agency, purpose and impls
+% rating as aux variable in bos score
+
+\paragraph{Batch Fee Rate Preference}
+
+\subsubsection{Uniform Price Market Clearing \& Matching}
+
+% matching, multi-attribute
+% series of matching predicates?
+% market clearing
+% selection of LAB, flash some theory
+
+\subsubsection{The Batch Execution Transaction}
+
+% need to also describe side-car channel as well?
+% batch execution
+
+% transaction construction
+
+% outline
+% before talk about impl of certain free params, LAB clearing, etc, account structure, channel lease enforcement, rating agency
+% first CLM stuff: fill in all algos in the z-cash like algo thing
+% then similar but filling in the main shadowchain algos with what was specified in earlier step
+
+% then the CLM Shadowchain
+% filll in the rest as well
+
+
+\subsection{the Lightning Pool Shadowchain}
+
+% auctioneer is the orcewstrator, etc fill in thos meethods now
+% execution env is golang code
+% define the state transition function: takes in orders and updates all other state likely use funcs from above
+
+\subsubsection{Lightning Pool Accounts as Lifted UTXOs}
+
+% compare them, state how same idea, define exit chain method, and lift+unlift
+
+\subsubsection{Auction Batch Proposal}
+
+% define server construction
+% client verification of function
+
+\subsubsection{Shadowchain Batch Execution}
+
+% fill in the rests of the algos
+
+\subsubsection{Unconfirmed Batch Cut-Through}
+
+\subsubsection{Auction Upgrades}
 
 \section{Security Analysis}
+
+lift shadow chain stuff from blog post
+
 \section{Future Directions}
+
+off chain order transperncy
+
+zkp of valid block
+
+linear progamming constraints for order matching
+
+coupon channels
+
 \section{Related Work}
+
 \section{Conclusion}
 
-\section{Acknolwdgments}
+\section{Acknowledgments}
+
+ryan, justin, etc
 
 \bibliographystyle{abbrv}
 \bibliography{main}
 
 \end{document}
 This is never printed
+

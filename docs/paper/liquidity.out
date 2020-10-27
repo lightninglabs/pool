@@ -30,9 +30,23 @@
 \BOOKMARK [3][-]{subsubsection.6.3.1}{Shadowchain Orchestrator}{subsection.6.3}% 30
 \BOOKMARK [3][-]{subsubsection.6.3.2}{Lifted UTXOs}{subsection.6.3}% 31
 \BOOKMARK [3][-]{subsubsection.6.3.3}{The Shadowchain}{subsection.6.3}% 32
-\BOOKMARK [1][-]{section.7}{Lightning Pool: A Channel Liquidity Marketplace as a Shadow Chain}{}% 33
-\BOOKMARK [1][-]{section.8}{Security Analysis}{}% 34
-\BOOKMARK [1][-]{section.9}{Future Directions}{}% 35
-\BOOKMARK [1][-]{section.10}{Related Work}{}% 36
-\BOOKMARK [1][-]{section.11}{Conclusion}{}% 37
-\BOOKMARK [1][-]{section.12}{Acknolwdgments}{}% 38
+\BOOKMARK [3][-]{subsubsection.6.3.4}{Shadowchain Operation}{subsection.6.3}% 33
+\BOOKMARK [1][-]{section.7}{Lightning Pool: A Channel Liquidity Marketplace as a Shadow Chain}{}% 34
+\BOOKMARK [2][-]{subsection.7.1}{Instantiating a CLM}{section.7}% 35
+\BOOKMARK [3][-]{subsubsection.7.1.1}{System Initialization}{subsection.7.1}% 36
+\BOOKMARK [3][-]{subsubsection.7.1.2}{Lightning Pool Accounts}{subsection.7.1}% 37
+\BOOKMARK [3][-]{subsubsection.7.1.3}{Channel Leases in the Lightning Network}{subsection.7.1}% 38
+\BOOKMARK [3][-]{subsubsection.7.1.4}{Order Structure}{subsection.7.1}% 39
+\BOOKMARK [3][-]{subsubsection.7.1.5}{Uniform Price Market Clearing \046 Matching}{subsection.7.1}% 40
+\BOOKMARK [3][-]{subsubsection.7.1.6}{The Batch Execution Transaction}{subsection.7.1}% 41
+\BOOKMARK [2][-]{subsection.7.2}{the Lightning Pool Shadowchain}{section.7}% 42
+\BOOKMARK [3][-]{subsubsection.7.2.1}{Lightning Pool Accounts as Lifted UTXOs}{subsection.7.2}% 43
+\BOOKMARK [3][-]{subsubsection.7.2.2}{Auction Batch Proposal}{subsection.7.2}% 44
+\BOOKMARK [3][-]{subsubsection.7.2.3}{Shadowchain Batch Execution}{subsection.7.2}% 45
+\BOOKMARK [3][-]{subsubsection.7.2.4}{Unconfirmed Batch Cut-Through}{subsection.7.2}% 46
+\BOOKMARK [3][-]{subsubsection.7.2.5}{Auction Upgrades}{subsection.7.2}% 47
+\BOOKMARK [1][-]{section.8}{Security Analysis}{}% 48
+\BOOKMARK [1][-]{section.9}{Future Directions}{}% 49
+\BOOKMARK [1][-]{section.10}{Related Work}{}% 50
+\BOOKMARK [1][-]{section.11}{Conclusion}{}% 51
+\BOOKMARK [1][-]{section.12}{Acknowledgments}{}% 52
