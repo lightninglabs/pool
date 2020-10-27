@@ -282,7 +282,7 @@ keys $P_{a}$ and $P_{b}$. The transaction which creates this multi-sig output
 is referred to as the \emph{funding transaction}. Assuming a fix for
 transaction ID level malleability (cite segwit) before broadcasting the funding
 transaction, another transaction dubbed the \emph{commitment transaction} is
-constructed given a series of paramaters by the two parties (cite bolt). The
+constructed given a series of parameters by the two parties (cite bolt). The
 commitment transaction spends the funding transaction and creates two new
 outputs $D_{a}$ and $D_{b}$ which \emph{deliver} the current balance allocation
 to both parties within the channel. Once the funding transaction is confirmed
@@ -306,7 +306,7 @@ $T$ blocks has passed. During this interval the non-broadcasting party
 $P_{defender}$ is able to provide the contested delivery output $D_{a_i}$ with
 a valid witness $W_{r_n}$ which \emph{proves} that there exists a  \emph{newer}
 state $n$ with $n > i$ which has been ratified by both parties. The exact
-details of this construct are outside the scope of this party, but Bitcoin
+details of this construct are outside the scope of this paper, but Bitcoin
 Script and basic cryptography are used to allow a defending party to present an
 objective statement of contract violation by the opposing party. \\
 
@@ -317,7 +317,7 @@ objective statement of contract violation by the opposing party. \\
 
 The final component of modern multi-hop payment channels is the Hash Time Locked
 Contract, or the HTLC. The HTLC enables payments to travel over a \emph{series}
-of payment channels, allowing set of interlinked payment channels to be
+of payment channels, allowing a set of interlinked payment channels to be
 composed into a logical \emph{payment network}. An HTLC can be viewed as a
 specific case of a time locked commit and reveal puzzle (cite ranjit?).
 Loosely, an HTLC consists of four parameters: the public key of the sender
@@ -354,7 +354,7 @@ F_{rate}*A_{sat}$ is comprised of two parts: a proportional amount (a rate) and
 a fixed amount, which are both expressed in \emph{milli satoshis} which are
 $1/1000$ of the base satoshi unit.
 
- Note that routing nodes are not compensated on an on going basis, and are not
+ Note that routing nodes are not compensated on an ongoing basis, and are not
  compensated for anything other than a completed payment. As a result, many
  routing nodes (cite aviv stuff) may be allocating capital in a non-productive
  manner as they've speculatively opened channels to areas of the network where
@@ -425,14 +425,14 @@ solving the boostrapping problem for routing nodes.
 
 \subsection{New Service Boostrapping}
 
-If routing nodes are the the backbone or highway of the Lightning Network, then
+If routing nodes are the backbone or highway of the Lightning Network, then
 so called Lightning Services, are the primary \emph{destinations} of a given
 payment. For simplicity, we assume that at given Lightning Service is primarily
-a payment \emph{sink}, in that it is primarily \emph{receiving} over the the
-LN. In theory, it's possible for a service to be balanced in terms of sending \emph{and} receiving,
-resulting in a net-flow of zero, but today in the network, most flows are
-uni-directional (cite), creating the need for on/off chain bridges such as
-Lightning Loop (cite). 
+a payment \emph{sink}, in that it is primarily \emph{receiving} over the LN. In
+theory, it's possible for a service to be balanced in terms of sending
+\emph{and} receiving, resulting in a net-flow of zero, but today in the
+network, most flows are uni-directional (cite), creating the need for on/off
+chain bridges such as Lightning Loop (cite). 
 
 \begin{center}
 	\textbf{Demand for Incoming Bandwidth}
@@ -508,7 +508,7 @@ be committed for a set period of time in a trust-minimized manner.
 
 Finally, we turn to the end users of the system. In our model, the end users of
 the system are those that are frequently \emph{transacting}. If routing nodes
-are the highways in our payment transportation network, the the Lightning
+are the highways in our payment transportation network, the Lightning
 Services popular destinations, then users trigger \emph{payment flows} that
 traverse the backbone created by routing nodes, to arrive at the Lightning
 Services. Note that within our model, we permit end users to both send
@@ -526,7 +526,7 @@ challenging. Notice that a user cannot simply download a Lightning wallet and
 start receiving coins. Instead, they need to first solicit \emph{inbound}
 capital to their node first. Many wallet providers such as Breez and Phoenix
 have started to overcome this issue by committing capital to the users
-themselves (cite). This can be see as a sort of customer acquisition cost: by
+themselves (cite). This is essentially a customer acquisition cost: by
 providing this inbound bandwidth to users, the wallet becomes more attractive
 as it enables both sending and receiving. However, just receiving isn't enough,
 a user also needs to be able to send \emph{and} receive. In addition to this
@@ -557,7 +557,7 @@ participants involved. Common uses of auction design in the wild include
 wireless spectrum auctions by the Federal Communications Comission (FCC)
 (cite), package auctions for auctioning off takeoff and landing rights in
 airpots (cite), real-time electricity markets (cite), and also carbon credits
-(cite). Market design brides both theory and practice in order to solve
+(cite). Market design bridges both theory and practice in order to solve
 real-world resource allocation constraints (cite
 http://www.cramton.umd.edu/papers2010-2014/cramton-market-design.pdf). 
 
@@ -634,7 +634,7 @@ yield-generating instrument for the greater Bitcoin network. Such a per-block
 interest rate $r_{b_i}$ would serve to allow market participants to effectively
 price the cost of capital on the Lightning Network. Assuming the existence of
 varying durations ${D_1, ..., D_n}$ a \emph{yield} curve conveying the relative
-short and long term interest rates of channel yields would be constructed. Such
+short and long term interest rates of channel yields could be constructed. Such
 an instrument would then potentially serve as the basis for higher level
 structured products and derivates built on top of the base channel lease
 instrument. 
@@ -657,7 +657,7 @@ without her, herself, making any new \emph{on-chain} Bitcoin transactions? It's
 desirable to present a solution to such a use-case as on-boarding for an on-chain
 user is as simple as sending coins to a fresh address. In order for
 off-chain payment channel networks to achieve wide-spread usage, a similar,
-seamless on-boarding workflow must be created.
+seamless on-boarding flow must be exist.
 
 We frame the solution to this use-case in our model of channel liquidity
 markets. In this case, Alice is a \emph{new} user to the network that requires
@@ -691,7 +691,7 @@ attractive from a graph theoretic perspective, but may not lead to a high
 velocity channel, as there was no inherent demand for a channel created at that
 particular location. Using a CLM, a node operator can enter a targeted venue to
 determine what the \emph{time value} of his liquidity is on the network. New
-services such as exchanges or merchant on the network can bid for the node's
+services such as exchanges or merchants on the network can bid for the node's
 liquidity in order to serve their prospective customers, with the node earning
 a small interest rate up-front for committing his liquidity in the first place
 (scaled by the worst-case CSV delay). 
@@ -743,7 +743,7 @@ Wallets commonly face the UX challenge of ensuring a user can receive funds as
 soon as they set up a wallet. Some wallet providers have chosen to open new
 inbound channels to users themselves. This gives users the inbound bandwidth
 they need to receive, but can come at a high capital cost to the wallet
-provider as they need to commit funds with a 1:1 ratio. The Pool allows them to
+provider as they need to commit funds at a 1:1 ratio. The Pool allows them to
 lower their customer acquisition costs, as they can pay only a percentage of
 the funds to be allocated to a new user. Just like the merchant purchasing
 inbound in the above segment, a wallet could pay 1k satoshis to have 1mm
@@ -778,7 +778,7 @@ cleared continually within a central-limit order book, we instead opt to
 utilize a discrete interval frequent batched auction in order to mitigate
 front-running and other undesirable aspects. Rather than participants paying
 what they bid (commonly called a pay-as-you-bid auction (cite)(cite)), all
-participants will instead pay the say \emph{uniform clearing price} (cite).
+participants will instead pay the same \emph{uniform clearing price} (cite).
 Finally, all operations that result from a successful auction are batched and
 committed in a \emph{single} atomic blockchain transaction.
 
@@ -928,7 +928,7 @@ The profit ($\alpha$) earned by a \texttt{Liquidity Maker} takes two forms:
        reflects the latent demand and time-value of regular coins vs "lifted
        coins" (coins placed in channels). 
 
-   \item Ongoing reoccurring revenue, $F_c$,  in the form of forwarding fees
+   \item Ongoing recurring revenue, $F_c$,  in the form of forwarding fees
        earned by facilitating payments to their matched taker. 
 \end{itemize} 
 
@@ -961,7 +961,7 @@ where their liquidity if most demanded on the network. % remove?
 \textbf{Channel Leases}
 \end{center}
 
-With our two primary agents, defined, we now move on to the definition of a
+With our two primary agents defined we now move on to the definition of a
 Lightning Channel Lease: 
 
 \begin{definition}{(Lightning Channel Lease).} 
