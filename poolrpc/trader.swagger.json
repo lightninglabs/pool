@@ -750,6 +750,11 @@
           "type": "string",
           "format": "byte",
           "description": "The batch transaction including all witness data."
+        },
+        "batch_tx_fee_rate_sat_per_kw": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The fee rate, in satoshis per kiloweight, of the batch transaction."
         }
       }
     },

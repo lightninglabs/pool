@@ -1120,6 +1120,9 @@ message BatchSnapshotResponse {
 
     // The batch transaction including all witness data.
     bytes batch_tx = 6;
+
+    // The fee rate, in satoshis per kiloweight, of the batch transaction.
+    uint64 batch_tx_fee_rate_sat_per_kw = 8;
 }
 
 message ServerNodeRatingRequest {
