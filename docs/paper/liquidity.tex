@@ -80,19 +80,19 @@ keys]{cryptocode}
 
 In this paper we examine the core inbound liquidity bootstrapping problem the
 Lightning Network faces, and frame it as a resource allocation problem to be
-solved by application of market design and auction theory. We present Lightning
+solved by the application of market design and auction theory. We present Lightning
 Pool, a non-custodial channel lease marketplace, implemented as a sealed-bid
 frequent batched uniform clearing price auction which allows participants to
-buy/sell capital obligations on the network. We call these capital obligations
+buy and sell capital obligations on the network. We call these capital obligations
 \emph{channel leases}. A channel lease can be viewed as a cross between a
-traditional fixed-income asset and an internet peering agreement. Channel
+traditional fixed-income asset and an internet bandwidth peering agreement. Channel
 leases allow nodes on the network with idle capital to earn yield (based on a
-derived \emph{per-block} interest rate) by selling a channel to an agent within
-the marketplace. The duration of such a contract is enforced on-chain using
-Bitcoin Script. We construct \textbf{Lightning Pool}, using a novel design for
+derived \emph{per-block} interest rate) by selling channels to other agents in
+the marketplace. The duration of such contracts is enforced on-chain using
+Bitcoin Script. We construct \textbf{Lightning Pool} using a novel design for
 constructing overlay applications on top of Bitcoin: a shadow chain. Shadow
 chains allow users to remain in full custody of their funds at all times while
-also participating in higher level cut-throughable applications. 
+also participating in higher level applications. 
 
 \end{abstract} 
 
@@ -104,22 +104,21 @@ also participating in higher level cut-throughable applications.
 
 \section{Introduction}
 
-\textbf{Lightning Network Bootstrapping Challenges}. The Lightning Network
+\textbf{Lightning Network Bootstrapping Challenges}. The Lightning Network (LN)
 (cite) is the largest deployed Layer 2 payment channel network (cite https://lightning.network/lightning-network-paper.pdf). A
-payment channel network comprises of a series of individual payment channels,
-which when strung together, enable rapid low-latency payments between
-participants on the network. Due to the off-chain nature of these payments
+payment channel network is comprised of a series of individual payment channels,
+which, when strung together, enable rapid low-latency payments between
+participants in the network. Due to the off-chain nature of these payments
 (only the final summary hits the blockchain), the cost of payments on the LN
 are typically much lower than an equivalent payment on the base blockchain
 (cite). In order to be able to send funds on a network, a user must open a
 payment channel (cite) to another participant on the network. Once the channel
-has been opened, both participants are able to send/receive a nearly unbounded
-number of payments off-chain, possibly never closing the channel on-chain to
-delivery the contained funds. Similarly, in order to receive on the network, a
+has been opened, both participants are able to send and receive a nearly unbounded
+number of payments off-chain, possibly never closing the channel on-chain. Similarly, in order to receive on the network, a
 user requires \emph{another individual} to open a channel \emph{to} the
 receiver. A participant can only send and receive up to the total amount of
-Bitcoin in a channel committed by both parties. This allocation of capital by
-one party in order to enable another party to receive funds on the network is
+Bitcoin in a channel committed to by both parties. This allocation of capital by
+one party to enable another party to receive funds on the network is
 typically referred to as \emph{inbound liquidity} or \emph{inbound bandwidth}.
 Because a would-be user of the network must somehow convince \emph{others} to allocate
 capital towards them in order to receive funds on the network, the inbound
@@ -127,9 +126,8 @@ bandwidth problem remains a significant barrier to the adoption and
 bootstrapping of the Lightning Network. 
 
 \textbf{Routing Node Capital Requirements}.  In order to incentivize users to
-commit capital to the network to help other users of the network send/receive
-payments, each time a node forwards a payment successfully they receive a fee
-dictated by themselves. As commonly implemented this fee has a fixed base
+commit capital to the network so as to help other users of the network send and receive
+payments, each time a node forwards a payment successfully they receive a fee. As commonly implemented, this fee has a fixed base
 amount to be paid for all forwards independent of payment size, and a fee rate
 or proportional amount that must be paid for each millionth of a satoshi
 forwarded (cite). We refer to nodes that join in order to facilitate payments
@@ -138,10 +136,10 @@ payment of size $N$ on the network, a routing node needs to have $N_{in} - F$
 Bitcoin allocated \emph{towards} it as inbound bandwidth, and $N_{out}$ Bitcoin
 allocated to another node as outbound bandwidth. The factor of $F$ is the fee
 collected by the routing node, with the following constraint being met $F =
-N_{out} - N_{in}$. Due to this requirement of having sufficient inbound
-\emph{and} outbound bandwidth, even those nodes which exist solely to help
-other nodes send/receive themselves must face the inbound bandwidth allocation
-problem, the fundamental bootstrapping issue that the LN faces. 
+N_{out} - N_{in}$. Due to this requirement that there be sufficient inbound
+\emph{and} outbound bandwidth, even those nodes that exist solely to help
+other nodes send and receive payments, themselves face the inbound bandwidth allocation
+problem, a fundamental bootstrapping issue for the LN. 
 
 \textbf{Market Design Resource Allocation Problems}. The field of market design
 is a sub-field of economics which is concerned primarily with the efficient
@@ -150,29 +148,28 @@ branch of market design concerned with instances wherein money is used to
 govern the exchange of goods and services: auction design (cite). Auction
 design can be used to effectively allocate scarce resources within a domain.
 Common established examples of market design widely used today include:
-emission of carbon credits, electricity markets, auctions for airpot slot
-usage, and wireless spectrum auctions (cite) (cite) (cite). In each of these
+carbon emissions credits, electricity markets, auctions for airport gates, and wireless spectrum auctions (cite) (cite) (cite). In each of these
 examples, market design is used to allow more effective communication of
-pricing information, resource allocation, and preference expressions (cite).
+pricing information, resource availability, and the expression of preferences (cite).
 Our first insight is framing the solution to the inbound bandwidth
 bootstrapping problem within the lens of market design. In the context of the
-LN, the scarce resource we aim to more efficiently allocate is: inbound channel
-bandwidth, which is commonly referred to as inbound liquidity. 
+LN, the scarce resource we aim to more efficiently allocate is inbound channel
+bandwidth. 
 
 \textbf{LN Bootstrapping as Resource Allocation Problem}. In the absence of a
 proper venue, those that need inbound capital to operate their Lightning
-service are forced to solicit capital on various chat groups, forums, and also
+services are forced to solicit capital on various chat groups, forums, or public venues like
 Twitter. On the other side, those seeking to deploy capital in order to
 facilitate network operation and gain routing fees must guess as to exactly
 where their capital is most demanded. As node operators may not necessarily
-know where their capital is most demanded, they risk opening channels where
-they aren?t actually demanded, leading to poor resource utilization and capital
-opportunity costs. It's as if node operators are speculatively building roads
+know where their capital is most demanded, they risk opening channels to locations where
+they aren?t actually need, leading to poor resource utilization and capital
+inefficiency. It's as if node operators are speculatively building roads
 that no one will use (why isn't my node forwarding?), and those seeking to
 receive aren't able to flag their service as an attractive destination to be
 connected to internal network "highways". Lightning Pool solves this resource
-allocation problem by creating a new auction that matches up those seeking to
-deploy capital (open channels) to those that need these channels in order to
+allocation problem using an auction that matches up those seeking to
+deploy capital (by opening channels) to those that need these channels to
 operate their Lightning service or business. With each executed batch, the
 participants of the auction derive a \emph{per block} interest rate which is
 effectively the current lease rate for capital on the Lightning Network. The
@@ -183,62 +180,60 @@ predatory routing hi-jacking stuff)
 
 \textbf{Channel Lease Marketplaces}. In this paper, we present Lightning Pool,
 a non-custodial channel lease marketplace that draws on modern auction theory
-to construct an auction that enables participants to buy/sell inbound channel
-bandwidth. Participants of the marketplace buy/sell channel capital obligations
+to construct an auction that enables participants to buy and sell inbound channel
+bandwidth. Participants in the marketplace buy and sell a channel capital obligation,
 which we call a Lightning Channel Lease (LCL). An LCL is similar to a
 traditional bond in that one party acquires capital from another for productive
-usage, with the party parting with their capital being compensated for their
+use, with the party parting with their capital being compensated for their
 cost of capital. However as the funds within an LCL can only be used in the
 Lightning Network for sending/receiving, an LCL is analogous to the creation of
 a new virtual "road" within the LN connecting two destinations. Critically,
-when one purchases an LCL the period of time those funds must be committed is
+when one purchases an LCL, the period of time those funds must be committed is
 enforced on-chain using Bitcoin Script. As a result, buyers of inbound channel
 bandwidth can be sure the capital will be committed for a set period of time.
 The auction itself contains several sub-auctions for the exchange of particular
 duration intervals expressed in blocks (similar to the various U.S Treasury
-auctions (cite)). A non-trusted auctioneer facilities the market place by
+auctions (cite)). A non-trusted auctioneer facilities the marketplace by
 accepting sealed-bid orders, clearing the market using a uniform clearing price
-for each duration bucket, and finally executes a batch of contracts using a
-single batch execution transaction that updates all involved accounts, and
-delivers the purchased channels to all parties in an atomic manner. Lightning
+for each duration bucket, and finally executing batches of contracts using execution transactions that update all involved accounts, delivering the purchased channels to all parties in an atomic manner. Lightning
 Pool and the LCL solve the inbound bandwidth problem by allowing participants
 on the network to effectively exchange pricing signals to determine exactly
-\emph{where} in the network capital should be allocated. 
+\emph{where} in the network capital should be allocated.
 
 
 \textbf{Shadow Chains as an Application Framework}. Lightning Pool is the first
 application built on top of Bitcoin that utilizes the \emph{Shadow Chain}
 paradigm to construct an application-specific overlay system on top of existing
 Bitcoin unspent transaction outputs (UTXOs). A user joins a shadow chain by
-creating a special multi-sig based output using a public key of the target
+creating a special multi-signature based output using a public key provided by the target
 shadow chain manager. Once a user has joined the shadow chain, proposed state
 transitions are packaged up (in the form of a block) by the shadow chain
 manager and proposed to each active participant. A shadow chain block updates
-the application-state of all participants and is embedded within a normal
-Bitcoin transaction. Depending on the application, a shadow-chain block may be
+the application state of all participants and is embedded within a normal
+Bitcoin transaction. Depending on the application, a shadow chain block may be
 indistinguishable from a normal Bitcoin transaction. Shadow chains are able to
 \emph{compress} state transitions \emph{off-chain} by employing a form of
 multi-party transaction cut-through (cite). As participants of a shadow-chain
 remain in custody of their funds at all times, complex fraud proofs or exit
 games are unnecessary, significantly simplifying the implementation of a given
-shadow chain. We note that the shadow chain itself is also of independent use. 
+shadow chain. We note that the shadow chain concept itself can be used for other applications as well.
 
 \subsection{Our Contributions}
 
-In summary we make the following contributions: \begin{itemize} \item We
+In summary, we make the following contributions: \begin{itemize} \item We
         propose a solution to the inbound bandwidth problem of the LN in the
-        form of a market place to buy/sell inbound bandwidth obligations.
+        form of a marketplace to buy and sell inbound bandwidth obligations.
     \item We propose the Lightning Channel Lease, an inbound bandwidth
         obligation contract that pays a per-block interest rate to the seller
         from the buyer, and whose duration is enforced on-chain with Bitcoin
         Script.  \item We put forth the concept of a Node Rating agency for
         channel leases in order to provide marketplace participants with
         information about the \emph{quality} of a channel lease.  \item We
-        construct a new system Lightning Pool, which is a non-custodial
+        construct a new system, Lightning Pool, which is a non-custodial
         marketplace with off-chain order submission and on-chain batch
-        execution that allow parties to exchange LCL contracts in an atomic
+        execution that allows parties to exchange LCL contracts in an atomic
         manner.  \item We design a new Bitcoin application design framework,
-the shadow chain, which is of independent use.  \end{itemize}
+the shadow chain, which can also serve other applications.  \end{itemize}
  
  
  \textbf{Organization}. Fill in final organization. 
