@@ -257,14 +257,14 @@ not needed?
 
 \section{Background}
 
-In this section, we aim to introduce some necessary background which will be
+In this section, we aim to introduce some necessary background that will be
 built upon in later chapters to construct our solution. First, we'll describe
 multi-hop payment channels and the Lightning Network as deployed today. Next,
 we'll explore the nature of the inbound bandwidth bootstrapping problem the
-Lightning Network faces today. Along the way we'll explain the dynamics of
+Lightning Network faces today. Along the way, we'll explain the dynamics of
 routing nodes in the network, as they're a key component of the system. Next,
-we introduce the field of market design, specifically the sub-field of auction
-design to demonstrate how auction design can be used to solve resource
+we introduce the field of market design and more specifically the sub-field of auction
+design, to demonstrate how auction design can be used to solve resource
 allocation problems in the real world. Next, we provide some brief background
 on money markets in the traditional financial system, and how this relates to
 our concept of channel leases. 
@@ -276,36 +276,35 @@ our concept of channel leases.
 \end{center}
 
 A payment channel (cite) in its simplest form (cite) is an on-chain 2-of-2
-multi-sig output between two parties $A$ and $B$. One, or both parties deposit
-funds into a script hash Bitcoin Script output constructed using two public
-keys $P_{a}$ and $P_{b}$. The transaction which creates this multi-sig output
-is referred to as the \emph{funding transaction}. Assuming a fix for
-transaction ID level malleability (cite segwit) before broadcasting the funding
+multi-signature output created by parties $A$ and $B$. One or both parties deposit
+funds into a Bitcoin Script output constructed using two public
+keys $P_{a}$ and $P_{b}$. The transaction that creates this multi-sig output
+is referred to as the \emph{funding transaction}. Before broadcasting the funding
 transaction, another transaction dubbed the \emph{commitment transaction} is
-constructed given a series of parameters by the two parties (cite bolt). The
+constructed using a series of agreed upon parameters by the two parties (cite bolt). The
 commitment transaction spends the funding transaction and creates two new
-outputs $D_{a}$ and $D_{b}$ which \emph{deliver} the current balance allocation
-to both parties within the channel. Once the funding transaction is confirmed
-and broadcasted both parties are able to rapidly update the balance of the
-delivery outputs, $D_{a}$ and $D_{b}$ in order to make payments to one another. \\
+outputs $D_{a}$ and $D_{b}$ that if broadcast, will \emph{deliver} the up-to-date balances allocated
+between the parties to the channel. Once the funding transaction is confirmed
+and broadcasted, both parties are able to rapidly update the balance of the
+delivery outputs, $D_{a}$ and $D_{b}$ so as to facilitate efficient payments between the parties. \\
 
 \begin{center}
 \textbf{Bi-Directional Payment Channels}
 \end{center}
 
-In order to safely make bi-directional payments between both parties, modern
+In order to safely make bi-directional payments between both parties to a payment channel, modern
 channel designs also employ a \emph{commitment invalidation mechanism} (cite
 paddy) to ensure that only the latest commitment transaction state can be
-broadcasted and redeemed within the underlying blockchain. The most commonly
+broadcasted and redeemed via the underlying blockchain. The most commonly
 used commitment invalidation scheme is the \textbf{replace-by-revocation}
 construct. In this construction, during channel negotiation, a security
 parameter $T$ (which may be asymmetric for both parties) is negotiated. Using
 this value $T$ which is typically expressed in blocks, a commitment transaction
 state can only be fully redeemed by the broadcasting party after a period of
-$T$ blocks has passed. During this interval the non-broadcasting party
+$T$ blocks has passed. During this interval, the non-broadcasting party
 $P_{defender}$ is able to provide the contested delivery output $D_{a_i}$ with
 a valid witness $W_{r_n}$ which \emph{proves} that there exists a  \emph{newer}
-state $n$ with $n > i$ which has been ratified by both parties. The exact
+state $n$ with $n > i$ that has been ratified by both parties. The exact
 details of this construct are outside the scope of this paper, but Bitcoin
 Script and basic cryptography are used to allow a defending party to present an
 objective statement of contract violation by the opposing party. \\
@@ -325,11 +324,11 @@ $P_{s}$, the public key of the receiver $P_{r}$, the payment amount expressed
 in satoshis (cite) $A_{sat}$, a payment secret $r$ s.t $H(r) = h$, and an
 absolute block timeout $T$. Given these parameters, a Bitcoin Script is set up
 such that, the funds deposited in the script hash output can be redeemed by the
-receiver $P_{r}$ via a public key signature by their public key and the reveal
+receiver $P_{r}$ via a public key signature by their public key and the revelation
 of the payment pre-image $r$, or by the sender $P_{s}$ after the absolute
 timeout $T$ has elapsed. This construct can be chained by several parties (up
 to 20 in the modern Lightning Network (cite)) to create a multi-hop payment
-within the network. For security properties, each party must ensure that their
+within the network. One implication of this security model is that each party must ensure that their
 outgoing hash lock puzzle's absolute timelock $T_o$ is offset from the incoming
 absolute timelock $T_i$ by a value of $C_{delta}$. This value $C_{delta}$ is
 commonly referred to as the CLTV delta (cite bolt). This value $C_{delta}$ is
@@ -342,13 +341,13 @@ expired. \\
 \textbf{Routing Nodes as Profit Seeking Capital Allocators}
 \end{center}
 
-Entities on the Lightning Network that exist primarily in order to collect fees
-denominated in Bitcoin rewarded by successfully forwarding payments are
+Entities on the Lightning Network that exist primarily to collect fees
+for successfully forwarding payments are
 referred to as \emph{routing nodes}. A routing node commits capital to the
-network within payment channels in order to be able to properly forward
+network within payment channels in order to be able to facilitate
 payments in the network. (move much of that intro about the nodes here
-insead?). As routing nodes incur an opportunity cost by committing the capital
-to the network in place of other opportunities, they request a fee $F$ upon
+insead?). As routing nodes incur an opportunity cost by committing capital
+to the network, they request a fee $F$ upon
 completion of a successful payment forward. This fee $F = F_{base} +
 F_{rate}*A_{sat}$ is comprised of two parts: a proportional amount (a rate) and
 a fixed amount, which are both expressed in \emph{milli satoshis} which are
@@ -379,7 +378,7 @@ Marketplace, and a specific instantiation of such a construct: Lightning Pool.
 
 As the Lightning Network is a fully collaterized network, in order to
 \emph{join} the system, a participant must commit capital in the form of
-Bitcoin charged into payment channels on the network. Routing nodes however are
+Bitcoin charged into payment channels on the network. Routing nodes, however, are
 in a unique situation, as they need to both \emph{commit} their own capital to
 the network, as well as \emph{solicit} committed capital from \emph{other}
 routing nodes. This is due to the fact that in order to be able to forward a
@@ -392,27 +391,27 @@ commitment requirement is commonly cited as a major barrier to Lightning
 Network adoption (cite), as well as why large "hubs" are inherently
 economically inefficient (cite joseph SB montreal). 
 
-A routing node faces two key questions when attempting to join the network in a
+A routing node operator faces two key questions when attempting to join the network in a
 productive manner, while also attempting to optimize for \emph{capital}
 efficiency: 
 
 \begin{enumerate}
-        \item \emph{Where} should I open channels to (thereby committing
+        \item \emph{Where} should I open channels (thereby committing
             outbound capital) within the network in order to \emph{maximize}
-            the velocity of my channels, and correspondingly my total fee
+            the velocity of transactions through my channels, along with the corresponding fee
             revenue $F_r$? 
 
-        \item \emph{How} can I attract \emph{other} routing nodes to commit
-            capital to myself such that I can actually forward payments to earn
+        \item \emph{How} can I attract \emph{other} routing node operators to commit
+            capital to my node such that I can actually forward payments to earn
             \emph{any} revenue $F_r$?
 \end{enumerate}
 
 We argue that the above two questions, optimizing for capital efficiency and
 velocity of committed channels, can only properly be addressed by the
-\emph{existence} of a \emph{marketplace} which allows agents (routing nodes) to
-communicate their preference using demand signals. Intuitively, a channel open
-to an undesirable location (possibly over served) will have low channel
-velocity $C_{v}$, and result in an overall lower total fee revenue $F_r$. In
+\emph{existence} of a \emph{marketplace} that allows agents (routing node operators) to
+communicate their preferences using demand signals. Intuitively, a channel open
+to an undesirable location (possibly over-served) will have low transaction
+velocity $C_{v}$, and result in overall lower total fee revenue $F_r$. In
 order to maximize both $C_v$ and $F_fr$, a routing node should only open
 channels to where they're \emph{most demanded}. If an agent is willing to pay
 up to $P_{premium}$ Bitcoin for inbound bandwidth, then they must gain
@@ -426,13 +425,13 @@ solving the boostrapping problem for routing nodes.
 \subsection{New Service Boostrapping}
 
 If routing nodes are the backbone or highway of the Lightning Network, then
-so called Lightning Services, are the primary \emph{destinations} of a given
-payment. For simplicity, we assume that at given Lightning Service is primarily
-a payment \emph{sink}, in that it is primarily \emph{receiving} over the LN. In
-theory, it's possible for a service to be balanced in terms of sending
+so called Lightning Services, are the primary \emph{destinations} for a given
+payment. For simplicity, we assume that a given Lightning Service is primarily
+a payment \emph{sink}, in that it's primarily \emph{receiving} over the LN. Eventually,
+it may become common for a service to be balanced in terms of sending
 \emph{and} receiving, resulting in a net-flow of zero, but today in the
 network, most flows are uni-directional (cite), creating the need for on/off
-chain bridges such as Lightning Loop (cite). 
+chain bridges such as Lightning Loop (cite).
 
 \begin{center}
 	\textbf{Demand for Incoming Bandwidth}
@@ -443,12 +442,11 @@ sink}, in order to receive up to $N$ Bitcoin, the service requires $S_b$
 Bitcoin to be committed as inbound capital, with $S_b > N$. Otherwise, assuming
 only channel churn (cite bryan blog post), all inbound bandwidth will become
 saturated, rendering a service unable to receive additional Bitcoin over the
-LN. Therefore, the operative question a service needs to ask itself when
+LN. Therefore, the operative question a service operator needs to ask when
 attempting to join the network is: 
 
 \begin{itemize}
-        \item How can I solicit enough inbound bandwidth within the network to
-            be able to receive up to $S_b$ Bitcoin? 
+        \item How can I solicit enough inbound bandwidth to be able to receive up to $S_b$ Bitcoin? 
 \end{itemize}
 
 
@@ -456,9 +454,9 @@ attempting to join the network is:
 	\textbf{Preference for Quality of Bandwidth}
 \end{center}
 
-It's important to note, that as operating an \emph{valid} routing node on the
+It's important to note, that as operating a \emph{valid} routing node on the
 network requires a degree of skill and commitment (cite bryan blog post), some
-routing nodes are able to provide a more \emph{effective} service than others.
+routing nodes are able to provide more \emph{effective} service than others.
 As an example, imagine a routing node $Bob$, who has sufficient capital
 committed to his node in both the inbound and outbound directions, but who is
 chronically \emph{offline}. As a node must be \emph{online} in order to be able
@@ -491,11 +489,11 @@ problem statement:
 
 \begin{itemize}
         \item How can I solicit enough \emph{high quality} inbound bandwidth
-            within the network to be able to receive up to $S_b$ Bitcoin, that
+             to be able to receive up to $S_b$ Bitcoin, that
             will be committed for \emph{at least} time $T_{blocks}$? 
 \end{itemize} 
 
-Summarizing, in addition to the existence of a marketplace for buying/selling
+Summarizing, in addition to the existence of a marketplace for buying and selling
 capital commitment obligations, a would-be buyer requires some sort of
 \emph{rating-system} to reduce information asymmetry (distinguish the good
 nodes from the lemons), and also requires that any capital committed must be
@@ -508,10 +506,10 @@ be committed for a set period of time in a trust-minimized manner.
 
 Finally, we turn to the end users of the system. In our model, the end users of
 the system are those that are frequently \emph{transacting}. If routing nodes
-are the highways in our payment transportation network, the Lightning
-Services popular destinations, then users trigger \emph{payment flows} that
+are the highways in our payment transportation network, with Lightning
+services as popular destinations, then users trigger \emph{payment flows} that
 traverse the backbone created by routing nodes, to arrive at the Lightning
-Services. Note that within our model, we permit end users to both send
+services. Note that within our model, we permit end users to both send
 \emph{and} receive. Compared to boostrapping a new user to a Layer 1 system
 such as the Bitcoin blockchain, boostrapping to a Layer 2 system like the
 Lightning Network presents additional challenges. The core challenge is created
@@ -520,18 +518,18 @@ need $K$ Bitcoin committed within the network. Similarly, in order to receive
 up to $K_r$ Bitcoin, they need up to $K_r$ Bitcoin committed as inbound
 bandwidth. 
 
-From the perspective of attempting to achieve a similar level of
+From the perspective of attempting to achieve a similar
 user-experience as a base Layer 1 system, the receiving constraint is the most
 challenging. Notice that a user cannot simply download a Lightning wallet and
-start receiving coins. Instead, they need to first solicit \emph{inbound}
+start receiving funds. Instead, they need to first solicit \emph{inbound}
 capital to their node first. Many wallet providers such as Breez and Phoenix
 have started to overcome this issue by committing capital to the users
 themselves (cite). This is essentially a customer acquisition cost: by
 providing this inbound bandwidth to users, the wallet becomes more attractive
-as it enables both sending and receiving. However, just receiving isn't enough,
-a user also needs to be able to send \emph{and} receive. In addition to this
+as it enables both sending and receiving. However, just receiving isn't enough. 
+A user needs to be able to send \emph{and} receive. In addition to this
 required symmetry, a typical user also has all the same quality of service, and
-time committed capital requirement as well. 
+time-committed capital requirements as well. 
 
 With this background, we can phrase the end user boostrapping problem as
 follows: 
