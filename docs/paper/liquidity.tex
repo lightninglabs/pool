@@ -538,26 +538,26 @@ follows:
 \subsection{Market Design \& Auction Theory}
 
 In this section, we make a brief detour to the economic field of auction design
-to examine how similar resource allocation problems can be solved by proper
-market design in existing industries for both digital and physical goods. In
+to examine how similar resource allocation problems have been addressed by
+market design in existing industries. These examples include both digital and physical goods. In
 the modern age, market design and proper construction of corresponding
 \emph{auctions} can be used to improve resource utilization and capital
 efficiency (cite cramton
-http://www.cramton.umd.edu/papers2010-2014/cramton-market-design.pdf) for a
-given scare resource. Within a particular domain, several context-specific
-design decisions are made to better optimize the resource allocation for all
-participants involved. Common uses of auction design in the wild include
-wireless spectrum auctions by the Federal Communications Comission (FCC)
-(cite), package auctions for auctioning off takeoff and landing rights in
+http://www.cramton.umd.edu/papers2010-2014/cramton-market-design.pdf). 
+Within a particular domain, context-specific
+design decisions can be made so as to better optimize resource allocations for all
+participants. Common uses of auction design in the wild include
+wireless spectrum auctions by the Federal Communications Commission (FCC)
+(cite), package auctions for auctioning off takeoff and landing rights at
 airpots (cite), real-time electricity markets (cite), and also carbon credits
 (cite). Market design bridges both theory and practice in order to solve
 real-world resource allocation constraints (cite
 http://www.cramton.umd.edu/papers2010-2014/cramton-market-design.pdf). 
 
 
-A commonly used tool in the field of market design are \emph{auctions}.
-Auctions allow agents to gather and exchange pricing signals in order to decide
-who gets what goods, and at which price. The design of a proper auction for a
+A commonly used tool in the field of market design is the concept of \emph{auctions}.
+Auctions allow agents to gather and exchange pricing signals in order to determine
+who gets which goods, and at which price. The design of a proper auction for a
 particular resource allocation problem has a vast design space. For example,
 should a first or second price auction be used (cite)? How frequently should
 the auction run? What \emph{type} of auction should be used? Should
@@ -565,7 +565,7 @@ participants be able to see the bids of other participants? And so on.
 
 Building off the series of boostrapping problems posed above, we turn to market
 design as a tool to efficiently allocate our scare resource in question:
-inbound payment bandwidth. Our problem-space is unique however in that as we're
+inbound payment bandwidth. Our problem-space is unique, however, in that as we're
 dealing with the allocation of capital, there are inherent opportunity costs:
 why should a routing node commit capital to the Lightning Network, compared to
 some other asset that has a similar risk adjusted rate of return (cite)? In
@@ -578,27 +578,27 @@ which is used by entities to trade short-term debt instruments.
 
 In traditional financial markets, money markets are used to allow entities to
 trade short term debt instruments. Examples of such instruments include U.S
-Treasury Bills (cite), certificates of deposits (site), and repos or repurchase
-agreements (cite). Capital markets on the other hand, are the long-term
-analogue of money markets, in that they deal with longer time frames, and also
+Treasury Bills (cite), certificates of deposit (site), and repurchase
+agreements (repos)(cite). Capital markets on the other hand, are the long-term
+analogue of money markets, in that they deal with longer timeframes, and also
 are more heavily traded on secondary markets with retail traders being more
-involved. 
+involved.
 
 In the context of the Lightning Network, our concept of capital obligations
-appears similar to a bond in that we require a a prior period of time in
-which the capital is allocated, but unlike a bond in that the committed funds
+appears similar to a bond, in that we require a period of time for
+which capital is allocated. However, unlike a bond, the committed funds
 can only be used on the Lightning Network to provide a new type of service: the
 \emph{propensity} to receive or send funds on the network. As a result, we
 don't require funds in channels to be borrowed, instead they only need to be
-\emph{leased} for a period of time. Also unlike bonds wherein it's possible for
+\emph{leased} for a period of time. Also unlike bonds, wherein it's possible for
 the issuer of a bond to \emph{default}, thereby failing to repay the borrowed
 money, in the context of the LN, there is \emph{no inherent default risk}.
 Instead, arguably the concept of channel leases can be viewed as a risk free
-rate of return (cite), in the context of Bitcoin, and specifically the
+rate of return (cite) in the context of Bitcoin, and specifically in the context of the
 Lightning Network. 
 
 The existence of a \emph{channel lease} serves to provide routing nodes with an
-additional monetary incentive (in the form of a premium paid by the lessor of
+additional monetary incentive (in the form of a premium paid by the lessee of
 the coins) to operate a routing node. As a result, we can modify the revenue
 $R_c$ earned by a routing node within the context of a specific channel $C$,
 for a period of $t$ blocks to be: 
@@ -611,14 +611,14 @@ where $P_c$ is the current \emph{per-block} interest rate, and ($F_c *
 P_{f_c}$) is the \emph{expected} routing fee revenue of the channel within that
 interval \\ 
 
-We reference an \emph{expectation} in fee revenue, as fees are effectively a
+We reference an \emph{expectation} for fee revenue, as fees are effectively a
 \emph{speculative} component of the routing revenue of a node. If a channel was
 allocated to a node in high demand, one would expect the latter portion of the
 question to possibly dominate the premium. If the opposite is the case, then a
 routing node would derive most of its revenue from the yield earned by leasing
-a channel. In this manner, the existence of a concept such as a channel lease,
-actually serves to \emph{reduce} the variance of a routing nodes revenue,
-similar to how joining a mining pool can reduce the variance of a hasher's
+a channel. In this manner, the existence of a concept such as a channel lease
+actually serves to \emph{reduce} the variance in a routing node's revenue,
+similar to how joining a mining pool can reduce the variance of a Bitcoin miner's
 earnings (cite). 
 
 Finally, we argue that the existence of a channel lease that pays a premium
@@ -626,7 +626,7 @@ based on a \emph{per-block} interest rate would result in a novel low-risk
 yield-generating instrument for the greater Bitcoin network. Such a per-block
 interest rate $r_{b_i}$ would serve to allow market participants to effectively
 price the cost of capital on the Lightning Network. Assuming the existence of
-varying durations ${D_1, ..., D_n}$ a \emph{yield} curve conveying the relative
+varying durations ${D_1, ..., D_n}$, a \emph{yield} curve conveying the relative
 short and long term interest rates of channel yields could be constructed. Such
 an instrument would then potentially serve as the basis for higher level
 structured products and derivates built on top of the base channel lease
@@ -636,8 +636,8 @@ instrument.
 
 \section{Bootstrapping Problems as Solved by CLM}
 
-Prior to outlining our design for channel liquidity markets we seek to provide
-a set of illuminating use-cases in order to demonstrate the need for such
+Prior to outlining our design for channel liquidity markets, we seek to provide
+a set of illuminating use cases in order to demonstrate the need for such
 markets on the Lightning Network. Each of these use cases are empirical
 real-world problems related to the Lightning Network, and prior to the
 publication of this document, no known solution has been presented. 
@@ -656,8 +656,8 @@ We frame the solution to this use-case in our model of channel liquidity
 markets. In this case, Alice is a \emph{new} user to the network that requires
 \emph{inbound} and \emph{outbound} liquidity. Without outbound liquidity, she's
 unable to send to any other node on the network. Without inbound liquidity,
-she's unable to receive any further payments on the network. We call our
-solution "sidecar channels" they allow an acquaintance of Alice, let's call her
+she's unable to receive any further payments on the network. "Sidecar channels"
+allow an acquaintance of Alice, let's call her
 Carol, to engage in a protocol with an existing routing node on the network,
 Bob, to provide \emph{both} inbound and outbound liquidity for Alice. Carol is
 able to provide liquidity either with an off-chain, or on-chain payment. At the
@@ -669,16 +669,16 @@ who himself is compensated accordingly for his role in the protocol.
 A "routing" node on the Lightning Network is a node categorized as having a
 persistent publicly reachable Internet address, a set of inbound channels from
 leaf nodes, and one which seeks to actively facilitate payment flows on the
-network in order to gain fee revenue using their existing liquidity as
+network in order to gain fee revenue using existing liquidity as
 bandwidth for these payment flows. A common question asked in the initial
 bootrapping phase of the Lighting Network by node operators is: "where should I
 open my channels to, such that they'll actually be routed through"? We posit
 that channel liquidity markets are the answer to this question.
 
-The channel liquidity market answer to this question is  supplementary to
-autopilot \cite{autopilot} techniques of automated channel creation based on
+The channel liquidity market answer to this question is supplementary to
+autopilot \cite{autopilot} techniques for automated channel creation based on
 static and dynamic graph signals. A key drawback of autopilot channel
-establishment techniques are they for the most part, they're devoid of
+establishment techniques is that for the most part, they're devoid of
 \emph{economic} context. A particular location in the sub-graph may be "fit" or
 attractive from a graph theoretic perspective, but may not lead to a high
 velocity channel, as there was no inherent demand for a channel created at that
@@ -693,13 +693,13 @@ a small interest rate up-front for committing his liquidity in the first place
 
 Any new service that wishes join the Lightning Network faces the same problem:
 "How can I incentivize nodes to create \emph{inbound} channels to me in order
-to be able to accept payments?". CLM's provide an elegant solution. The
+to be able to accept payments?". CLMs provide an elegant solution. The
 merchant/exchange/service uses their existing on-chain funds to enter the
-liquidity market place in order to exchange their on-chain coins for off-chain
+liquidity marketplace in order to exchange their on-chain coins for off-chain
 coins. Once the trade has been atomically executed, the merchant immediately
 has usable inbound liquidity that can be used to accept payments from users. 
 
-The merchant can then use its prior market place exchange partners as
+The merchant can then use its prior marketplace exchange partners as
 "introduction" points. As it's undesirable for all users to connect directly to
 the merchant for payment connectivity, users can instead establish channels to
 the prior swapping partners of the service. As the merchant acquires more
@@ -709,8 +709,8 @@ using AMP \cite{amp}.
 
 \subsection{Cross-Chain Market Maker Liquidity Sourcing} 
 
-As traders are becoming more aware of the counter-party risk of trading on
-centralized exchanges, they look to non-custodial exchange venues. The
+As traders are becoming more aware of the counterparty risk of trading on
+centralized exchanges, they are looking to non-custodial exchange venues. The
 flexibility of channels on the Lightning Network appears to be a prime
 candidate of such a venue: channels allow for non-custodial trading at similar
 execution speeds to that of centralized exchanges. Additionally, channel based
@@ -722,7 +722,7 @@ financial privacy.
 Once again, we encounter a bootstrapping issue. How is a market maker on a
 payment channel-based non-custodial exchange meant to gather an initial pool of
 liquidity to service orders? We see CLMs as a natural solution. The market
-maker can seek out liquidity of relevant trading pairs by purchasing inbound
+maker can seek out liquidity for relevant trading pairs by purchasing inbound
 channel liquidity, in addition to putting up its own outbound channel liquidity
 to other market makers. A balanced distribution of liquidity amongst market
 makers allows for new traders to participate in the exchange, knowing that
@@ -736,17 +736,19 @@ Wallets commonly face the UX challenge of ensuring a user can receive funds as
 soon as they set up a wallet. Some wallet providers have chosen to open new
 inbound channels to users themselves. This gives users the inbound bandwidth
 they need to receive, but can come at a high capital cost to the wallet
-provider as they need to commit funds at a 1:1 ratio. The Pool allows them to
-lower their customer acquisition costs, as they can pay only a percentage of
+provider as they need to commit funds at a 1:1 ratio. A CLM like Lightning Pool would 
+allow wallet developers to
+lower their customer acquisition costs, as they would need to pay only a percentage of
 the funds to be allocated to a new user. Just like the merchant purchasing
-inbound in the above segment, a wallet could pay 1k satoshis to have 1mm
-satoshis be allocated to a user, instead of fronting the whole 1mm satoshis
+inbound liquidity in the above segment, a wallet provider could pay something like 
+one thousand satoshis to have one million
+satoshis allocated to a user, instead of fronting the entire one million satoshis
 themselves.
 
 \subsection{Variance Reduction in Routing Node Revenue}
 
-Today routing node operators aim to join the network in order to facilitate the
-transfer of payments as well as earn fees over time with successfully completed
+Today, routing node operators aim to join the network in order to facilitate the
+transfer of payments as well as to earn fees over time by successfully facilitating
 payments. However, if a node isn't regularly routing payments (thereby earning
 a forwarding fee), then they aren't compensated for the various (though minor)
 risks they expose their capital to. With Pool, routing node operators are able
