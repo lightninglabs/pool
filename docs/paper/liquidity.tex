@@ -1,6 +1,6 @@
 \RequirePackage{etex}
 
-\documentclass[12pt,a4paper]{article}
+\documentclass[10pt,a4paper]{article}
 \usepackage{hyperref}
 \usepackage{amsthm}
 \usepackage{amsfonts}
@@ -2238,7 +2238,7 @@ algorithms used in our order tagging scheme:
 Given these algorithms, we now define our order tag generation and validation
 implementations:
 
-\begin{pchstack}[boxed,center, space=1em]
+\begin{pcvstack}[boxed,center, space=1em]
     \procedure[syntaxhighlight=auto]{GenOrderTag($P_{acct}$, $\Theta$)}{
         m \gets K_{nonce} \| V_{ver} \| P_{acct} \| \Delta_{base} \concat \Delta_{aux} \\
         tag \gets \texttt{Sign$(\{\Theta.L_{pub}, \Theta.M_{pub}\dots \}, m$)} \\
@@ -2250,7 +2250,7 @@ implementations:
         b \gets \texttt{Verify($\{P_{acct}, P_{M_pub_0}, \dots, P_{M_pub_i} \}, m$)} \\
         return b
     }
-\end{pchstack}
+\end{pcvstack}
 
 We omit the implementations of \texttt{SubmitOrder} and \texttt{CancelOrder} as
 the depend on the specific environment in which the auctioneer is implemented
@@ -2277,7 +2277,7 @@ ratings that can be given to a Lightning Node with $\hat{t_0}$ containing
 words, we create a series of node sets, with the higher node tiers having less
 nodes than lower tiers.  This creates a natural system of concentric circles
 where as the tier index increases, the set of nodes shrinks, and eventually
-only higher quality nodes remain.
+only higher quality nodes remain. \\
 
 Building off this notion of tiered node sets, we define the following algorithm
 for our node rating agency:
@@ -2290,8 +2290,7 @@ for our node rating agency:
 \end{pchstack}
 
 Given this algorithm, we now specify our of the additional auxiliary order
-attribute $\Delta_{aux}$ as:
-\[
+attribute $\Delta_{aux}$ as: \[
     (N_{tier}, \dots) = \Delta_{aux}
 \]
 
@@ -2340,10 +2339,10 @@ order $\Theta_{bid}$:
 Given this function we define our implementation of the \texttt{MatchMake}
 algorithm:
 \begin{pchstack}[boxed,center, space=1em]
-    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{MatchMake(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter, sort}]{\texttt{MatchMake(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
         \texttt{matchSet} \gets \{\} \\
-        \texttt{asks} \gets filter(O, \Theta_{i}.O_{type} == Ask) \\
-        \texttt{bids} \gets filter(O, \Theta_{i}.O_{type} == Bid) \\
+        \texttt{asks} \gets sort(filter(O, \Theta_{i}.O_{type} == Ask)) \\
+        \texttt{bids} \gets sort(filter(O, \Theta_{i}.O_{type} == Bid)) \\
         for bid in bids: \\
         \t for ask in asks: \\
         \t \t if \texttt{MatchPossible(bid, ask)}: \\
@@ -2353,7 +2352,10 @@ algorithm:
 \end{pchstack}
 
 We note that several optimizations here are possible to reduce the worst-case
-running time of the algorithm which we leave open for future work.
+running time of the algorithm which we leave open for future work. We also
+assume that the set of valid orders has been flittered out before being passed
+into this algorithm based on the current target batch fee rate and the posted
+max batch fee rate of each order.
 
 \begin{center}
     \textbf{Uniform Price Clearing}
@@ -2373,7 +2375,34 @@ carried out:
 
 These two actions comprise the \texttt{ClearMarket} and
 \texttt{MarketClearingPrice} algorithms. For our market clearing price, we
-select the Last Accepted Bid market clearing rule (cite).
+select the Last Accepted Bid market clearing rule (cite), chosing to go with a
+buery's mid marking price. Given this price clearing algorithm, we now define
+our implementaion of the market clearing algorithms:
+\begin{pcvstack}[boxed,center, space=1em]
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={len, filter, sort}]{\texttt{MarketClearingPrice($\Phi_b$)}}{
+        \texttt{lastPair} \gets \Phi_b[len(\Phi_b - 1)] \\ 
+        return \texttt{lastPair.bid.$\alpha_{rate}$}
+    }
+
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={newLease, filter, sort}]{\texttt{ClearMarket($\Psi_{A}, \Phi_b, \{\Psi_0, \dots, \Psi_n\}, c_{price}$)}}{
+        \texttt{leases} \gets \{\} \\
+        \texttt{accts} \gets \{\} \\
+        for \texttt{orderPair} in \Phi_b: \\
+        \t \texttt{lease} \gets \texttt{newLease(orderPair)} \\
+        \t \texttt{orderPair.taker.balance} \mathrel{{-}{=}} \texttt{lease.premium} \\
+        \t \texttt{orderPair.maker.balance} \mathrel{{+}{=}} \texttt{lease.premium} \\ \\
+        \t \texttt{orderPair.taker.balance} \mathrel{{-}{=}} \texttt{exeFee(lease.amt)} \\
+        \t \texttt{orderPair.maker.balance} \mathrel{{-}{=}} \texttt{exeFee(lease.amt)} \\
+        \t \texttt{$\Psi_{A}$.balance} \mathrel{{+}{=}} \texttt{exeFee(lease.amt)} \\ \\
+        \t \texttt{leases} \gets \texttt{leases} \cup \texttt{lease} \\
+        \t \texttt{accts[orderPair.taker]} \gets \texttt{orderPair.taker} \\
+        \t \texttt{accts[orderPair.maker]} \gets \texttt{orderPair.maker} \\ \\
+        return (\Psi_{A}, \texttt{leases, accts})
+    }
+\end{pcvstack}
+
+Notice that we omit the observance of chain fees, as that will be applied to
+each input/output during the later batch construction phase.
 
 % matching, multi-attribute
 % series of matching predicates?
@@ -2382,7 +2411,7 @@ select the Last Accepted Bid market clearing rule (cite).
 
 \subsubsection{The Batch Execution Transaction}
 
-Once we've laired the market, we'll now move onto the batch execution phase.
+Once we've cleared the market, we'll now move onto the batch execution phase.
 During this phase, we'll construct the batch transaction which executes a given
 batch, and also gather all the necessary witnesses for each participant of the
 batch so we can properly spend their on-chain account outputs. Remember
@@ -2393,28 +2422,61 @@ batch before they sign off on it.
     \textbf{Batch Transaction Construction}
 \end{center}
 
-A given batch transaction contains the following inputs:
-\begin{itemize}
-    \item The set of trader account inputs involved in the batch.
-    \item The input of the master auctioneer itself.
-\end{itemize}
+A given batch transaction contains the following inputs: the set of trader
+account inputs involved in the batch, and the input of the master auctioneer
+itself. In addition to these inputs which can only eb spent each each user
+authorized the proposed batch, we also add the following outputs: a trader's
+new incremented account output which reflects the market clearing, the set of
+channels created as part of the channel lease, and the incremented auctioneer
+account. Note that the format of the batch transaction itself may change
+multiple times during this phase if participants reject the batch, or if fee
+changes causing the auctioneer to consider a subset of the prior set of orders.
 
-As well as the following outputs:
-\begin{itemize}
-    \item A trader's new incremented account output which reflects the market
-        clearing.
-
-    \item The set of channels created as part of the channel lease.
-
-    \item The incremented auctioneer account.
-\end{itemize}
-
-We now define the complete \texttt{ConstructBatch} and \texttt{ExecuteBatch}
-methods:
+Taking this into consideration, we define our implementation of
+\textbf{ConstructBatch} as follows: 
+\begin{pcvstack}[boxed,center, space=1em]
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={len, newTx, sort}]{\texttt{ConstructBatch($\Delta_i$)}}{
+        \texttt{tx} \gets newTx() \\
+        \texttt{tx.addIn($\Delta_i.\Psi_{A}$)} \\ \\
+        for acct in \Delta_i.\Psi: \\
+        \t \texttt{tx.addIn(acct.prevOut)} \\
+        for acct in \Delta_i.\Psi^\prime: \\
+        \t \texttt{acct.Value} \mathrel{{-}{=}} \texttt{feeShare($\Delta_i$, acct)} \\
+        \t \texttt{tx.addOut(acct.txOut)} \\ \\
+        for lease in \Delta_i.\Gamma:
+        \t \texttt{tx.addOut(lease.txOut)} \\ \\
+        \Psi_{A}.value \mathrel{{-}{=}} \texttt{feeShare($\Delta_i, \Psi_{A}$)} \\
+        \texttt{tx.addOut($\Delta_i.\Psi_{A}^\prime$)} \\
+        return tx
+    }
+\end{pcvstack}
 
 \begin{center}
     \textbf{Batch Transaction Execution}
 \end{center}
+
+Once the batch has been constructed, the auctioneer then needs to propose the
+batch to each trader, and collect the necessary set of signatures required to
+spend each trader's account input. During this execution phase, we assume that
+this is the final set of traders that wish to be a part of this batch. Once the
+auctioneer has all the necessary signatures to broadcast a batch, the batch
+execution transaction can be broadcast, ending this auction epoch. \\
+
+We define batch execution in the context of Lightning Pool as follows:
+\begin{pcvstack}[boxed,center, space=1em]
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={await, newTx, sort}]{\texttt{ExecuteBatch($B_{t_i}$)}}{
+        b \gets 0 \\
+        for i, input in B_{t_i}.inputs: \\
+        \t witness \gets await reqSig(input) \\
+        \t B_{t_i}.witness \gets witness \\ \\
+        if \texttt{scriptVerify($B_{t_i}$)}: \\
+        \t return 1 \\
+        else \\
+        \t return 0
+    }
+\end{pcvstack}
+
+% make this a more involved diagram?
 
 
 % need to also describe side-car channel as well?
@@ -2431,7 +2493,7 @@ methods:
 % filll in the rest as well
 
 
-\subsection{the Lightning Pool Shadowchain}
+\subsection{The Lightning Pool Shadowchain}
 
 In this section, we complete the Lightning Pool system by demonstrating out its
 implemetnation of a Channel LEase Marketplace can be impleneted using our
@@ -2444,21 +2506,26 @@ shadowchain application overlay framework.
 \subsubsection{Lightning Pool Accounts as Lifted UTXOs}
 
 First, we link the concept of our non-custodial accounts in the CLM realm to a
-lifted UTXO. The process of lifting and unlifting a UTXO is simply a serie sof
+lifted UTXO. The process of lifting and unlifting a UTXO is simply a series of
 operations required to create, modify or close an account:
+
 \begin{pcvstack}[boxed,center, space=1em]
-    \begin{pchstack}[boxed,center, space=1em]
-        \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{LiftUTXO(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
-        }
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{LiftUTXO($T_{expiry}, \{U_{N_0}, \ldots, U_{N_n}\}, P_{0}$)}}{
+        \texttt{inputs} \gets \{U_{N_0}, \ldots, U_{N_n}\} \\
+        return \texttt{NewAccount($T_{expiry}, P_{0}$, inputs)}
+    }
 
-        \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{UnliftUTXO(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
-        }
-    \end{pchstack}
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{UnliftUTXO($\Psi_{U}$)}}{
+        (b, _) \gets \texttt{ModifyAccount($\Psi_{U}, P_{auction_p}$)} \\
+        return b
+    }
 
-    \begin{center}
-        \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{ExitChain(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
-        }
-    \end{center}
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{ExitChain($\phi_{U}, B_{height}$)}}{
+        if \phi_{U}.T_{blocks} < B_{height}: \\
+        \t return 0 \\
+        (b, _) \gets \texttt{ModifyAccount($\Psi_{U}, P_{auction_p}$)} \\
+        return b
+    }
 \end{pcvstack}
 
 % compare them, state how same idea, define exit chain method, and lift+unlift
@@ -2470,15 +2537,21 @@ maps 1:1 to the concept of blocks in the shadowchain domain. Given this
 insight, we now dfine the \texttt{ConstructBlock} and \texttt{ProposeBlock}
 algorithms:
 \begin{pchstack}[boxed,center, space=1em]
-    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{ConstructBlock(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+    \procedure[syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{ConstructBlock($\phi_{live}, T_{xn}, E_{exe}, \Delta_F$)} $\rightarrow$}{
+        \Phi_b \gets \texttt{MatchMake($T_{xn}$)} \\
+        c_{price} \gets \texttt{MarketClearingPrice($\Phi_{b}$)} \\
+        \texttt{ClearMarket} \gets \Delta_F \\
+        \Delta_i \gets \texttt{ClearMarket($\Psi_{A}, \Phi_{b}, \Psi, c_{price}$)} \\
+        return \Delta_i
     }
 
-    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{ProposeBlock(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+    \procedure[syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{ProposeBlock($B_S, \phi_{live}$)}}{
+        b \gets \texttt{ValidateBatch($B_S, \phi_{live}$)} \\
+        return b
     }
 \end{pchstack}
 
-% define server construction
-% client verification of function
+% need to define validate batch as well, also cast above?
 
 \subsubsection{Shadowchain Batch Execution}
 
@@ -2487,7 +2560,9 @@ shadowchain, we now define the series of methods that will be utilized to allow
 clients to execute the their local version of the state transition function to
 accept new proposed batches:
 \begin{pchstack}[boxed,center, space=1em]
-    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{CommitBlock(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{CommitBlock($B_S$)}}{
+        (b, TX_{id}) \gets \texttt{ExecuteBatch($B_S$)} \\
+        return b
     }
 \end{pchstack}
 
@@ -2501,7 +2576,13 @@ requires ensuring that all produced channel leases will still exist in the
 final combined blocks, and the end state of each accoutn refelcts any
 conseqeutive market clearing opportunities:
 \begin{pchstack}[boxed,center, space=1em]
-    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{CoalesceBlocks(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={set, filter}]{\texttt{CoalesceBlocks(F: $\{B_{S_0}, \cdots, B_{S_N}\}$)}}{
+        \texttt{inputs} \gets set(F) \\
+        \texttt{leases} \gets \texttt{extractLeases(F)} \\
+        \texttt{accts} \gets \texttt{endAcctState(F)} \\ \\
+        \texttt{tx} \gets \texttt{ConstructBatch($\Delta_i$(inputs, leases, accts))} \\
+        b \gets ExecuteBatch(t) \\
+        return b
     }
 \end{pchstack}
 
@@ -2511,7 +2592,8 @@ Finally, we define the process by which we upgrade the CLM shadowchain itself.
 As this is an off-chain process, each participant of the shadowchain is able to
 call the followin algorithm to update in a de-synchronized manner:
 \begin{pchstack}[boxed,center, space=1em]
-    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{UpgradeChain(O: $\{\Theta_0, \ldots, \Theta_n\}$)}}{
+    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{UpgradeChain($\Delta_{new}, E_{exe}^\prime, T_{xn}^\prime$)}}{
+        return 0
     }
 \end{pchstack}
 
@@ -2554,14 +2636,6 @@ off-chain order execution, Pool has a number of attractive security properties:
 
 \section{Future Directions}
 
-off chain order transperncy
-
-zkp of valid block
-
-linear progamming constraints for order matching
-
-coupon channels
-
 As is clients verify each Shadowchain blocks within the CLM system, but they
 have no assurance that their order was actually included in the mach making
 function. In this manner, the auctioneer can silently ignore a set of orders.
@@ -2582,14 +2656,17 @@ the future cash flows of the "coupon channels".
 
 \section{Conclusion}
 
-In this work, we've put forth a new sbatraction over capital aobligations on
-teh Lightning Netowkr, that we call channel leases. Channel lease can be bought
-and sold on a Channle Liqudiity Marketplace diretyl solving a series of
-bootrapping challenges the networkj faces. To implmenet a Channle LEase
-marketpalce in a secure manner, we put forth the concetp of a shadowchain
-application framework. In conjunction with the concept of a node rageting's
-agency, the Channel Lease Marketplace is a new way for routing node operators
-to earn yield  within the Lightning Netowrk.
+In this work, we've put forth a new abstraction over capital obligations in the
+Lightning Network, which we call channel leases. Channel leases can be bought
+and sold on a Channle Liqudiity Marketplace directly solving a series of
+bootrapping challenges the network faces, commonly referred to as: the inbound
+liquidity problem. To implement a Channel Lease Marketplace in a secure manner,
+we put forth the concept of a shadowchain application framework which is of
+independent use. We then concretely construct Lightning Pool, the first
+\texttt{CLM} implemented on top of the base Bitcoin blockchain. Lightning Pool
+allows those with idle capital to earn yieild on their Bitcoin, and also allows
+those that need inbound to receive over the network to obtain a reliable soure
+of incoming payment bandwidth.
 
 \section{Acknowledgments}
 
