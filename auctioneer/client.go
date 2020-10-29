@@ -22,6 +22,7 @@ import (
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -1154,11 +1155,14 @@ func (c *Client) Terms(ctx context.Context) (*terms.AuctioneerTerms, error) {
 	}
 
 	return &terms.AuctioneerTerms{
-		MaxAccountValue:  btcutil.Amount(resp.MaxAccountValue),
-		MaxOrderDuration: resp.MaxOrderDurationBlocks,
-		OrderExecBaseFee: btcutil.Amount(resp.ExecutionFee.BaseFee),
-		OrderExecFeeRate: btcutil.Amount(resp.ExecutionFee.FeeRate),
-		LeaseDurations:   resp.LeaseDurations,
+		MaxAccountValue:     btcutil.Amount(resp.MaxAccountValue),
+		MaxOrderDuration:    resp.MaxOrderDurationBlocks,
+		OrderExecBaseFee:    btcutil.Amount(resp.ExecutionFee.BaseFee),
+		OrderExecFeeRate:    btcutil.Amount(resp.ExecutionFee.FeeRate),
+		LeaseDurations:      resp.LeaseDurations,
+		NextBatchConfTarget: resp.NextBatchConfTarget,
+		NextBatchFeeRate:    chainfee.SatPerKWeight(resp.NextBatchFeeRateSatPerKw),
+		NextBatchClear:      time.Unix(int64(resp.NextBatchClearTimestamp), 0),
 	}, nil
 }
 

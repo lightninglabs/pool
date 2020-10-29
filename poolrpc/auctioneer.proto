@@ -974,6 +974,21 @@ message TermsResponse {
     thickness before starting to clear batches.
     */
     map<uint32, bool> lease_durations = 4;
+
+    // The confirmation target to use for fee estimation of the next batch.
+    uint32 next_batch_conf_target = 5;
+
+    /*
+    The fee rate, in satoshis per kiloweight, estimated to use for the next
+    batch.
+    */
+    uint64 next_batch_fee_rate_sat_per_kw = 6;
+
+    /*
+    The absolute unix timestamp at which the auctioneer will attempt to clear
+    the next batch.
+    */
+    uint64 next_batch_clear_timestamp = 7;
 }
 
 message RelevantBatchRequest {
