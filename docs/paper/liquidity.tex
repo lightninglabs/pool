@@ -1656,7 +1656,9 @@ extend the current machine chain. Where:
         transaction, input Lifted UTXOs, the resulting output UTXOs after
         applying the set of state transition functions, and $U_{A}$ any new
         application-specific UTXOs produced as a result of the state transition
-        function.
+        function. Lifted UTXOs can be consumed fully by the state transitions,
+        therefore |\{\phi_{U_0}, \cdots, \phi_{U_N}\}| \geq 
+        |\{\phi_{U_0}^\prime, \cdots, \phi_{U_N}^\prime\}| must be given.
 \end{itemize}
 
 Once a block has been constructed, the operator of the shadowchain now must
@@ -1678,7 +1680,7 @@ we can now proceed to the execution and block commitment phase.
     \textbf{Chain Execution}
 \end{center}
 
-Once the operator has esatblshed a stable set of participants which accept the
+Once the operator has established a stable set of participants which accept the
 proposed shadowchain block, it can execute the block and commit it in the base Bitcoin blockchain: \\
 
 \texttt{CommitBlock($B_S$)} $\rightarrow$ $(b, TX_{id})$. The
@@ -1792,11 +1794,6 @@ before finally attempting to commit the new block within the chain.
         \t \t if b==1 \\
         \t \t \t (b^\prime, TX_{id}) \gets \texttt{CommitBlock($B_{S}$)} \\
      }
-
-     \procedure [linenumbering, mode=text ]{ Oracle $O$}{
-         some code \\
-         more code
-     }
 \end{pchstack}
 
 
@@ -1822,11 +1819,6 @@ new block proposal by the orchestrator.
         \t\t if b^\prime == 1 \\
         \t\t \t \texttt{localCommitBlock()}
      }
-
-     \procedure [linenumbering, mode=text ]{ Oracle $O$}{
-         some code \\
-         more code
-     }
  \end{pchstack}
 
 % lift utxo if non empty
@@ -1841,8 +1833,8 @@ new block proposal by the orchestrator.
 
 In this section, we build upon the prior sections outlining the abstract
 \texttt{Channel Lease Marketplace} definition, as well as shadowchain
-operation, and construct out \textbf{Lightning Pool} implementation at a
-low-level. We first being by detailing our implementation of the \texttt{CLM}
+operation, and construct our \textbf{Lightning Pool} implementation at a
+low-level. We first begin by detailing our implementation of the \texttt{CLM}
 algorithms, as well as our choice of certain free parameters. With this
 concrete structure in place, we'll then go up a layer of abstraction to
 demonstrate how Lightning Pool can be operated as a shadowchain on Bitcoin
@@ -1857,13 +1849,13 @@ today, without any further modifications enhancements.
 \end{center}
 
 Before an instance of Lightning Pool can be used by willing agents, the system
-must first be initialized. This operation can be performed only by by the
-Orchestrator of the auctioneer. Within the system, we'll utilize incremented
+must first be initialized. This operation can be performed only by the
+Orchestrator of the auctioneer. Within the system, we'll utilize an incremented
 Elliptic Curve point which we refer to as the \texttt{batchID} for several
 operations. The \texttt{batchID} serves to uniquely identified a given batch,
 and is incremented after each successful batch. \\
 
-The \texttt{batchID} itself is a nothing up my sleeve (NUMs) point which has
+The \texttt{batchID} itself is a nothing up my sleeve (NUMS) point which has
 been generated in a manner that no one, not even the auctioneer knows the
 discrete log to. The raw serialized \texttt{batchID} (for the very first batch)
 within the \textbf{Lightning Pool} system can be expressed in the following
@@ -1911,12 +1903,12 @@ all account scripts within the system, as well as the auctioneer's main
 account. \\
 
 First, we define a helper function for deriving the auctioneer's current key
-parameterized by the current \texttt{batchID}. As noted above, the
-\texttt{batchID} serves as both a public key within the system as well as a
-counter. The \texttt{batchID} may be expressed as a normal compressed public
-key, or as an integer $N_{b}$ which denotes the scalar multiple off-set from
-the starting batch key $B_{k_0}$: $[B_{k_0}]N_{b}$. We define the
-\texttt{auctioneerScript} as follows: 
+A_{pk_i} from the static auctioneer account key A_{pk} parameterized by the
+current \texttt{batchID}. As noted above, the \texttt{batchID} serves as both a
+public key within the system as well as a counter. The \texttt{batchID} may be
+expressed as a normal compressed public key, or as an integer $N_{b}$ which
+denotes the scalar multiple off-set from the starting batch key
+$B_{k_0}$: $[B_{k_0}]N_{b}$. We define the \texttt{auctioneerScript} as follows: 
 
 \begin{pcvstack}[boxed,center, space=1em]
     \procedure[linenumbering, syntaxhighlight=auto]{\texttt{auctioneerScript($A_{pk}, B_{k_i}$)}}{
