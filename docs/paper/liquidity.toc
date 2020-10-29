@@ -14,7 +14,7 @@
 \contentsline {subsection}{\numberline {4.2}Demand Fueled Routing Node Channel Selection}{13}{subsection.4.2}%
 \contentsline {subsection}{\numberline {4.3}Bootstrapping New Services to Lightning}{14}{subsection.4.3}%
 \contentsline {subsection}{\numberline {4.4}Cross-Chain Market Maker Liquidity Sourcing}{14}{subsection.4.4}%
-\contentsline {subsection}{\numberline {4.5}Instant Lightning Wallet User On Boarding}{14}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.5}Instant Lightning Wallet User On Boarding}{15}{subsection.4.5}%
 \contentsline {subsection}{\numberline {4.6}Variance Reduction in Routing Node Revenue}{15}{subsection.4.6}%
 \contentsline {section}{\numberline {5}The Channel Lease Marketplace}{15}{section.5}%
 \contentsline {subsection}{\numberline {5.1}High-Level Description}{15}{subsection.5.1}%
@@ -36,18 +36,20 @@
 \contentsline {subsubsection}{\numberline {7.1.1}System Initialization}{32}{subsubsection.7.1.1}%
 \contentsline {subsubsection}{\numberline {7.1.2}Lightning Pool Accounts}{33}{subsubsection.7.1.2}%
 \contentsline {subsubsection}{\numberline {7.1.3}Channel Leases in the Lightning Network}{36}{subsubsection.7.1.3}%
-\contentsline {subsubsection}{\numberline {7.1.4}Order Structure}{38}{subsubsection.7.1.4}%
-\contentsline {subsubsection}{\numberline {7.1.5}Node Rating Agencies}{39}{subsubsection.7.1.5}%
+\contentsline {subsubsection}{\numberline {7.1.4}Order Structure}{39}{subsubsection.7.1.4}%
+\contentsline {subsubsection}{\numberline {7.1.5}Node Rating Agencies}{40}{subsubsection.7.1.5}%
 \contentsline {subsubsection}{\numberline {7.1.6}Uniform Price Market Clearing \& Matching}{40}{subsubsection.7.1.6}%
-\contentsline {subsubsection}{\numberline {7.1.7}The Batch Execution Transaction}{41}{subsubsection.7.1.7}%
-\contentsline {subsection}{\numberline {7.2}The Lightning Pool Shadowchain}{43}{subsection.7.2}%
-\contentsline {subsubsection}{\numberline {7.2.1}Lightning Pool Accounts as Lifted UTXOs}{43}{subsubsection.7.2.1}%
-\contentsline {subsubsection}{\numberline {7.2.2}Auction Batch Proposal}{43}{subsubsection.7.2.2}%
-\contentsline {subsubsection}{\numberline {7.2.3}Shadowchain Batch Execution}{44}{subsubsection.7.2.3}%
-\contentsline {subsubsection}{\numberline {7.2.4}Unconfirmed Batch Cut-Through}{44}{subsubsection.7.2.4}%
-\contentsline {subsubsection}{\numberline {7.2.5}Auction Upgrades}{44}{subsubsection.7.2.5}%
-\contentsline {section}{\numberline {8}Security Analysis}{45}{section.8}%
-\contentsline {section}{\numberline {9}Future Directions}{45}{section.9}%
-\contentsline {section}{\numberline {10}Related Work}{46}{section.10}%
-\contentsline {section}{\numberline {11}Conclusion}{46}{section.11}%
-\contentsline {section}{\numberline {12}Acknowledgments}{46}{section.12}%
+\contentsline {subsubsection}{\numberline {7.1.7}Auction Batch Execution}{42}{subsubsection.7.1.7}%
+\contentsline {subsubsection}{\numberline {7.1.8}Sidecar Channel Market Clearing \& Batch Execution}{45}{subsubsection.7.1.8}%
+\contentsline {subsubsection}{\numberline {7.1.9}LSAT as Pool Tickets}{46}{subsubsection.7.1.9}%
+\contentsline {subsection}{\numberline {7.2}The Lightning Pool Shadowchain}{46}{subsection.7.2}%
+\contentsline {subsubsection}{\numberline {7.2.1}Lightning Pool Accounts as Lifted UTXOs}{46}{subsubsection.7.2.1}%
+\contentsline {subsubsection}{\numberline {7.2.2}Auction Batch Proposal}{47}{subsubsection.7.2.2}%
+\contentsline {subsubsection}{\numberline {7.2.3}Shadowchain Batch Execution}{47}{subsubsection.7.2.3}%
+\contentsline {subsubsection}{\numberline {7.2.4}Unconfirmed Batch Cut-Through}{47}{subsubsection.7.2.4}%
+\contentsline {subsubsection}{\numberline {7.2.5}Auction Upgrades}{48}{subsubsection.7.2.5}%
+\contentsline {section}{\numberline {8}Security Analysis}{48}{section.8}%
+\contentsline {section}{\numberline {9}Future Directions}{49}{section.9}%
+\contentsline {section}{\numberline {10}Related Work}{49}{section.10}%
+\contentsline {section}{\numberline {11}Conclusion}{49}{section.11}%
+\contentsline {section}{\numberline {12}Acknowledgments}{50}{section.12}%

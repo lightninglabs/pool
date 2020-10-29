@@ -92,7 +92,8 @@ the marketplace. The duration of such contracts is enforced on-chain using
 Bitcoin Script. We construct \textbf{Lightning Pool} using a novel design for
 constructing overlay applications on top of Bitcoin: a shadow chain. Shadow
 chains allow users to remain in full custody of their funds at all times while
-also participating in higher level applications. 
+also participating in higher level applications that scale via an optimistic
+transaction cut-through protocol.
 
 \end{abstract} 
 
@@ -105,41 +106,43 @@ also participating in higher level applications.
 \section{Introduction}
 
 \textbf{Lightning Network Bootstrapping Challenges}. The Lightning Network (LN)
-(cite) is the largest deployed Layer 2 payment channel network (cite https://lightning.network/lightning-network-paper.pdf). A
-payment channel network is comprised of a series of individual payment channels,
-which, when strung together, enable rapid low-latency payments between
-participants in the network. Due to the off-chain nature of these payments
-(only the final summary hits the blockchain), the cost of payments on the LN
-are typically much lower than an equivalent payment on the base blockchain
-(cite). In order to be able to send funds on a network, a user must open a
-payment channel (cite) to another participant on the network. Once the channel
-has been opened, both participants are able to send and receive a nearly unbounded
-number of payments off-chain, possibly never closing the channel on-chain. Similarly, in order to receive on the network, a
-user requires \emph{another individual} to open a channel \emph{to} the
-receiver. A participant can only send and receive up to the total amount of
-Bitcoin in a channel committed to by both parties. This allocation of capital by
-one party to enable another party to receive funds on the network is
-typically referred to as \emph{inbound liquidity} or \emph{inbound bandwidth}.
-Because a would-be user of the network must somehow convince \emph{others} to allocate
-capital towards them in order to receive funds on the network, the inbound
-bandwidth problem remains a significant barrier to the adoption and
-bootstrapping of the Lightning Network. 
+(cite) is the largest deployed Layer 2 payment channel network (cite
+https://lightning.network/lightning-network-paper.pdf). A payment channel
+network is comprised of a series of individual payment channels, which, when
+strung together, enable rapid low-latency payments between participants in the
+network. Due to the off-chain nature of these payments (only the final summary
+hits the blockchain), the cost of payments on the LN are typically much lower
+than an equivalent payment on the base blockchain (cite). In order to be able
+to send funds on a network, a user must open a payment channel (cite) to
+another participant on the network. Once the channel has been opened, both
+participants are able to send and receive a nearly unbounded number of payments
+off-chain, possibly never closing the channel on-chain. Similarly, in order to
+receive on the network, a user requires \emph{another individual} to open a
+channel \emph{to} the receiver. A participant can only send and receive up to
+the total amount of Bitcoin in a channel committed to by both parties. This
+allocation of capital by one party to enable another party to receive funds on
+the network is typically referred to as \emph{inbound liquidity} or
+\emph{inbound bandwidth}.  Because a would-be user of the network must somehow
+convince \emph{others} to allocate capital towards them in order to receive
+funds on the network, the inbound bandwidth problem remains a significant
+barrier to the adoption and bootstrapping of the Lightning Network. 
 
 \textbf{Routing Node Capital Requirements}.  In order to incentivize users to
-commit capital to the network so as to help other users of the network send and receive
-payments, each time a node forwards a payment successfully they receive a fee. As commonly implemented, this fee has a fixed base
-amount to be paid for all forwards independent of payment size, and a fee rate
-or proportional amount that must be paid for each millionth of a satoshi
-forwarded (cite). We refer to nodes that join in order to facilitate payments
-and collect forwarding fees as \emph{routing nodes}. In order to forward a
-payment of size $N$ on the network, a routing node needs to have $N_{in} - F$
-Bitcoin allocated \emph{towards} it as inbound bandwidth, and $N_{out}$ Bitcoin
-allocated to another node as outbound bandwidth. The factor of $F$ is the fee
-collected by the routing node, with the following constraint being met $F =
-N_{out} - N_{in}$. Due to this requirement that there be sufficient inbound
-\emph{and} outbound bandwidth, even those nodes that exist solely to help
-other nodes send and receive payments, themselves face the inbound bandwidth allocation
-problem, a fundamental bootstrapping issue for the LN. 
+commit capital to the network so as to help other users of the network send and
+receive payments, each time a node forwards a payment successfully they receive
+a fee. As commonly implemented, this fee has a fixed base amount to be paid for
+all forwards independent of payment size, and a fee rate or proportional amount
+that must be paid for each millionth of a satoshi forwarded (cite). We refer to
+nodes that join in order to facilitate payments and collect forwarding fees as
+\emph{routing nodes}. In order to forward a payment of size $N$ on the network,
+a routing node needs to have $N_{in} - F$ Bitcoin allocated \emph{towards} it
+as inbound bandwidth, and $N_{out}$ Bitcoin allocated to another node as
+outbound bandwidth. The factor of $F$ is the fee collected by the routing node,
+with the following constraint being met $F = N_{out} - N_{in}$. Due to this
+requirement that there be sufficient inbound \emph{and} outbound bandwidth,
+even those nodes that exist solely to help other nodes send and receive
+payments, themselves face the inbound bandwidth allocation problem, a
+fundamental bootstrapping issue for the LN. 
 
 \textbf{Market Design Resource Allocation Problems}. The field of market design
 is a sub-field of economics which is concerned primarily with the efficient
@@ -147,10 +150,11 @@ allocation of scarce resources (cite). Within this sub-field, of interest is a
 branch of market design concerned with instances wherein money is used to
 govern the exchange of goods and services: auction design (cite). Auction
 design can be used to effectively allocate scarce resources within a domain.
-Common established examples of market design widely used today include:
-carbon emissions credits, electricity markets, auctions for airport gates, and wireless spectrum auctions (cite) (cite) (cite). In each of these
-examples, market design is used to allow more effective communication of
-pricing information, resource availability, and the expression of preferences (cite).
+Common established examples of market design widely used today include: carbon
+emissions credits, electricity markets, auctions for airport gates, and
+wireless spectrum auctions (cite) (cite) (cite). In each of these examples,
+market design is used to allow more effective communication of pricing
+information, resource availability, and the expression of preferences (cite).
 Our first insight is framing the solution to the inbound bandwidth
 bootstrapping problem within the lens of market design. In the context of the
 LN, the scarce resource we aim to more efficiently allocate is inbound channel
@@ -180,22 +184,24 @@ predatory routing hi-jacking stuff)
 
 \textbf{Channel Lease Marketplaces}. In this paper, we present Lightning Pool,
 a non-custodial channel lease marketplace that draws on modern auction theory
-to construct an auction that enables participants to buy and sell inbound channel
-bandwidth. Participants in the marketplace buy and sell a channel capital obligation,
-which we call a Lightning Channel Lease (LCL). An LCL is similar to a
-traditional bond in that one party acquires capital from another for productive
-use, with the party parting with their capital being compensated for their
-cost of capital. However as the funds within an LCL can only be used in the
-Lightning Network for sending/receiving, an LCL is analogous to the creation of
-a new virtual "road" within the LN connecting two destinations. Critically,
-when one purchases an LCL, the period of time those funds must be committed is
-enforced on-chain using Bitcoin Script. As a result, buyers of inbound channel
-bandwidth can be sure the capital will be committed for a set period of time.
-The auction itself contains several sub-auctions for the exchange of particular
-duration intervals expressed in blocks (similar to the various U.S Treasury
-auctions (cite)). A non-trusted auctioneer facilities the marketplace by
-accepting sealed-bid orders, clearing the market using a uniform clearing price
-for each duration bucket, and finally executing batches of contracts using execution transactions that update all involved accounts, delivering the purchased channels to all parties in an atomic manner. Lightning
+to construct an auction that enables participants to buy and sell inbound
+channel bandwidth. Participants in the marketplace buy and sell a channel
+capital obligation, which we call a Lightning Channel Lease (LCL). An LCL is
+similar to a traditional bond in that one party acquires capital from another
+for productive use, with the party parting with their capital being compensated
+for their cost of capital. However as the funds within an LCL can only be used
+in the Lightning Network for sending/receiving, an LCL is analogous to the
+creation of a new virtual "road" within the LN connecting two destinations.
+Critically, when one purchases an LCL, the period of time those funds must be
+committed is enforced on-chain using Bitcoin Script. As a result, buyers of
+inbound channel bandwidth can be sure the capital will be committed for a set
+period of time.  The auction itself contains several sub-auctions for the
+exchange of particular duration intervals expressed in blocks (similar to the
+various U.S Treasury auctions (cite)). A non-trusted auctioneer facilities the
+marketplace by accepting sealed-bid orders, clearing the market using a uniform
+clearing price for each duration bucket, and finally executing batches of
+contracts using execution transactions that update all involved accounts,
+delivering the purchased channels to all parties in an atomic manner. Lightning
 Pool and the LCL solve the inbound bandwidth problem by allowing participants
 on the network to effectively exchange pricing signals to determine exactly
 \emph{where} in the network capital should be allocated.
@@ -205,18 +211,19 @@ on the network to effectively exchange pricing signals to determine exactly
 application built on top of Bitcoin that utilizes the \emph{Shadow Chain}
 paradigm to construct an application-specific overlay system on top of existing
 Bitcoin unspent transaction outputs (UTXOs). A user joins a shadow chain by
-creating a special multi-signature based output using a public key provided by the target
-shadow chain manager. Once a user has joined the shadow chain, proposed state
-transitions are packaged up (in the form of a block) by the shadow chain
-manager and proposed to each active participant. A shadow chain block updates
-the application state of all participants and is embedded within a normal
-Bitcoin transaction. Depending on the application, a shadow chain block may be
-indistinguishable from a normal Bitcoin transaction. Shadow chains are able to
-\emph{compress} state transitions \emph{off-chain} by employing a form of
-multi-party transaction cut-through (cite). As participants of a shadow-chain
-remain in custody of their funds at all times, complex fraud proofs or exit
-games are unnecessary, significantly simplifying the implementation of a given
-shadow chain. We note that the shadow chain concept itself can be used for other applications as well.
+creating a special multi-signature based output using a public key provided by
+the target shadow chain manager. Once a user has joined the shadow chain,
+proposed state transitions are packaged up (in the form of a block) by the
+shadow chain manager and proposed to each active participant. A shadow chain
+block updates the application state of all participants and is embedded within
+a normal Bitcoin transaction. Depending on the application, a shadow chain
+block may be indistinguishable from a normal Bitcoin transaction. Shadow chains
+are able to \emph{compress} state transitions \emph{off-chain} by employing a
+form of multi-party transaction cut-through (cite). As participants of a
+shadow-chain remain in custody of their funds at all times, complex fraud
+proofs or exit games are unnecessary, significantly simplifying the
+implementation of a given shadow chain. We note that the shadow chain concept
+itself can be used for other applications as well.
 
 \subsection{Our Contributions}
 
@@ -452,10 +459,10 @@ attempting to join the network is:
 It's important to note, that as operating a \emph{valid} routing node on the
 network requires a degree of skill and commitment (cite bryan blog post), some
 routing nodes are able to provide more \emph{effective} service than others.
-As an example, imagine a routing node $Bob$, who has sufficient capital
+As an example, imagine a routing node \textbf{Bob}, who has sufficient capital
 committed to his node in both the inbound and outbound directions, but who is
 chronically \emph{offline}. As a node must be \emph{online} in order to be able
-to forward payments, any capital $C_Bob$ committed by $Bob$, can essentially be
+to forward payments, any capital committed by \textbf{Bob}, can essentially be
 considered dead weight. With this insight in mind, we revisit the bootstrapping
 questions of the Lightning Service to also require a high \emph{quality of
 service}:
@@ -599,17 +606,19 @@ Lightning Network.
 
 The existence of a \emph{channel lease} serves to provide routing nodes with an
 additional monetary incentive (in the form of a premium paid by the lessee of
-the coins) to operate a routing node. As a result, we can modify the revenue
+the coins) to operate a routing node. As a result, we can model the revenue
 $R_c$ earned by a routing node within the context of a specific channel $C$,
-for a period of $t$ blocks to be: 
+for a period of $T$ blocks to be: 
 
 \begin{equation}
-R_c(t) = (P_c * t) + (F_c* P_{f_c}) % mak Pr[x] instead? 
+    R_c(T) = (P_c \cdot T \cdot A_{sat}) + \sum_{i=0}^T (F_c \cdot \prob{X_{t_i(C})})
 \end{equation}
 
-where $P_c$ is the current \emph{per-block} interest rate, and ($F_c *
-P_{f_c}$) is the \emph{expected} routing fee revenue of the channel within that
-interval \\ 
+where $P_c$ is the current \emph{per-block} interest rate, and $A_{sat}$ is the
+number of coins leased, and $(F_c \cdot \prob{X_{t_i(C})})$ is the
+\emph{expected} routing fee revenue of the channel within that interval, and
+$X_{t_i}(C)$ is a random event representing a payment passing through the
+channel $C$ on the incoming edge during a time-slice $t$ with $T = \Sigma t_i$ \\
 
 We reference an \emph{expectation} for fee revenue, as fees are effectively a
 \emph{speculative} component of the routing revenue of a node. If a channel was
@@ -966,8 +975,8 @@ Lightning Channel Lease:
 
 \begin{itemize}
     \item $P_{T}$ is the \texttt{secp256k1} public key (cite) of the
-\texttt{Liquidity Taker}, $P_{M}$ the public key for the \texttt{Liquidity
-Maker}. 
+\texttt{Liquidity Taker}. 
+    \item $P_{M}$ the public key for the \texttt{Liquidity Maker}. 
     \item $A_{sat}$ is the total amount of Bitcoin within the contract.
     \item $D_{block}$ is the duration of the contract expressed in Blocks.
     \item $r_{i}$ is the per-block interest rate as discovered in the $i$th
@@ -2087,52 +2096,58 @@ multi-sig funding output, until the lease duration has expired. \\
 
 We now make a small modification first to the settled local output of the
 \texttt{Liquidity Maker}:
-\begin{verbatim}
-OP_IF
-    <revoke key> 
-OP_ELSE
-    <lease duration in blocks>
-    OP_CHECKLOCKTIMEVERIFY
-    OP_DROP
- 
-    <delay in blocks>
-    OP_CHECKSEQUENCEVERIFY
-    OP_DROP
-    
-    <delay key> 
-OP_ENDIF
+\begin{center}
+    \begin{verbatim}
+    OP_IF
+        <revoke key> 
+    OP_ELSE
+        <lease duration in blocks>
+        OP_CHECKLOCKTIMEVERIFY
+        OP_DROP
+     
+        <delay in blocks>
+        OP_CHECKSEQUENCEVERIFY
+        OP_DROP
+        
+        <delay key> 
+    OP_ENDIF
 
-OP_CHECKSIG
-\end{verbatim} 
+    OP_CHECKSIG
+    \end{verbatim} 
+\end{center}
 
 Next, we make a similar modification to the settled remote output of the
 \texttt{Liquidity Maker}, assuming anchor output based channels (cite) are
 used: 
-\begin{verbatim}
-<localKey> OP_CHECKSIGVERIFY
-<lease duration> OP_CHECKLOCKTIMEVERIFY
-1 OP_CHECKSEQUENCEVERIFY
-\end{verbatim} 
+\begin{center}
+    \begin{verbatim}
+    <localKey> OP_CHECKSIGVERIFY
+    <lease duration> OP_CHECKLOCKTIMEVERIFY
+    1 OP_CHECKSEQUENCEVERIFY
+    \end{verbatim} 
+\end{center}
 
 Finally, we modify the offered HTLC outputs of the \texttt{Liquidity Maker} for
 their local commitment transaction:
-\begin{verbatim}
- OP_IF
-    <revoke key> 
-OP_ELSE
-    <lease duration in blocks>
-    OP_CHECKLOCKTIMEVERIFY
-    OP_DROP
- 
-    <delay in blocks>
-    OP_CHECKSEQUENCEVERIFY
-    OP_DROP
-    
-    <delay key> 
-OP_ENDIF
+\begin{center}
+    \begin{verbatim}
+     OP_IF
+        <revoke key> 
+    OP_ELSE
+        <lease duration in blocks>
+        OP_CHECKLOCKTIMEVERIFY
+        OP_DROP
+     
+        <delay in blocks>
+        OP_CHECKSEQUENCEVERIFY
+        OP_DROP
+        
+        <delay key> 
+    OP_ENDIF
 
-OP_CHECKSIG
-\end{verbatim} 
+    OP_CHECKSIG
+    \end{verbatim} 
+\end{center}
 
 % ^ make these into funcs instead
 
@@ -2177,6 +2192,44 @@ Given the lease, and the expected outpoint, both sides can fully sign the
 commitment transaction in a manner that doesn't incur any risk as due to the
 account structure, they'll need to sign off on the batch funding transaction
 itself before it can be broadcast.
+
+The funding flow using this new order shim, assuming that match making and
+market clearing has already occurred, resembles the following flow, with Alice
+being the \texttt{Liquidity Taker} and Bob being the \texttt{Liquidity Maker}:
+\begin{pcvstack}[boxed,center,space=1em]
+    \procedure{\texttt{leaseInit}}{
+        (\Gamma, \texttt{leasePoint}) \gets B_{t_i}.\texttt{lease[Alice \concat Bob]} \\
+        P_{a} \gets \Gamma.P_{T} \\
+        P_{b} \gets \Gamma.P_{M} \\
+        \texttt{RegisterChannelShim($\Gamma, P_{a}$, leasePoint)}
+    }
+
+    \procedure{\texttt{ChannelShimFundChannel}}{
+        \textbf{Alice} \> \> \> \textbf{Bob} \\
+        \texttt{leaseInit()<++>} \\
+        \> \sendmessage{<-}{top=\texttt{OpenChannel($P_b$)}} \> \\
+        \> \sendmessage{->}{top=\texttt{AcceptChannel($P_a$)}} \> \\ 
+        \> \sendmessage{<-}{top=\texttt{FundingCreated(leasePoint)}} \> \\
+        \> \sendmessage{->}{top=\texttt{FundingSigned}} \> \\ 
+    }
+\end{pcvstack} 
+
+In this modified flow, notice that the taker returns the \emph{pre-generated}
+public key to use within the multi-sig within the \texttt{AcceptChannel}
+method, and the taker uses the canned \texttt{leasePoint} as the input to the
+funding transaction. As we'll see below the \texttt{leasePoint} itself is
+generated after market clearing, and during the construction of the batch
+execution transaction. The \texttt{leasePoint} as it exists on the batch
+execution transaction creates a new channel point that staifies the details of
+the negotiated channel lease $\Gamma$: the amount of the leaase, and the
+pkSCript of the two multi-sig keys $P_a$ and $P_b$.
+
+We note that the channel shim abstraction has a number of indepneddent uses
+including strong layer isolation for more elaborate multi-party channel
+protocols. Notice how the base \textbf{BOLT} funding flow is unmodified,
+meaning that a higher level application can handle the specified details of the
+multi-party transaction protocol, while the unmodified Lightning node software
+manages the underlying channel itself.
 
 \subsubsection{Order Structure}
 
@@ -2404,7 +2457,7 @@ each input/output during the later batch construction phase.
 % market clearing
 % selection of LAB, flash some theory
 
-\subsubsection{The Batch Execution Transaction}
+\subsubsection{Auction Batch Execution}
 
 Once we've cleared the market, we'll now move onto the batch execution phase.
 During this phase, we'll construct the batch transaction which executes a given
@@ -2438,7 +2491,7 @@ Taking this into consideration, we define our implementation of
         for acct in \Delta_i.\Psi^\prime: \\
         \t \texttt{acct.Value} \mathrel{{-}{=}} \texttt{feeShare($\Delta_i$, acct)} \\
         \t \texttt{tx.addOut(acct.txOut)} \\ \\
-        for lease in \Delta_i.\Gamma:
+        for lease in \Delta_i.\Gamma: \\
         \t \texttt{tx.addOut(lease.txOut)} \\ \\
         \Psi_{A}.value \mathrel{{-}{=}} \texttt{feeShare($\Delta_i, \Psi_{A}$)} \\
         \texttt{tx.addOut($\Delta_i.\Psi_{A}^\prime$)} \\
@@ -2455,43 +2508,154 @@ batch to each trader, and collect the necessary set of signatures required to
 spend each trader's account input. During this execution phase, we assume that
 this is the final set of traders that wish to be a part of this batch. Once the
 auctioneer has all the necessary signatures to broadcast a batch, the batch
-execution transaction can be broadcast, ending this auction epoch. \\
+execution transaction can be broadcast, ending this auction epoch.  \\
+
+Batch transaction execution itself is a multi-party protocol wherein the
+auctioneer presents a valid auction batch to all involved parties, the parties
+verify the batch, before finally signing off by resenting valid signatures of
+the batch (thereby attesting to it) which are require to execute the batch by
+committing it in the Bitcoin blockchain. \\
 
 We define batch execution in the context of Lightning Pool as follows:
 \begin{pcvstack}[boxed,center, space=1em]
-    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={await, newTx, sort}]{\texttt{ExecuteBatch($B_{t_i}$)}}{
-        b \gets 0 \\
-        for i, input in B_{t_i}.inputs: \\
-        \t witness \gets await reqSig(input) \\
-        \t B_{t_i}.witness \gets witness \\ \\
-        if \texttt{scriptVerify($B_{t_i}$)}: \\
-        \t return 1 \\
-        else \\
-        \t return 0
+    \procedure[syntaxhighlight=auto, addkeywords={sign, newTx, sort}]{\texttt{ExecuteBatch($B_{t_i}$)}}{
+        \textbf{Trader} \> \> \textbf{Auctioneer} \\
+        \> \sendmessage{<-}{top=\texttt{BatchPrepare($B_{t_i}$)}} \> \\
+        b \gets \texttt{ValidateBatch($B_{t_i}$)} \\
+        if b == 1: \\
+        \t \texttt{leaseInit($B_{t_i}$)} \\
+        \> \sendmessage{->}{top=\texttt{BatchAccept}} \> \\ 
+        else: \\
+        \> \sendmessage{->}{top=\texttt{BatchReject}} \> \\
+        \> \> \text{abort if reject sent} \\ \\
+        \> \sendmessage{<-}{top=\texttt{BatchSignBegin}} \> \\
+        \t \texttt{ChannelShimFundChannel($\Gamma$)} \\
+        W_i \gets \texttt{sign($\Gamma, B_{t_i}$)} \\
+        \> \sendmessage{->}{top=\texttt{BatchSign($W_i$)}} \> \\ 
+        \> \sendmessage{<-}{top=\texttt{BatchFinalize}} \> \\
+        \> \> \texttt{broadcast($B_{t_i}$)}
     }
 \end{pcvstack}
 
-% make this a more involved diagram?
+Once the auctioneer has gathered all the signatures $W_i$ from each participant
+of the batch, then it can sign its own input in the batch transaction, and
+broadcast the batch thereby finalizing execution. We now provide additional
+insight with respect to the meaning of each of the messages sent above.
+\begin{itemize}
+    \item The \texttt{BatchPrepare} message kicks off batch execution and is
+        used to \emph{propose} a new potential auction batch to an end user
+        client. Upon receipt of this message, the client will attempt to verify
+        the batch using the \texttt{ValidateBatch} algorithm. 
 
+    \item If the batch is \emph{invalid} from the client's PoV, then a
+        \texttt{BatchReject} message is sent. Upon receipt of the reject
+        message the auctioneer will resume the protocol, excluding the
+        rejecting client.
 
-% need to also describe side-car channel as well?
-% batch execution
+    \item Otherwise, the client accepts the batch after verifying its integrity
+        by sending the \texttt{BatchAccept} message.
 
-% transaction construction
+    \item In order to synchronize the creation of funding shims and the channel
+        funding protocol itself, the auctioneer send the
+        \texttt{BatchSignBegin} message. After sending the reject, the
+        \emph{taker} will register a funding shim to ensure it's able to
+        properly handle the incoming funding request in the next phase.
 
-% outline
-% before talk about impl of certain free params, LAB clearing, etc, account structure, channel lease enforcement, rating agency
-% first CLM stuff: fill in all algos in the z-cash like algo thing
-% then similar but filling in the main shadowchain algos with what was specified in earlier step
+    \item Upon receipt of the \texttt{BatchSignBegin} message, the client then
+        is ready to fund the channel, using the \texttt{leasePoint} which is
+        present on the batch execution transaction $B_{t_i}$.
 
-% then the CLM Shadowchain
-% filll in the rest as well
+    \item Once the funding is complete (both sides have a valid commitment
+        transaction), then the trader will sign its input to present a valid
+        signature to the auctioneer, so the batch transaction can be completed.
+
+    \item The final set for the auctioneer is to commit the new batch to disk,
+        and broadcast the transaction to the Bitcoin network.
+\end{itemize}
+
+\subsubsection{Sidecar Channel Market Clearing \& Batch Execution}
+
+As mentioned in the background section, a Channel Lease Marketplace is able to
+also implement the abstract notion of a "sidecar channel". We begin by first
+defining a sidecar channel as so:
+
+\theoremstyle{definition}
+
+\begin{definition}{(Sidecar Channel.} 
+    A \texttt{Sidecar Channel} is defined as $\Sigma_c = \{A_{r}, B_{s}, C_{g},
+    N_{sat_{in}}, N_{sat_{out}}\}$, where:
+\end{definition}
+\begin{itemize}
+    \item $A_{r}$ is the \emph{receiver} of a new channel which may contain both
+        inbound and outbound liquidity. This party may or may not already be a
+        participant in the CLM.
+
+    \item $B_{s}$ is the seller of a normal channel lease within the CLM, and
+        holds an active trading account.
+
+    \item $C_{g}$ is the \emph{gifter} of a sidecar channel who wishes to onboard
+        $A_{r}$ to the Lightning Network. Note that $A_{r}$ may not even have any
+        Bitcoin at all.
+
+    \item $N_{sat_{in}}$ is the number of Bitcoin expressed in satoshis of the
+        channel itself, which will be available as inbound channel bandwidth to
+        $A_{r}$.
+
+    \item $N_{sat_{out}}$ is the number of Bitcoin which is to be pushed (cite)
+        to the receiver of the side car channel, allowing them to both send and
+        receive.
+\end{itemize}
+
+At a high level, a sidecar channel allows Alice to buy a channel for Carol via
+Bob. Pool implements sidecar channels by making a series of small modifications to
+the normal marketplace operations. An end-to-end workflow resembles the
+following:
+\begin{itemize}
+    \item Alice who already has an account in the CLM places an order to buy a
+        channel. However, rather than specifying the public key and connection
+        details of her own node, she uses Carol's information instead.
+
+    \item During market clearing, if $N_{sat_{out}} > 0$, then Alice will pay
+        an \emph{additional} amount of $N_{sat_{out}}$ satoshis directly into
+        the account of Bob.
+
+    \item During batch execution, rather than Alice registering a channel shim,
+        she informs Carol to do so in an expectation step. Bob then uses the
+        new $N_{sat_{out}}$ satoshis in his account to push the Bitcoin over to
+        the channel he created between himself an Alice.
+
+    \item To ensure the agreement is upheld, Carol uses a channel acceptor
+        (cite) predicate to validate that the proper amount has been pushed.
+\end{itemize}
+
+Aside from the above modifications to our market clearing and batch execution,
+everything else remains untouched. The end result is the ability to purchase a
+channel for a 3rd party in the network in a trust-minimized manner. This new
+ability is akin to being able to insert an edge in the network (a new channel)
+between any two arbitrary but cooperating parties. As an example, an exchange
+could use this flow to allow a client to withdraw directly into a \emph{new}
+channel. 
+
+\subsubsection{LSAT as Pool Tickets}
+
+As an added layer against spam and resource exhaustion attacks, Lightning Pool
+uses Lightning Service Authentication Tokens, or LSATs (cite) when interacting
+with all users. In order to perform operations such as creating an account,
+querying batch snapshots, etc, a valid LSAT is required. The auctioneer is able
+to dynamically raise the price of an LSAT which is expressed in satoshis if
+anomalous behavior is detected.
+
+In addition to using LSATs to throttle or rate limit clients, the auctioneer is
+also able to use them as a mechanism to offer up historical chain data for sale
+to 3rd party observers (those without active trading accounts) of the system.
+
+% talk about other LSAT stuff
 
 
 \subsection{The Lightning Pool Shadowchain}
 
 In this section, we complete the Lightning Pool system by demonstrating out its
-implemetnation of a Channel LEase Marketplace can be impleneted using our
+implementation of a Channel Lease Marketplace can be implemented using our
 shadowchain application overlay framework.
 
 % auctioneer is the orcewstrator, etc fill in thos meethods now
@@ -2523,16 +2687,21 @@ operations required to create, modify or close an account:
     }
 \end{pcvstack}
 
-% compare them, state how same idea, define exit chain method, and lift+unlift
+Note that it's also possible to upgrade Lifted UTXOs as implemented within
+Pool, as a given user is able to use the latest features in Bitcoin script to
+achieve the same functionality. However, due to privacy implications, it may be
+preferred to have all account scripts, and further all scripts within a batch
+execution transaction be uniform.
 
 \subsubsection{Auction Batch Proposal}
 
 Next, we move unto patch proposal and acceptance. An auction batch within a CLM
 maps 1:1 to the concept of blocks in the shadowchain domain. Given this
-insight, we now dfine the \texttt{ConstructBlock} and \texttt{ProposeBlock}
+insight, we now define the \texttt{ConstructBlock} and \texttt{ProposeBlock}
 algorithms:
+
 \begin{pchstack}[boxed,center, space=1em]
-    \procedure[syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{ConstructBlock($\phi_{live}, T_{xn}, E_{exe}, \Delta_F$)} $\rightarrow$}{
+    \procedure[syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{ConstructBlock($\phi_{live}, T_{xn}, E_{exe}, \Delta_F$)}}{
         \Phi_b \gets \texttt{MatchMake($T_{xn}$)} \\
         c_{price} \gets \texttt{MarketClearingPrice($\Phi_{b}$)} \\
         \texttt{ClearMarket} \gets \Delta_F \\
@@ -2546,12 +2715,19 @@ algorithms:
     }
 \end{pchstack}
 
+The process of constructing a new block walks through each of the phases within
+the auction itself. Note that a block in our system can only be constructed if
+there exist a valid market clearing given the set of orders
+( application-specific transactions). The auctioneer then proposes the block to
+each party within the \texttt{BatchPrepare} message. Traders are then free to
+accept or reject a given block. 
+
 % need to define validate batch as well, also cast above?
 
 \subsubsection{Shadowchain Batch Execution}
 
-Now that we're able to lift/unlift UTXOs and propse blocks within our
-shadowchain, we now define the series of methods that will be utilized to allow
+Now that we're able to lift/unlift UTXOs and propose blocks within our
+Shadowchain, we now define the series of methods that will be utilized to allow
 clients to execute the their local version of the state transition function to
 accept new proposed batches:
 \begin{pchstack}[boxed,center, space=1em]
@@ -2561,6 +2737,17 @@ accept new proposed batches:
     }
 \end{pchstack}
 
+The \texttt{ExecuteBatch} algorithm does most of the heavy lifting here. Note
+that if for whatever reason, execution fails, then $b=0$ is returned, and we
+resume our normal state machine execution loop. At the end of the
+\texttt{CommitBlock} algorithm all participants have the latest block (as they
+need to be given thee block in order to sign off on it), and the block is
+broadcast to the Bitcoin blockchain. After this phase, it's possible to
+continue committing new blocks without waiting for prior blocks to confirm. Due
+to this flexibility, the Orchestrator of the Lightning Pool shadow chain is
+then able to \emph{optimistically} perform transaction cut-through to combine
+several logical blocks into a single Bitcoin transaction.
+
 % fill in the rests of the algos
 
 \subsubsection{Unconfirmed Batch Cut-Through}
@@ -2568,8 +2755,9 @@ accept new proposed batches:
 Recall that a shadowchain block can also be optimistically aggregated into a
 single block. In the domain of the Lightning Pool shadowchain, combining blocks
 requires ensuring that all produced channel leases will still exist in the
-final combined blocks, and the end state of each accoutn refelcts any
-conseqeutive market clearing opportunities:
+final combined blocks, and the end state of each account remelts any
+consecutive market clearing opportunities:
+
 \begin{pchstack}[boxed,center, space=1em]
     \procedure[linenumbering,syntaxhighlight=auto, addkeywords={set, filter}]{\texttt{CoalesceBlocks(F: $\{B_{S_0}, \cdots, B_{S_N}\}$)}}{
         \texttt{inputs} \gets set(F) \\
@@ -2581,29 +2769,56 @@ conseqeutive market clearing opportunities:
     }
 \end{pchstack}
 
+For brevity, we omit the referenced internal algorithms, however the naming is
+intended to be intuitive. Given a series of blocks $F$, we need to extract all
+thee inputs referenced in each block (the series of accounts), extract the set
+of all leases created within the block, and also the ending account state of
+all accounts involved in the prior blocks. Note that one account may
+participate in all or some of the prior blocks. The process of block
+cut-through allows us to only manifest the \emph{ending state} of their account
+and elide the intermediate states from the PoV of the blockchain. With these
+summaries constructed, the auctioneer then construct a new batch, and executes
+it using the normal algorithms.
+
+Scalability gains are had by only manifesting the final state of each account,
+as well as removing the need to manifest all intermediate transaction within
+the blockchain.  All participants have an incentive to participate in this
+optimistic block cut-through as they'll also end up paying less chain fees as
+they only need to pay for their account input+output, and any leases created
+\emph{once}. If any of the intermediate blocks confirm instead of the
+cut-through block, then the process can be repeated with the new set of
+unconfirmed blocks.
+
 \subsubsection{Auction Upgrades}
 
 Finally, we define the process by which we upgrade the CLM shadowchain itself.
 As this is an off-chain process, each participant of the shadowchain is able to
-call the followin algorithm to update in a de-synchronized manner:
-\begin{pchstack}[boxed,center, space=1em]
-    \procedure[linenumbering,syntaxhighlight=auto, addkeywords={map, filter}]{\texttt{UpgradeChain($\Delta_{new}, E_{exe}^\prime, T_{xn}^\prime$)}}{
-        return 0
-    }
-\end{pchstack}
+execute the \texttt{UpgradeChain} algorithm simply by updating their end client
+software. In addition to this we utilize two upgrade extension points:
+\begin{itemize}
+    \item The version of a given order.
+    \item The \texttt{batchVersion} sent within the \texttt{BatchPrepare}
+        message.
+\end{itemize}
+
+The version in each order allows us to add new order types over time which
+implement new match making related preference expression, or brand new channel
+types. The version sent along during batch execution allows us to modify
+attributes such as the fee sharing scheme, or the structure of the batch
+execution transaction itself.
 
 \section{Security Analysis}
 
-Similar to Loop, the Pool backend server is closed source, but clients are able
-to fully verify and audit each phase of the auction. At a high level, Pool can
-be seen as a “shadow chain” anchored in the base Bitcoin blockchain. The shadow
-chain validates modifications to a subset of the UTXO set (the Pool accounts)
-with the auctioneer acting as a block proposer to extend the chain. State
-transitions are validated and accepted by those that are involved in a new
-block (the auction batch). Newer clients are even able to audit the prior
-history of the system in order to ensure proper operation. Pool uses the
-Bitcoin blockchain for what it’s best for: global censorship resistant batch
-execution.
+Similar to Lightning Loop, the Lightning Pool backend server is may be closed
+source, but clients are able to fully verify and audit each phase of the
+auction. At a high level, Pool can be seen as a “shadow chain” anchored in the
+base Bitcoin blockchain. The shadow chain validates modifications to a subset
+of the UTXO set (the Pool accounts) with the auctioneer acting as a block
+proposer to extend the chain. State transitions are validated and accepted by
+those that are involved in a new block (the auction batch). Newer clients are
+even able to audit the prior history of the system in order to ensure proper
+operation. Pool uses the Bitcoin blockchain for what it’s best for: global
+censorship resistant batch execution.
 
 Leveraging this shadow chain structure, users remain in control of their funds
 at all times, and will only enter into agreements that they’re able to fully
