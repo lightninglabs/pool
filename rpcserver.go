@@ -1144,10 +1144,10 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	// If the market isn't currently accepting orders for this particular
 	// lease duration, then we'll exit here as the order will be rejected.
 	leaseDuration := o.Details().LeaseDuration
-	if _, ok := terms.LeaseDurations[leaseDuration]; !ok {
+	if _, ok := terms.LeaseDurationBuckets[leaseDuration]; !ok {
 		return nil, fmt.Errorf("invalid channel lease duration %v "+
 			"blocks, active durations are: %v",
-			leaseDuration, terms.LeaseDurations)
+			leaseDuration, terms.LeaseDurationBuckets)
 	}
 
 	// Collect all the order data and sign it before sending it to the
@@ -1909,7 +1909,7 @@ func (s *rpcServer) LeaseDurations(ctx context.Context,
 	}
 
 	return &poolrpc.LeaseDurationResponse{
-		LeaseDurations: terms.LeaseDurations,
+		LeaseDurationBuckets: terms.LeaseDurationBuckets,
 	}, nil
 }
 

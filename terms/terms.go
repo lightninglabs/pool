@@ -2,6 +2,7 @@ package terms
 
 import (
 	"github.com/btcsuite/btcutil"
+	"github.com/lightninglabs/pool/poolrpc"
 )
 
 // AuctioneerTerms is a struct that holds all dynamic terms the auctioneer defines.
@@ -21,11 +22,9 @@ type AuctioneerTerms struct {
 	// OrderExecFeeRate is the fee rate in parts per million.
 	OrderExecFeeRate btcutil.Amount
 
-	// LeaseDurations lists the current set of active lease durations in
-	// the market at this instance. The duration in blocks is mapped to a
-	// bool which indicates if this market is actively clearing order or
-	// not.
-	LeaseDurations map[uint32]bool
+	// LeaseDurationBuckets lists the current set of lease durations and
+	// maps them to their current market state.
+	LeaseDurationBuckets map[uint32]poolrpc.DurationBucketState
 }
 
 // FeeSchedule returns the execution fee as a FeeSchedule.
