@@ -866,6 +866,17 @@
         }
       }
     },
+    "poolrpcDurationBucketState": {
+      "type": "string",
+      "enum": [
+        "NO_MARKET",
+        "MARKET_CLOSED",
+        "ACCEPTING_ORDERS",
+        "CLEARING_MARKET"
+      ],
+      "default": "NO_MARKET",
+      "description": " - NO_MARKET: NO_MARKET indicates that this bucket doesn't actually exist, in that no\nmarket is present for this market.\n - MARKET_CLOSED: MARKET_CLOSED indicates that this market exists, but that it isn't currently\nrunning.\n - ACCEPTING_ORDERS: ACCEPTING_ORDERS indicates that we're accepting orders for this bucket, but\nnot yet clearing for this duration.\n - CLEARING_MARKET: CLEARING_MARKET indicates that we're accepting orders, and fully clearing\nthe market for this duration."
+    },
     "poolrpcExecutionFee": {
       "type": "object",
       "properties": {
@@ -989,12 +1000,12 @@
     "poolrpcLeaseDurationResponse": {
       "type": "object",
       "properties": {
-        "lease_durations": {
+        "lease_duration_buckets": {
           "type": "object",
           "additionalProperties": {
-            "type": "boolean",
-            "format": "boolean"
-          }
+            "$ref": "#/definitions/poolrpcDurationBucketState"
+          },
+          "description": "The set of lease durations the market is currently accepting and the state\nthe duration buckets currently are in."
         }
       }
     },

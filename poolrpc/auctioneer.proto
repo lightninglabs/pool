@@ -15,7 +15,7 @@ service ChannelAuctioneer {
     rpc Terms (TermsRequest) returns (TermsResponse);
     rpc RelevantBatchSnapshot (RelevantBatchRequest) returns (RelevantBatch);
     rpc BatchSnapshot (BatchSnapshotRequest) returns (BatchSnapshotResponse);
-    rpc NodeRating(ServerNodeRatingRequest) returns (ServerNodeRatingResponse);
+    rpc NodeRating (ServerNodeRatingRequest) returns (ServerNodeRatingResponse);
 }
 
 message ReserveAccountRequest {
@@ -950,6 +950,32 @@ message ServerOrderStateResponse {
 message TermsRequest {
 }
 
+enum DurationBucketState {
+    /*
+    NO_MARKET indicates that this bucket doesn't actually exist, in that no
+    market is present for this market.
+    */
+    NO_MARKET = 0;
+
+    /*
+    MARKET_CLOSED indicates that this market exists, but that it isn't currently
+    running.
+    */
+    MARKET_CLOSED = 1;
+
+    /*
+    ACCEPTING_ORDERS indicates that we're accepting orders for this bucket, but
+    not yet clearing for this duration.
+    */
+    ACCEPTING_ORDERS = 2;
+
+    /*
+    CLEARING_MARKET indicates that we're accepting orders, and fully clearing
+    the market for this duration.
+    */
+    CLEARING_MARKET = 3;
+}
+
 message TermsResponse {
     /*
     The maximum account size in satoshis currently allowed by the auctioneer.
@@ -959,7 +985,7 @@ message TermsResponse {
     /*
     The maximum order duration in blocks currently allowed by the auctioneer.
     */
-    uint32 max_order_duration_blocks = 2 [deprecated=true];
+    uint32 max_order_duration_blocks = 2 [deprecated = true];
 
     /*
     The execution fee charged per matched order.
@@ -967,13 +993,10 @@ message TermsResponse {
     ExecutionFee execution_fee = 3;
 
     /*
-    The set of lease durations the market is currently accepting. If a duration
-    is mapped to false, then this means the durations are being accepted, but
-    the market may be paused (not clearing batches). This might happen if a new
-    duration is added, and the auction wishes to build of sufficient market
-    thickness before starting to clear batches.
+    The set of lease durations the market is currently accepting and the state
+    the duration buckets currently are in.
     */
-    map<uint32, bool> lease_durations = 4;
+    map<uint32, DurationBucketState> lease_duration_buckets = 4;
 }
 
 message RelevantBatchRequest {
