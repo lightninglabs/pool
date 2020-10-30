@@ -65,8 +65,9 @@ type LocalBatchSnapshot struct {
 	// BatchID is the batch's unique ID.
 	BatchID order.BatchID
 
-	// ClearingPrice is the fixed rate the orders were cleared at.
-	ClearingPrice order.FixedRatePremium
+	// ClearingPrices is a map of the lease duration markets and the fixed
+	// rate the orders were cleared at within that market.
+	ClearingPrices map[uint32]order.FixedRatePremium
 
 	// ExecutionFee is the FeeSchedule that was used by the server to
 	// calculate the execution fee.
@@ -120,7 +121,7 @@ func NewSnapshot(batch *order.Batch, ourOrders []order.Order,
 	snapshot := &LocalBatchSnapshot{
 		Version:        batch.Version,
 		BatchID:        batch.ID,
-		ClearingPrice:  batch.ClearingPrice,
+		ClearingPrices: batch.ClearingPrices,
 		ExecutionFee:   *feeSched,
 		BatchTX:        batch.BatchTX,
 		BatchTxFeeRate: batch.BatchTxFeeRate,
@@ -382,8 +383,19 @@ func getSnapshotBuckets(tx *bbolt.Tx) (*bbolt.Bucket, *bbolt.Bucket,
 }
 
 func serializeLocalBatchSnapshot(w io.Writer, b *LocalBatchSnapshot) error {
+	// The previous batch versions had a single clearing price. We'll
+	// extract it from the map which will only contain one entry for that
+	// oder version. For new batch versions we just store a zero price.
+	var clearingPrice order.FixedRatePremium
+	if b.Version == order.DefaultVersion {
+		for _, price := range b.ClearingPrices {
+			clearingPrice = price
+			break
+		}
+	}
+
 	err := WriteElements(
-		w, uint32(b.Version), b.BatchID[:], b.ClearingPrice,
+		w, uint32(b.Version), b.BatchID[:], clearingPrice,
 		b.ExecutionFee, b.BatchTX, b.BatchTxFeeRate,
 	)
 	if err != nil {
@@ -426,14 +438,32 @@ func serializeLocalBatchSnapshot(w io.Writer, b *LocalBatchSnapshot) error {
 		}
 	}
 
+	// New batch versions have an additional map of duration->price that we
+	// need to serialize. Since both values are uint32 this is pretty
+	// straightforward.
+	numPrices := uint32(len(b.ClearingPrices))
+	err = WriteElements(w, numPrices)
+	if err != nil {
+		return err
+	}
+	for duration, price := range b.ClearingPrices {
+		err = WriteElements(w, duration, price)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func deserializeLocalBatchSnapshot(r io.Reader) (*LocalBatchSnapshot, error) {
-	b := &LocalBatchSnapshot{}
+	b := &LocalBatchSnapshot{
+		ClearingPrices: make(map[uint32]order.FixedRatePremium),
+	}
 	var version uint32
+	var clearingPrice order.FixedRatePremium
 	err := ReadElements(
-		r, &version, b.BatchID[:], &b.ClearingPrice, &b.ExecutionFee,
+		r, &version, b.BatchID[:], &clearingPrice, &b.ExecutionFee,
 		&b.BatchTX, &b.BatchTxFeeRate,
 	)
 	if err != nil {
@@ -466,6 +496,36 @@ func deserializeLocalBatchSnapshot(r io.Reader) (*LocalBatchSnapshot, error) {
 		}
 
 		b.MatchedOrders[nonce] = append(b.MatchedOrders[nonce], m)
+	}
+
+	// Depending on the batch version we either have a single clearing price
+	// or multiple of them mapped by the lease durations.
+	switch b.Version {
+	case order.DefaultVersion:
+		b.ClearingPrices[order.LegacyLeaseDurationBucket] = clearingPrice
+
+	case order.VersionLeaseDurationBuckets:
+		var (
+			numPrices uint32
+			duration  uint32
+			price     order.FixedRatePremium
+		)
+		err = ReadElements(r, &numPrices)
+		if err != nil {
+			return nil, err
+		}
+
+		for i := uint32(0); i < numPrices; i++ {
+			err = ReadElements(r, &duration, &price)
+			if err != nil {
+				return nil, err
+			}
+
+			b.ClearingPrices[duration] = price
+		}
+
+	default:
+		return nil, fmt.Errorf("unknown batch version %d", b.Version)
 	}
 
 	return b, nil

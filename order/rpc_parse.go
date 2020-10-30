@@ -223,9 +223,10 @@ func ParseRPCBatch(prepareMsg *poolrpc.OrderMatchPrepare) (*Batch,
 	error) {
 
 	b := &Batch{
-		Version:       BatchVersion(prepareMsg.BatchVersion),
-		MatchedOrders: make(map[Nonce][]*MatchedOrder),
-		BatchTX:       &wire.MsgTx{},
+		Version:        BatchVersion(prepareMsg.BatchVersion),
+		MatchedOrders:  make(map[Nonce][]*MatchedOrder),
+		BatchTX:        &wire.MsgTx{},
+		ClearingPrices: make(map[uint32]FixedRatePremium),
 	}
 
 	// Parse matched orders market by market.
@@ -264,7 +265,9 @@ func ParseRPCBatch(prepareMsg *poolrpc.OrderMatchPrepare) (*Batch,
 			}
 		}
 
-		// TODO(guggero): Add clearing price per lease duration bucket.
+		b.ClearingPrices[leaseDuration] = FixedRatePremium(
+			matchedMarket.ClearingPriceRate,
+		)
 	}
 
 	// Parse account diff.

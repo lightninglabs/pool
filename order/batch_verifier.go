@@ -112,6 +112,10 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 			accounts[acctKeyRaw] = acct
 		}
 
+		// The clearing price is different for each duration.
+		ourOrderDuration := ourOrder.Details().LeaseDuration
+		clearingPrice := batch.ClearingPrices[ourOrderDuration]
+
 		// Now that we know which of our orders were involved in the
 		// match, we can start validating the match and tally up the
 		// account balance, executed units and fee diffs.
@@ -120,7 +124,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 			// Verify order compatibility and fee structure.
 			err = v.validateMatchedOrder(
 				tally, ourOrder, theirOrder, batch.ExecutionFee,
-				batch.ClearingPrice,
+				clearingPrice,
 			)
 			if err != nil {
 				return newMismatchErr(
@@ -150,8 +154,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 		}
 
 		// Verify the clearing price satisfies our order.
-		ourOrderPrice := ourOrder.Details().FixedRate
-		clearingPrice := uint32(batch.ClearingPrice)
+		ourOrderPrice := FixedRatePremium(ourOrder.Details().FixedRate)
 		switch {
 		// Bids should always have a price greater than or equal to the
 		// clearing price.

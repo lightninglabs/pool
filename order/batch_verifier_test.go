@@ -28,6 +28,7 @@ var (
 	execFeeBase           = btcutil.Amount(1_100)
 	execFeeRate           = btcutil.Amount(50)
 	clearingPrice         = FixedRatePremium(5000)
+	leaseDuration         = uint32(1000)
 	stateRecreated        = poolrpc.AccountDiff_OUTPUT_RECREATED
 	stateExtendedOffchain = poolrpc.AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN
 )
@@ -200,7 +201,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				delete(b.MatchedOrders, a.nonce)
-				b1.FixedRate = uint32(b.ClearingPrice) - 1
+				b1.FixedRate = uint32(clearingPrice) - 1
 				return v.Verify(b)
 			},
 		},
@@ -224,7 +225,7 @@ func TestBatchVerifier(t *testing.T) {
 						UnitsUnfulfilled: 4,
 						AcctKey:          acctIDSmall,
 						FixedRate:        b1.FixedRate,
-						LeaseDuration:    1000,
+						LeaseDuration:    leaseDuration,
 					}),
 				}
 				v.(*batchVerifier).orderStore.(*mockStore).orders[ask.nonce] = ask
@@ -347,7 +348,7 @@ func TestBatchVerifier(t *testing.T) {
 				MinUnitsMatch:    1,
 				AcctKey:          acctIDSmall,
 				FixedRate:        uint32(clearingPrice) / 2,
-				LeaseDuration:    1000,
+				LeaseDuration:    leaseDuration,
 			}),
 		}
 		bid1 := &Bid{
@@ -361,7 +362,7 @@ func TestBatchVerifier(t *testing.T) {
 				AcctKey:          acctIDBig,
 				FixedRate:        uint32(clearingPrice) * 2,
 				// 1000 * (200_000 * 5000 / 1_000_000_000) = 1000 sats premium
-				LeaseDuration: 1000,
+				LeaseDuration: leaseDuration,
 			}),
 		}
 		bid2 := &Bid{
@@ -375,7 +376,7 @@ func TestBatchVerifier(t *testing.T) {
 				AcctKey:          acctIDBig,
 				FixedRate:        uint32(clearingPrice),
 				// 2000 * (200_000 * 5000 / 1_000_000_000) = 1000 sats premium
-				LeaseDuration: 1000,
+				LeaseDuration: leaseDuration,
 			}),
 		}
 		batchTx := &wire.MsgTx{
@@ -474,7 +475,9 @@ func TestBatchVerifier(t *testing.T) {
 			ExecutionFee: terms.NewLinearFeeSchedule(
 				execFeeBase, execFeeRate,
 			),
-			ClearingPrice:  clearingPrice,
+			ClearingPrices: map[uint32]FixedRatePremium{
+				1000: clearingPrice,
+			},
 			BatchTX:        batchTx,
 			BatchTxFeeRate: chainfee.FeePerKwFloor,
 		}

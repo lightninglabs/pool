@@ -36,9 +36,11 @@ func newOrderKit(nonce order.Nonce, duration uint32) *order.Kit {
 }
 
 var testSnapshot = &LocalBatchSnapshot{
-	Version:        5,
-	BatchID:        testBatchID,
-	ClearingPrice:  999,
+	Version: order.VersionLeaseDurationBuckets,
+	BatchID: testBatchID,
+	ClearingPrices: map[uint32]order.FixedRatePremium{
+		order.LegacyLeaseDurationBucket: 999,
+	},
 	ExecutionFee:   *terms.NewLinearFeeSchedule(101, 900),
 	BatchTX:        testBatchTx,
 	BatchTxFeeRate: 123456,

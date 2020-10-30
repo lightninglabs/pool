@@ -37,6 +37,10 @@ const (
 	// it will point to a previous version than the server and the mismatch
 	// will be detected during the OrderMatchPrepare call.
 	CurrentVersion = VersionLeaseDurationBuckets
+
+	// LegacyLeaseDurationBucket is the single static duration bucket that
+	// was used for orders before dynamic duration buckets were added.
+	LegacyLeaseDurationBucket uint32 = 2016
 )
 
 // BatchID is a 33-byte point that uniquely identifies this batch. This ID
@@ -167,8 +171,9 @@ type Batch struct {
 	// calculate the execution fee.
 	ExecutionFee terms.FeeSchedule
 
-	// ClearingPrice is the fixed rate the orders were cleared at.
-	ClearingPrice FixedRatePremium
+	// ClearingPrices is a map of the lease duration markets and the fixed
+	// rate the orders were cleared at within that market.
+	ClearingPrices map[uint32]FixedRatePremium
 
 	// BatchTX is the complete batch transaction with all non-witness data
 	// fully populated.
