@@ -607,18 +607,22 @@ Lightning Network.
 The existence of a \emph{channel lease} serves to provide routing nodes with an
 additional monetary incentive (in the form of a premium paid by the lessee of
 the coins) to operate a routing node. As a result, we can model the revenue
-$R_c$ earned by a routing node within the context of a specific channel $C$,
-for a period of $T$ blocks to be: 
+$R_c$ earned by a routing node for a given channel $C$, as a function of the
+lease interval $T$ and channel size $A_{sat}$. Factoring in transaction values
+during the interval (as routing fee revenue is a function of them), we assume
+that transaction values fall in the range of: $[1, A_{sat}]$ satoshis and
+follow a distribution $K$. Given these considerations, we express the revenue
+of a given routing node as:
 
 \begin{equation}
-    R_c(T) = (P_c \cdot T \cdot A_{sat}) + \sum_{i=0}^T (F_c \cdot \prob{X_{t_i(C})})
+    R_c(T, A_{sat}) = (P_c \cdot T \cdot A_{sat}) + \sum_{k=1}^{A_{sat}} \prob{K=k} \int_{i=0}^{T} F_c(k) \cdot X_{t}(k, C) \,dt 
 \end{equation}
 
-where $P_c$ is the current \emph{per-block} interest rate, and $A_{sat}$ is the
-number of coins leased, and $(F_c \cdot \prob{X_{t_i(C})})$ is the
-\emph{expected} routing fee revenue of the channel within that interval, and
-$X_{t_i}(C)$ is a random event representing a payment passing through the
-channel $C$ on the incoming edge during a time-slice $t$ with $T = \Sigma t_i$ \\
+where $P_c$ is the current \emph{per-block} interest rate, $(F_c(k)\cdot
+X_{t}(C))$ is the \emph{expected} routing fee revenue of the channel within
+that interval, for a payment of $k$ satoshis, and $X_{t}(k, C)$ is a function
+describing the random event of a payment of $k$ satoshis passing through the
+channel $C$ on the outgoing edge during a time-slice $t$. \\
 
 We reference an \emph{expectation} for fee revenue, as fees are effectively a
 \emph{speculative} component of the routing revenue of a node. If a channel was
