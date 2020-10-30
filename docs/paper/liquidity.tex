@@ -1668,8 +1668,8 @@ extend the main chain where:
         applying the set of state transition functions, and $U_{A}$ any new
         application-specific UTXOs produced as a result of the state transition
         function. Lifted UTXOs can be consumed fully by the state transitions,
-        therefore |\{\phi_{U_0}, \cdots, \phi_{U_N}\}| \geq 
-        |\{\phi_{U_0}^\prime, \cdots, \phi_{U_N}^\prime\}| must be given.
+        therefore $|\{\phi_{U_0}, \cdots, \phi_{U_N}\}| \geq
+        |\{\phi_{U_0}^\prime, \cdots, \phi_{U_N}^\prime\}|$ must be given.
 \end{itemize}
 
 Once a block has been constructed, the operator of the shadowchain now must
@@ -1915,7 +1915,7 @@ all account scripts within the system, as well as the auctioneer's main
 account. \\
 
 First, we define a helper function for deriving the auctioneer's current key
-A_{pk_i} from the static auctioneer account key A_{pk} parameterized by the
+$A_{pk_i}$ from the static auctioneer account $key A_{pk}$ parameterized by the
 current \texttt{batchID}. As noted above, the \texttt{batchID} serves as both a
 public key within the system as well as a counter. The \texttt{batchID} may be
 expressed as a normal compressed public key, or as an integer $N_{b}$ which
@@ -2210,7 +2210,7 @@ being the \texttt{Liquidity Taker} and Bob being the \texttt{Liquidity Maker}:
 
     \procedure{\texttt{ChannelShimFundChannel}}{
         \textbf{Alice} \> \> \> \textbf{Bob} \\
-        \texttt{leaseInit()<++>} \\
+        \texttt{leaseInit()} \\
         \> \sendmessage{<-}{top=\texttt{OpenChannel($P_b$)}} \> \\
         \> \sendmessage{->}{top=\texttt{AcceptChannel($P_a$)}} \> \\ 
         \> \sendmessage{<-}{top=\texttt{FundingCreated(leasePoint)}} \> \\
