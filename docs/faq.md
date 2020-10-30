@@ -33,11 +33,11 @@ You can choose the chain fee rate for these operations.
 
 ### How will I know if my order was fulfilled?
 
-Watch the logs. Pull the order snapshot locally. Watch your account balance. Pool orders list. 
+Watch the logs. Pull the order snapshot locally. Watch your account balance. Pool orders list.
 
 ### How soon after my order is filled will the seller open a channel to me?
 
-A channel will be opened as soon as the batch transaction has received N confirmations. 
+A channel will be opened as soon as the batch transaction has received N confirmations.
 
 If the seller’s node is offline when the batch clears, \_\_\_\_
 
@@ -47,7 +47,7 @@ No, you cannot choose who you peer with. You will peer with any partner who is a
 
 ### Who earns the routing fees from the channel that is opened with me?
 
-The seller earns the routing fees. You can also earn fees if that new channel is used by a routing node. 
+The seller earns the routing fees. You can also earn fees if that new channel is used by a routing node.
 
 ### Can I specify the maximum fee rate of a peer I’m buying liquidity from?
 
@@ -71,7 +71,7 @@ In the future this node may be removed from the market by market participant sel
 
 ### What happens if the lender force closes a channel before the maturity date?
 
-If the lender force closes they will be banned from the market. This will not be possible in future versions. 
+If the lender force closes they will be banned from the market. This will not be possible in future versions.
 
 ### What is the minimum purchase time for a channel?
 
@@ -139,7 +139,7 @@ This is necessary so that users can recover funds in the event we disappear.
 
 ### What do I do if my account expires?
 
-Currently you will need to close your account and then re-open your account. In the future you will be able to renew your account as part of a batch will be the most cost efficient way of opening an account. 
+Currently you will need to close your account and then re-open your account. In the future you will be able to renew your account as part of a batch will be the most cost efficient way of opening an account.
 
 ## Technical questions
 
@@ -166,9 +166,7 @@ accounts leases
 
 ### Do I need to keep `poold` running the whole time?
 
-To participate in an auction, the `poold` trader daemon needs to be in constant
-communication with the auction server to validate and then sign potential batch
-transactions.
+To participate in an auction, the `poold` trader daemon needs to be in constant communication with the auction server to validate and then sign potential batch transactions.
 
-Once all orders are in a final state (either fully matched or canceled), the
-trader daemon can be safely shut down.
+Once all orders are in a final state \(either fully matched or canceled\), the trader daemon can be safely shut down.
+
