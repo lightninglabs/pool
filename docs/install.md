@@ -29,7 +29,7 @@ To build both the `poold` and `pool` binaries from the source code, at least the
 To download the code, compile and install it, the following commands can then
 be run:
 
-```shell script
+```shell
 $ git clone https://github.com/lightninglabs/pool
 $ cd pool
 $ make install
@@ -47,7 +47,7 @@ later to work. It is recommended to run an
 is also possible but needs to be done **with all sub-server build flags
 enabled**:
 
-```shell script
+```shell
 $ make install tags="signrpc walletrpc chainrpc invoicesrpc"
 ```
 
@@ -57,7 +57,7 @@ If `lnd` is configured with the default values and is running on the same
 machine, `poold` will be able to connect to it automatically and can be started
 by simply running:
 
-```shell script
+```shell
 $ poold
 
 # Or if you want to do everything in the same terminal and run poold in the
@@ -76,7 +76,7 @@ machine where `poold` is running.
 The daemon can then be configured to connect to the remote `lnd` node by using
 the following command line flags:
 
-```shell script
+```shell
 $ poold --lnd.host=<the_remote_host_IP_address>:10009 \
         --lnd.macaroondir=/some/directory/with/lnd/data/macaroons \
         --lnd.tlspath=/some/directory/with/lnd/data/tls.cert

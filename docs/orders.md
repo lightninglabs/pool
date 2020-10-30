@@ -24,7 +24,7 @@ BTC that's been burning a hole in our SD card for the past year. We'll place a
 single order for 10 million satoshis, wanting to receive 0.3% \(30 bps\) over a
 2016 block period \(approximately 2 weeks\):
 
-```shell script
+```shell
 $ pool orders submit ask 10000000 0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732 --interest_rate_percent=0.3 --lease_duration_blocks=2016
 
 -- Order Details --
@@ -80,7 +80,7 @@ and also for authentication purposes.
 
 We can then check out the order we just placed with the following command:
 
-```shell script
+```shell
 $ pool orders list
 
 {
@@ -124,7 +124,7 @@ available.
 
 Command for submitting an ask order:
 
-```shell script
+```shell
 $ pool orders submit ask
 ```
 
@@ -172,7 +172,7 @@ below for more information.
 
 Command for submitting a bid order:
 
-```shell script
+```shell
 $ pool orders submit bid
 ```
 
@@ -236,7 +236,7 @@ possible lease durations are fixed and defined by the auctioneer. The current
 list of possible lease durations can be queried by running the following
 command:
 
-```shell script
+```shell
 $ pool auction leasedurations
 
 {
@@ -266,7 +266,7 @@ The fee is set by the server and can change depending on demand, chain fee
 climate or other operational costs. The current fee can be queried by running
 the following command:
 
-```shell script
+```shell
 $ pool auction fee
 
 {
