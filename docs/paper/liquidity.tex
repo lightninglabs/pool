@@ -158,13 +158,13 @@ efficiently allocate is inbound channel bandwidth.
 
 \textbf{LN Bootstrapping as Resource Allocation Problem}. In the absence of a
 proper venue, those that need inbound capital to operate their Lightning
-services are forced to solicit capital on various chat groups, forums, or
+services often turn to soliciting capital on various chat groups, forums, or
 public venues like Twitter. On the other side, those seeking to deploy capital
 in order to facilitate network operation and gain routing fees must guess as to
 exactly where their capital is most demanded. As node operators may not
 necessarily know where their capital is most demanded, they risk opening
-channels to locations where they aren't actually need, leading to poor resource
-utilization and capital inefficiency. It's as if node operators are
+channels to locations where they aren't actually needed, leading to poor
+resource utilization and capital inefficiency. It's as if node operators are
 speculatively building roads that no one will use (why isn't my node
 forwarding?), and those seeking to receive aren't able to flag their service as
 an attractive destination to be connected to internal network "highways".
@@ -191,7 +191,7 @@ analogous to the creation of a new virtual "road" within the LN connecting two
 destinations. Critically, when one purchases an LCL, the period of time those
 funds must be committed is enforced on-chain using Bitcoin Script. As a result,
 buyers of inbound channel bandwidth can be sure the capital will be committed
-for a set period of time.  The auction itself contains several sub-auctions for
+for a set period of time. The auction itself contains several sub-auctions for
 the exchange of particular duration intervals expressed in blocks (similar to
 the various U.S Treasury auctions \cite{usTreasury}). A non-trusted auctioneer
 facilities the marketplace by accepting sealed-bid orders, clearing the market
@@ -203,7 +203,7 @@ participants on the network to effectively exchange pricing signals to
 determine exactly \emph{where} in the network capital should be allocated.
 
 
-\textbf{Shadowchains as an Application Framework}. Lightning Pool is the first
+\textbf{Shadowchains as an Application Framework}.  Lightning Pool is the first
 application built on top of Bitcoin that utilizes the \emph{Shadowchain}
 paradigm to construct an application-specific overlay system on top of existing
 Bitcoin unspent transaction outputs (UTXOs). A user joins a shadowchain by
@@ -266,7 +266,7 @@ not needed?
 \section{Background}
 
 In this section, we aim to introduce some necessary background that will be
-built upon in later chapters to construct our solution. First, we'll describe
+built upon in later sections to construct our solution. First, we'll describe
 multi-hop payment channels and the Lightning Network as deployed today. Next,
 we'll explore the nature of the inbound bandwidth bootstrapping problem the
 Lightning Network faces today. Along the way, we'll explain the dynamics of
@@ -347,19 +347,18 @@ occurs as the time out clauses of \emph{both} the incoming and outgoing hash
 locks have expired. \\
 
 \begin{center}
-\textbf{Routing Nodes as Profit Seeking Capital Allocators}
+\textbf{Routing Nodes as Profit-Seeking Capital Allocators}
 \end{center}
 
-Entities on the Lightning Network that exist primarily to collect fees
-for successfully forwarding payments are
-referred to as \emph{routing nodes}. A routing node commits capital to the
-network within payment channels in order to be able to facilitate
-payments in the network. (move much of that intro about the nodes here
-insead?). As routing nodes incur an opportunity cost by committing capital
-to the network, they request a fee $F$ upon
+Entities on the Lightning Network that exist primarily to collect fees for
+successfully forwarding payments are referred to as \emph{routing nodes}. A
+routing node commits capital to the network within payment channels in order to
+be able to facilitate payments in the network. (move much of that intro about
+the nodes here instead?). As routing nodes incur an opportunity cost by
+committing capital to the network, they specify a fee $F$ to be paid upon
 completion of a successful payment forward. This fee $F = F_{base} +
 F_{rate}*A_{sat}$ is comprised of two parts: a proportional amount (a rate) and
-a fixed amount, which are both expressed in \emph{milli satoshis} which are
+a fixed amount, which are both expressed in \emph{millisatoshis}, which are
 $1/1000$ of the base satoshi unit.
 
  Note that routing nodes are not compensated on an ongoing basis, and are not
@@ -374,12 +373,13 @@ $1/1000$ of the base satoshi unit.
  today's network participants to exchange these key demand signals lies at the
  crux of the bootstrapping problems of the Lightning Network.
 
-\subsection{Boostrapping Problems in the Lightning Network}
+\subsection{Liquidity Boostrapping Problems in the Lightning Network}
 
 In this section, building on the background provided above, we aim to detail
-the various bootstrapping problems that exist in the Lightning Network today.
-These problems will serve motivation for our solution, the Channel Lease
-Marketplace, and a specific instantiation of such a construct: Lightning Pool.
+the various liquidity bootstrapping problems that exist in the Lightning
+Network today.  These problems will serve motivation for our solution, the
+Channel Lease Marketplace, and a specific instantiation of such a construct:
+Lightning Pool.
 
 
 \subsection{New Routing Node Boostrapping}
@@ -399,41 +399,41 @@ commitment requirement is commonly cited as a major barrier to Lightning
 Network adoption, as well as why large "hubs" are inherently
 economically inefficient.
 
-A routing node operator faces two key questions when attempting to join the network in a
-productive manner, while also attempting to optimize for \emph{capital}
-efficiency:
+A routing node operator faces two key questions when attempting to join the
+network in a productive manner, while also attempting to optimize for
+\emph{capital} efficiency:
 
 \begin{enumerate}
-        \item \emph{Where} should I open channels (thereby committing
-            outbound capital) within the network in order to \emph{maximize}
-            the velocity of transactions through my channels, along with the corresponding fee
-            revenue $F_r$?
+        \item \emph{Where} should I open channels (thereby committing outbound
+            capital) within the network in order to \emph{maximize} the
+            velocity of transactions through my channels, along with the
+            corresponding fee revenue $F_r$?
 
-        \item \emph{How} can I attract \emph{other} routing node operators to commit
-            capital to my node such that I can actually forward payments to earn
-            \emph{any} revenue $F_r$?
+        \item \emph{How} can I attract \emph{other} routing node operators to
+            commit capital to my node such that I can actually forward payments
+            to earn \emph{any} revenue $F_r$?
 \end{enumerate}
 
 We argue that the above two questions, optimizing for capital efficiency and
 velocity of committed channels, can only properly be addressed by the
-\emph{existence} of a \emph{marketplace} that allows agents (routing node operators) to
-communicate their preferences using demand signals. Intuitively, a channel open
-to an undesirable location (possibly over-served) will have low transaction
-velocity $C_{v}$, and result in overall lower total fee revenue $F_r$. In
-order to maximize both $C_v$ and $F_r$, a routing node should only open
-channels to where they're \emph{most demanded}. If an agent is willing to pay
-up to $P_{premium}$ Bitcoin for inbound bandwidth, then they must gain
-more utility than the paid premium $P_{premium}$, as otherwise, such a
-transaction would not be economically rational. Thus, the existence of a
-marketplace that allows routing nodes to efficiently commit their outbound
-capital, as well as \emph{purchase} new inbound capital is a key component to
-solving the boostrapping problem for routing nodes.
+\emph{existence} of a \emph{marketplace} that allows agents (routing node
+operators) to communicate their preferences using demand signals. Intuitively,
+a channel open to an undesirable location (possibly over-served) will have low
+transaction velocity $C_{v}$, and result in overall lower total fee revenue
+$F_r$. In order to maximize both $C_v$ and $F_r$, a routing node should only
+open channels to where they're \emph{most demanded}. If an agent is willing to
+pay up to $P_{premium}$ Bitcoin for inbound bandwidth, then they must gain more
+utility than the paid premium $P_{premium}$, as otherwise, such a transaction
+would not be economically rational. Thus, the existence of a marketplace that
+allows routing nodes to efficiently commit their outbound capital, as well as
+\emph{purchase} new inbound capital is a key component to solving the
+boostrapping problem for routing nodes.
 
 
 \subsection{New Service Boostrapping}
 
-If routing nodes are the backbone or highway of the Lightning Network, then
-so called Lightning Services, are the primary \emph{destinations} for a given
+If routing nodes are the backbone or highway of the Lightning Network, then so
+called Lightning Services are the primary \emph{destinations} for a given
 payment. For simplicity, we assume that a given Lightning Service is primarily
 a payment \emph{sink}, in that it's primarily \emph{receiving} over the LN. Eventually,
 it may become common for a service to be balanced in terms of sending
@@ -454,7 +454,8 @@ operative question a service operator needs to ask when attempting to join the
 network is:
 
 \begin{itemize}
-        \item How can I solicit enough inbound bandwidth to be able to receive up to $S_b$ Bitcoin?
+        \item How can I solicit enough inbound bandwidth to be able to receive
+            up to $S_b$ Bitcoin?
 \end{itemize}
 
 
@@ -500,13 +501,13 @@ problem statement:
             will be committed for \emph{at least} time $T_{blocks}$?
 \end{itemize}
 
-Summarizing, in addition to the existence of a marketplace for buying and selling
-capital commitment obligations, a would-be buyer requires some sort of
-\emph{rating-system} to reduce information asymmetry (distinguish the good
+Summarizing, in addition to the existence of a marketplace for buying and
+selling capital commitment obligations, a would-be buyer requires some sort of
+\emph{rating system} to reduce information asymmetry (distinguish the good
 nodes from the lemons), and also requires that any capital committed must be
 committed for a period of $T_{blocks}$. These new requirements argue for the
-existence of a Node Rating agency, as well as somewhere to ensure capital will
-be committed for a set period of time in a trust-minimized manner.
+existence of a Node Rating agency, as well as a facility that ensures that
+capital will be committed for a set period of time in a trust-minimized manner.
 
 
 \subsection{End User Boostrapping}
@@ -542,8 +543,9 @@ With this background, we can phrase the end user boostrapping problem as
 follows:
 
 \begin{itemize}
-        \item How can a new user join the Lighting Network in a manner that allows them to
-            both send and receive to relevant destinations in the network?
+        \item How can a new user join the Lighting Network in a manner that
+            allows them to both send and receive to relevant destinations in
+            the network?
 \end{itemize}
 
 
