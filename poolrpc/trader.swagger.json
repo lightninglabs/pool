@@ -307,6 +307,29 @@
         ]
       }
     },
+    "/v1/pool/batch/next": {
+      "get": {
+        "summary": "pool: `auction nextbatchinfo`\nNextBatchInfo returns information about the next batch the auctioneer will\nperform.",
+        "operationId": "NextBatchInfo",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcNextBatchInfoResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/pool/batch/snapshot": {
       "get": {
         "summary": "pool: `auction snapshot`\nBatchSnapshot returns the snapshot of a past batch identified by its ID.",
@@ -750,6 +773,11 @@
           "type": "string",
           "format": "byte",
           "description": "The batch transaction including all witness data."
+        },
+        "batch_tx_fee_rate_sat_per_kw": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The fee rate, in satoshis per kiloweight, of the batch transaction."
         }
       }
     },
@@ -1165,6 +1193,26 @@
           "type": "integer",
           "format": "int64",
           "description": "The total number of units that were matched."
+        }
+      }
+    },
+    "poolrpcNextBatchInfoResponse": {
+      "type": "object",
+      "properties": {
+        "conf_target": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The confirmation target the auctioneer will use for fee estimation of the\nnext batch."
+        },
+        "fee_rate_sat_per_kw": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The fee rate, in satoshis per kiloweight, estimated by the auctioneer to use\nfor the next batch."
+        },
+        "clear_timestamp": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The absolute unix timestamp in seconds at which the auctioneer will attempt\nto clear the next batch."
         }
       }
     },

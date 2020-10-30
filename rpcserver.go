@@ -1913,6 +1913,24 @@ func (s *rpcServer) LeaseDurations(ctx context.Context,
 	}, nil
 }
 
+// NextBatchInfo returns information about the next batch the auctioneer
+// will perform.
+func (s *rpcServer) NextBatchInfo(ctx context.Context,
+	_ *poolrpc.NextBatchInfoRequest) (*poolrpc.NextBatchInfoResponse, error) {
+
+	terms, err := s.auctioneer.Terms(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
+			err)
+	}
+
+	return &poolrpc.NextBatchInfoResponse{
+		ConfTarget:      terms.NextBatchConfTarget,
+		FeeRateSatPerKw: uint64(terms.NextBatchFeeRate),
+		ClearTimestamp:  uint64(terms.NextBatchClear.Unix()),
+	}, nil
+}
+
 // NodeRatings returns rating information about the target node. This can be
 // used to query the rating of your own node, or other nodes to determine which
 // asks/bids might be filled based on a target min node tier.
