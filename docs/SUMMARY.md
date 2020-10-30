@@ -1,6 +1,7 @@
 # Table of contents
 
 * [Introduction](README.md)
+* [Lightning Pool: A Non-Custodial Channel Lease Marketplace](lightning_pool.md)
 * [Overview](overview.md)
 * [Installation](install.md)
 * [Accounts](accounts.md)
