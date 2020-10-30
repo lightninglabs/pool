@@ -428,7 +428,7 @@ message SubscribeSuccess {
     bytes trader_key = 1;
 }
 
-message OrderMatchPrepare {
+message MatchedMarket {
     /*
     Maps a user's own order_nonce to the opposite order type they were matched
     with. The order_nonce is a 32 byte hex encoded string because bytes is not
@@ -441,40 +441,48 @@ message OrderMatchPrepare {
     batch.
     */
     uint32 clearing_price_rate = 2;
+}
+
+message OrderMatchPrepare {
+    /*
+    Maps the distinct lease duration markets to the orders that were matched
+    within and the discovered market clearing price.
+    */
+    map<uint32, MatchedMarket> matched_markets = 1;
 
     /*
     A list of the user's own accounts that are being spent by the matched
     orders. The list contains the differences that would be applied by the
     server when executing the orders.
     */
-    repeated AccountDiff charged_accounts = 3;
+    repeated AccountDiff charged_accounts = 2;
 
     /*
     The fee parameters used to calculate the execution fees.
     */
-    ExecutionFee execution_fee = 4;
+    ExecutionFee execution_fee = 3;
 
     /*
     The batch transaction with all non-witness data.
     */
-    bytes batch_transaction = 5;
+    bytes batch_transaction = 4;
 
     /*
     Fee rate of the batch transaction, expressed in satoshis per 1000 weight
     units (sat/kW).
     */
-    uint64 fee_rate_sat_per_kw = 6;
+    uint64 fee_rate_sat_per_kw = 5;
 
     /*
     Fee rebate in satoshis, offered if another batch participant wants to pay
     more fees for a faster confirmation.
     */
-    uint64 fee_rebate_sat = 7;
+    uint64 fee_rebate_sat = 6;
 
     /*
     The 32 byte unique identifier of this batch.
     */
-    bytes batch_id = 8;
+    bytes batch_id = 7;
 
     /*
     The batch verification protocol version the server is using. Clients that
@@ -482,7 +490,7 @@ message OrderMatchPrepare {
     an empty list of orders so the batch can continue. The user should then be
     informed that a software update is required.
     */
-    uint32 batch_version = 9;
+    uint32 batch_version = 8;
 }
 
 message OrderMatchSignBegin {
@@ -1024,25 +1032,22 @@ message RelevantBatch {
     repeated AccountDiff charged_accounts = 3;
 
     /*
-    The set of orders that were matched against the orders belonging to the
-    requested accounts.
+    Maps the distinct lease duration markets to the orders that were matched
+    within and the discovered market clearing price.
     */
-    map<string, MatchedOrder> matched_orders = 4;
-
-    // The uniform clearing price rate in parts per billion of the batch.
-    uint32 clearing_price_rate = 5;
+    map<uint32, MatchedMarket> matched_markets = 4;
 
     // The fee parameters used to calculate the execution fees.
-    ExecutionFee execution_fee = 6;
+    ExecutionFee execution_fee = 5;
 
     // The batch transaction including all witness data.
-    bytes transaction = 7;
+    bytes transaction = 6;
 
     /*
     Fee rate of the batch transaction, expressed in satoshis per 1000 weight
     units (sat/kW).
     */
-    uint64 fee_rate_sat_per_kw = 8;
+    uint64 fee_rate_sat_per_kw = 7;
 }
 
 message ExecutionFee {
@@ -1122,6 +1127,17 @@ message BatchSnapshotRequest {
     bytes batch_id = 1;
 }
 
+message MatchedMarketSnapshot {
+    // The set of all orders matched in the batch.
+    repeated MatchedOrderSnapshot matched_orders = 1;
+
+    /*
+    The uniform clearing price rate in parts per billion that was used for this
+    batch.
+    */
+    uint32 clearing_price_rate = 2;
+}
+
 message BatchSnapshotResponse {
     // The version of the batch.
     uint32 version = 1;
@@ -1132,14 +1148,14 @@ message BatchSnapshotResponse {
     // The unique identifier of the prior batch.
     bytes prev_batch_id = 3;
 
-    // The uniform clearing price rate in parts per billion of the batch.
-    uint32 clearing_price_rate = 4;
-
-    // The set of all orders matched in the batch.
-    repeated MatchedOrderSnapshot matched_orders = 5;
+    /*
+    Maps the distinct lease duration markets to the orders that were matched
+    within and the discovered market clearing price.
+    */
+    map<uint32, MatchedMarketSnapshot> matched_markets = 4;
 
     // The txid of the batch transaction.
-    string batch_tx_id = 7;
+    string batch_tx_id = 5;
 
     // The batch transaction including all witness data.
     bytes batch_tx = 6;
