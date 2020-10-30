@@ -133,7 +133,7 @@ func (m *fundingBaseClientMock) OpenChannel(ctx context.Context,
 
 	op, _ := m.lightningClient.OpenChannel(
 		ctx, node, btcutil.Amount(req.LocalFundingAmount),
-		btcutil.Amount(req.PushSat),
+		btcutil.Amount(req.PushSat), false,
 	)
 
 	stream := &openChannelStream{

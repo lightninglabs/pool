@@ -346,7 +346,7 @@ func (m *MockLightning) DecodePaymentRequest(context.Context,
 }
 
 func (m *MockLightning) OpenChannel(_ context.Context, peer route.Vertex,
-	localSat, pushSat btcutil.Amount) (*wire.OutPoint, error) {
+	localSat, pushSat btcutil.Amount, _ bool) (*wire.OutPoint, error) {
 
 	var randomHash chainhash.Hash
 	if _, err := rand.Read(randomHash[:]); err != nil {
@@ -410,4 +410,10 @@ func (m *MockLightning) UpdateChanPolicy(ctx context.Context,
 	req lndclient.PolicyUpdateRequest, chanPoint *wire.OutPoint) error {
 
 	return nil
+}
+
+func (m *MockLightning) SubscribeChannelEvents(ctx context.Context) (
+	<-chan *lndclient.ChannelEventUpdate, <-chan error, error) {
+
+	return nil, nil, nil
 }
