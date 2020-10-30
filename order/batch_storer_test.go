@@ -101,7 +101,7 @@ func TestBatchStorer(t *testing.T) {
 	}
 	batch := &Batch{
 		ID:             batchID,
-		Version:        DefaultVersion,
+		Version:        VersionLeaseDurationBuckets,
 		MatchedOrders:  matchedOrders,
 		AccountDiffs:   accountDiffs,
 		BatchTX:        batchTx,

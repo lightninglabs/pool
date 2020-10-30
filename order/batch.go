@@ -26,12 +26,17 @@ const (
 	// verification protocol.
 	DefaultVersion BatchVersion = 0
 
+	// VersionLeaseDurationBuckets is the version that added distinct lease
+	// duration buckets for order matches. This is a breaking change and
+	// will require clients to update once the server uses this version.
+	VersionLeaseDurationBuckets BatchVersion = 1
+
 	// CurrentVersion must point to the latest implemented version of the
 	// batch verification protocol. Both server and client should always
 	// refer to this constant. If a client's binary is not updated in time
 	// it will point to a previous version than the server and the mismatch
 	// will be detected during the OrderMatchPrepare call.
-	CurrentVersion = DefaultVersion
+	CurrentVersion = VersionLeaseDurationBuckets
 )
 
 // BatchID is a 33-byte point that uniquely identifies this batch. This ID

@@ -468,7 +468,7 @@ func TestBatchVerifier(t *testing.T) {
 		}
 		batch := &Batch{
 			ID:            batchID,
-			Version:       DefaultVersion,
+			Version:       VersionLeaseDurationBuckets,
 			MatchedOrders: matchedOrders,
 			AccountDiffs:  accountDiffs,
 			ExecutionFee: terms.NewLinearFeeSchedule(
