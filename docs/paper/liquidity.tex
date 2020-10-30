@@ -821,14 +821,14 @@ committed in a \emph{single} atomic blockchain transaction.
 We assume the existence of a \emph{non-trusted} auctioneer $\Lambda$ that
 publishes a master auctioneer key $A_{auction}$ ahead of time. The auction
 itself is uniquely identified by $A_{auction}$ from the perspective of the
-system due to the \emph{Shadow Chain} qualities of the system. The auctioneer
-implements a non-custodial auction via \texttt{Marketplace Accounts} which use
-a new unique key derived from $A_{auction}$ as the second public key in the
-2-of-2 multi-sig. The auctioneer accepts and validates orders off-chain, aides
-an agent in modifying their account before expiration, proposes a valid batch
-to each of the agents matched in an instance of the auction, and produces a
-batch execution transaction which modifies accounts appropriately, and creates
-a series of corresponding channel leases.
+system due to its \emph{Shadow Chain} qualities. The auctioneer implements a
+non-custodial auction via \texttt{Marketplace Accounts} which use a new unique
+key derived from $A_{auction}$ as the second public key in the 2-of-2
+multi-sig. The auctioneer accepts and validates orders off-chain, aides an
+agent in modifying their account before expiration, proposes a valid batch to
+each of the agents matched in an instance of the auction, and produces a batch
+execution transaction which modifies accounts appropriately, and creates a
+series of corresponding channel leases.
 
 \begin{center}
     \textbf{Account Creation}
@@ -889,8 +889,8 @@ of a valid clearing solution, or a more "argument" describing one.  Valid
 batches are then bundled into a single \texttt{Batch Execution
 Transaction} that updates all involved accounts, and creates any channel leases
 bought/sold in the batch. After a period of time $\Upsilon$ has elapsed, the
-market is restarted with any new orders and account being considered for market
-clearing.
+market is restarted with any new orders and accounts being considered for
+market clearing.
 
 \subsection{Lightning Channel Leases}
 \begin{center}
@@ -904,7 +904,7 @@ We begin by introducing the concept of a \texttt{Liquidity Taker}:
 \begin{definition}{(Liquidity Taker).} % call Lease instead? also define CLM earlier in the process? 
     A Liquidity Taker is an agent in a Channel Liquidity Market seeking to
     \emph{obtain} new \emph{inbound} channel liquidity of size $A_{sat}$ for a
-    period of $T_{block}$ Bitcoin blocks. 
+    period of at least $T_{block}$ Bitcoin blocks. 
 \end{definition}
 
 A taker is prepared to either boostrap the inbound liquidity with their own
@@ -920,7 +920,7 @@ A natural companion to the Liquidity Taker agent within a \texttt{CLM} is the
 \theoremstyle{definition}
 \begin{definition}{(Liquidity Maker).}
 
-A Liquidity Taker is an agent in a Channel Liquidity Market seeking to earn
+A Liquidity Maker is an agent in a Channel Liquidity Market seeking to earn
 \emph{yield} by deploying up to $A_{sat}$ Bitcoin into the Lightning Network
 for up to a period of $T_{block}$ Bitcoin blocks, earning a profit $\alpha$. 
 
@@ -955,7 +955,7 @@ low-velocity section of the sub-graph.
 \end{theorem}
 
 Intuitively, if each payment flow sourced at an incoming channel $C_i$ and sunk
-at at outgoing channel $C_o$ pays and equal forwarding fee per flow, then for a
+at an outgoing channel $C_o$ pays an equal forwarding fee per flow, then for a
 fixed unit of time, a higher velocity channel will result in higher total
 revenue in a time slice. 
 
@@ -963,7 +963,7 @@ The role of Channel Liquidity Markets in a payment channel network is to reduce
 information asymmetry by allowing agents to signal their preferences for lifted
 coins vs non-lifted coins. The existence of \emph{venues} where these markets
 can be carried out benefits the wider network by allowing agents to determine
-where their liquidity if most demanded on the network. % remove?
+where their liquidity is most demanded on the network. % remove?
 
 \begin{center}
 \textbf{Channel Leases}
@@ -990,9 +990,9 @@ Lightning Channel Lease:
 Note that the premium $R_{P}$ as referenced above is parametrized in using the
 \emph{lease duration} $D_{blocks}$: $R_{P}(D_{blocks}) = r_i * D_{blocks}$ as
 we deal in simple, rather than compounding, interest.  The duration of the
-contract $D_{blocks}$ is of great interest as similar to U.S Treasury auctions,
-a \emph{yield-curve} (cite) can be constructed based on the matched contents of
-a given auction iteration. % mention t-bills
+contract $D_{blocks}$ is of great interest, as similar to U.S Treasury
+auctions, a \emph{yield-curve} (cite) can be constructed based on the matched
+contents of a given auction iteration. % mention t-bills
 
 
 \subsection{Non-Custodial Auction Accounts}
@@ -1039,7 +1039,7 @@ properties including:
 
     \item \textbf{Deterministic batch execution construction}: As we'll see in
         later sections, the existence of a fixed account for each agent
-        simplified the clearing and execution process within the auction
+        simplifies the clearing and execution process within the auction
         lifecycle. 
 
 \end{itemize}
@@ -1083,11 +1083,11 @@ We define an \texttt{Order} within the context of a \texttt{CLM} as follows:
         \mathbb{Z}_{p}$.
 
     \item $V_{ver}$ is the \emph{version} of this order. As we'll see below,
-        the version used as an upgrade mechanism, and is needed in order to
+        the version is used as an upgrade mechanism, and is needed in order to
         parse any newly added fields, as well as compute the digest required to
         check the authentication tag attached to an order.
 
-    \item $P_{acct}$ is the public key that uniquely identifies this account. 
+    \item $P_{acct}$ is the public key that uniquely identifies this account.
 
     \item The set of base order details is: \\ $\Delta_{base} = \{
         \alpha_{rate}, A_{sat}, M_{pub}, L_{pub}, A_{addr}, C_{type},
@@ -1104,7 +1104,7 @@ We define an \texttt{Order} within the context of a \texttt{CLM} as follows:
             the system.
 
         \item $M_{pub}$ is the multi-sig public key to be used when creating
-            the funding output (cite) of the tranction. % abstract out more?
+            the funding output (cite) of the channel. % abstract out more?
 
         \item $L_{pub}$ is the identity public key (cite) of the Lightning
             Node that wishes to buy/sell this channel.
@@ -1118,12 +1118,12 @@ We define an \texttt{Order} within the context of a \texttt{CLM} as follows:
 
         \item $D_{blocks}$ is the target \emph{lease duration} of the contract.
 
-        \item $F_{chain_{max}}$ is the max chain fee expressed in $sat/byte$ that
-            the own of said order is willing to pay within a batch.
+        \item $F_{chain_{max}}$ is the max chain fee expressed in $sat/vbyte$
+            that the owner of said order is willing to pay within a batch.
 
     \end{itemize}
 
-    \item The set of \emph{auxillary} details is implcitily defined by the
+    \item The set of \emph{auxiliary} details is implicitly defined by the
         order version $V_{ver}$.
 
     \item $T_{auth}$ is an authentication tag that allows the auctioneer, and
@@ -1172,7 +1172,7 @@ to buy/sell Lightning Channel Leases in a non-custodial manner.
 
 \subsubsection{Auction Specification}
 
-In this section, we'll now specify the behavior and requirements of an using abstract
+We'll now specify the behavior and requirements of an using abstract
 \texttt{Channel Liquidity Marketplace} instance. We define the expected
 behavior and the client-facing interface of a \texttt{CLM} instance. A
 \texttt{CLM} is a tuple of polynomial-time algorithms divided into five
@@ -1201,7 +1201,7 @@ $P_{auction_s}, \Psi_{A}$). Denoting the security parameter as $\lambda$, the
     \texttt{SystemInit} algorithm takes as input the security parameter, and
     the batch interval $\Upsilon_{min}$ expressed in minutes, and outputs a
     public ($P_{auction_p}$) and private ($P_{auction_s}$) key pair for the
-    auctioneer. The auctioneer's public key will be used as an parameter in
+    auctioneer. The auctioneer's public key will be used as a parameter in
     algorithms related to account creation, modification, and batch execution.
     This algorithm also returns $\Psi_{A}$, which is a special account owned by
     the auctioneer that will be used to collect fees, and during batch
@@ -1212,8 +1212,8 @@ $P_{auction_s}, \Psi_{A}$). Denoting the security parameter as $\lambda$, the
 \end{center}
 
 In order to create an account, agents will need to interact with the auctioneer
-itself. After account creation an account can freely be modified (close,
-deposit, withdraw, etc) if the account isn't part of an active batch: \\
+itself. After account creation, an account can be modified freely (close,
+deposit, withdraw, etc.) if the account isn't part of an active batch: \\
 
 \texttt{NewAccount($1^{\lambda}, P_{auction_p}$)} $\rightarrow$ $\Psi$. The
 \texttt{NewAccount} algorithm takes as input our security parameter, and the
@@ -1224,7 +1224,7 @@ marketplace. We require that all resulting accounts within the marketplace be
 \texttt{ModifyAccount($\Psi, P_{auction_p}$)} $\rightarrow$ ($b, \Psi^\prime$).
 The \texttt{ModifyAccount} algorithm takes an existing valid account $\Psi$ and
 the auctioneer's public key and performs an account modification. The algorithm
-returns $b=1$ if the modification was successfully, and $b=0$ otherwise. An
+returns $b=1$ if the modification was successful, and $b=0$ otherwise. An
 account modification may fail if the target account is already part of a
 pending batch. An account modification can either:
 \begin{itemize}
@@ -1271,9 +1271,9 @@ algorithms: \\
 $\Phi_b = \{(\Theta_{b_0}, \Theta_{a_0}), \cdots, (\Theta_{b_n}, \Theta_{a_n})\}$. The
 \texttt{MatchMake} algorithm takes as input the set of valid orders submitted
 during the past batch interval and outputs a series of tuples which reflect
-properly matched orders matched orders. $\Theta_a$ represents an order whose
-$O_{type} = \texttt{Ask}$, while $\Theta_b$ represents an order whose $O_{type}
-= \texttt{Bid}$. Note that since we allow \emph{partial} matches, a given order
+properly matched orders. $\Theta_a$ represents an order with $O_{type} =
+\texttt{Ask}$, while $\Theta_b$ represents an order with $O_{type} =
+\texttt{Bid}$. Note that since we allow \emph{partial} matches, a given order
 may appear multiple times in the final match set. We require that a valid
 implementation be able to perform proper \emph{multi-attribute} (cite) matching
 due to the existence of the $\Delta_{aux}$ portion of an order's structure. \\
@@ -1286,9 +1286,8 @@ due to the existence of the $\Delta_{aux}$ portion of an order's structure. \\
 \texttt{MatchMake} algorithm and returns the \emph{market clearing price} of
 the prior batch. The precise market clearing price algorithm is left as a free
 parameter, with algorithms such as first-rejected-bid (cite) or
-last-accepted-bid (cite) likely being used. Utilizing of a single market
-clearing price is intended to promote fairness (cite) (all traders pay the same
-price!).  \\
+last-accepted-bid (cite) likely being used. Utilizing a single market clearing
+price is intended to promote fairness (cite) (all traders pay the same price!). \\
 
 % give example of FRB and/or LAB here? 
 
@@ -1298,7 +1297,7 @@ price!).  \\
 $\rightarrow$ $(\Psi_{A}^\prime, \{\Gamma_0, \dots, \Gamma_n\},
 \{\Psi_{0}^\prime, \dots, \Psi_{n}^\prime\})$. The \texttt{ClearMarket}
 algorithm takes as input a prior set of matched orders within a batch, the
-auctioneer's account, the set of accounts involved in the bach, and the market
+auctioneer's account, the set of accounts involved in the batch, and the market
 clearing price of a given batch and outputs: a set of channel leases to be
 created by a batch and a set of updated accounts which represents the state of
 the involved accounts post batch as well as an updated version of the
@@ -1326,15 +1325,15 @@ can now move on to \emph{executing} the resulting batch. We use the following
 algorithms to do so:  \\ 
 
 \texttt{ConstructBatch($\Delta_i$)} $\rightarrow$ $B_{t_i}$. The
-\texttt{ConstructBatch} algorithm takes a valid market clearing (which can be
-seen as a delta on the auction state) and returns a valid transaction, which
-\emph{atomically} executes the given batch on the blockchain. \\
+\texttt{ConstructBatch} algorithm takes a valid market clearing, which can be
+seen as a delta on the auction state, and returns a valid transaction
+\emph{atomically} executing the given batch on the blockchain. \\
 
 \texttt{ExecuteBatch($B_{t_i}$)} $\rightarrow$ $b=$. The \texttt{ExecuteBatch}
-algorithm takes a fully valid batch and attempts to commit it, by confirming
-the transaction in the target base blockchain. Once the batch has been
-confirmed, all operations contained within a batch are considered executed, and
-can be used as inputs to additional iterations of the auction life cycle.
+algorithm takes a fully valid batch and attempts to commit it by confirming the
+transaction in the target base blockchain. Once the batch has been confirmed,
+all operations contained within a batch are considered executed, and can be
+used as inputs to additional iterations of the auction life cycle.
 
 % have it return the batch ID? batch ID not shown any where there?
 
@@ -1370,25 +1369,24 @@ In this section, we present the concept of a \texttt{Shadowchain}, a
 non-custodial application overlay framework that we'll use to construct a
 concrete instantiation of a \texttt{CLM}. We note that shadowchains may also be
 of independent interest, as they're a novel way to layer more complex
-interactions on top of the base Bitcoin blockchain. We note that shadowchains
-as we present them can be implemented on the base Bitcoin blockchain today
-without any additional changes or enhancements. However, further extensions to
-Bticoin such as non-interactive signature aggregation (cite) and covenants
-(cite) can serve to dramatically increase the scalability traits of a
-shadowchain.
+interactions on top of the base Bitcoin blockchain. Shadowchains as we present
+them can be implemented on the base Bitcoin blockchain today without any
+additional changes or enhancements. However, further extensions to Bitcoin such
+as non-interactive signature aggregation (cite) and covenants (cite) can serve
+to dramatically increase the scalability traits of a shadowchain.
 
 \subsection{High-Level Description}
 
 First, we provide a high-level description of the shadowchain application
-framework. 
+framework.
 
 \textbf{The Shadowchain Usecase}. A shadowchain can be used to implement
 non-custodial smart contract systems on top of the base Bitcoin blockchain.
-Typically one would opt for a shadowchain if the complexity of the state
-transition logic of the smart counteract system cannot be fully expressed using
-the base Bitcoin Script.  Shadowchains allow an application designer to use the
-Bitcoin blockchain for what it's best for: censorship resistant settlement,
-pushing the more complex portions of the application (state, logic, etc)
+Typically, one would opt for a shadowchain if the complexity of the state
+transition logic of the smart contract system cannot be fully expressed using
+the base Bitcoin Script. Shadowchains allow an application designer to use the
+Bitcoin blockchain what it's best for: censorship resistant settlement and
+pushing the more complex portions of the application (state, logic, etc.)
 \emph{off-chain}.
 
 \textbf{Shadowchain Roles \& Lifted UTXOs}. A shadowchain has two primary
@@ -1398,12 +1396,12 @@ initialization parameters, and upgrade mechanisms. A user is able to join a
 shadowchain by "lifting" their UTXOs \emph{into} the higher-level shadowchain.
 The process of lifting (defined further below) entails the user placing funds
 within a time-lock released multi-sig output between itself and the shadowchain
-orchestrator. 
+orchestrator.
 
 \textbf{Shadowchain Operation}. The shadowchain orchestrator accepts
-transaction data from users, then periodically proposes a new \emph{shadowchain
+transaction data from users and periodically proposes a new \emph{shadowchain
 block}. A shadowchain block takes as input the set of \texttt{Lifted UTXO}s
-which accepted the latest block proposals, and produces a set of \emph{new}
+that accepted the latest block proposals, and produces a set of \emph{new}
 UTXOs, which are the end state after the state transition function has been
 evaluated. A shadowchain is even permitted to use \emph{multiple} distinct state
 transition functions. As the funds of an end user cannot move without both
@@ -1411,9 +1409,8 @@ multi-sig signatures, users are able to fully validate (possibly using
 techniques such as zero knowledge proofs (cite shafi)) that the
 resulting UTXO state was properly derived from the known state transition
 function.  Note that due to this structure complex "exit-games", or fraud
-proofs are not required as as a user simply won't sign off on a fraudulent
-state, and a user's UTXO is always manifested (in a base form) on the main
-blockchain.
+proofs are not required as a user simply won't sign off on a fraudulent state,
+and a user's UTXO is always manifested (in its base form) on the main blockchain.
 
 \textbf{Ephemeral Lifted UTXOs}. In the scenario that the shadowchain orchestrator
 disappears, or is unresponsive, users are able convert their lifted UTXO into a
@@ -1436,13 +1433,13 @@ it's possible to commit several shadowchain states (possibly hundreds) in a
 single logical Bitcoin transaction.
 
 \textbf{Shadowchain Upgrades}. Finally, similar to the base blockchain, a
-shadowchain can also be \emph{upgrade} in a forwards and backwards compatible
+shadowchain can also be \emph{upgraded} in a forwards and backwards compatible
 manner. In other words, it's possible for a shadowchain orchestrator to
 \emph{soft-fork} the state transition logic by restricting a valid state
 transition to enable new behavior. Notably, the operator can do this in a
-de-synchronized manner as only those wishing to use features in the new state
+desynchronized manner as only those wishing to use features in the new state
 transition function need to adhere to the new rules. Additionally, an operator
-can opt to also introduces new backwards incompatible state transition functions.
+can opt to also introduce new backwards incompatible state transition functions.
 Due to the inherent batched nature of Bitcoin transaction, an operator can
 commit multiple logical shadowchain blocks (with distinct state transition
 functions) in a single atomic Bitcoin transaction.
@@ -1488,15 +1485,15 @@ Block hash of a normal blockchain.
 
 \subsubsection{Lifted UTXOs}
 
-Next, we define the \texttt{Lifted UTXO} which is the representation of a
+Next, we define the \texttt{Lifted UTXO}, which is the representation of a
 user's state within a given shadow chain:
 
-\begin{definition}{(Lifted UTXO).} A \texttt{Lifted UTXO} is a tuple, 
+\begin{definition}{(Lifted UTXO).} A \texttt{Lifted UTXO} is a tuple,
     $ \phi_{U} = (A_{sat}, T_{expiry}, P_{u}, P_{o})$, where:
 \end{definition}
 
 \begin{itemize}
-    \item $A_{sat}$ is the size of an \texttt{LO} (\texttt{Lifted UTXO})
+    \item $A_{sat}$ is the size of a \texttt{LO} (\texttt{Lifted UTXO})
         expressed in \emph{satoshis}.
 
     \item $T_{expiry}$ is the \emph{absolute} expiry height of the \texttt{LO},
@@ -1517,10 +1514,10 @@ user's state within a given shadow chain:
 
 The construct of a \texttt{Lifted UTXO} is similar to the existing concept of a
 Fidelity Bond (cite), yet with an application specific twist. This process is
-akin to creation a new 'account' within a Shadowchain. The time-lock release
+akin to creating a new 'account' within a Shadowchain. The time-lock release
 nature of the UTXO means a user can always recover funds if the
 \texttt{Orchestrator} becomes unresponsive. In addition to this, a natural cost
-in the form of chain fees is added which increases the barrier for potentially
+in the form of chain fees is added, which increases the barrier for potentially
 malicious users to interact with the shadow chain.
 
 \subsubsection{The Shadowchain}
@@ -1535,7 +1532,7 @@ itself.
     \textbf{Shadowchain Components}
 \end{center}
 
-First, we define the core components of the shadowchain. 
+First, we define the core components of the shadowchain.
 
 \begin{definition}{(Shadowchain).} An instantiation of a \texttt{Shadowchain}
     is defined as a tuple: $\Sigma = (U_{L}, U_{O}, \Delta_F, E_{exe},
@@ -1546,8 +1543,8 @@ First, we define the core components of the shadowchain.
     \item $U_{L} = \{\phi_i, \cdots, \phi_n\}$ is the set of non-expired
         \texttt{Lifted UTXO}s observed by the orchestrator.
 
-    \item $U_{0}$ is the current UTXO orchestrator, where they may accrue
-        application level fees.
+    \item $U_{0}$ is the current UTXO of the orchestrator, where they may
+        accrue application level fees.
 
     \item $\Delta_F =  \{ \Delta_{f_0}, \cdots, \Delta_{f_n} \}$ is the set of
         current state transition functions.
@@ -1587,7 +1584,8 @@ With behavior and semantics as expressed below. \\
 
 Before a shadowchain can be used for a given application, it is required that
 the system be initialized to obtain the long-term public key of the auctioneer,
-as well as the execution environment, and set of state transition functions: \\
+as well as the execution environment, and the set of state transition
+functions: \\
 
 \texttt{InitChain($1^{\lambda}$)} $\rightarrow$ $(U_{0}, P_{0}, \Delta_F,
 E_{exe})$. Given the security parameter $\lambda$ (expressed in unary), the
@@ -1603,7 +1601,7 @@ environment.
 \end{center}
 
 Once the chain has been initialized, given the parameters of the shadowchain,
-users can being lifting their UTXO to be able to participate in shadowchain
+users can begin lifting their UTXO to be able to participate in shadowchain
 blocks and operations. The process of entering the shadowchain is referred to as
 UTXO Lifting, while exiting is the reverse process: \\
 
@@ -1641,11 +1639,11 @@ miners ordering them within blocks in the base Bitcoin system: \\
 
 % set of lifted utxos, set of transactions, exe env, state transition funcs
 \texttt{ConstructBlock($\phi_{live}, T_{xn}, E_{exe}, \Delta_F$)} $\rightarrow$
-$B_S$. Given inputs of the set of 'live' Lifted UTXOs, the set of transaction
+$B_S$. Given inputs of the set of 'live' Lifted UTXOs, the set of transactions
 belonging to the live UTXOs, the execution environment, and the current set of
 valid state transition
 functions, the \texttt{ConstructBlock} outputs a valid shadowchain block to
-extend the current machine chain. Where: 
+extend the main chain where: 
 \begin{itemize}
     \item $\phi_{live} = live(\{\phi_{U_0}, \cdots, \phi_{U_N}\}$ is the set of
             'live' Lifted UTXOs where the $live$ algorithm uses a heart-beat
@@ -1656,11 +1654,11 @@ extend the current machine chain. Where:
 
     \item $B_S = (T_{xn}, \{\phi_{U_0}, \cdots, \phi_{U_N}\}, \Delta_{f},
         \{\phi_{U_0}^\prime, \cdots, \phi_{U_N}^\prime\}, U_{A})$, is the
-        shadowchain block itself, which is composed of the set of application
-        transaction, input Lifted UTXOs, the resulting output UTXOs after
-        applying the set of state transition functions, and $U_{A}$ any new
-        application-specific UTXOs produced as a result of the state transition
-        function.
+        shadowchain block itself, which is composed of the application-specific
+        transaction format, input Lifted UTXOs, the resulting output UTXOs
+        after applying the set of state transition functions, and $U_{A}$ any
+        new application-specific UTXOs produced as a result of the state
+        transition function.
 \end{itemize}
 
 Once a block has been constructed, the operator of the shadowchain now must
@@ -1682,8 +1680,9 @@ we can now proceed to the execution and block commitment phase.
     \textbf{Chain Execution}
 \end{center}
 
-Once the operator has esatblshed a stable set of participants which accept the
-proposed shadowchain block, it can execute the block and commit it in the base Bitcoin blockchain: \\
+Once the operator has esatblished a stable set of participants which accept the
+proposed shadowchain block, it can execute the block and commit it in the base
+Bitcoin blockchain: \\
 
 \texttt{CommitBlock($B_S$)} $\rightarrow$ $(b, TX_{id})$. The
 \texttt{CommitBlock} takes a valid shadowchain block, and attempts to obtain
@@ -1698,16 +1697,16 @@ to a sub-set of the live Lifted UTXOs.
     \textbf{Block Cut-Through}
 \end{center}
 
-Given the sturcutre of a shadowchain block, and the state transition function
+Given the structure of a shadowchain block, and the state transition function
 itself, it's possible for a shadowchain operator to compress several distinct
-shadowchain blocks into a single instance that is equivalent to the succesive
-state transtion function application on each distinct shadowchain block: \\
+shadowchain blocks into a single instance that is equivalent to the successive
+state transition function application on each distinct shadowchain block: \\
 
 \texttt{CoalesceBlocks($\{B_{S_0}, \cdots, B_{S_N}\}$)} $\rightarrow$
 $B_{S}^\prime$. Given a series of \emph{consecutive} shadowchain blocks, the
 \texttt{CoalesceBlocks} algorithms compresses each consecutive block into a
-single block $B_{S_N}$ which has an equivalent output state to the serial
-appliation of the state transition functino on each individual shadowchain
+single block $B_{S_N}$ that has an equivalent output state to the serial
+application of the state transition functions on each individual shadowchain
 block. \\
 
 The \texttt{CoalesceBlocks} algorithm is similar to the concept of transaction
@@ -1715,7 +1714,7 @@ cut-through (cite) for UTXO-based blockchains. Using this algorithm, the
 operator is able to propose a new equivalent block which produces the same set
 of net Lifted UTXO outputs, along with any other application specific outputs
 produced by any of the intermediate blocks. This can be done post-facto, and
-also in an optimsitic manner in order to coalesce several unconfirmed
+also in an optimistic manner in order to coalesce several unconfirmed
 shadowchain blocks into a single one.
 
 % diagram for cut thru
@@ -1730,13 +1729,13 @@ shadowchain blocks into a single one.
 
 The process of upgrading the chain in terms of the \emph{types} of
 application-level transactions offered, or the set of valid state transition
-functions can be done entirely off-chain in a de-synchronized manner. In order to
-update the environment, state transition functions, or the applicatoin-level
+functions, can be done entirely off-chain in a de-synchronized manner. In order to
+update the environment, state transition functions, or the application-level
 transactions, the operator simply needs to utilize the following algorithm: \\
 
 \texttt{UpgradeChain($\Delta_{new}, E_{exe}^\prime, T_{xn}^\prime$)}
 $\rightarrow$ $\bot$. The \texttt{UpgradeChain} is an algorithm that's executed
-entirely in an off-chain manner, than lets the operator of the shadowchain
+entirely in an off-chain manner allowing the operator of the shadowchain
 upgrade some or all of: the application transaction data, the execution
 environment, and the set of state transition functions. Due to the nature of
 the shadowchain, in order to utilize this new functionality each user must
@@ -1758,12 +1757,12 @@ certain states.
 \end{center}
 
 The main Operator State Machine loop first attempts to process any new UTXO
-lifting requests, then will optimistically attempt to merge in any existing
+lifting requests and will optimistically attempt to merge in any existing
 unconfirmed shadowchain blocks that can be coalesced. Independent of either of
 these clauses, we'll then enter into our main loop where the operator attempts
-to construct a new block given the set of live transaction, propose the block
-to the set of live UTXOs, filter out any participants that rejected the block,
-before finally attempting to commit the new block within the chain.
+to construct a new block given the set of live transactions, propose the block
+to the set of live UTXOs, and filter out any participants that rejected the
+block before finally attempting to commit the new block within the chain.
 
 %\procedureblock[syntaxhighlight=auto]{OrchestrateChain(utxos, env, funcs)}{
 %    until \neg s
@@ -1808,7 +1807,7 @@ before finally attempting to commit the new block within the chain.
     \textbf{Participant State Machine}
 \end{center}
 
-The main state machine if each shadowchain participant is essentially a mirror
+The main state machine of each shadowchain participant is essentially a mirror
 of the orchestrator state machine. First we'll process any requests to modify
 our existing Lifted UTXO, gather up any unconfirmed transactions, then await a
 new block proposal by the orchestrator.
