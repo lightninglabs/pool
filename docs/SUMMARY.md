@@ -8,5 +8,5 @@
 * [Channel Leases](channel_leases.md)
 * [Batch Execution](batch_execution.md)
 * [Alpha Limitations](alpha_limitations.md)
-* [FAQ](faq.md)
+* [FAQs](faq.md)
 
