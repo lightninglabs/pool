@@ -86,6 +86,10 @@ var (
 			Entity: "auction",
 			Action: "read",
 		}},
+		"/poolrpc.Trader/NextBatchInfo": {{
+			Entity: "auction",
+			Action: "read",
+		}},
 		"/poolrpc.Trader/NodeRatings": {{
 			Entity: "auction",
 			Action: "read",
