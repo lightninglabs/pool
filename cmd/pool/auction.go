@@ -60,6 +60,7 @@ var auctionCommands = []cli.Command{
 			batchSnapshotCommand,
 			leasesCommand,
 			leaseDurationsCommand,
+			nextBatchInfoCommand,
 			ratingsCommand,
 		},
 	},
@@ -253,6 +254,32 @@ func leaseDurations(ctx *cli.Context) error {
 
 	resp, err := client.LeaseDurations(
 		context.Background(), &poolrpc.LeaseDurationRequest{},
+	)
+	if err != nil {
+		return err
+	}
+
+	printRespJSON(resp)
+
+	return nil
+}
+
+var nextBatchInfoCommand = cli.Command{
+	Name:      "nextbatchinfo",
+	ShortName: "nbi",
+	Usage:     "returns information about the next batch the auctioneer will attempt to clear",
+	Action:    nextBatchInfo,
+}
+
+func nextBatchInfo(ctx *cli.Context) error {
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.NextBatchInfo(
+		context.Background(), &poolrpc.NextBatchInfoRequest{},
 	)
 	if err != nil {
 		return err
