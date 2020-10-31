@@ -4,7 +4,7 @@ Lightning Pool is a non-custodial, peer-to-peer marketplace that allows node ope
 
 Efficient capital allocation is one of the most widely felt pain points when using the Lightning Network. Existing node operators do not have access to pricing signals to help determine where in the network their outbound liquidity should be allocated, and new node operators have no way to signal that they need new inbound liquidity. Lightning Pool brings these two sides together into a single market while allowing them to maintain custody of their funds.
 
-Checkout our [documentation](#tk) to learn more.
+Checkout our [documentation](https://pool.lightning.engineering/) to learn more.
 
 ## How it works
 Lightning Pool is a non-custodial auction for liquidity where bids are kept private and trades clear periodically. Key aspects of Pool include:
@@ -19,17 +19,25 @@ Lightning Pool is a non-custodial auction for liquidity where bids are kept priv
 Download the latest binaries from the [releases](https://github.com/lightninglabs/pool/releases) page.
 
 ## LND
-Note that LiT requires `lnd` to be built with **all of its subservers** and requires running at least `v0.11.1`. Download the latest [official release binary](https://github.com/lightningnetwork/lnd/releases/latest) or build `lnd` from source by following the [installation instructions](https://github.com/lightningnetwork/lnd/blob/master/docs/INSTALL.md). If you choose to build `lnd` from source, use the following command to enable all the relevant subservers:
+Note that Pool requires `lnd` to be built with **all of its subservers** and requires running at least `v0.11.1`. Download the latest [official release binary](https://github.com/lightningnetwork/lnd/releases/latest) or build `lnd` from source by following the [installation instructions](https://github.com/lightningnetwork/lnd/blob/master/docs/INSTALL.md). If you choose to build `lnd` from source, use the following command to enable all the relevant subservers:
 
 ```
 make install tags="signrpc walletrpc chainrpc invoicesrpc"
 ```
 
 ## Usage
-Read our [getting started guide](#tk) to learn more about how to use Pool.
+Read our [quickstart guide](https://pool.lightning.engineering/) to learn more about how to use Pool. 
+
+## Marketplace Fee
+Fees are calculated based on the amount of liquidity purchased. During the mainnet alpha, fees will range from 5-25 basis points per user.
+
+## Development
+The Pool client is currently in early alpha and offers a simple command line application.
+
+The Pool daemon exposes a [gRPC API](https://lightning.engineering/poolapi/index.html#pool-grpc-api-reference) and [REST API](https://lightning.engineering/poolapi/index.html#pool-rest-api-reference).
 
 ## Troubleshooting
-[Join us on Slack](https://lightning.engineering/slack.html) and we'd be happy to help in any way we can. In the meantime please see our [FAQs](#tk).
+[Join us on Slack](https://lightning.engineering/slack.html) and we'd be happy to help in any way we can. In the meantime please see our [FAQs](https://pool.lightning.engineering/faq).
 
 ## Build from source
 If you’d prefer to compile from source code, you’ll need at least `go 1.14` and `make`.
