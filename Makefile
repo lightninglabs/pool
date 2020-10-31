@@ -28,6 +28,11 @@ MAKE := make
 XARGS := xargs -L 1
 
 include make/testing_flags.mk
+include make/release_flags.mk
+
+# For the release, we want to remove the symbol table and debug information (-s)
+# and omit the DWARF symbol table (-w). Also we clear the build ID.
+RELEASE_LDFLAGS := $(call make_ldflags, $(RELEASE_TAGS), -s -w -buildid=)
 
 # Linting uses a lot of memory, so keep it under control by limiting the number
 # of workers if requested.
@@ -76,6 +81,11 @@ install:
 	@$(call print, "Installing Pool.")
 	$(GOINSTALL) $(PKG)/cmd/pool
 	$(GOINSTALL) $(PKG)/cmd/poold
+
+release:
+	@$(call print, "Releasing pool and poold binaries.")
+	$(VERSION_CHECK)
+	./scripts/release.sh build-release "$(VERSION_TAG)" "$(BUILD_SYSTEM)" "$(RELEASE_TAGS)" "$(RELEASE_LDFLAGS)"
 
 scratch: build
 
