@@ -3,7 +3,7 @@
 \BOOKMARK [1][-]{section.2}{Preliminaries}{}% 3
 \BOOKMARK [1][-]{section.3}{Background}{}% 4
 \BOOKMARK [2][-]{subsection.3.1}{Payment Channels \046 the Lightning Network}{section.3}% 5
-\BOOKMARK [2][-]{subsection.3.2}{Boostrapping Problems in the Lightning Network}{section.3}% 6
+\BOOKMARK [2][-]{subsection.3.2}{Liquidity Boostrapping Problems in the Lightning Network}{section.3}% 6
 \BOOKMARK [2][-]{subsection.3.3}{New Routing Node Boostrapping}{section.3}% 7
 \BOOKMARK [2][-]{subsection.3.4}{New Service Boostrapping}{section.3}% 8
 \BOOKMARK [2][-]{subsection.3.5}{End User Boostrapping}{section.3}% 9
