@@ -36,10 +36,10 @@ If you’d prefer to compile from source code, you’ll need at least `go 1.14` 
 
 Run the following commands to download the code, compile and install Pool:
 
-```shell script
-git clone https://github.com/lightninglabs/pool
-cd pool
-make install
+```shell
+$ git clone https://github.com/lightninglabs/pool
+$ cd pool
+$ make install
 ```
 
 This will install the binaries into your `$GOPATH/bin` directory.
