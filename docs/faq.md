@@ -12,10 +12,6 @@ description: >-
 
 A channel is opened to you after paying an upfront premium for inbound channel liquidity of a specific size for a set duration of time \(2016 blocks\). Once the upfront premium is paid a channel is opened to the buyer. 
 
-### How do I buy inbound channel liquidity?
-
-
-
 ### How is the price of inbound channel liquidity determined?
 
 Set your buy price to according to the time you are willing to wait for a match and of course your own internal cost and benefit analysis.
@@ -32,13 +28,17 @@ It will not show you an exact total, but you can see how much you will pay in fe
 
 ### How will I know if my order was fulfilled?
 
-Watch the logs. Pull the order snapshot locally. Watch your account balance. Pool orders list.
+You can check the status of your order at any time by running the following command: 
+
+```text
+pool orders list
+```
 
 ### How soon after my order is filled will the seller open a channel to me?
 
-A channel will be opened as soon as the batch transaction has received N confirmations. Batches are processed whenever the market clears or approximately every 10 minutes or whichever is longer.
+A channel will be opened as soon as the batch transaction has received a sufficient number of confirmations. Batches are processed whenever the market clears or approximately every 10 minutes or whichever is longer.
 
-If the seller’s node is offline when the batch clears, \_\_\_\_
+The seller has to be online when the batch clears or the match won't be included
 
 ### Can I buy a channel for someone else?
 
@@ -46,9 +46,9 @@ Not at this time but this is something we plan to add in the future.
 
 ## Channels
 
-### How does the channel get opened?
+### How is the channel opened?
 
-The channel is open automatically by the seller once the market clears.
+The channel is opened automatically by the seller once the market clears.
 
 ### How long will the channel stay open?
 
@@ -60,7 +60,7 @@ No, it will remain open but the seller has no obligation to keep the channel ope
 
 ### Is there a way to ensure that the channels are of a certain size?
 
-You can specify a minimum allowable channel size which will ensure a channel greater than or equal to what you require.
+You can specify a minimum allowable channel size which will ensure that you receive one or more inbound channels greater than or equal to the size you specified.
 
 ### Are there limits on what I can do with the channel?
 
@@ -72,7 +72,7 @@ If the lender force closes they will be banned from the market. This will not be
 
 ### If off-chain funds have moved over to my side, must I keep them there?
 
-If you cannot or don't want to move the funds out of the channel off-chain, you can close the channel before the term limit with no penalties.
+If you cannot or do not want to move the funds out of the channel off-chain, you can close the channel before the term limit with no penalties.
 
 ## Accounts
 
@@ -80,7 +80,7 @@ If you cannot or don't want to move the funds out of the channel off-chain, you 
 
 Opening an account requires first funding your `lnd` wallet and subsequently funding a time-locked 2-of-2 multi-sig account. This account is then debited whenever an order of is fully or partially matched.
 
-When creating the account you specify a time-lock so that you can gain access to your funds in the event that Pool is offline for a period of time. The account will expire once the specified amount of time has elapsed. 
+When creating an account you must specify a time-lock so that you can gain access to your funds in the event that Pool is offline for a period of time. The account will expire once the specified amount of time has elapsed. 
 
 ### Why do accounts expire?
 

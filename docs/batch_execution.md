@@ -1,100 +1,43 @@
 # Batch Execution
 
-Now that we have orders submitted, how does the rest of the auction actually
-work? As mentioned above, Pool conducts a _discrete_ batch auction every 10
-minutes. This is distinct from regular continuous exchanges in that orders are
-only cleared every 10 minutes. Orders are also sealed-bid, meaning that other
-traders in the venue are unable to see what others have bid. On top of this, we
-utilize a uniform-clearing price algorithm to give all traders in the batch the
-_same_ interest rate. This is the same mechanism used by the U.S Treasury for
-its bonds, and is intended to promote fairness as your order will only be
-matched with a price better than your initial ask/bid.
+Now that we have orders submitted, how does the rest of the auction actually work? As mentioned above, Pool conducts a _discrete_ batch auction every 10 minutes. This is distinct from regular continuous exchanges in that orders are only cleared every 10 minutes. Orders are also sealed-bid, meaning that other traders in the venue are unable to see what others have bid. On top of this, we utilize a uniform-clearing price algorithm to give all traders in the batch the _same_ interest rate. This is the same mechanism used by the U.S Treasury for its bonds, and is intended to promote fairness as your order will only be matched with a price better than your initial ask/bid.
 
-Note that it's possible that after the 10 minutes interval has passed a market
-can't be made \(supply and demand didn't cross\). In this case, nothing
-happens, and we just wait for the next batch to come across.
+Note that it's possible that after the 10 minutes interval has passed a market can't be made \(supply and demand didn't cross\). In this case, nothing happens, and we just wait for the next batch to come across.
 
 ### Matchmaking
 
-The first stage in batch execution is the matchmaking that is done by the
-auctioneer. Before actual matchmaking is performed, the auctioneer looks at the
-current fee climate and decides what fee rate should be used for the final
-Batch Execution Transaction, in order for the transaction to confirm in a
-timely manner. All orders that have their `max_batch_fee_rate` set to a value
-lower than the chosen fee rate are ignored from the auction this time around,
-but will be reconsidered if the fee climate changes before the next auction.
-This allows traders with a low time preference to submit orders that will stay
-around on the order book and only be considered for matchmaking in times of low
-chain fees.
+The first stage in batch execution is the matchmaking that is done by the auctioneer. Before actual matchmaking is performed, the auctioneer looks at the current fee climate and decides what fee rate should be used for the final Batch Execution Transaction, in order for the transaction to confirm in a timely manner. All orders that have their `max_batch_fee_rate` set to a value lower than the chosen fee rate are ignored from the auction this time around, but will be reconsidered if the fee climate changes before the next auction. This allows traders with a low time preference to submit orders that will stay around on the order book and only be considered for matchmaking in times of low chain fees.
 
-Now that the transaction fee rate has been chosen, all orders still on the
-order book are considered, and the auctioneer matches asks with bids that pay
-at least the desired rate. The unsigned Batch Execution Transaction (BET) is
-assembled and presented to all traders that had their orders matched, along
-with information about the node they matched with.
+Now that the transaction fee rate has been chosen, all orders still on the order book are considered, and the auctioneer matches asks with bids that pay at least the desired rate. The unsigned Batch Execution Transaction \(BET\) is assembled and presented to all traders that had their orders matched, along with information about the node they matched with.
 
 ### Batch Signing
 
-When the trader's client receives a notification about a batch that is under
-execution, it checks that every part of the BET that affects the trader meets
-its requirements. This includes checking that the premium paid to the maker
-matches the batch clearing price, and that the chain fee deducted from the
-trader's account doesn't violate the max fee rate the trader agreed to.
+When the trader's client receives a notification about a batch that is under execution, it checks that every part of the BET that affects the trader meets its requirements. This includes checking that the premium paid to the maker matches the batch clearing price, and that the chain fee deducted from the trader's account doesn't violate the max fee rate the trader agreed to.
 
-Each match the trader was part of results in a channel output on the BET, and
-the trader will also ensure this is well formed, and of the expected amount.
-When that has been verified, the trader connects to the node on the other side
-of the match, and starts the channel opening process with the channel peer.
-Technically this is done by setting up a _funding shim_ with the backing `lnd`
-node, which prepares `lnd` for a funding transaction setting up a channel with
-the given parameters to be broadcast.
+Each match the trader was part of results in a channel output on the BET, and the trader will also ensure this is well formed, and of the expected amount. When that has been verified, the trader connects to the node on the other side of the match, and starts the channel opening process with the channel peer. Technically this is done by setting up a _funding shim_ with the backing `lnd` node, which prepares `lnd` for a funding transaction setting up a channel with the given parameters to be broadcast.
 
-Only when all these checks are satisfactory and the channel funding shim has
-been successfully set up, the trader signs its input to the batch transaction
-and responds to the auctioneer. This ensures the trader is always _fully in
-custody of its own funds_, and never signs a transaction that would send the
-funds to an output it doesn't control.
+Only when all these checks are satisfactory and the channel funding shim has been successfully set up, the trader signs its input to the batch transaction and responds to the auctioneer. This ensures the trader is always _fully in custody of its own funds_, and never signs a transaction that would send the funds to an output it doesn't control.
 
-Note that the trader can reject signing the batch for any reason, even when the
-BET is well formed. For instance, connecting to the channel peer can fail,
-resulting in the channel not being ready to be funded. The trader will reject
-this match, and matchmaking can start over, making sure the trader won't be
-matched with this channel peer again.
+Note that the trader can reject signing the batch for any reason, even when the BET is well formed. For instance, connecting to the channel peer can fail, resulting in the channel not being ready to be funded. The trader will reject this match, and matchmaking can start over, making sure the trader won't be matched with this channel peer again.
 
 ### Batch Publication
 
-When all participating traders have signed their inputs in the Batch Execution
-Transaction, the auctioneer can sign the final input and broadcast the
-transaction. This transaction can be large, and serve as the funding
-transaction for potentially hundres of channels! The participating traders only
-pay chain fees for their inputs and outputs in the transaction, so everybody is
-saving substantially on fees compared to individually funding channels.
+When all participating traders have signed their inputs in the Batch Execution Transaction, the auctioneer can sign the final input and broadcast the transaction. This transaction can be large, and serve as the funding transaction for potentially hundres of channels! The participating traders only pay chain fees for their inputs and outputs in the transaction, so everybody is saving substantially on fees compared to individually funding channels.
 
 ## Batched Uniform-Price Clearing
 
-To illustrate how the uniform price clearing works consider the following
-example. Let's say I want to buy 100 million satoshis \(1 BTC, 1000 units\),
-for 2 weeks \(2016 blocks\) at a price of 5% \(using high numbers to make it
-easy to follow\). However, the _market clearing price_ \(where the
-supply+demand curves cross\) is actually 1%. In this case I bid _more_ than the
-market clearing price, but end up paying that price, as it's the best price
-that was possible in that market.
+To illustrate how the uniform price clearing works consider the following example. Let's say I want to buy 100 million satoshis \(1 BTC, 1000 units\), for 2 weeks \(2016 blocks\) at a price of 5% \(using high numbers to make it easy to follow\). However, the _market clearing price_ \(where the supply+demand curves cross\) is actually 1%. In this case I bid _more_ than the market clearing price, but end up paying that price, as it's the best price that was possible in that market.
 
 A simple rule of thumb for bids and asks is as follows:
 
 * When I submit a bid, I'll either pay that amount or less.
 * When I submit an ask, I'll either receive that amount or more.
 
-All orders in a batch are executed in a _single_ on-chain transaction. This
-allows for thousands of channels to be bought/sold atomically in a single
-block. We call the transaction that executes the orders the Batch Execution
-Transaction.
+All orders in a batch are executed in a _single_ on-chain transaction. This allows for thousands of channels to be bought/sold atomically in a single block. We call the transaction that executes the orders the Batch Execution Transaction.
 
-The `pool auction` sub-command houses a number of useful commands to explore
-the past batches, and examine the current auction parameters.
+The `pool auction` sub-command houses a number of useful commands to explore the past batches, and examine the current auction parameters.
 
-One can browse the latest cleared batch using the `pool auction snapshot`
-command:
+One can browse the latest cleared batch using the `pool auction snapshot` command:
 
 ```text
 🏔 pool auction snapshot 
@@ -127,19 +70,11 @@ command:
 }
 ```
 
-Here we see a batch where a single order was matched, at a clearing rate of
-`1636`, with a single channel being purchased with a lifetime of `2016` blocks,
-or roughly two weeks.
+Here we see a batch where a single order was matched, at a clearing rate of `1636`, with a single channel being purchased with a lifetime of `2016` blocks, or roughly two weeks.
 
-Note that the `pool auction snapshot` command can be used to determine the past
-marker clearing price, which can be useful when deciding what your bid/ask
-should be. There's no explicit "market buy" function, but submitting a bid/ask
-at a similar `clearing_price_rate` to the historical one should put you close
-to where the demand in the market is.
+Note that the `pool auction snapshot` command can be used to determine the past marker clearing price, which can be useful when deciding what your bid/ask should be. There's no explicit "market buy" function, but submitting a bid/ask at a similar `clearing_price_rate` to the historical one should put you close to where the demand in the market is.
 
-The command also accept a target `batch_id` as well. Here we can use the
-`prev_batch_id` to examine the _prior_ batch, similar to traversing a
-link-listed/blockchain:
+The command also accept a target `batch_id` as well. Here we can use the `prev_batch_id` to examine the _prior_ batch, similar to traversing a link-listed/blockchain:
 
 ```text
 🏔 pool auction snapshot --batch_id=03687baa3c7414e800ddba37edacb3281999739303b7290a69bd457f428ecd9b2c
@@ -147,9 +82,7 @@ link-listed/blockchain:
 
 ## Fees
 
-There are various fees paid and accumulated during a successful batch
-execution. The easiest way to get an overview of the total impact of fees on
-ones account is to run
+There are various fees paid and accumulated during a successful batch execution. The easiest way to get an overview of the total impact of fees on ones account is to run
 
 ```text
 🏔 pool auction leases
@@ -194,18 +127,9 @@ ones account is to run
 }
 ```
 
-Here you can see a summary of all matches you've been part of and that resulted
-in a channel being opened. In the first example the trader sold a 1,200,000 sat
-channel and got paid a premium of 59,998 sats for this liquidity. To be part of
-this batch, the trader paid an execution fee of 1201 sats, and a chain fee of
-165 sats, netting 59998-1201-165 = 58632 sats that got paid to its account.
+Here you can see a summary of all matches you've been part of and that resulted in a channel being opened. In the first example the trader sold a 1,200,000 sat channel and got paid a premium of 59,998 sats for this liquidity. To be part of this batch, the trader paid an execution fee of 1201 sats, and a chain fee of 165 sats, netting 59998-1201-165 = 58632 sats that got paid to its account.
 
-In the last example in the list above, the trader this time around bought a
-channel of 1,200,000 sats, and paid a premium of 11999 to the seller. Also this
-time around the trader paid an execution fee and chain fee, resulting in a
-total cost of 11999+1201+165 = 13365 sats.
+In the last example in the list above, the trader this time around bought a channel of 1,200,000 sats, and paid a premium of 11999 to the seller. Also this time around the trader paid an execution fee and chain fee, resulting in a total cost of 11999+1201+165 = 13365 sats.
 
-Finally, a total tally of fees earned and paid is given. The command takes
-optional account and batch id arguments in case you want to filter the leases
-returned.
+Finally, a total tally of fees earned and paid is given. The command takes optional account and batch id arguments in case you want to filter the leases returned.
 
