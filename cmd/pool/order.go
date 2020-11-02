@@ -499,8 +499,8 @@ var ordersListCommand = cli.Command{
 			Usage: "show verbose output including events",
 		},
 		cli.BoolFlag{
-			Name:  "active_only",
-			Usage: "only show active orders",
+			Name:  "show_archived",
+			Usage: "include orders no longer active",
 		},
 	},
 	Action: ordersList,
@@ -513,10 +513,16 @@ func ordersList(ctx *cli.Context) error {
 	}
 	defer cleanup()
 
+	// Default to only showing active orders.
+	activeOnly := true
+	if ctx.Bool("show_archived") {
+		activeOnly = false
+	}
+
 	resp, err := client.ListOrders(
 		context.Background(), &poolrpc.ListOrdersRequest{
 			Verbose:    ctx.Bool("verbose"),
-			ActiveOnly: ctx.Bool("active_only"),
+			ActiveOnly: activeOnly,
 		},
 	)
 	if err != nil {
