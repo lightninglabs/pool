@@ -59,15 +59,16 @@ make install tags="signrpc walletrpc chainrpc invoicesrpc"
 ```
 
 ## Usage
-Read our [quickstart guide](https://pool.lightning.engineering/) to learn more
-about how to use Pool. 
+Read our [quickstart guide](https://pool.lightning.engineering/quickstart) to
+learn more about how to use Pool. 
 
-## Marketplace Fee Fees are calculated based on the amount of liquidity
-purchased. During the mainnet alpha, fees will range from 5-25 basis points per
-user.
+## Marketplace Fee 
+Fees are calculated based on the amount of liquidity purchased. During the
+mainnet alpha, fees will range from 5-25 basis points per user.
 
-## Development The Pool client is currently in early alpha and offers a simple
-command line application.
+## Development
+The Pool client is currently in early alpha and offers a simple command line
+application.
 
 The Pool daemon exposes a [gRPC
 API](https://lightning.engineering/poolapi/index.html#pool-grpc-api-reference)
