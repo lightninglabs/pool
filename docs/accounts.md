@@ -1,7 +1,5 @@
 # Accounts
 
-Accounts
-
 ## Overview
 
 Like any exchange/auction, before you can start trading, you'll need an account! Accounts in the Pool are actually special on-chain contracts. A user deposits a certain amount of funds into an account which has a set expiry. By having users commit funds to an account in order to place orders, we ensure that they're unable to spoof orders \(placing an order that they can't fulfill\). We also add a cost to attempting to sybil attack the venue as well.
@@ -13,7 +11,7 @@ The script for an account is very simple, funds can be moved from the account:
 
 This script resembles certain two-factor wallets with a time-lock escape clause. The second clause ensures that users are able to move their funds if the auctioneer is unavailable.
 
-Many interactions in CLM are based around accounts:
+Many interactions in Pool are based around accounts:
 
 * Fees paid to the auctioneer are deducted from your account
 * Fees gained by selling channels are credited to your account
