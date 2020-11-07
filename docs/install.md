@@ -64,9 +64,9 @@ $ poold --lnd.host=<the_remote_host_IP_address>:10009 \
         --lnd.tlspath=/some/directory/with/lnd/data/tls.cert
 ```
 
-To persist this configuration, these values can also be written to a configuration file, located in `~/.pool/<network>/pool.conf`, for example:
+To persist this configuration, these values can also be written to a configuration file, located in `~/.pool/<network>/poold.conf`, for example:
 
-> ~/.pool/mainnet/pool.conf
+> ~/.pool/mainnet/poold.conf
 >
 > ```text
 > lnd.host=<the_remote_host_IP_address>:10009
