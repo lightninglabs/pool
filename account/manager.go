@@ -140,6 +140,12 @@ type Manager struct {
 	// Finalize message for.
 	pendingBatchMtx sync.Mutex
 
+	// reservationMtx prevents a trader from attempting to have more than
+	// once active reservation at a time when creating new accounts. This is
+	// done to ensure an account picks up the correct reservation once its
+	// time to fund it.
+	reservationMtx sync.Mutex
+
 	wg   sync.WaitGroup
 	quit chan struct{}
 }
@@ -259,6 +265,12 @@ func (m *Manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
 // parameters.
 func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	expiry, bestHeight, confTarget uint32) (*Account, error) {
+
+	// We'll make sure to acquire the reservation lock throughout the
+	// account funding process to ensure we use the same reservation, as
+	// only one can be active per trader LSAT.
+	m.reservationMtx.Lock()
+	defer m.reservationMtx.Unlock()
 
 	// First, make sure we have a valid amount to create the account. We
 	// need to ask the auctioneer for the maximum as it dynamically defines
