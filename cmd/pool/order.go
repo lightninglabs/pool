@@ -105,31 +105,29 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 	}
 
 	// If the minimum channel amount flag wasn't provided, use a default of
-	// 10%, but make sure it doesn't dip below the minimum allowed.
-	minOrderChanAmt := btcutil.Amount(order.BaseSupplyUnit)
+	// 10% and round to the nearest unit.
 	minChanAmt := btcutil.Amount(ctx.Uint64("min_chan_amt"))
 	if minChanAmt == 0 {
-		minChanAmt = btcutil.Amount(params.Amt) / 10
-		if minChanAmt < minOrderChanAmt {
-			minChanAmt = minOrderChanAmt
-		}
+		minChanAmt = order.RoundToNextSupplyUnit(
+			btcutil.Amount(params.Amt) / 10,
+		).ToSatoshis()
 	}
 
 	// Verify the minimum channel amount flag has been properly set.
 	switch {
-	case minChanAmt%minOrderChanAmt != 0:
+	case minChanAmt%order.BaseSupplyUnit != 0:
 		return nil, fmt.Errorf("minimum channel amount %v must be "+
-			"a multiple of %v", minChanAmt, minOrderChanAmt)
+			"a multiple of %v", minChanAmt, order.BaseSupplyUnit)
 
-	case minChanAmt < minOrderChanAmt:
+	case minChanAmt < order.BaseSupplyUnit:
 		return nil, fmt.Errorf("minimum channel amount %v is below "+
-			"required value of %v", minChanAmt, minOrderChanAmt)
+			"required value of %v", minChanAmt, order.BaseSupplyUnit)
 
 	case minChanAmt > btcutil.Amount(params.Amt):
 		return nil, fmt.Errorf("minimum channel amount %v is above "+
 			"order amount %v", minChanAmt, btcutil.Amount(params.Amt))
 	}
-	params.MinUnitsMatch = uint32(minChanAmt / minOrderChanAmt)
+	params.MinUnitsMatch = uint32(minChanAmt / order.BaseSupplyUnit)
 
 	var err error
 	params.TraderKey, err = parseAccountKey(ctx, args)
