@@ -1262,20 +1262,21 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 		}))
 	}
 
-	prevAccountState := account.Copy()
-	if err := m.cfg.Store.UpdateAccount(account, modifiers...); err != nil {
-		return nil, nil, err
-	}
-
-	// If we require the auctioneer's signature, request it now.
+	// If we require the auctioneer's signature, request it now before
+	// updating the account on disk.
 	if witnessType == multiSigWitness {
 		witness, err := m.constructMultiSigWitness(
-			ctx, prevAccountState, spendPkg, modifiers, isClose,
+			ctx, account, spendPkg, modifiers, isClose,
 		)
 		if err != nil {
 			return nil, nil, err
 		}
 		spendPkg.tx.TxIn[spendPkg.accountInputIdx].Witness = witness
+	}
+
+	prevAccountState := account.Copy()
+	if err := m.cfg.Store.UpdateAccount(account, modifiers...); err != nil {
+		return nil, nil, err
 	}
 
 	// As this is a generic account modification, we'll add some additional
