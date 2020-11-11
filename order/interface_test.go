@@ -149,6 +149,32 @@ func TestOrderReservedValue(t *testing.T) {
 			},
 		},
 		{
+			name: "ask 10 units 5 min units match",
+			order: &Ask{
+				Kit: Kit{
+					State:            StateSubmitted,
+					UnitsUnfulfilled: 10,
+					FixedRate:        10_000_000,
+					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
+					MinUnitsMatch:    5,
+				},
+			},
+		},
+		{
+			name: "bid 10 units 5 min units match",
+			order: &Bid{
+				Kit: Kit{
+					State:            StateSubmitted,
+					UnitsUnfulfilled: 10,
+					FixedRate:        10_000_000,
+					MaxBatchFeeRate:  1000,
+					LeaseDuration:    144,
+					MinUnitsMatch:    5,
+				},
+			},
+		},
+		{
 			name: "ask 10 units 4 min units match",
 			order: &Ask{
 				Kit: Kit{
@@ -190,10 +216,22 @@ func TestOrderReservedValue(t *testing.T) {
 			}
 
 			// For bids the taker pays the most fees if the min
-			// units get matched every block.
+			// units get matched every block. There's an edge case
+			// where if the units unfulfilled is not divisible by
+			// the min units match, then the last match will consume
+			// all the remaining units left.
 			numBlocks := int(o.UnitsUnfulfilled / o.MinUnitsMatch)
-			amt := o.MinUnitsMatch.ToSatoshis()
+			unitsRem := o.UnitsUnfulfilled % o.MinUnitsMatch
+			lastMatch := o.MinUnitsMatch
+			if unitsRem != 0 {
+				lastMatch += unitsRem
+			}
 			for i := 0; i < numBlocks; i++ {
+				amt := o.MinUnitsMatch.ToSatoshis()
+				if i == numBlocks-1 {
+					amt = lastMatch.ToSatoshis()
+				}
+
 				lumpSum := FixedRatePremium(o.FixedRate).
 					LumpSumPremium(amt, o.LeaseDuration)
 				exeFee := executionFee(amt, simpleFeeSchedule)
@@ -213,10 +251,22 @@ func TestOrderReservedValue(t *testing.T) {
 			}
 
 			// For asks the maker pays the most fees if min units
-			// get matched every block.
+			// get matched every block. There's an edge case where
+			// if the units unfulfilled is not divisible by the min
+			// units match, then the last match will consume all the
+			// remaining units left.
 			numBlocks := int(o.UnitsUnfulfilled / o.MinUnitsMatch)
-			amt := o.MinUnitsMatch.ToSatoshis()
+			unitsRem := o.UnitsUnfulfilled % o.MinUnitsMatch
+			lastMatch := o.MinUnitsMatch
+			if unitsRem != 0 {
+				lastMatch += unitsRem
+			}
 			for i := 0; i < numBlocks; i++ {
+				amt := o.MinUnitsMatch.ToSatoshis()
+				if i == numBlocks-1 {
+					amt = lastMatch.ToSatoshis()
+				}
+
 				// In the worst case, the maker will be paid
 				// only one lump sum for a 144 block duration,
 				// since that is the minimum duration.
