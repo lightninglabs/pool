@@ -857,14 +857,27 @@ func TestAccountWithdrawal(t *testing.T) {
 	defer h.stop()
 
 	const bestHeight = 100
+	const feeRate = chainfee.FeePerKwFloor
+
 	account := h.openAccount(
 		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
 	)
 
-	// With our account created, we'll start our withdrawal by creating the
-	// outputs we'll withdraw our funds to. We'll create three outputs, one
-	// of each supported output type. Each output will have 1/4 of the
-	// account's value.
+	// With our account created, we'll start with an invalid withdrawal to a
+	// dust output, which should fail.
+	dustOutput := &wire.TxOut{Value: 0, PkScript: p2wsh}
+	_, _, err := h.manager.WithdrawAccount(
+		context.Background(), account.TraderKey.PubKey,
+		[]*wire.TxOut{dustOutput}, feeRate, bestHeight,
+	)
+	if err == nil || !strings.Contains(err.Error(), "dust output") {
+		t.Fatalf("expected dust output error, got: %v", err)
+	}
+
+	// We'll now attempt a withdrawal that should succeed. We'll start by
+	// creating the outputs we'll withdraw our funds to. We'll create three
+	// outputs, one of each supported output type. Each output will have 1/4
+	// of the account's value.
 	valuePerOutput := account.Value / 4
 	outputs := []*wire.TxOut{
 		{
@@ -884,14 +897,13 @@ func TestAccountWithdrawal(t *testing.T) {
 	// We'll use the lowest fee rate possible, which should yield a
 	// transaction fee of 260 satoshis when taking into account the outputs
 	// we'll be withdrawing to.
-	const feeRate = chainfee.FeePerKwFloor
 	const expectedFee btcutil.Amount = 260
 
 	// Attempt the withdrawal.
 	//
 	// If successful, we'll follow with a series of assertions to ensure it
 	// was performed correctly.
-	_, _, err := h.manager.WithdrawAccount(
+	_, _, err = h.manager.WithdrawAccount(
 		context.Background(), account.TraderKey.PubKey, outputs,
 		feeRate, bestHeight,
 	)
