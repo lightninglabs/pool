@@ -393,17 +393,31 @@ func reservedValue(o Order,
 	// fees is when the order gets partially matched by its minimum possible
 	// units per batch. This situation results in the most chain and
 	// execution fees possible.
+	totalSats := o.Details().UnitsUnfulfilled.ToSatoshis()
 	minMatchSize := o.Details().MinUnitsMatch.ToSatoshis()
-	maxNumMatches := o.Details().UnitsUnfulfilled.ToSatoshis() / minMatchSize
+	maxNumMatches := totalSats / minMatchSize
+
+	// We handle the case where the last match consumes the remainder of
+	// the order size.
+	rem := btcutil.Amount(0)
+	if maxNumMatches*minMatchSize < totalSats {
+		maxNumMatches--
+		rem = totalSats - maxNumMatches*minMatchSize
+	}
 
 	// We'll calculate the worst case possible wrt. fees paid by the
 	// account if the order is filled by minimum size matched.
 	balanceDelta := maxNumMatches * perMatchDelta(minMatchSize)
+	if rem > 0 {
+		balanceDelta += perMatchDelta(rem)
+	}
 
 	// Subtract the worst case chain fee from the balance.
-	balanceDelta -= maxNumMatches * EstimateTraderFee(
-		1, o.Details().MaxBatchFeeRate,
-	)
+	maxFeeRate := o.Details().MaxBatchFeeRate
+	balanceDelta -= maxNumMatches * EstimateTraderFee(1, maxFeeRate)
+	if rem > 0 {
+		balanceDelta -= EstimateTraderFee(1, maxFeeRate)
+	}
 
 	// If the balance delta is negative, meaning this order will decrease
 	// the balance, the reserved value is the negative balance delta.
