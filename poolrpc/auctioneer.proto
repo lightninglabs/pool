@@ -872,6 +872,12 @@ message InvalidOrder {
 message ServerInput {
     // The outpoint that the input corresponds to.
     OutPoint outpoint = 1;
+
+    /*
+    The signature script required by the input. This only applies to NP2WKH
+    inputs.
+    */
+    bytes sig_script = 2;
 }
 
 message ServerOutput {

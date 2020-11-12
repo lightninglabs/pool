@@ -303,6 +303,7 @@ func (c *Client) ModifyAccount(ctx context.Context, account *account.Account,
 				Txid:        op.Hash[:],
 				OutputIndex: op.Index,
 			},
+			SigScript: input.SignatureScript,
 		})
 	}
 
