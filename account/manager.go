@@ -972,7 +972,7 @@ func (m *Manager) DepositAccount(ctx context.Context,
 		return nil, nil, err
 	}
 	if account.State != StateOpen {
-		return nil, nil, fmt.Errorf("account must be in %v to be"+
+		return nil, nil, fmt.Errorf("account must be in %v to be "+
 			"modified", StateOpen)
 	}
 
@@ -1044,7 +1044,7 @@ func (m *Manager) WithdrawAccount(ctx context.Context,
 		return nil, nil, err
 	}
 	if account.State != StateOpen {
-		return nil, nil, fmt.Errorf("account must be in %v to be"+
+		return nil, nil, fmt.Errorf("account must be in %v to be "+
 			"modified", StateOpen)
 	}
 
@@ -1699,6 +1699,13 @@ func sanityCheckAccountSpendTx(tx *wire.MsgTx, account *Account,
 	err := blockchain.CheckTransactionSanity(btcutil.NewTx(tx))
 	if err != nil {
 		return err
+	}
+
+	// None of the outputs should be dust.
+	for _, output := range tx.TxOut {
+		if txrules.IsDustOutput(output, txrules.DefaultRelayFeePerKb) {
+			return fmt.Errorf("dust output %x", output.PkScript)
+		}
 	}
 
 	// CheckTransactionSanity doesn't have enough context to attempt fee
