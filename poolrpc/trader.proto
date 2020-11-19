@@ -144,7 +144,7 @@ service Trader {
     LeaseDurations returns the current set of valid lease duration in the
     market as is, and also information w.r.t if the market is currently active.
     */
-    rpc LeaseDurations(LeaseDurationRequest) returns (LeaseDurationResponse) {
+    rpc LeaseDurations (LeaseDurationRequest) returns (LeaseDurationResponse) {
         option (google.api.http) = {
             get: "/v1/pool/lease_durations"
         };
@@ -154,7 +154,7 @@ service Trader {
     NextBatchInfo returns information about the next batch the auctioneer will
     perform.
     */
-    rpc NextBatchInfo(NextBatchInfoRequest) returns (NextBatchInfoResponse) {
+    rpc NextBatchInfo (NextBatchInfoRequest) returns (NextBatchInfoResponse) {
         option (google.api.http) = {
             get: "/v1/pool/batch/next"
         };
@@ -192,7 +192,7 @@ service Trader {
     Returns the Node Tier information for this target Lightning node, and other
     related ranking information.
     */
-    rpc NodeRatings(NodeRatingRequest) returns (NodeRatingResponse) {
+    rpc NodeRatings (NodeRatingRequest) returns (NodeRatingResponse) {
         option (google.api.http) = {
             get: "/v1/pool/node_ratings"
         };
@@ -239,6 +239,10 @@ message QuoteAccountResponse {
 }
 
 message ListAccountsRequest {
+    /*
+    Only list accounts that are still active.
+    */
+    bool active_only = 1;
 }
 message ListAccountsResponse {
     repeated Account accounts = 1;
@@ -558,7 +562,6 @@ message Bid {
     features are added.
     */
     uint32 version = 3;
-
 
     /*
     The minium node tier this order should be matched with. Only asks backed by
