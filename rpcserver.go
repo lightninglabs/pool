@@ -599,6 +599,11 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 
 	rpcAccounts := make([]*poolrpc.Account, 0, len(accounts))
 	for _, account := range accounts {
+		// Filter out inactive accounts if requested by the user.
+		if req.ActiveOnly && !account.State.IsActive() {
+			continue
+		}
+		
 		rpcAccount, err := marshallAccount(account)
 		if err != nil {
 			return nil, err
@@ -636,7 +641,7 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 			account.TraderKey.PubKey.SerializeCompressed(),
 		)
 
-		// We'll make sure to assumulate a distinct sum for each
+		// We'll make sure to accumulate a distinct sum for each
 		// outstanding account the user has.
 		for _, order := range orders {
 			if order.Details().AcctKey != acctKey {
