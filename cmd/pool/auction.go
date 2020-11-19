@@ -7,6 +7,7 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/protobuf-hex-display/proto"
 	"github.com/urfave/cli"
 )
 
@@ -100,9 +101,10 @@ var batchSnapshotCommand = cli.Command{
 	Name:      "snapshot",
 	ShortName: "s",
 	Usage:     "return information about a prior cleared auction batch",
+	ArgsUsage: "batch_id",
 	Description: `
-		Returns information about a prior batch such as the clearing
-		price and the set of orders included in the batch. The
+		Returns information about a prior batch or batches such as the
+		clearing price and the set of orders included in the batch. The
 		prev_batch_id field can be used to explore prior batches in the
 		sequence, similar to a block chain.
 		`,
@@ -112,6 +114,13 @@ var batchSnapshotCommand = cli.Command{
 			Usage: "the target batch ID to obtain a snapshot " +
 				"for, if left blank, information about the " +
 				"latest batch is returned",
+		},
+		cli.Uint64Flag{
+			Name: "num_batches",
+			Usage: "the number of batches to show, starting at " +
+				"the batch_id and going back through the " +
+				"history of finalized batches",
+			Value: 1,
 		},
 	},
 	Action: batchSnapshot,
@@ -124,7 +133,11 @@ func batchSnapshot(ctx *cli.Context) error {
 	}
 	defer cleanup()
 
-	var batchIDStr string
+	var (
+		batchIDStr string
+		ctxb       = context.Background()
+		resp       proto.Message
+	)
 	switch {
 	case ctx.Args().Present():
 		batchIDStr = ctx.Args().First()
@@ -138,18 +151,17 @@ func batchSnapshot(ctx *cli.Context) error {
 		return fmt.Errorf("unable to decode batch ID: %v", err)
 	}
 
-	ctxb := context.Background()
-	batchSnapshot, err := client.BatchSnapshot(
-		ctxb,
-		&poolrpc.BatchSnapshotRequest{
-			BatchId: batchID,
+	resp, err = client.BatchSnapshots(
+		ctxb, &poolrpc.BatchSnapshotsRequest{
+			StartBatchId:   batchID,
+			NumBatchesBack: uint32(ctx.Uint64("num_batches")),
 		},
 	)
 	if err != nil {
 		return err
 	}
 
-	printRespJSON(batchSnapshot)
+	printRespJSON(resp)
 
 	return nil
 }
