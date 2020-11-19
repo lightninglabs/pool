@@ -1907,6 +1907,18 @@ func (s *rpcServer) BatchSnapshot(ctx context.Context,
 	return s.auctioneer.BatchSnapshot(ctx, batchID)
 }
 
+// BatchSnapshots returns a list of batch snapshots starting at the start batch
+// ID and going back through the history of batches, returning at most the
+// number of specified batches. A maximum of 100 snapshots can be queried in
+// one call. If no start batch ID is provided, the most recent finalized batch
+// is used as the starting point to go back from.
+func (s *rpcServer) BatchSnapshots(ctx context.Context,
+	req *poolrpc.BatchSnapshotsRequest) (*poolrpc.BatchSnapshotsResponse,
+	error) {
+
+	return s.auctioneer.BatchSnapshots(ctx, req)
+}
+
 // LeaseDurations returns the current set of valid lease duration in the
 // market as is, and also information w.r.t if the market is currently active.
 func (s *rpcServer) LeaseDurations(ctx context.Context,

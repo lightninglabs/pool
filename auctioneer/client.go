@@ -1182,6 +1182,21 @@ func (c *Client) BatchSnapshot(ctx context.Context,
 	})
 }
 
+// BatchSnapshots returns a list of batch snapshots starting at the start batch
+// ID and going back through the history of batches, returning at most the
+// number of specified batches. A maximum of 100 snapshots can be queried in
+// one call. If no start batch ID is provided, the most recent finalized batch
+// is used as the starting point to go back from.
+//
+// NOTE: This isn't wrapped in "native" types, as atm we only use this to
+// shuffle information back to the client over our RPC interface.
+func (c *Client) BatchSnapshots(ctx context.Context,
+	req *poolrpc.BatchSnapshotsRequest) (*poolrpc.BatchSnapshotsResponse,
+	error) {
+
+	return c.client.BatchSnapshots(ctx, req)
+}
+
 // NodeRating returns the current up to date ratings information for the target
 // node pubkey.
 func (c *Client) NodeRating(ctx context.Context,

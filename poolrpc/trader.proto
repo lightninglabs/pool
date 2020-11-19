@@ -166,6 +166,8 @@ service Trader {
 
     /* pool: `auction snapshot`
     BatchSnapshot returns the snapshot of a past batch identified by its ID.
+    If no ID is provided, the snapshot of the last finalized batch is returned.
+    Deprecated, use BatchSnapshots instead.
     */
     rpc BatchSnapshot (BatchSnapshotRequest) returns (BatchSnapshotResponse) {
         option (google.api.http) = {
@@ -199,6 +201,20 @@ service Trader {
     rpc NodeRatings (NodeRatingRequest) returns (NodeRatingResponse) {
         option (google.api.http) = {
             get: "/v1/pool/node_ratings"
+        };
+    };
+
+    /* pool: `auction snapshot`
+    BatchSnapshots returns a list of batch snapshots starting at the start batch
+    ID and going back through the history of batches, returning at most the
+    number of specified batches. A maximum of 100 snapshots can be queried in
+    one call. If no start batch ID is provided, the most recent finalized batch
+    is used as the starting point to go back from.
+    */
+    rpc BatchSnapshots (BatchSnapshotsRequest)
+        returns (BatchSnapshotsResponse) {
+        option (google.api.http) = {
+            get: "/v1/pool/batch/snapshots/{start_batch_id}/{num_batches_back}"
         };
     };
 }
