@@ -55,7 +55,8 @@ service Trader {
     WithdrawAccount splits off parts of the account balance into the specified
     outputs while recreating the account with a reduced balance.
     */
-    rpc WithdrawAccount (WithdrawAccountRequest) returns (WithdrawAccountResponse) {
+    rpc WithdrawAccount (WithdrawAccountRequest)
+        returns (WithdrawAccountResponse) {
         option (google.api.http) = {
             post: "/v1/pool/accounts/withdraw"
             body: "*"
@@ -66,7 +67,8 @@ service Trader {
     DepositAccount adds more funds from the connected lnd node's wallet to an
     account.
     */
-    rpc DepositAccount (DepositAccountRequest) returns (DepositAccountResponse) {
+    rpc DepositAccount (DepositAccountRequest)
+        returns (DepositAccountResponse) {
         option (google.api.http) = {
             post: "/v1/pool/accounts/deposit"
             body: "*"
@@ -81,7 +83,8 @@ service Trader {
     account, and this RPC is invoked again, then a replacing transaction (RBF)
     of the child will be broadcast.
     */
-    rpc BumpAccountFee (BumpAccountFeeRequest) returns (BumpAccountFeeResponse) {
+    rpc BumpAccountFee (BumpAccountFeeRequest)
+        returns (BumpAccountFeeResponse) {
         option (google.api.http) = {
             post: "/v1/pool/accounts/bump"
             body: "*"
@@ -92,7 +95,8 @@ service Trader {
     RecoverAccounts queries the auction server for this trader daemon's accounts
     in case we lost our local account database.
     */
-    rpc RecoverAccounts (RecoverAccountsRequest) returns (RecoverAccountsResponse) {
+    rpc RecoverAccounts (RecoverAccountsRequest)
+        returns (RecoverAccountsResponse) {
         option (google.api.http) = {
             post: "/v1/pool/accounts/recover"
             body: "*"
