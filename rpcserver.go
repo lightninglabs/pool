@@ -96,35 +96,35 @@ func (s *accountStore) PendingBatch() error {
 // database is created in `serverDir` if it does not yet exist.
 func newRPCServer(server *Server) *rpcServer {
 	accountStore := &accountStore{server.db}
-	lnd := &server.lndServices.LndServices
+	lndServices := &server.lndServices.LndServices
 	pendingOpenChannels := make(chan *lnrpc.ChannelEventUpdate_PendingOpenChannel)
 	quit := make(chan struct{})
 	return &rpcServer{
 		server:      server,
-		lndServices: lnd,
+		lndServices: lndServices,
 		lndClient:   server.lndClient,
 		auctioneer:  server.AuctioneerClient,
 		accountManager: account.NewManager(&account.ManagerConfig{
 			Store:          accountStore,
 			Auctioneer:     server.AuctioneerClient,
-			Wallet:         lnd.WalletKit,
-			Signer:         lnd.Signer,
-			ChainNotifier:  lnd.ChainNotifier,
-			TxSource:       lnd.Client,
-			TxFeeEstimator: lnd.Client,
+			Wallet:         lndServices.WalletKit,
+			Signer:         lndServices.Signer,
+			ChainNotifier:  lndServices.ChainNotifier,
+			TxSource:       lndServices.Client,
+			TxFeeEstimator: lndServices.Client,
 			TxLabelPrefix:  server.cfg.TxLabelPrefix,
 		}),
 		orderManager: order.NewManager(&order.ManagerConfig{
 			Store:     server.db,
 			AcctStore: accountStore,
-			Lightning: lnd.Client,
-			Wallet:    lnd.WalletKit,
-			Signer:    lnd.Signer,
+			Lightning: lndServices.Client,
+			Wallet:    lndServices.WalletKit,
+			Signer:    lndServices.Signer,
 		}),
 		fundingManager: &fundingMgr{
 			db:                  server.db,
-			walletKit:           lnd.WalletKit,
-			lightningClient:     lnd.Client,
+			walletKit:           lndServices.WalletKit,
+			lightningClient:     lndServices.Client,
 			baseClient:          server.lndClient,
 			pendingOpenChannels: pendingOpenChannels,
 			quit:                quit,
@@ -578,7 +578,7 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 			"greater than 0")
 	}
 
-	account, err := s.accountManager.InitAccount(
+	acct, err := s.accountManager.InitAccount(
 		ctx, btcutil.Amount(req.AccountValue), expiryHeight,
 		bestHeight, confTarget,
 	)
@@ -586,7 +586,7 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 		return nil, err
 	}
 
-	return marshallAccount(account)
+	return marshallAccount(acct)
 }
 
 func (s *rpcServer) ListAccounts(ctx context.Context,
@@ -598,13 +598,13 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 	}
 
 	rpcAccounts := make([]*poolrpc.Account, 0, len(accounts))
-	for _, account := range accounts {
+	for _, acct := range accounts {
 		// Filter out inactive accounts if requested by the user.
-		if req.ActiveOnly && !account.State.IsActive() {
+		if req.ActiveOnly && !acct.State.IsActive() {
 			continue
 		}
-		
-		rpcAccount, err := marshallAccount(account)
+
+		rpcAccount, err := marshallAccount(acct)
 		if err != nil {
 			return nil, err
 		}
@@ -620,7 +620,7 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 
 	// Get the current fee schedule so we can compute the worst-case
 	// account debit assuming all our standing orders were matched.
-	terms, err := s.auctioneer.Terms(ctx)
+	auctionTerms, err := s.auctioneer.Terms(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
 			err)
@@ -629,8 +629,8 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 	// For each active account, consume the worst-case account delta if the
 	// order were to be matched.
 	accountDebits := make(map[[33]byte]btcutil.Amount)
-	auctionFeeSchedule := terms.FeeSchedule()
-	for _, account := range accounts {
+	auctionFeeSchedule := auctionTerms.FeeSchedule()
+	for _, acct := range accounts {
 		var (
 			debitAmt btcutil.Amount
 			acctKey  [33]byte
@@ -638,17 +638,17 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 
 		copy(
 			acctKey[:],
-			account.TraderKey.PubKey.SerializeCompressed(),
+			acct.TraderKey.PubKey.SerializeCompressed(),
 		)
 
 		// We'll make sure to accumulate a distinct sum for each
 		// outstanding account the user has.
-		for _, order := range orders {
-			if order.Details().AcctKey != acctKey {
+		for _, o := range orders {
+			if o.Details().AcctKey != acctKey {
 				continue
 			}
 
-			debitAmt += order.ReservedValue(auctionFeeSchedule)
+			debitAmt += o.ReservedValue(auctionFeeSchedule)
 		}
 
 		accountDebits[acctKey] = debitAmt
@@ -1140,7 +1140,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	}
 
 	// We also need to know the current maximum order duration.
-	terms, err := s.auctioneer.Terms(ctx)
+	auctionTerms, err := s.auctioneer.Terms(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not query auctioneer terms: %v",
 			err)
@@ -1149,15 +1149,15 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	// If the market isn't currently accepting orders for this particular
 	// lease duration, then we'll exit here as the order will be rejected.
 	leaseDuration := o.Details().LeaseDuration
-	if _, ok := terms.LeaseDurations[leaseDuration]; !ok {
+	if _, ok := auctionTerms.LeaseDurations[leaseDuration]; !ok {
 		return nil, fmt.Errorf("invalid channel lease duration %v "+
 			"blocks, active durations are: %v",
-			leaseDuration, terms.LeaseDurations)
+			leaseDuration, auctionTerms.LeaseDurations)
 	}
 
 	// Collect all the order data and sign it before sending it to the
 	// auction server.
-	serverParams, err := s.orderManager.PrepareOrder(ctx, o, acct, terms)
+	serverParams, err := s.orderManager.PrepareOrder(ctx, o, acct, auctionTerms)
 	if err != nil {
 		return nil, err
 	}
@@ -1589,7 +1589,7 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 func (s *rpcServer) AuctionFee(ctx context.Context,
 	_ *poolrpc.AuctionFeeRequest) (*poolrpc.AuctionFeeResponse, error) {
 
-	terms, err := s.auctioneer.Terms(ctx)
+	auctionTerms, err := s.auctioneer.Terms(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
 			err)
@@ -1598,8 +1598,8 @@ func (s *rpcServer) AuctionFee(ctx context.Context,
 	// TODO(roasbeef): accept the amt of order instead?
 	return &poolrpc.AuctionFeeResponse{
 		ExecutionFee: &poolrpc.ExecutionFee{
-			BaseFee: uint64(terms.OrderExecBaseFee),
-			FeeRate: uint64(terms.OrderExecFeeRate),
+			BaseFee: uint64(auctionTerms.OrderExecBaseFee),
+			FeeRate: uint64(auctionTerms.OrderExecFeeRate),
 		},
 	}, nil
 }
@@ -1907,14 +1907,14 @@ func (s *rpcServer) BatchSnapshot(ctx context.Context,
 func (s *rpcServer) LeaseDurations(ctx context.Context,
 	_ *poolrpc.LeaseDurationRequest) (*poolrpc.LeaseDurationResponse, error) {
 
-	terms, err := s.auctioneer.Terms(ctx)
+	auctionTerms, err := s.auctioneer.Terms(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
 			err)
 	}
 
 	return &poolrpc.LeaseDurationResponse{
-		LeaseDurations: terms.LeaseDurations,
+		LeaseDurations: auctionTerms.LeaseDurations,
 	}, nil
 }
 
@@ -1923,16 +1923,16 @@ func (s *rpcServer) LeaseDurations(ctx context.Context,
 func (s *rpcServer) NextBatchInfo(ctx context.Context,
 	_ *poolrpc.NextBatchInfoRequest) (*poolrpc.NextBatchInfoResponse, error) {
 
-	terms, err := s.auctioneer.Terms(ctx)
+	auctionTerms, err := s.auctioneer.Terms(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
 			err)
 	}
 
 	return &poolrpc.NextBatchInfoResponse{
-		ConfTarget:      terms.NextBatchConfTarget,
-		FeeRateSatPerKw: uint64(terms.NextBatchFeeRate),
-		ClearTimestamp:  uint64(terms.NextBatchClear.Unix()),
+		ConfTarget:      auctionTerms.NextBatchConfTarget,
+		FeeRateSatPerKw: uint64(auctionTerms.NextBatchFeeRate),
+		ClearTimestamp:  uint64(auctionTerms.NextBatchClear.Unix()),
 	}, nil
 }
 
