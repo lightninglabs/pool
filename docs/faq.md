@@ -116,7 +116,7 @@ Buyers and sellers of channels should expect service charges of 5-25 basis point
 
 ### Who pays the on-chain fees?
 
-When the channel is opened, the cost of opening the channel is split between the buyer and seller. When the channel is closed, the cost of closing the channel and future UTXO consolidation costs are paid by the buyer. 
+When the channel is opened, the cost of opening the channel is split between the buyer and seller. The Pool is not involved on the closing fees and they are charged like any other normal Lightning channel, with the channel's initiator being the seller.
 
 ### Who earns the routing fees from the channel that is opened with me?
 
