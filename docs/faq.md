@@ -116,7 +116,14 @@ Buyers and sellers of channels should expect service charges of 5-25 basis point
 
 ### Who pays the on-chain fees?
 
-When the channel is opened, the cost of opening the channel is split between the buyer and seller. When the channel is closed, the cost of closing the channel and future UTXO consolidation costs are paid by the buyer. 
+When the channel is opened, the cost of opening the channel is split between the
+buyer and seller. When closing the channel, the rules are the same as with any
+other LN channel: The initiator (in the Pool case the seller) pays the closing
+fee.
+
+This will be different with anchor output channels however, once they are rolled
+out by default (they're still experimental and need to be opt in). With those,
+the party initiating the force close will pay the chain fee for doing so.
 
 ### Who earns the routing fees from the channel that is opened with me?
 
