@@ -254,9 +254,6 @@ func (s *Server) Start() error {
 
 		log.Infof("RPC server listening on %s", s.grpcListener.Addr())
 		if s.restListener != nil {
-			s.restListener = tls.NewListener(
-				s.restListener, serverTLSCfg,
-			)
 			log.Infof("REST proxy listening on %s",
 				s.restListener.Addr())
 		}
