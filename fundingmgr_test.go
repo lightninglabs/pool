@@ -199,7 +199,7 @@ func newManagerHarness(t *testing.T) *managerHarness {
 	tempDir, err := ioutil.TempDir("", "client-db")
 	require.NoError(t, err)
 
-	db, err := clientdb.New(tempDir)
+	db, err := clientdb.New(tempDir, clientdb.DBFilename)
 	if err != nil {
 		_ = os.RemoveAll(tempDir)
 		t.Fatalf("unable to create new db: %v", err)

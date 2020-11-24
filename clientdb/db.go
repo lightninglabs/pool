@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	// dbFilename is the default filename of the client database.
-	dbFilename = "pool.db"
+	// DBFilename is the default filename of the client database.
+	DBFilename = "pool.db"
 
 	// dbFilePermission is the default permission the client database file
 	// is created with.
@@ -29,9 +29,9 @@ type DB struct {
 }
 
 // New creates a new bolt database that can be found at the given directory.
-func New(dir string) (*DB, error) {
+func New(dir, fileName string) (*DB, error) {
 	firstInit := false
-	path := filepath.Join(dir, dbFilename)
+	path := filepath.Join(dir, fileName)
 
 	// If the database file does not exist yet, create its directory.
 	if !fileExists(path) {

@@ -378,7 +378,7 @@ func (s *Server) setupClient() error {
 
 	// Open the main database.
 	var err error
-	s.db, err = clientdb.New(s.cfg.BaseDir)
+	s.db, err = clientdb.New(s.cfg.BaseDir, clientdb.DBFilename)
 	if err != nil {
 		return err
 	}
