@@ -586,7 +586,7 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 		return nil, err
 	}
 
-	return marshallAccount(acct)
+	return MarshallAccount(acct)
 }
 
 func (s *rpcServer) ListAccounts(ctx context.Context,
@@ -604,7 +604,7 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 			continue
 		}
 
-		rpcAccount, err := marshallAccount(acct)
+		rpcAccount, err := MarshallAccount(acct)
 		if err != nil {
 			return nil, err
 		}
@@ -671,7 +671,8 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 	}, nil
 }
 
-func marshallAccount(a *account.Account) (*poolrpc.Account, error) {
+// MarshallAccount returns the RPC representation of an account.
+func MarshallAccount(a *account.Account) (*poolrpc.Account, error) {
 	var rpcState poolrpc.AccountState
 	switch a.State {
 	case account.StateInitiated, account.StatePendingOpen:
@@ -753,7 +754,7 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 		return nil, err
 	}
 
-	rpcModifiedAccount, err := marshallAccount(modifiedAccount)
+	rpcModifiedAccount, err := MarshallAccount(modifiedAccount)
 	if err != nil {
 		return nil, err
 	}
@@ -805,7 +806,7 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 		return nil, err
 	}
 
-	rpcModifiedAccount, err := marshallAccount(modifiedAccount)
+	rpcModifiedAccount, err := MarshallAccount(modifiedAccount)
 	if err != nil {
 		return nil, err
 	}
@@ -1259,7 +1260,7 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			continue
 		}
 
-		orderState, err := dbOrderStateToRPCState(dbDetails.State)
+		orderState, err := DBOrderStateToRPCState(dbDetails.State)
 		if err != nil {
 			return nil, err
 		}
@@ -1989,9 +1990,9 @@ func rpcOrderStateToDBState(state poolrpc.OrderState) (order.State, error) {
 	}
 }
 
-// dbOrderStateToRPCState maps the order state as stored in the database to the
+// DBOrderStateToRPCState maps the order state as stored in the database to the
 // corresponding RPC enum type.
-func dbOrderStateToRPCState(state order.State) (poolrpc.OrderState, error) {
+func DBOrderStateToRPCState(state order.State) (poolrpc.OrderState, error) {
 	switch state {
 	case order.StateSubmitted:
 		return poolrpc.OrderState_ORDER_SUBMITTED, nil
@@ -2064,11 +2065,11 @@ func dbEventsToRPCEvents(dbEvents []event.Event) ([]*poolrpc.OrderEvent,
 			// itself is stored for this event type.
 
 		case *clientdb.UpdatedEvent:
-			prevState, err := dbOrderStateToRPCState(e.PrevState)
+			prevState, err := DBOrderStateToRPCState(e.PrevState)
 			if err != nil {
 				return nil, err
 			}
-			newState, err := dbOrderStateToRPCState(e.NewState)
+			newState, err := DBOrderStateToRPCState(e.NewState)
 			if err != nil {
 				return nil, err
 			}
