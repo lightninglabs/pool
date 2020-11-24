@@ -114,9 +114,20 @@ In the future this node may be removed from the market.
 
 Buyers and sellers of channels should expect service charges of 5-25 basis points each.
 
+A one time payment of 1000 satoshi is also required to obtain an
+[LSAT](https://lsat.tech) token to communicate with the auction server. That
+token currently does not expire and can therefore be used indefinitely.
+
 ### Who pays the on-chain fees?
 
-When the channel is opened, the cost of opening the channel is split between the buyer and seller. When the channel is closed, the cost of closing the channel and future UTXO consolidation costs are paid by the buyer. 
+When the channel is opened, the cost of opening the channel is split between the
+buyer and seller. When closing the channel, the rules are the same as with any
+other LN channel: The initiator (in the Pool case the seller) pays the closing
+fee.
+
+This will be different with anchor output channels however, once they are rolled
+out by default (they're still experimental and need to be opt in). With those,
+the party initiating the force close will pay the chain fee for doing so.
 
 ### Who earns the routing fees from the channel that is opened with me?
 
@@ -158,3 +169,14 @@ To participate in an auction, the `poold` trader daemon needs to be in constant 
 
 Once all orders are in a final state \(either fully matched or canceled\), the trader daemon can be safely shut down.
 
+### I want to move `poold` to another machine, what files do I need to move?
+
+As long as there are no differences in the operating system or the processor
+architecture, moving `poold` to another machine is as easy as moving the `.pool`
+directory.
+
+However, because `poold` doesn't have any private keys on its own, it always has
+to be connected to the same `lnd` node. Moving `poold` between nodes is not
+supported and will result in errors. If you need to use a different `lnd` node,
+cancel all orders and close all accounts first, then start a fresh `poold` with
+a new `lnd` instance.
