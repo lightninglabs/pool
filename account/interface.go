@@ -116,6 +116,18 @@ func (s State) String() string {
 	}
 }
 
+// IsActive returns true if the state is considered to be an active account
+// state.
+func (s State) IsActive() bool {
+	switch s {
+	case StateClosed, StateCanceledAfterRecovery:
+		return false
+
+	default:
+		return true
+	}
+}
+
 // Account encapsulates all of the details of a CLM account on-chain from
 // the trader's perspective.
 type Account struct {

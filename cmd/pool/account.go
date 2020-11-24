@@ -202,6 +202,12 @@ var listAccountsCommand = cli.Command{
 	Usage:       "list all existing accounts",
 	Description: `List all existing accounts.`,
 	Action:      listAccounts,
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "show_archived",
+			Usage: "include accounts that are no longer active",
+		},
+	},
 }
 
 func listAccounts(ctx *cli.Context) error {
@@ -211,8 +217,16 @@ func listAccounts(ctx *cli.Context) error {
 	}
 	defer cleanup()
 
+	// Default to only showing active accounts.
+	activeOnly := true
+	if ctx.Bool("show_archived") {
+		activeOnly = false
+	}
+
 	resp, err := client.ListAccounts(
-		context.Background(), &poolrpc.ListAccountsRequest{},
+		context.Background(), &poolrpc.ListAccountsRequest{
+			ActiveOnly: activeOnly,
+		},
 	)
 	if err != nil {
 		return err
