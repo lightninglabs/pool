@@ -660,7 +660,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	// can be marked as closed if we decide to close it.
 	case StateExpired:
 		log.Infof("Watching expired account %x for spend",
-			account.TraderKey)
+			account.TraderKey.PubKey.SerializeCompressed())
 
 		err = m.watcher.WatchAccountSpend(
 			account.TraderKey.PubKey, account.OutPoint,
@@ -684,7 +684,8 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 			return err
 		}
 
-		log.Infof("Watching account %x for spend", account.TraderKey)
+		log.Infof("Watching account %x for spend",
+			account.TraderKey.PubKey.SerializeCompressed())
 		err = m.watcher.WatchAccountSpend(
 			account.TraderKey.PubKey, account.OutPoint,
 			accountOutput.PkScript, account.HeightHint,
