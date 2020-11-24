@@ -15,6 +15,8 @@ import (
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/signal"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const Subsystem = "LLMD"
@@ -124,7 +126,9 @@ type errorLoggingClientStream struct {
 // RecvMsg attempts to recv a message, but logs an error if it occurs.
 func (e *errorLoggingClientStream) RecvMsg(m interface{}) error {
 	err := e.ClientStream.RecvMsg(m)
-	if err != nil {
+	s, ok := status.FromError(err)
+	isCtxCanceledErr := ok && s.Code() == codes.Canceled
+	if err != nil && !isCtxCanceledErr {
 		e.logger.Errorf("[%v]: %v", e.methodName, err)
 	}
 

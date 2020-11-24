@@ -10,6 +10,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chainntnfs"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // expiryReq is an internal message we'll sumbit to the Watcher to process for
@@ -109,6 +111,7 @@ func (w *Watcher) Stop() {
 	w.stopped.Do(func() {
 		close(w.quit)
 		w.wg.Wait()
+
 		for _, cancel := range w.ctxCancels {
 			cancel()
 		}
@@ -264,6 +267,13 @@ func (w *Watcher) waitForAccountConf(traderKey *btcec.PublicKey,
 
 	case err := <-errChan:
 		if err != nil {
+			// Ignore context canceled error due to possible manual
+			// cancellation.
+			s, ok := status.FromError(err)
+			if ok && s.Code() == codes.Canceled {
+				return
+			}
+
 			log.Errorf("Unable to determine confirmation for "+
 				"account %x: %v",
 				traderKey.SerializeCompressed(), err)
@@ -336,6 +346,13 @@ func (w *Watcher) waitForAccountSpend(traderKey *btcec.PublicKey,
 
 	case err := <-errChan:
 		if err != nil {
+			// Ignore context canceled error due to possible manual
+			// cancellation.
+			s, ok := status.FromError(err)
+			if ok && s.Code() == codes.Canceled {
+				return
+			}
+
 			log.Errorf("Unable to determine spend for account %x: "+
 				"%v", traderKey.SerializeCompressed(), err)
 		}
