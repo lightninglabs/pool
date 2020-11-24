@@ -74,6 +74,7 @@ type Server struct {
 	restProxy       *http.Server
 	grpcListener    net.Listener
 	restListener    net.Listener
+	restCancel      func()
 	macaroonService *macaroons.Service
 	wg              sync.WaitGroup
 }
@@ -194,8 +195,8 @@ func (s *Server) Start() error {
 
 		// We'll also create and start an accompanying proxy to serve
 		// clients through REST.
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		var ctx context.Context
+		ctx, s.restCancel = context.WithCancel(context.Background())
 		mux := proxy.NewServeMux()
 		proxyOpts := []grpc.DialOption{
 			grpc.WithTransportCredentials(*restClientCreds),
@@ -254,9 +255,6 @@ func (s *Server) Start() error {
 
 		log.Infof("RPC server listening on %s", s.grpcListener.Addr())
 		if s.restListener != nil {
-			s.restListener = tls.NewListener(
-				s.restListener, serverTLSCfg,
-			)
 			log.Infof("REST proxy listening on %s",
 				s.restListener.Addr())
 		}
@@ -479,6 +477,10 @@ func (s *Server) Stop() error {
 		shutdownErr = err
 	}
 	s.grpcServer.GracefulStop()
+
+	if s.restCancel != nil {
+		s.restCancel()
+	}
 	if s.restProxy != nil {
 		err := s.restProxy.Shutdown(context.Background())
 		if err != nil {
