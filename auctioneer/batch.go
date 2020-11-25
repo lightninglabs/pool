@@ -66,14 +66,14 @@ func (c *Client) checkPendingBatch() error {
 // finalizedBatchTx retrieves the finalized transaction of a batch according to
 // the auctioneer, i.e., the transaction that will be broadcast to the network.
 func (c *Client) finalizedBatchTx(id order.BatchID) (*wire.MsgTx, error) {
-	req := &poolrpc.RelevantBatchRequest{Id: id[:]}
-	batch, err := c.client.RelevantBatchSnapshot(context.Background(), req)
+	req := &poolrpc.BatchSnapshotRequest{BatchId: id[:]}
+	batch, err := c.client.BatchSnapshot(context.Background(), req)
 	if err != nil {
 		return nil, err
 	}
 
 	var batchTx wire.MsgTx
-	err = batchTx.Deserialize(bytes.NewReader(batch.Transaction))
+	err = batchTx.Deserialize(bytes.NewReader(batch.BatchTx))
 	if err != nil {
 		return nil, err
 	}
