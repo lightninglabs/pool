@@ -925,6 +925,12 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 		orderDetails := dbOrder.Details()
 		nonce := orderDetails.Nonce()
 
+		// There's no need to query for an order in a terminal state
+		// from our PoV as it can't transition back to active.
+		if dbOrder.Details().State.Archived() {
+			continue
+		}
+
 		// To ensure we have the latest order state, we'll consult with
 		// the auctioneer's state.
 		orderStateResp, err := s.auctioneer.OrderState(ctx, nonce)
@@ -938,9 +944,7 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 
 		// If the order isn't in the base state, then we'll skip it as
 		// it isn't considered an "active" order.
-		switch orderState {
-		case order.StateFailed, order.StateExpired,
-			order.StateCanceled, order.StateExecuted:
+		if orderState.Archived() {
 			continue
 		}
 
