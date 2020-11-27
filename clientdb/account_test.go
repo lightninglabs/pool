@@ -51,7 +51,7 @@ func newTestDB(t *testing.T) (*DB, func()) {
 		t.Fatalf("unable to create temp dir: %v", err)
 	}
 
-	db, err := New(tempDir)
+	db, err := New(tempDir, DBFilename)
 	if err != nil {
 		os.RemoveAll(tempDir)
 		t.Fatalf("unable to create new db: %v", err)

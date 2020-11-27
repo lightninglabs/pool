@@ -477,7 +477,8 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 	if c.serverStream == nil {
 		err := c.connectServerStream(0, initialConnectRetries)
 		if err != nil {
-			return sub, false, err
+			return sub, false, fmt.Errorf("connecting server "+
+				"stream failed: %v", err)
 		}
 
 		// Since this is the first time we establish our connection to
@@ -485,7 +486,8 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		// batch as finalized, or if we need to remove it due to the
 		// batch auction no longer including us.
 		if err := c.checkPendingBatch(); err != nil {
-			return sub, false, err
+			return sub, false, fmt.Errorf("checking pending "+
+				"batch failed: %v", err)
 		}
 	}
 

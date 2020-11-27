@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/btcsuite/btcd/wire"
@@ -41,7 +42,7 @@ func (c *Client) checkPendingBatch() error {
 		return nil
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("loading pending batch failed: %v", err)
 	}
 
 	finalizedTx, err := c.finalizedBatchTx(id)
@@ -53,7 +54,7 @@ func (c *Client) checkPendingBatch() error {
 		return nil
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("querying finalized batch TX failed: %v", err)
 	}
 
 	if tx.TxHash() != finalizedTx.TxHash() {
@@ -69,13 +70,14 @@ func (c *Client) finalizedBatchTx(id order.BatchID) (*wire.MsgTx, error) {
 	req := &poolrpc.BatchSnapshotRequest{BatchId: id[:]}
 	batch, err := c.client.BatchSnapshot(context.Background(), req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("querying relevant batch snapshot "+
+			"failed: %v", err)
 	}
 
 	var batchTx wire.MsgTx
 	err = batchTx.Deserialize(bytes.NewReader(batch.BatchTx))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("deserializing batch TX failed: %v", err)
 	}
 
 	return &batchTx, nil

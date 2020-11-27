@@ -126,6 +126,7 @@ func main() {
 	app.Commands = append(app.Commands, ordersCommands...)
 	app.Commands = append(app.Commands, auctionCommands...)
 	app.Commands = append(app.Commands, listAuthCommand)
+	app.Commands = append(app.Commands, debugCommands...)
 
 	err := app.Run(os.Args)
 	if err != nil {
