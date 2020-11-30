@@ -268,7 +268,7 @@ var depositAccountCommand = cli.Command{
 		cli.Uint64Flag{
 			Name: "sat_per_vbyte",
 			Usage: "the fee rate expressed in sat/vbyte that " +
-				"should be used for the withdrawal",
+				"should be used for the deposit",
 		},
 	},
 	Action: depositAccount,
