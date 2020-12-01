@@ -12,10 +12,20 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
+)
+
+const (
+	// MaxBatchIDHistoryLookup is the maximum number of iterations we do
+	// when iterating batch IDs. It's unlikely to happen but in case we
+	// start from an invalid value we want to avoid an endless loop. If we
+	// ever have more than that many batches, we need to handle them in
+	// multiple steps anyway.
+	MaxBatchIDHistoryLookup = 10_000
 )
 
 // BatchVersion is the type for the batch verification protocol.
@@ -392,4 +402,43 @@ type BatchStorer interface {
 	// MarkBatchComplete marks a pending batch as complete, allowing a
 	// trader to participate in a new batch.
 	MarkBatchComplete() error
+}
+
+// DecrementingBatchIDs lists all possible batch IDs that can exist between a
+// start and end key. Start key must be the larger/higher key, decrementing it a
+// given number of times should finally result in the end key. If the keys
+// aren't related or are too far apart, we return a maximum number of IDs that
+// corresponds to our safety net parameter and the end key won't be contained in
+// the list. The returned list is in descending order, meaning the first entry
+// is the start key, the last entry is the end key.
+func DecrementingBatchIDs(startKey, endKey *btcec.PublicKey) []BatchID {
+	var (
+		result       = []BatchID{NewBatchID(startKey)}
+		tempBatchKey = startKey
+		numIDs       = 0
+	)
+
+	// No need to loop if start and end are the same.
+	if startKey.IsEqual(endKey) {
+		return result
+	}
+
+	for !tempBatchKey.IsEqual(endKey) {
+		numIDs++
+
+		// Unlikely to happen but in case we start from an invalid value
+		// we want to avoid an endless loop. This will cause the list to
+		// be incomplete if we ever have more than the maximum number of
+		// batches. But there is no scenario where it makes sense to
+		// work with more than that number of batches in one step. So if
+		// we ever do have more than that maximum number of batches, we
+		// need to query them in multiple steps.
+		if numIDs >= MaxBatchIDHistoryLookup {
+			break
+		}
+
+		tempBatchKey = poolscript.DecrementKey(tempBatchKey)
+		result = append(result, NewBatchID(tempBatchKey))
+	}
+	return result
 }

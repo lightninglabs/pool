@@ -146,6 +146,10 @@ rpc:
 	@$(call print, "Compiling protos.")
 	cd ./poolrpc; ./gen_protos.sh
 
+rpc-format:
+	@$(call print, "Formatting protos.")
+	cd ./poolrpc; find . -name "*.proto" | xargs clang-format --style=file -i
+
 clean:
 	@$(call print, "Cleaning source.$(NC)")
 	$(RM) ./pool
