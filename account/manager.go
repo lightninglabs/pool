@@ -1039,15 +1039,14 @@ func (m *Manager) DepositAccount(ctx context.Context,
 	// required new value of the account as part of the deposit. The
 	// selected inputs, along with a change output if needed, will then be
 	// included in the deposit transaction we'll broadcast.
-	witnessType := determineWitnessType(account, bestHeight)
 	inputs, releaseInputs, changeOutput, err := m.inputsForDeposit(
-		ctx, depositAmount, witnessType, feeRate,
+		ctx, depositAmount, multiSigWitness, feeRate,
 	)
 	if err != nil {
 		return nil, nil, err
 	}
 	newAccountOutput, modifiers, err := createNewAccountOutput(
-		account, newAccountValue,
+		account, newAccountValue, nil,
 	)
 	if err != nil {
 		releaseInputs()
@@ -1064,7 +1063,7 @@ func (m *Manager) DepositAccount(ctx context.Context,
 	}
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
 	modifiedAccount, spendPkg, err := m.spendAccount(
-		ctx, account, inputs, outputs, witnessType, modifiers, false,
+		ctx, account, inputs, outputs, multiSigWitness, modifiers, false,
 		bestHeight,
 	)
 	if err != nil {
@@ -1097,15 +1096,14 @@ func (m *Manager) WithdrawAccount(ctx context.Context,
 	// To start, we'll need to determine the new value of the account after
 	// creating the outputs specified as part of the withdrawal, which we'll
 	// then use to create the new account output.
-	witnessType := determineWitnessType(account, bestHeight)
-	newAccountValue, err := valueAfterWithdrawal(
-		account, outputs, witnessType, feeRate,
+	newAccountValue, err := valueAfterAccountUpdate(
+		account, outputs, multiSigWitness, feeRate,
 	)
 	if err != nil {
 		return nil, nil, err
 	}
 	newAccountOutput, modifiers, err := createNewAccountOutput(
-		account, newAccountValue,
+		account, newAccountValue, nil,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1118,9 +1116,73 @@ func (m *Manager) WithdrawAccount(ctx context.Context,
 	outputs = append(outputs, newAccountOutput)
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
 	modifiedAccount, spendPkg, err := m.spendAccount(
-		ctx, account, nil, outputs, witnessType, modifiers, false,
+		ctx, account, nil, outputs, multiSigWitness, modifiers, false,
 		bestHeight,
 	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return modifiedAccount, spendPkg.tx, nil
+}
+
+// RenewAccount updates the expiration of an open/expired account. This will
+// always require a signature from the auctioneer, even after the account has
+// expired, to ensure the auctioneer is aware the account is being renewed.
+func (m *Manager) RenewAccount(ctx context.Context,
+	traderKey *btcec.PublicKey, newExpiry uint32,
+	feeRate chainfee.SatPerKWeight, bestHeight uint32) (*Account,
+	*wire.MsgTx, error) {
+
+	// The account can only have its expiry updated if it has confirmed
+	// and/or has expired.
+	account, err := m.cfg.Store.Account(traderKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	switch account.State {
+	case StateOpen, StatePendingBatch, StateExpired:
+	default:
+		return nil, nil, fmt.Errorf("account must be in either of %v "+
+			"to be renewed",
+			[]State{StateOpen, StatePendingBatch, StateExpired})
+	}
+
+	// Validate the new expiry.
+	if err := validateAccountExpiry(newExpiry, bestHeight); err != nil {
+		return nil, nil, err
+	}
+
+	// Determine the new account output after attempting the expiry update.
+	newAccountValue, err := valueAfterAccountUpdate(
+		account, nil, multiSigWitness, feeRate,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	newAccountOutput, modifiers, err := createNewAccountOutput(
+		account, newAccountValue, &newExpiry,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// With the output created, we'll tack on an additional
+	// `StatePendingUpdate` modifier to our account and proceed with the
+	// rest of the flow. This should request a signature from the auctioneer
+	// and assuming it's valid, broadcast the update transaction.
+	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
+	modifiedAccount, spendPkg, err := m.spendAccount(
+		ctx, account, nil, []*wire.TxOut{newAccountOutput},
+		multiSigWitness, modifiers, false, bestHeight,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Begin to track the new account expiration, which will overwrite the
+	// existing expiration request.
+	err = m.watcher.WatchAccountExpiration(traderKey, modifiedAccount.Expiry)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1260,8 +1322,6 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 	)
 	switch witnessType {
 	case expiryWitness:
-		// TODO(wilmer): Support modifications through the expiry path.
-		// This will require a new account expiration.
 		if !isClose {
 			return nil, nil, errors.New("modifications for expired " +
 				"accounts are not currently supported")
@@ -1273,6 +1333,9 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 
 	case multiSigWitness:
 		spendPkg, err = m.createSpendTx(ctx, account, inputs, outputs, 0)
+
+	default:
+		err = fmt.Errorf("unhandled witness type: %v", witnessType)
 	}
 	if err != nil {
 		return nil, nil, err
@@ -1548,11 +1611,11 @@ func addBaseAccountModificationWeight(weightEstimator *input.TxWeightEstimator,
 	return nil
 }
 
-// valueAfterWithdrawal determines the new value of an account after processing
-// a withdrawal to the specified outputs at the provided fee rate.
-func valueAfterWithdrawal(accountBeforeWithdrawl *Account,
-	withdrawalOutputs []*wire.TxOut, witnessType witnessType,
-	feeRate chainfee.SatPerKWeight) (btcutil.Amount, error) {
+// valueAfterAccountUpdate determines the new value of an account after
+// processing a withdrawal to the specified outputs at the provided fee rate.
+func valueAfterAccountUpdate(account *Account, outputs []*wire.TxOut,
+	witnessType witnessType, feeRate chainfee.SatPerKWeight) (
+	btcutil.Amount, error) {
 
 	// To determine the new value of the account, we'll need to subtract the
 	// values of all additional outputs and the resulting fee of the
@@ -1570,7 +1633,7 @@ func valueAfterWithdrawal(accountBeforeWithdrawl *Account,
 	// We'll then add the weight estimates for any additional outputs
 	// provided, keeping track of the total output value sum as we go.
 	var outputTotal btcutil.Amount
-	for _, out := range withdrawalOutputs {
+	for _, out := range outputs {
 		// To determine the proper weight of the output, we'll need to
 		// know its type.
 		pkScript, err := txscript.ParsePkScript(out.PkScript)
@@ -1598,7 +1661,7 @@ func valueAfterWithdrawal(accountBeforeWithdrawl *Account,
 	// from our input total and ensure our new account value isn't below our
 	// required minimum.
 	fee := feeRate.FeeForWeight(int64(weightEstimator.Weight()))
-	newAccountValue := accountBeforeWithdrawl.Value - outputTotal - fee
+	newAccountValue := account.Value - outputTotal - fee
 	if newAccountValue < MinAccountValue {
 		return 0, fmt.Errorf("new account value is below accepted "+
 			"minimum of %v", MinAccountValue)
@@ -1713,23 +1776,21 @@ coinSelection:
 }
 
 // createNewAccountOutput creates the next account output in the sequence using
-// the new account value.
-func createNewAccountOutput(account *Account, newAccountValue btcutil.Amount) (
-	*wire.TxOut, []Modifier, error) {
+// the new account value and optional new account expiry.
+func createNewAccountOutput(account *Account, newAccountValue btcutil.Amount,
+	newAccountExpiry *uint32) (*wire.TxOut, []Modifier, error) {
 
-	// Use the next output script in the sequence to avoid script reuse.
-	newPkScript, err := account.NextOutputScript()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	newAccountOutput := &wire.TxOut{
-		Value:    int64(newAccountValue),
-		PkScript: newPkScript,
-	}
 	modifiers := []Modifier{
 		ValueModifier(newAccountValue),
 		IncrementBatchKey(),
+	}
+	if newAccountExpiry != nil {
+		modifiers = append(modifiers, ExpiryModifier(*newAccountExpiry))
+	}
+
+	newAccountOutput, err := account.Copy(modifiers...).Output()
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return newAccountOutput, modifiers, nil
@@ -1873,16 +1934,9 @@ func validateAccountValue(value, maxValue btcutil.Amount) error {
 	return nil
 }
 
-// validateAccountParams ensures that a trader has provided sane parameters for
-// the creation of a new account.
-func validateAccountParams(value, maxValue btcutil.Amount, expiry,
-	bestHeight uint32) error {
-
-	err := validateAccountValue(value, maxValue)
-	if err != nil {
-		return err
-	}
-
+// validateAccountExpiry ensures that a trader has provided a sane account expiry
+// for the creation/modification of an account.
+func validateAccountExpiry(expiry, bestHeight uint32) error {
 	if expiry < bestHeight+minAccountExpiry {
 		return fmt.Errorf("current minimum account expiry allowed is "+
 			"height %v", bestHeight+minAccountExpiry)
@@ -1893,6 +1947,18 @@ func validateAccountParams(value, maxValue btcutil.Amount, expiry,
 	}
 
 	return nil
+}
+
+// validateAccountParams ensures that a trader has provided sane parameters for
+// the creation of a new account.
+func validateAccountParams(value, maxValue btcutil.Amount, expiry,
+	bestHeight uint32) error {
+
+	err := validateAccountValue(value, maxValue)
+	if err != nil {
+		return err
+	}
+	return validateAccountExpiry(expiry, bestHeight)
 }
 
 // numConfsForValue chooses an appropriate number of confirmations to wait for
