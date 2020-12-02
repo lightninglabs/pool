@@ -46,6 +46,10 @@ var (
 			Entity: "account",
 			Action: "write",
 		}},
+		"/poolrpc.Trader/RenewAccount": {{
+			Entity: "account",
+			Action: "write",
+		}},
 		"/poolrpc.Trader/BumpAccountFee": {{
 			Entity: "account",
 			Action: "write",

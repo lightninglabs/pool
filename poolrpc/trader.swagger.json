@@ -284,6 +284,39 @@
         ]
       }
     },
+    "/v1/pool/accounts/renew": {
+      "post": {
+        "summary": "pool: `accounts renew`\nRenewAccount renews the expiration of an account.",
+        "operationId": "RenewAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcRenewAccountResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/poolrpcRenewAccountRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/pool/accounts/withdraw": {
       "post": {
         "summary": "pool: `accounts withdraw`\nWithdrawAccount splits off parts of the account balance into the specified\noutputs while recreating the account with a reduced balance.",
@@ -1512,6 +1545,45 @@
           "type": "integer",
           "format": "int64",
           "description": "The number of accounts that were recovered."
+        }
+      }
+    },
+    "poolrpcRenewAccountRequest": {
+      "type": "object",
+      "properties": {
+        "account_key": {
+          "type": "string",
+          "format": "byte",
+          "description": "The key associated with the account to renew."
+        },
+        "absolute_expiry": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The new absolute expiration height of the account."
+        },
+        "relative_expiry": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The new relative expiration height of the account."
+        },
+        "fee_rate_sat_per_kw": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The fee rate, in satoshis per kw, to use for the renewal transaction."
+        }
+      }
+    },
+    "poolrpcRenewAccountResponse": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/definitions/poolrpcAccount",
+          "description": "The state of the account after processing the renewal."
+        },
+        "renewal_txid": {
+          "type": "string",
+          "format": "byte",
+          "description": "The transaction used to renew the expiration of the account."
         }
       }
     },

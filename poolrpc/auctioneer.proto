@@ -926,6 +926,9 @@ message ServerModifyAccountRequest {
     message NewAccountParameters {
         // The new value of the account.
         uint64 value = 1;
+
+        // The new expiry of the account as an absolute height.
+        uint32 expiry = 2;
     }
 
     // The new parameters to apply for the account.
