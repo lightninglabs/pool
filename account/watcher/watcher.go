@@ -44,7 +44,7 @@ type Config struct {
 	// HandleAccountExpiry the operations that should be perform for an
 	// account once it's expired. The account is identified by its user sub
 	// key (i.e., trader key).
-	HandleAccountExpiry func(*btcec.PublicKey) error
+	HandleAccountExpiry func(*btcec.PublicKey, uint32) error
 }
 
 // Watcher is responsible for the on-chain interaction of an account, whether
@@ -135,9 +135,13 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 		// bestHeight is the height we believe the current chain is at.
 		bestHeight uint32
 
-		// expirations keeps track of all registered accounts that
-		// expire at a certain height.
-		expirations = make(map[uint32][]*btcec.PublicKey)
+		// expirations keeps track of the current accounts we're
+		// watching expirations for.
+		expirations = make(map[[33]byte]uint32)
+
+		// expirationsPerHeight keeps track of all registered accounts
+		// that expire at a certain height.
+		expirationsPerHeight = make(map[uint32][]*btcec.PublicKey)
 	)
 
 	// Wait for the initial block notification to be received before we
@@ -159,8 +163,23 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 		case newBlock := <-blockChan:
 			bestHeight = uint32(newBlock)
 
-			for _, traderKey := range expirations[bestHeight] {
-				err := w.cfg.HandleAccountExpiry(traderKey)
+			for _, traderKey := range expirationsPerHeight[bestHeight] {
+				var accountKey [33]byte
+				copy(accountKey[:], traderKey.SerializeCompressed())
+
+				// If the account doesn't exist within the
+				// expiration set, then the request was
+				// canceled and there's nothing for us to do.
+				// Similarly, if the request was updated to
+				// track a new height, then we can skip it.
+				curExpiry, ok := expirations[accountKey]
+				if !ok || bestHeight != curExpiry {
+					continue
+				}
+
+				err := w.cfg.HandleAccountExpiry(
+					traderKey, bestHeight,
+				)
 				if err != nil {
 					log.Errorf("Unable to handle "+
 						"expiration of account %x: %v",
@@ -169,7 +188,7 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 				}
 			}
 
-			delete(expirations, bestHeight)
+			delete(expirationsPerHeight, bestHeight)
 
 		// An error occurred while being sent a block notification.
 		case err := <-errChan:
@@ -178,21 +197,28 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 
 		// A new watch expiry request has been received for an account.
 		case req := <-w.expiryReqs:
+			var accountKey [33]byte
+			copy(accountKey[:], req.traderKey.SerializeCompressed())
+
 			// If it's already expired, we don't need to track it.
 			if req.expiry <= bestHeight {
-				err := w.cfg.HandleAccountExpiry(req.traderKey)
+				err := w.cfg.HandleAccountExpiry(
+					req.traderKey, bestHeight,
+				)
 				if err != nil {
 					log.Errorf("Unable to handle "+
 						"expiration of account %x: %v",
 						req.traderKey.SerializeCompressed(),
 						err)
 				}
+				delete(expirations, accountKey)
 
 				continue
 			}
 
-			expirations[req.expiry] = append(
-				expirations[req.expiry], req.traderKey,
+			expirations[accountKey] = req.expiry
+			expirationsPerHeight[req.expiry] = append(
+				expirationsPerHeight[req.expiry], req.traderKey,
 			)
 
 		case <-w.quit:
@@ -358,6 +384,8 @@ func (w *Watcher) waitForAccountSpend(traderKey *btcec.PublicKey,
 }
 
 // WatchAccountExpiration watches for the expiration of an account on-chain.
+// Successive calls for the same account will cancel any previous expiration
+// watch requests and the new expiration will be tracked instead.
 func (w *Watcher) WatchAccountExpiration(traderKey *btcec.PublicKey,
 	expiry uint32) error {
 
