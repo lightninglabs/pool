@@ -62,6 +62,9 @@ const (
 
 	accountExpiryRelative = "expiry_blocks"
 
+	// Equivalent to approx. 30d in blocks.
+	defaultExpiryRelative = 30 * 144
+
 	defaultFundingConfTarget = 6
 )
 
@@ -69,7 +72,7 @@ var newAccountCommand = cli.Command{
 	Name:      "new",
 	ShortName: "n",
 	Usage:     "create an account",
-	ArgsUsage: "amt expiry",
+	ArgsUsage: "amt [--expiry_height | --expiry_blocks]",
 	Description: `
 		Send the amount in satoshis specified by the amt argument to a
 		new account.`,
@@ -86,7 +89,9 @@ var newAccountCommand = cli.Command{
 		cli.Uint64Flag{
 			Name: accountExpiryRelative,
 			Usage: "the relative height (from the current chain " +
-				"height) that the account should expire at",
+				"height) that the account should expire at " +
+				"(default of 30 days equivalent in blocks)",
+			Value: defaultExpiryRelative,
 		},
 		cli.Uint64Flag{
 			Name: "conf_target",
@@ -118,22 +123,19 @@ func newAccount(ctx *cli.Context) error {
 		},
 	}
 
-	if ctx.IsSet(accountExpiryAbsolute) && ctx.IsSet(accountExpiryRelative) {
-		return fmt.Errorf("only %v or %v should be set, but not both",
-			accountExpiryAbsolute, accountExpiryRelative)
-	}
-
-	if height, err := parseUint64(ctx, 1, accountExpiryAbsolute, cmd); err == nil {
+	// Parse the expiry in either of its forms. We'll always prefer the
+	// absolute expiry over the relative as the relative has a default value
+	// present.
+	switch {
+	case ctx.Uint64(accountExpiryAbsolute) != 0:
 		req.AccountExpiry = &poolrpc.InitAccountRequest_AbsoluteHeight{
-			AbsoluteHeight: uint32(height),
+			AbsoluteHeight: uint32(ctx.Uint64(accountExpiryAbsolute)),
 		}
-	} else if height, err := parseUint64(ctx, 1, accountExpiryRelative, cmd); err == nil {
+
+	default:
 		req.AccountExpiry = &poolrpc.InitAccountRequest_RelativeHeight{
-			RelativeHeight: uint32(height),
+			RelativeHeight: uint32(ctx.Uint64(accountExpiryRelative)),
 		}
-	} else {
-		return fmt.Errorf("either a relative or absolute height must " +
-			"be specified")
 	}
 
 	client, cleanup, err := getClient(ctx)
