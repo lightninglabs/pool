@@ -61,11 +61,9 @@ type Watcher struct {
 	quit       chan struct{}
 	ctxCancels []func()
 
-	spendCancelMtx sync.Mutex
-	spendCancels   map[[33]byte]func()
-
-	confCancelMtx sync.Mutex
-	confCancels   map[[33]byte]func()
+	cancelMtx    sync.Mutex
+	spendCancels map[[33]byte]func()
+	confCancels  map[[33]byte]func()
 }
 
 // New instantiates a new chain watcher backed by the given config.
@@ -116,17 +114,14 @@ func (w *Watcher) Stop() {
 			cancel()
 		}
 
-		w.spendCancelMtx.Lock()
+		w.cancelMtx.Lock()
 		for _, cancel := range w.spendCancels {
 			cancel()
 		}
-		w.spendCancelMtx.Unlock()
-
-		w.confCancelMtx.Lock()
 		for _, cancel := range w.confCancels {
 			cancel()
 		}
-		w.confCancelMtx.Unlock()
+		w.cancelMtx.Unlock()
 	})
 }
 
@@ -214,8 +209,8 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 func (w *Watcher) WatchAccountConf(traderKey *btcec.PublicKey,
 	txHash chainhash.Hash, script []byte, numConfs, heightHint uint32) error {
 
-	w.confCancelMtx.Lock()
-	defer w.confCancelMtx.Unlock()
+	w.cancelMtx.Lock()
+	defer w.cancelMtx.Unlock()
 
 	var traderKeyRaw [33]byte
 	copy(traderKeyRaw[:], traderKey.SerializeCompressed())
@@ -253,9 +248,9 @@ func (w *Watcher) waitForAccountConf(traderKey *btcec.PublicKey,
 	defer func() {
 		w.wg.Done()
 
-		w.confCancelMtx.Lock()
+		w.cancelMtx.Lock()
 		delete(w.confCancels, traderKeyRaw)
-		w.confCancelMtx.Unlock()
+		w.cancelMtx.Unlock()
 	}()
 
 	select {
@@ -292,8 +287,8 @@ func (w *Watcher) waitForAccountConf(traderKey *btcec.PublicKey,
 func (w *Watcher) WatchAccountSpend(traderKey *btcec.PublicKey,
 	accountPoint wire.OutPoint, script []byte, heightHint uint32) error {
 
-	w.spendCancelMtx.Lock()
-	defer w.spendCancelMtx.Unlock()
+	w.cancelMtx.Lock()
+	defer w.cancelMtx.Unlock()
 
 	var traderKeyRaw [33]byte
 	copy(traderKeyRaw[:], traderKey.SerializeCompressed())
@@ -331,9 +326,9 @@ func (w *Watcher) waitForAccountSpend(traderKey *btcec.PublicKey,
 	defer func() {
 		w.wg.Done()
 
-		w.spendCancelMtx.Lock()
+		w.cancelMtx.Lock()
 		delete(w.spendCancels, traderKeyRaw)
-		w.spendCancelMtx.Unlock()
+		w.cancelMtx.Unlock()
 	}()
 
 	select {
@@ -381,8 +376,8 @@ func (w *Watcher) WatchAccountExpiration(traderKey *btcec.PublicKey,
 // CancelAccountSpend cancels the spend watcher of the given account, if one is
 // active.
 func (w *Watcher) CancelAccountSpend(traderKey *btcec.PublicKey) {
-	w.spendCancelMtx.Lock()
-	defer w.spendCancelMtx.Unlock()
+	w.cancelMtx.Lock()
+	defer w.cancelMtx.Unlock()
 
 	var traderKeyRaw [33]byte
 	copy(traderKeyRaw[:], traderKey.SerializeCompressed())
@@ -396,8 +391,8 @@ func (w *Watcher) CancelAccountSpend(traderKey *btcec.PublicKey) {
 // CancelAccountConf cancels the conf watcher of the given account, if one is
 // active.
 func (w *Watcher) CancelAccountConf(traderKey *btcec.PublicKey) {
-	w.confCancelMtx.Lock()
-	defer w.confCancelMtx.Unlock()
+	w.cancelMtx.Lock()
+	defer w.cancelMtx.Unlock()
 
 	var traderKeyRaw [33]byte
 	copy(traderKeyRaw[:], traderKey.SerializeCompressed())
