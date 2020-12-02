@@ -934,7 +934,9 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 }
 
 // handleAccountExpiry marks an account as expired within the database.
-func (m *Manager) handleAccountExpiry(traderKey *btcec.PublicKey) error {
+func (m *Manager) handleAccountExpiry(traderKey *btcec.PublicKey,
+	height uint32) error {
+
 	account, err := m.cfg.Store.Account(traderKey)
 	if err != nil {
 		return err
