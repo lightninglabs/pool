@@ -127,13 +127,6 @@ type Manager struct {
 	cfg     ManagerConfig
 	watcher *watcher.Watcher
 
-	// watchMtx guards access to watchingExpiry.
-	watchMtx sync.Mutex
-
-	// watchingExpiry is the set of accounts we're currently tracking the
-	// expiration of.
-	watchingExpiry map[[33]byte]struct{}
-
 	// pendingBatchMtx guards access to any database calls involving pending
 	// batches. This is mostly used to prevent race conditions when handling
 	// multiple accounts spends as part of a batch that we didn't receive a
@@ -153,9 +146,8 @@ type Manager struct {
 // NewManager instantiates a new Manager backed by the given config.
 func NewManager(cfg *ManagerConfig) *Manager {
 	m := &Manager{
-		cfg:            *cfg,
-		watchingExpiry: make(map[[33]byte]struct{}),
-		quit:           make(chan struct{}),
+		cfg:  *cfg,
+		quit: make(chan struct{}),
 	}
 
 	m.watcher = watcher.New(&watcher.Config{
@@ -774,19 +766,12 @@ func (m *Manager) handleStateOpen(ctx context.Context, account *Account) error {
 		return fmt.Errorf("unable to watch for spend: %v", err)
 	}
 
-	// Make sure we don't track the expiry again if we don't have to.
-	m.watchMtx.Lock()
-	if _, ok := m.watchingExpiry[traderKey]; !ok {
-		err = m.watcher.WatchAccountExpiration(
-			account.TraderKey.PubKey, account.Expiry,
-		)
-		if err != nil {
-			m.watchMtx.Unlock()
-			return fmt.Errorf("unable to watch for expiration: %v",
-				err)
-		}
+	err = m.watcher.WatchAccountExpiration(
+		account.TraderKey.PubKey, account.Expiry,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to watch for expiration: %v", err)
 	}
-	m.watchMtx.Unlock()
 
 	// Now that we have an open account, subscribe for updates to it to the
 	// server. We subscribe for the account instead of the individual orders
