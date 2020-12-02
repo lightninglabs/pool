@@ -323,7 +323,8 @@ func (c *Client) ModifyAccount(ctx context.Context, account *account.Account,
 	modifiedAccount := account.Copy(modifiers...)
 	if len(modifiers) > 0 {
 		rpcNewParams = &poolrpc.ServerModifyAccountRequest_NewAccountParameters{
-			Value: uint64(modifiedAccount.Value),
+			Value:  uint64(modifiedAccount.Value),
+			Expiry: modifiedAccount.Expiry,
 		}
 	}
 

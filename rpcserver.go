@@ -799,6 +799,62 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 	}, nil
 }
 
+// RenewAccount updates the expiration of an open/expired account. This
+// will always require a signature from the auctioneer, even after the account
+// has expired, to ensure the auctioneer is aware the account is being renewed.
+func (s *rpcServer) RenewAccount(ctx context.Context,
+	req *poolrpc.RenewAccountRequest) (
+	*poolrpc.RenewAccountResponse, error) {
+
+	rpcLog.Infof("Updating account expiration for account %x", req.AccountKey)
+
+	// Ensure the account key is well formed.
+	accountKey, err := btcec.ParsePubKey(req.AccountKey, btcec.S256())
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine the desired expiration value, can be relative or absolute.
+	bestHeight := atomic.LoadUint32(&s.bestHeight)
+	var expiryHeight uint32
+	switch {
+	case req.GetAbsoluteExpiry() != 0:
+		expiryHeight = req.GetAbsoluteExpiry()
+	case req.GetRelativeExpiry() != 0:
+		expiryHeight = req.GetRelativeExpiry() + bestHeight
+	default:
+		return nil, errors.New("either relative or absolute height " +
+			"must be specified")
+	}
+
+	// Enforce a minimum fee rate of 253 sat/kw.
+	feeRate := chainfee.SatPerKWeight(req.FeeRateSatPerKw)
+	if feeRate < chainfee.FeePerKwFloor {
+		return nil, fmt.Errorf("fee rate of %d sat/kw is too low, "+
+			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
+	}
+
+	// Proceed to process the expiration update and map its response to the
+	// RPC's response.
+	modifiedAccount, tx, err := s.accountManager.RenewAccount(
+		ctx, accountKey, expiryHeight, feeRate, bestHeight,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcModifiedAccount, err := MarshallAccount(modifiedAccount)
+	if err != nil {
+		return nil, err
+	}
+	txHash := tx.TxHash()
+
+	return &poolrpc.RenewAccountResponse{
+		Account:     rpcModifiedAccount,
+		RenewalTxid: txHash[:],
+	}, nil
+}
+
 // BumpAccountFee attempts to bump the fee of an account's transaction through
 // child-pays-for-parent (CPFP). Since the CPFP is performed through the backing
 // lnd node, the account transaction must contain an output under its control
