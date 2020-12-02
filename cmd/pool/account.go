@@ -23,6 +23,7 @@ var accountsCommands = []cli.Command{
 			listAccountsCommand,
 			depositAccountCommand,
 			withdrawAccountCommand,
+			renewAccountCommand,
 			closeAccountCommand,
 			bumpAccountFeeCommand,
 			recoverAccountsCommand,
@@ -245,6 +246,106 @@ func listAccounts(ctx *cli.Context) error {
 	}
 
 	printJSON(listAccountsResp)
+
+	return nil
+}
+
+var renewAccountCommand = cli.Command{
+	Name:      "renew",
+	ShortName: "r",
+	Usage:     "renew the expiration of an account",
+	Description: `
+	Renews the expiration of an account. This will broadcast a chain
+	transaction as the expiry is enforced within the account output script.
+	The fee rate of said transaction must be specified.`,
+	ArgsUsage: "trader_key sat_per_vbyte [--expiry_height | --expiry_blocks]",
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name: "trader_key",
+			Usage: "the hex-encoded trader key of the account to " +
+				"renew",
+		},
+		cli.Uint64Flag{
+			Name: "sat_per_vbyte",
+			Usage: "the fee rate expressed in sat/vbyte that " +
+				"should be used for the renewal transaction",
+		},
+		cli.Uint64Flag{
+			Name: accountExpiryAbsolute,
+			Usage: "the new block height at which this account " +
+				"should expire at",
+		},
+		cli.Uint64Flag{
+			Name: accountExpiryRelative,
+			Usage: "the new relative height (from the current " +
+				"chain height) that the account should expire " +
+				"at (default of 30 days equivalent in blocks)",
+			Value: defaultExpiryRelative,
+		},
+	},
+	Action: renewAccount,
+}
+
+func renewAccount(ctx *cli.Context) error {
+	cmd := "renew"
+	traderKey, err := parseHexStr(ctx, 0, "trader_key", cmd)
+	if err != nil {
+		return err
+	}
+	satPerVByte, err := parseUint64(ctx, 1, "sat_per_vbyte", cmd)
+	if err != nil {
+		return err
+	}
+
+	// Enforce a minimum fee rate of 253 sat/kw by rounding up if 1
+	// sat/byte is used.
+	feeRate := chainfee.SatPerKVByte(satPerVByte * 1000).FeePerKWeight()
+	if feeRate < chainfee.FeePerKwFloor {
+		feeRate = chainfee.FeePerKwFloor
+	}
+
+	// Parse the expiry in either of its forms. We'll always prefer the
+	// absolute expiry over the relative as the relative has a default value
+	// present.
+	req := &poolrpc.RenewAccountRequest{
+		AccountKey:      traderKey,
+		FeeRateSatPerKw: uint64(feeRate),
+	}
+	switch {
+	case ctx.Uint64(accountExpiryAbsolute) != 0:
+		req.AccountExpiry = &poolrpc.RenewAccountRequest_AbsoluteExpiry{
+			AbsoluteExpiry: uint32(ctx.Uint64(accountExpiryAbsolute)),
+		}
+
+	default:
+		req.AccountExpiry = &poolrpc.RenewAccountRequest_RelativeExpiry{
+			RelativeExpiry: uint32(ctx.Uint64(accountExpiryRelative)),
+		}
+	}
+
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.RenewAccount(context.Background(), req)
+	if err != nil {
+		return err
+	}
+
+	var renewalTxid chainhash.Hash
+	copy(renewalTxid[:], resp.RenewalTxid)
+
+	var renewResp = struct {
+		Account     *Account `json:"account"`
+		RenewalTxid string   `json:"renewal_txid"`
+	}{
+		Account:     NewAccountFromProto(resp.Account),
+		RenewalTxid: renewalTxid.String(),
+	}
+
+	printJSON(renewResp)
 
 	return nil
 }
