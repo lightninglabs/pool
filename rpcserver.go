@@ -59,7 +59,7 @@ type rpcServer struct {
 	auctioneer     *auctioneer.Client
 	accountManager *account.Manager
 	orderManager   *order.Manager
-	fundingManager *fundingMgr
+	fundingManager *Manager
 
 	quit                           chan struct{}
 	wg                             sync.WaitGroup
@@ -114,13 +114,13 @@ func newRPCServer(server *Server) *rpcServer {
 			Wallet:    lndServices.WalletKit,
 			Signer:    lndServices.Signer,
 		}),
-		fundingManager: &fundingMgr{
-			db:               server.db,
-			walletKit:        lndServices.WalletKit,
-			lightningClient:  lndServices.Client,
-			baseClient:       server.lndClient,
-			batchStepTimeout: defaultBatchStepTimeout,
-			newNodesOnly:     server.cfg.NewNodesOnly,
+		fundingManager: &Manager{
+			DB:               server.db,
+			WalletKit:        lndServices.WalletKit,
+			LightningClient:  lndServices.Client,
+			BaseClient:       server.lndClient,
+			BatchStepTimeout: DefaultBatchStepTimeout,
+			NewNodesOnly:     server.cfg.NewNodesOnly,
 		},
 		quit: make(chan struct{}),
 	}
@@ -245,7 +245,7 @@ func (s *rpcServer) consumePendingOpenChannels(
 		}
 
 		select {
-		case s.fundingManager.pendingOpenChannels <- channel:
+		case s.fundingManager.PendingOpenChannels <- channel:
 		case <-s.quit:
 			return
 		}
@@ -425,7 +425,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		// Before we accept the batch, we'll finish preparations on our
 		// end which include applying any order match predicates,
 		// connecting out to peers, and registering funding shim.
-		err = s.fundingManager.prepChannelFunding(
+		err = s.fundingManager.PrepChannelFunding(
 			batch, nodeHasTorAddrs(nodeInfo.Uris), s.quit,
 		)
 		if err != nil {
@@ -446,7 +446,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		// then start negotiating with the remote peers. We'll sign
 		// once all channel partners have responded.
 		batch := s.orderManager.PendingBatch()
-		channelKeys, err := s.fundingManager.batchChannelSetup(
+		channelKeys, err := s.fundingManager.BatchChannelSetup(
 			batch, s.quit,
 		)
 		if err != nil {
@@ -1400,7 +1400,7 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	}
 
 	// Attach the status code to the message to give a bit more context.
-	var partialReject *matchRejectErr
+	var partialReject *MatchRejectErr
 	switch {
 	case errors.Is(failure, order.ErrVersionMismatch):
 		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_BATCH_VERSION_MISMATCH
@@ -1429,14 +1429,14 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	case errors.As(failure, &partialReject):
 		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_PARTIAL_REJECT
 		msg.Reject.RejectedOrders = make(map[string]*poolrpc.OrderReject)
-		for nonce, reject := range partialReject.rejectedOrders {
+		for nonce, reject := range partialReject.RejectedOrders {
 			msg.Reject.RejectedOrders[nonce.String()] = reject
 		}
 
 		// Track this reject by adding an event to our orders with the
 		// specific reject code for each of rejected orders.
 		err := s.server.db.StoreBatchPartialRejectEvents(
-			batch, partialReject.rejectedOrders,
+			batch, partialReject.RejectedOrders,
 		)
 		if err != nil {
 			rpcLog.Errorf("Could not store match event: %v", err)
