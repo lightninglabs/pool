@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
@@ -297,10 +298,25 @@ func AbandonCanceledChannels(matchedOrders map[Nonce][]*MatchedOrder,
 					PendingFundingShimOnly: true,
 				},
 			)
+			const notFoundErr = "unable to find closed channel"
 			if err != nil {
-				log.Warnf("Unable to abandon channel "+
-					"(channel_point=%v:%d) for order=%v",
-					txHash, idx, ourOrderNonce)
+				// If the channel was never created in the first
+				// place, it might just not exist. Therefore we
+				// ignore the "not found" error but fail on any
+				// other error.
+				if !strings.Contains(err.Error(), notFoundErr) {
+					log.Errorf("Unexpected error when "+
+						"trying to clean up pending "+
+						"channels: %v", err)
+					return err
+				}
+
+				log.Debugf("Cleaning up incomplete/replaced "+
+					"pending channel in lnd was "+
+					"unsuccessful for order=%v "+
+					"(channel_point=%v:%d), assuming "+
+					"timeout when funding: %v", txHash, idx,
+					ourOrderNonce, err)
 			}
 		}
 	}
