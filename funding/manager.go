@@ -607,6 +607,41 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 	return channelKeys, nil
 }
 
+// RemovePendingBatchArtifacts removes any funding shims or pending channels
+// from a batch that was never finalized. Some non-terminal errors are logged
+// only and not returned. Therefore if this method returns an error, it should
+// be handled as terminal error.
+func (m *Manager) RemovePendingBatchArtifacts(
+	matchedOrders map[order.Nonce][]*order.MatchedOrder,
+	batchTx *wire.MsgTx) error {
+
+	err := CancelPendingFundingShims(
+		matchedOrders, m.BaseClient, m.DB.GetOrder,
+	)
+	if err != nil {
+		// CancelPendingFundingShims only returns hard errors that
+		// justify us rejecting the batch or logging an actual error.
+		return fmt.Errorf("error canceling funding shims "+
+			"from previous pending batch: %v", err)
+	}
+
+	// Also abandon any channels that might still be pending
+	// from a previous round of the same batch or a previous
+	// batch that we didn't make it into the final round.
+	err = AbandonCanceledChannels(
+		matchedOrders, batchTx, m.WalletKit, m.BaseClient,
+		m.DB.GetOrder,
+	)
+	if err != nil {
+		// AbandonCanceledChannels also only returns hard errors that
+		// justify us rejecting the batch or logging an actual error.
+		return fmt.Errorf("error abandoning channels from "+
+			"previous pending batch: %v", err)
+	}
+
+	return nil
+}
+
 // connectToMatchedTrader attempts to connect to a trader that we've had an
 // order matched with, on all available addresses.
 func (m *Manager) connectToMatchedTrader(ctx context.Context,

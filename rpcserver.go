@@ -374,35 +374,19 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		}
 
 		// The prepare message can be sent over and over again if the
-		// batch needs adjustment. Clear all previous shims.
+		// batch needs adjustment. Clear all previous shims and channels
+		// that will never complete because the funding TX they refer to
+		// will never be published.
 		if s.orderManager.HasPendingBatch() {
 			pendingBatch := s.orderManager.PendingBatch()
-			orderFetcher := s.server.db.GetOrder
-			err := funding.CancelPendingFundingShims(
-				pendingBatch.MatchedOrders, s.lndClient,
-				orderFetcher,
+			err = s.fundingManager.RemovePendingBatchArtifacts(
+				pendingBatch.MatchedOrders, pendingBatch.BatchTX,
 			)
 			if err != nil {
-				// CancelPendingFundingShims only returns hard
-				// errors that justify us rejecting the batch.
-				rpcLog.Errorf("Error clearing previous batch: "+
-					"%v", err)
-				return s.sendRejectBatch(batch, err)
-			}
-
-			// Also abandon any channels that might still be pending
-			// from a previous round of the same batch or a previous
-			// batch that we didn't make it into the final round.
-			err = funding.AbandonCanceledChannels(
-				pendingBatch.MatchedOrders,
-				pendingBatch.BatchTX, s.lndServices.WalletKit,
-				s.lndClient, orderFetcher,
-			)
-			if err != nil {
-				// AbandonCanceledChannels only returns hard
-				// errors that justify us rejecting the batch.
-				rpcLog.Errorf("Error abandoning channels from "+
-					"last batch: %v", err)
+				// The above method only returns hard errors
+				// that justify us rejecting the batch.
+				rpcLog.Errorf("Error clearing previous batch "+
+					"artifacts: %v", err)
 				return s.sendRejectBatch(batch, err)
 			}
 		}
