@@ -23,6 +23,7 @@ import (
 	"github.com/lightninglabs/pool/chaninfo"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/event"
+	"github.com/lightninglabs/pool/funding"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/poolscript"
@@ -59,7 +60,7 @@ type rpcServer struct {
 	auctioneer     *auctioneer.Client
 	accountManager *account.Manager
 	orderManager   *order.Manager
-	fundingManager *Manager
+	fundingManager *funding.Manager
 
 	quit                           chan struct{}
 	wg                             sync.WaitGroup
@@ -114,13 +115,16 @@ func newRPCServer(server *Server) *rpcServer {
 			Wallet:    lndServices.WalletKit,
 			Signer:    lndServices.Signer,
 		}),
-		fundingManager: &Manager{
+		fundingManager: &funding.Manager{
 			DB:               server.db,
 			WalletKit:        lndServices.WalletKit,
 			LightningClient:  lndServices.Client,
 			BaseClient:       server.lndClient,
-			BatchStepTimeout: DefaultBatchStepTimeout,
-			NewNodesOnly:     server.cfg.NewNodesOnly,
+			BatchStepTimeout: funding.DefaultBatchStepTimeout,
+			PendingOpenChannels: make(
+				chan *lnrpc.ChannelEventUpdate_PendingOpenChannel,
+			),
+			NewNodesOnly: server.cfg.NewNodesOnly,
 		},
 		quit: make(chan struct{}),
 	}
@@ -1400,7 +1404,7 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	}
 
 	// Attach the status code to the message to give a bit more context.
-	var partialReject *MatchRejectErr
+	var partialReject *funding.MatchRejectErr
 	switch {
 	case errors.Is(failure, order.ErrVersionMismatch):
 		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_BATCH_VERSION_MISMATCH
