@@ -378,7 +378,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		if s.orderManager.HasPendingBatch() {
 			pendingBatch := s.orderManager.PendingBatch()
 			orderFetcher := s.server.db.GetOrder
-			err := order.CancelPendingFundingShims(
+			err := funding.CancelPendingFundingShims(
 				pendingBatch.MatchedOrders, s.lndClient,
 				orderFetcher,
 			)
@@ -393,7 +393,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 			// Also abandon any channels that might still be pending
 			// from a previous round of the same batch or a previous
 			// batch that we didn't make it into the final round.
-			err = order.AbandonCanceledChannels(
+			err = funding.AbandonCanceledChannels(
 				pendingBatch.MatchedOrders,
 				pendingBatch.BatchTX, s.lndServices.WalletKit,
 				s.lndClient, orderFetcher,
@@ -1388,7 +1388,7 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	// As we're rejecting this batch, we'll now cancel all funding shims
 	// that we may have registered since we may be matched with a distinct
 	// set of channels if this batch is repeated.
-	err := order.CancelPendingFundingShims(
+	err := funding.CancelPendingFundingShims(
 		batch.MatchedOrders, s.lndClient,
 		func(o order.Nonce) (order.Order, error) {
 			return s.server.db.GetOrder(o)
