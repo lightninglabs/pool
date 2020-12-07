@@ -184,6 +184,13 @@ func (m *fundingBaseClientMock) SubscribePeerEvents(ctx context.Context,
 	}, nil
 }
 
+func (m *fundingBaseClientMock) AbandonChannel(_ context.Context,
+	_ *lnrpc.AbandonChannelRequest,
+	_ ...grpc.CallOption) (*lnrpc.AbandonChannelResponse, error) {
+
+	return nil, nil
+}
+
 type managerHarness struct {
 	t              *testing.T
 	tempDir        string

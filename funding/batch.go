@@ -16,7 +16,7 @@ import (
 // we need to reject the batch, so we're able to process any subsequent modified
 // batches.
 func CancelPendingFundingShims(matchedOrders map[order.Nonce][]*order.MatchedOrder,
-	lndClient lnrpc.LightningClient, fetchOrder order.Fetcher) error {
+	baseClient BaseClient, fetchOrder order.Fetcher) error {
 
 	// Since we support partial matches, a given bid of ours could've been
 	// matched with multiple asks, so we'll iterate through all those to
@@ -53,7 +53,7 @@ func CancelPendingFundingShims(matchedOrders map[order.Nonce][]*order.MatchedOrd
 				},
 			}
 
-			_, err = lndClient.FundingStateStep(
+			_, err = baseClient.FundingStateStep(
 				ctxb, &lnrpc.FundingTransitionMsg{
 					Trigger: cancelShimMsg,
 				},
@@ -79,7 +79,7 @@ func CancelPendingFundingShims(matchedOrders map[order.Nonce][]*order.MatchedOrd
 // returned.
 func AbandonCanceledChannels(matchedOrders map[order.Nonce][]*order.MatchedOrder,
 	batchTx *wire.MsgTx, wallet lndclient.WalletKitClient,
-	lndClient lnrpc.LightningClient, fetchOrder order.Fetcher) error {
+	baseClient BaseClient, fetchOrder order.Fetcher) error {
 
 	// Since we support partial matches, a given bid of ours could've been
 	// matched with multiple asks, so we'll iterate through all those to
@@ -110,7 +110,7 @@ func AbandonCanceledChannels(matchedOrders map[order.Nonce][]*order.MatchedOrder
 					FundingTxidBytes: txHash[:],
 				},
 			}
-			_, err = lndClient.AbandonChannel(
+			_, err = baseClient.AbandonChannel(
 				ctxb, &lnrpc.AbandonChannelRequest{
 					ChannelPoint:           channelPoint,
 					PendingFundingShimOnly: true,

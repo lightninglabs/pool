@@ -76,6 +76,15 @@ type BaseClient interface {
 	SubscribePeerEvents(ctx context.Context, r *lnrpc.PeerEventSubscription,
 		opts ...grpc.CallOption) (
 		lnrpc.Lightning_SubscribePeerEventsClient, error)
+
+	// AbandonChannel removes all channel state from the database except for
+	// a close summary. This method can be used to get rid of permanently
+	// unusable channels due to bugs fixed in newer versions of lnd. This
+	// method can also be used to remove externally funded channels where
+	// the funding transaction was never broadcast. Only available for
+	// non-externally funded channels in dev build.
+	AbandonChannel(ctx context.Context, in *lnrpc.AbandonChannelRequest,
+		opts ...grpc.CallOption) (*lnrpc.AbandonChannelResponse, error)
 }
 
 type Manager struct {
