@@ -193,16 +193,17 @@ type Batch struct {
 type Fetcher func(Nonce) (Order, error)
 
 // CancelPendingFundingShims cancels all funding shims we registered when
-// preparing for this batch. This should be called if for any reason we need to
-// reject the batch, so we're able to process any subsequent modified batches.
-func (b *Batch) CancelPendingFundingShims(lndClient lnrpc.LightningClient,
-	fetchOrder Fetcher) error {
+// preparing for the orders in a batch. This should be called if for any reason
+// we need to reject the batch, so we're able to process any subsequent modified
+// batches.
+func CancelPendingFundingShims(matchedOrders map[Nonce][]*MatchedOrder,
+	lndClient lnrpc.LightningClient, fetchOrder Fetcher) error {
 
 	// Since we support partial matches, a given bid of ours could've been
 	// matched with multiple asks, so we'll iterate through all those to
 	// ensure we unregister all the created shims.
 	ctxb := context.Background()
-	for ourOrderNonce, matchedOrders := range b.MatchedOrders {
+	for ourOrderNonce, matchedOrders := range matchedOrders {
 		ourOrder, err := fetchOrder(ourOrderNonce)
 		if err != nil {
 			return err
