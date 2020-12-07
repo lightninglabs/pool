@@ -90,11 +90,9 @@ type fundingMgr struct {
 	// pendingOpenChannels is a channel through which we'll receive
 	// notifications for pending open channels resulting from a successful
 	// batch.
-	pendingOpenChannels <-chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
+	pendingOpenChannels chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
 
 	batchStepTimeout time.Duration
-
-	quit chan struct{}
 }
 
 // deriveFundingShim generates the proper funding shim that should be used by
@@ -220,7 +218,7 @@ func (f *fundingMgr) registerFundingShim(ourOrder order.Order,
 // prepChannelFunding preps the backing node to either receive or initiate a
 // channel funding based on the items in the order batch.
 func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
-	traderBehindTor bool) error {
+	traderBehindTor bool, quit <-chan struct{}) error {
 
 	fndgLog.Infof("Batch(%x): preparing channel funding for %v orders",
 		batch.ID[:], len(batch.MatchedOrders))
@@ -335,7 +333,7 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
 	// We need to wait for all connections to be established now. Otherwise
 	// the asker won't be able to open the channel as it doesn't know the
 	// connection details of the bidder.
-	return f.waitForPeerConnections(setupCtx, connsInitiated, batch)
+	return f.waitForPeerConnections(setupCtx, connsInitiated, batch, quit)
 }
 
 // batchChannelSetup will attempt to establish new funding flows with all
@@ -343,8 +341,8 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
 // will block until the channel is considered pending. Once this phase is
 // complete, and the batch execution transaction broadcast, the channel will be
 // finalized and locked in.
-func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
-	map[wire.OutPoint]*chaninfo.ChannelInfo, error) {
+func (f *fundingMgr) batchChannelSetup(batch *order.Batch,
+	quit <-chan struct{}) (map[wire.OutPoint]*chaninfo.ChannelInfo, error) {
 
 	var (
 		eg                errgroup.Group
@@ -465,7 +463,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 				for {
 					select {
 
-					case <-f.quit:
+					case <-quit:
 						return fmt.Errorf("server " +
 							"shutting down")
 					default:
@@ -504,7 +502,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	// we can report that together with the other errors.
 	if err := eg.Wait(); err != nil {
 		select {
-		case <-f.quit:
+		case <-quit:
 			return nil, err
 		default:
 		}
@@ -548,7 +546,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 				rejectedOrders: fundingRejects,
 			}
 
-		case <-f.quit:
+		case <-quit:
 			return nil, fmt.Errorf("server shutting down")
 		}
 
@@ -621,7 +619,8 @@ func (f *fundingMgr) connectToMatchedTrader(ctx context.Context,
 // NOTE: The passed context MUST have a timeout applied to it, otherwise this
 // method will block forever in case a connection doesn't succeed.
 func (f *fundingMgr) waitForPeerConnections(ctx context.Context,
-	peers map[route.Vertex]struct{}, batch *order.Batch) error {
+	peers map[route.Vertex]struct{}, batch *order.Batch,
+	quit <-chan struct{}) error {
 
 	// First of all, subscribe to new peer events so we certainly don't miss
 	// an update while we look for the already connected peers.
@@ -677,7 +676,7 @@ func (f *fundingMgr) waitForPeerConnections(ctx context.Context,
 			}
 
 		// We're shutting down, nothing more to do here.
-		case <-f.quit:
+		case <-quit:
 			return nil
 
 		default:

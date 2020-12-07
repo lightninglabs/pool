@@ -232,7 +232,6 @@ func newManagerHarness(t *testing.T) *managerHarness {
 			baseClient:          baseClientMock,
 			newNodesOnly:        true,
 			pendingOpenChannels: msgChan,
-			quit:                quit,
 			batchStepTimeout:    400 * time.Millisecond,
 		},
 	}
@@ -329,7 +328,7 @@ func TestFundingManager(t *testing.T) {
 	h.baseClientMock.peerList = map[route.Vertex]string{
 		node1Key: "1.1.1.1",
 	}
-	err = h.mgr.prepChannelFunding(batch, false)
+	err = h.mgr.prepChannelFunding(batch, false, h.quit)
 	require.NoError(t, err)
 
 	// Verify we have the expected connections and funding shims registered.
@@ -375,7 +374,7 @@ func TestFundingManager(t *testing.T) {
 	h.lnMock.Channels = append(h.lnMock.Channels, lndclient.ChannelInfo{
 		PubKeyBytes: node1Key,
 	})
-	err = h.mgr.prepChannelFunding(batch, false)
+	err = h.mgr.prepChannelFunding(batch, false, h.quit)
 	require.Error(t, err)
 
 	expectedErr := &matchRejectErr{
@@ -393,7 +392,7 @@ func TestFundingManager(t *testing.T) {
 	// error if the connections to the remote peers couldn't be established.
 	h.mgr.newNodesOnly = false
 	h.baseClientMock.peerList = make(map[route.Vertex]string)
-	err = h.mgr.prepChannelFunding(batch, false)
+	err = h.mgr.prepChannelFunding(batch, false, h.quit)
 	require.Error(t, err)
 
 	expectedErr = &matchRejectErr{
@@ -446,13 +445,13 @@ func TestFundingManager(t *testing.T) {
 		ChannelPoint: fmt.Sprintf("%s:1", txidHash.String()),
 	})
 	h.lnMock.ScbKeyRing.EncryptionKey.PubKey = pubKeyAsk
-	chanInfo, err := h.mgr.batchChannelSetup(batch)
+	chanInfo, err := h.mgr.batchChannelSetup(batch, h.quit)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(chanInfo))
 
 	// Finally, make sure we get a timeout error if no channel open messages
 	// are received.
-	_, err = h.mgr.batchChannelSetup(batch)
+	_, err = h.mgr.batchChannelSetup(batch, h.quit)
 	require.Error(t, err)
 
 	code := &poolrpc.OrderReject{
@@ -487,7 +486,9 @@ func TestWaitForPeerConnections(t *testing.T) {
 		node1Key: {},
 		node2Key: {},
 	}
-	err := h.mgr.waitForPeerConnections(ctxt, expectedConnections, nil)
+	err := h.mgr.waitForPeerConnections(
+		ctxt, expectedConnections, nil, h.quit,
+	)
 	require.NoError(t, err)
 
 	// Next, make sure that connections established while waiting are
@@ -516,7 +517,9 @@ func TestWaitForPeerConnections(t *testing.T) {
 		node1Key: {},
 		node2Key: {},
 	}
-	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, nil)
+	err = h.mgr.waitForPeerConnections(
+		ctxt, expectedConnections, nil, h.quit,
+	)
 	require.NoError(t, err)
 
 	// Final test, make sure we get the correct error message back if we
@@ -551,7 +554,9 @@ func TestWaitForPeerConnections(t *testing.T) {
 		node1Key: {},
 		node2Key: {},
 	}
-	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, fakeBatch)
+	err = h.mgr.waitForPeerConnections(
+		ctxt, expectedConnections, fakeBatch, h.quit,
+	)
 	require.Error(t, err)
 
 	code := &poolrpc.OrderReject{
@@ -576,7 +581,9 @@ func TestWaitForPeerConnections(t *testing.T) {
 		close(h.baseClientMock.cancelSub)
 	}()
 
-	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, fakeBatch)
+	err = h.mgr.waitForPeerConnections(
+		ctxt, expectedConnections, fakeBatch, h.quit,
+	)
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
 }
