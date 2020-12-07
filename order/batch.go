@@ -251,22 +251,23 @@ func CancelPendingFundingShims(matchedOrders map[Nonce][]*MatchedOrder,
 }
 
 // AbandonCanceledChannels removes all channels from lnd's channel database that
-// were created for an iteration of the batch that never made it to chain in its
-// current configuration. This should be called whenever a batch is replaced
+// were created for an iteration of a batch that never made it to chain in the
+// provided configuration. This should be called whenever a batch is replaced
 // with an updated version because some traders were offline or rejected the
 // batch. If a non-nil error is returned, something with reading the local order
 // or extracting the channel outpoint went wrong and we should fail hard. If the
 // channel cannot be abandoned for some reason, the error is just logged but not
 // returned.
-func (b *Batch) AbandonCanceledChannels(wallet lndclient.WalletKitClient,
+func AbandonCanceledChannels(matchedOrders map[Nonce][]*MatchedOrder,
+	batchTx *wire.MsgTx, wallet lndclient.WalletKitClient,
 	lndClient lnrpc.LightningClient, fetchOrder Fetcher) error {
 
 	// Since we support partial matches, a given bid of ours could've been
 	// matched with multiple asks, so we'll iterate through all those to
 	// ensure we remove all channels that never made it to chain.
 	ctxb := context.Background()
-	txHash := b.BatchTX.TxHash()
-	for ourOrderNonce, matchedOrders := range b.MatchedOrders {
+	txHash := batchTx.TxHash()
+	for ourOrderNonce, matchedOrders := range matchedOrders {
 		ourOrder, err := fetchOrder(ourOrderNonce)
 		if err != nil {
 			return err
@@ -276,8 +277,8 @@ func (b *Batch) AbandonCanceledChannels(wallet lndclient.WalletKitClient,
 		// locate the channel outpoint then abandon it from lnd's
 		// channel database.
 		for _, matchedOrder := range matchedOrders {
-			_, idx, err := b.channelOutput(
-				wallet, ourOrder, matchedOrder,
+			_, idx, err := ChannelOutput(
+				batchTx, wallet, ourOrder, matchedOrder,
 			)
 			if err != nil {
 				return fmt.Errorf("error locating channel "+
@@ -307,9 +308,9 @@ func (b *Batch) AbandonCanceledChannels(wallet lndclient.WalletKitClient,
 	return nil
 }
 
-// channelOutput returns the transaction output and output index of the channel
-// created for an order of ours that was matched with another one in the batch.
-func (b *Batch) channelOutput(wallet lndclient.WalletKitClient,
+// ChannelOutput returns the transaction output and output index of the channel
+// created for an order of ours that was matched with another one in a batch.
+func ChannelOutput(batchTx *wire.MsgTx, wallet lndclient.WalletKitClient,
 	ourOrder Order, otherOrder *MatchedOrder) (*wire.TxOut, uint32, error) {
 
 	// Re-derive our multisig key first.
@@ -337,7 +338,7 @@ func (b *Batch) channelOutput(wallet lndclient.WalletKitClient,
 	}
 
 	// Locate the channel output now that we know what to look for.
-	for idx, out := range b.BatchTX.TxOut {
+	for idx, out := range batchTx.TxOut {
 		if out.Value == expectedOut.Value &&
 			bytes.Equal(out.PkScript, expectedOut.PkScript) {
 

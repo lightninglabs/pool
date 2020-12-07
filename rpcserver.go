@@ -393,9 +393,10 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 			// Also abandon any channels that might still be pending
 			// from a previous round of the same batch or a previous
 			// batch that we didn't make it into the final round.
-			err = pendingBatch.AbandonCanceledChannels(
-				s.lndServices.WalletKit, s.lndClient,
-				orderFetcher,
+			err = order.AbandonCanceledChannels(
+				pendingBatch.MatchedOrders,
+				pendingBatch.BatchTX, s.lndServices.WalletKit,
+				s.lndClient, orderFetcher,
 			)
 			if err != nil {
 				// AbandonCanceledChannels only returns hard
