@@ -403,10 +403,6 @@ func TestDeletePendingBatch(t *testing.T) {
 				return fmt.Errorf("found unexpected key %v",
 					string(pendingBatchIDKey))
 			}
-			if (root.Get(pendingBatchTxKey) != nil) != exists {
-				return fmt.Errorf("found unexpected key %v",
-					string(pendingBatchTxKey))
-			}
 			if (root.Bucket(pendingBatchAccountsBucketKey) != nil) != exists {
 				return fmt.Errorf("found unexpected bucket %v",
 					string(pendingBatchAccountsBucketKey))
