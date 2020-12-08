@@ -308,6 +308,22 @@ func storePendingBatchSnapshot(tx *bbolt.Tx,
 	return topBucket.Put(batchSnapshotPendingKey, buf.Bytes())
 }
 
+// fetchPendingBatchSnapshot retrieves the currently pending batch snapshot from
+// the database or returns the account.ErrNoPendingBatch error if none exists.
+func fetchPendingBatchSnapshot(tx *bbolt.Tx) (*LocalBatchSnapshot, error) {
+	topBucket, err := getBucket(tx, batchSnapshotBucketKey)
+	if err != nil {
+		return nil, err
+	}
+
+	snapshotBytes := topBucket.Get(batchSnapshotPendingKey)
+	if len(snapshotBytes) == 0 {
+		return nil, account.ErrNoPendingBatch
+	}
+
+	return deserializeLocalBatchSnapshot(bytes.NewReader(snapshotBytes))
+}
+
 // finalizeBatchSnapshot moves the pending batch snapshot into the sub-bucket
 // indexed by sequence numbers.
 func finalizeBatchSnapshot(tx *bbolt.Tx, batchID order.BatchID) error {
