@@ -465,6 +465,7 @@ func (s *Server) setupClient() error {
 		MinBackoff:    s.cfg.MinBackoff,
 		MaxBackoff:    s.cfg.MaxBackoff,
 		BatchSource:   s.db,
+		BatchCleaner:  s.db,
 	}
 	s.AuctioneerClient, err = auctioneer.NewClient(clientCfg)
 	if err != nil {

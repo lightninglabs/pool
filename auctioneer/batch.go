@@ -25,7 +25,10 @@ type BatchSource interface {
 	// PendingBatchSnapshot retrieves the snapshot of the currently pending
 	// batch. If there isn't one, account.ErrNoPendingBatch is returned.
 	PendingBatchSnapshot() (*clientdb.LocalBatchSnapshot, error)
+}
 
+// BatchCleaner abstracts the cleaning up of a trader's pending batch.
+type BatchCleaner interface {
 	// DeletePendingBatch removes all references to the current pending
 	// batch without applying its staged updates to accounts and orders. If
 	// no pending batch exists, this acts as a no-op.
@@ -58,7 +61,7 @@ func (c *Client) checkPendingBatch() error {
 	}
 
 	if snapshot.BatchTX.TxHash() != finalizedTx.TxHash() {
-		return c.cfg.BatchSource.DeletePendingBatch()
+		return c.cfg.BatchCleaner.DeletePendingBatch()
 	}
 
 	return nil
