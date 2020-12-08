@@ -10,6 +10,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/clientdb"
+	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 )
 
@@ -33,6 +34,14 @@ type BatchCleaner interface {
 	// batch without applying its staged updates to accounts and orders. If
 	// no pending batch exists, this acts as a no-op.
 	DeletePendingBatch() error
+
+	// RemovePendingBatchArtifacts removes any funding shims or pending
+	// channels from a batch that was never finalized. Some non-terminal
+	// errors are logged only and not returned. Therefore if this method
+	// returns an error, it should be handled as terminal error.
+	RemovePendingBatchArtifacts(
+		matchedOrders map[order.Nonce][]*order.MatchedOrder,
+		batchTx *wire.MsgTx) error
 }
 
 // checkPendingBatch cross-checks the trader's pending batch with what the
@@ -61,6 +70,14 @@ func (c *Client) checkPendingBatch() error {
 	}
 
 	if snapshot.BatchTX.TxHash() != finalizedTx.TxHash() {
+		err := c.cfg.BatchCleaner.RemovePendingBatchArtifacts(
+			snapshot.MatchedOrders, snapshot.BatchTX,
+		)
+		if err != nil {
+			return fmt.Errorf("error removing pending batch "+
+				"artifacts: %v", err)
+		}
+
 		return c.cfg.BatchCleaner.DeletePendingBatch()
 	}
 

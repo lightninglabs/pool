@@ -607,10 +607,21 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 	return channelKeys, nil
 }
 
+// DeletePendingBatch removes all references to the current pending batch
+// without applying its staged updates to accounts and orders. If no pending
+// batch exists, this acts as a no-op.
+//
+// NOTE: This is part of the auctioneer.BatchCleaner interface.
+func (m *Manager) DeletePendingBatch() error {
+	return m.DB.DeletePendingBatch()
+}
+
 // RemovePendingBatchArtifacts removes any funding shims or pending channels
 // from a batch that was never finalized. Some non-terminal errors are logged
 // only and not returned. Therefore if this method returns an error, it should
 // be handled as terminal error.
+//
+// NOTE: This is part of the auctioneer.BatchCleaner interface.
 func (m *Manager) RemovePendingBatchArtifacts(
 	matchedOrders map[order.Nonce][]*order.MatchedOrder,
 	batchTx *wire.MsgTx) error {
