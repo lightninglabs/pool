@@ -113,7 +113,7 @@ var (
 			runTest: func(db *DB, a *order.Ask, b *order.Bid,
 				acct *account.Account) error {
 
-				_, _, err := db.PendingBatch()
+				_, err := db.PendingBatchSnapshot()
 				return err
 			},
 		},
@@ -155,20 +155,20 @@ var (
 
 				// The pending batch ID and transaction should
 				// reflect correctly.
-				dbBatchID, dbBatchTx, err := db.PendingBatch()
+				dbSnapshot, err := db.PendingBatchSnapshot()
 				if err != nil {
 					return err
 				}
-				if dbBatchID != testBatchID {
+				if dbSnapshot.BatchID != testBatchID {
 					return fmt.Errorf("expected pending "+
 						"batch id %x, got %x",
-						testBatchID, dbBatchID)
+						testBatchID, dbSnapshot.BatchID)
 				}
-				if dbBatchTx.TxHash() != testBatch.BatchTX.TxHash() {
+				if dbSnapshot.BatchTX.TxHash() != testBatch.BatchTX.TxHash() {
 					return fmt.Errorf("expected pending "+
 						"batch tx %v, got %v",
 						testBatch.BatchTX.TxHash(),
-						dbBatchTx.TxHash())
+						dbSnapshot.BatchTX.TxHash())
 				}
 
 				// Verify the updates have not been applied to

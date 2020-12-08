@@ -9,7 +9,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/pool/account"
-	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/poolrpc"
 )
 
@@ -22,9 +22,9 @@ var (
 
 // BatchSource abstracts the source of a trader's pending batch.
 type BatchSource interface {
-	// PendingBatch retrieves the ID and transaction of the current pending
-	// batch. If one does not exist, account.ErrNoPendingBatch is returned.
-	PendingBatch() (order.BatchID, *wire.MsgTx, error)
+	// PendingBatchSnapshot retrieves the snapshot of the currently pending
+	// batch. If there isn't one, account.ErrNoPendingBatch is returned.
+	PendingBatchSnapshot() (*clientdb.LocalBatchSnapshot, error)
 
 	// DeletePendingBatch removes all references to the current pending
 	// batch without applying its staged updates to accounts and orders. If
@@ -36,7 +36,7 @@ type BatchSource interface {
 // auctioneer considers finalized. If they don't match, then the pending batch
 // is deleted without applying its staged updates.
 func (c *Client) checkPendingBatch() error {
-	id, tx, err := c.cfg.BatchSource.PendingBatch()
+	snapshot, err := c.cfg.BatchSource.PendingBatchSnapshot()
 	if err == account.ErrNoPendingBatch {
 		// If there's no pending batch, there's nothing to do.
 		return nil
@@ -45,7 +45,7 @@ func (c *Client) checkPendingBatch() error {
 		return fmt.Errorf("loading pending batch failed: %v", err)
 	}
 
-	finalizedTx, err := c.finalizedBatchTx(id)
+	finalizedTx, err := c.finalizedBatchTx(snapshot)
 	// If the batch has not been finalized yet, there's nothing to do but
 	// wait to receive its Finalize message.
 	//
@@ -57,7 +57,7 @@ func (c *Client) checkPendingBatch() error {
 		return fmt.Errorf("querying finalized batch TX failed: %v", err)
 	}
 
-	if tx.TxHash() != finalizedTx.TxHash() {
+	if snapshot.BatchTX.TxHash() != finalizedTx.TxHash() {
 		return c.cfg.BatchSource.DeletePendingBatch()
 	}
 
@@ -66,8 +66,10 @@ func (c *Client) checkPendingBatch() error {
 
 // finalizedBatchTx retrieves the finalized transaction of a batch according to
 // the auctioneer, i.e., the transaction that will be broadcast to the network.
-func (c *Client) finalizedBatchTx(id order.BatchID) (*wire.MsgTx, error) {
-	req := &poolrpc.BatchSnapshotRequest{BatchId: id[:]}
+func (c *Client) finalizedBatchTx(
+	snapshot *clientdb.LocalBatchSnapshot) (*wire.MsgTx, error) {
+
+	req := &poolrpc.BatchSnapshotRequest{BatchId: snapshot.BatchID[:]}
 	batch, err := c.client.BatchSnapshot(context.Background(), req)
 	if err != nil {
 		return nil, fmt.Errorf("querying relevant batch snapshot "+

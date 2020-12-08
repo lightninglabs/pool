@@ -83,7 +83,7 @@ type accountStore struct {
 var _ account.Store = (*accountStore)(nil)
 
 func (s *accountStore) PendingBatch() error {
-	_, _, err := s.DB.PendingBatch()
+	_, err := s.DB.PendingBatchSnapshot()
 	return err
 }
 

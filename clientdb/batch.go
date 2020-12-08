@@ -152,24 +152,16 @@ func (db *DB) StorePendingBatch(batch *order.Batch, orders []order.Nonce,
 	})
 }
 
-// PendingBatchID retrieves the ID of the currently pending batch. If there
-// isn't one, account.ErrNoPendingBatch is returned.
-func (db *DB) PendingBatch() (order.BatchID, *wire.MsgTx, error) {
-	var (
-		batchID order.BatchID
-		batchTx *wire.MsgTx
-	)
+// PendingBatchSnapshot retrieves the snapshot of the currently pending batch.
+// If there isn't one, account.ErrNoPendingBatch is returned.
+func (db *DB) PendingBatchSnapshot() (*LocalBatchSnapshot, error) {
+	var batchSnapshot *LocalBatchSnapshot
 	err := db.View(func(tx *bbolt.Tx) error {
 		var err error
-		batchID, err = pendingBatchID(tx)
-		if err != nil {
-			return err
-		}
-
-		batchTx, err = pendingBatchTx(tx)
+		batchSnapshot, err = fetchPendingBatchSnapshot(tx)
 		return err
 	})
-	return batchID, batchTx, err
+	return batchSnapshot, err
 }
 
 // pendingBatchID retrieves the stored pending batch ID within a database
