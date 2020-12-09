@@ -1,10 +1,8 @@
 package clientdb
 
 import (
-	"bytes"
 	"fmt"
 
-	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
 	"go.etcd.io/bbolt"
@@ -18,10 +16,6 @@ var (
 	// pendingBatchIDKey is a key we'll use to store the ID of a batch we're
 	// currently participating in.
 	pendingBatchIDKey = []byte("pending-id")
-
-	// pendingBatchTxKey is a key we'll use to store the transaction of a
-	// batch we're currently participating in.
-	pendingBatchTxKey = []byte("pending-tx")
 
 	// pendingBatchAccountsBucketKey is the key of a bucket nested within
 	// the top level batch bucket that is responsible for storing the
@@ -130,14 +124,6 @@ func (db *DB) StorePendingBatch(batch *order.Batch, orders []order.Nonce,
 		if err := bucket.Put(pendingBatchIDKey, batchID[:]); err != nil {
 			return err
 		}
-		var buf bytes.Buffer
-		if err := WriteElement(&buf, batch.BatchTX); err != nil {
-			return err
-		}
-
-		if err = bucket.Put(pendingBatchTxKey, buf.Bytes()); err != nil {
-			return err
-		}
 
 		// Before we are done, we store a snapshot of the this batch,
 		// so we retain this history for later.
@@ -152,24 +138,16 @@ func (db *DB) StorePendingBatch(batch *order.Batch, orders []order.Nonce,
 	})
 }
 
-// PendingBatchID retrieves the ID of the currently pending batch. If there
-// isn't one, account.ErrNoPendingBatch is returned.
-func (db *DB) PendingBatch() (order.BatchID, *wire.MsgTx, error) {
-	var (
-		batchID order.BatchID
-		batchTx *wire.MsgTx
-	)
+// PendingBatchSnapshot retrieves the snapshot of the currently pending batch.
+// If there isn't one, account.ErrNoPendingBatch is returned.
+func (db *DB) PendingBatchSnapshot() (*LocalBatchSnapshot, error) {
+	var batchSnapshot *LocalBatchSnapshot
 	err := db.View(func(tx *bbolt.Tx) error {
 		var err error
-		batchID, err = pendingBatchID(tx)
-		if err != nil {
-			return err
-		}
-
-		batchTx, err = pendingBatchTx(tx)
+		batchSnapshot, err = fetchPendingBatchSnapshot(tx)
 		return err
 	})
-	return batchID, batchTx, err
+	return batchSnapshot, err
 }
 
 // pendingBatchID retrieves the stored pending batch ID within a database
@@ -190,27 +168,6 @@ func pendingBatchID(tx *bbolt.Tx) (order.BatchID, error) {
 	return batchID, nil
 }
 
-// pendingBatchTx retrieves the stored pending batch transaction within a
-// database transaction.
-func pendingBatchTx(tx *bbolt.Tx) (*wire.MsgTx, error) {
-	bucket, err := getBucket(tx, batchBucketKey)
-	if err != nil {
-		return nil, err
-	}
-
-	rawBatchTx := bucket.Get(pendingBatchTxKey)
-	if rawBatchTx == nil {
-		return nil, account.ErrNoPendingBatch
-	}
-
-	var batchTx *wire.MsgTx
-	if err := ReadElement(bytes.NewReader(rawBatchTx), &batchTx); err != nil {
-		return nil, err
-	}
-
-	return batchTx, nil
-}
-
 // DeletePendingBatch removes all references to the current pending batch
 // without applying its staged updates to accounts and orders. If no pending
 // batch exists, this acts as a no-op.
@@ -222,9 +179,6 @@ func (db *DB) DeletePendingBatch() error {
 		}
 
 		if err := bucket.Delete(pendingBatchIDKey); err != nil {
-			return err
-		}
-		if err := bucket.Delete(pendingBatchTxKey); err != nil {
 			return err
 		}
 		err = bucket.DeleteBucket(pendingBatchAccountsBucketKey)
@@ -328,10 +282,6 @@ func applyBatchUpdates(tx *bbolt.Tx) error {
 		return err
 	}
 
-	// Finally, remove the reference to the pending batch ID and
-	// transaction.
-	if err := bucket.Delete(pendingBatchIDKey); err != nil {
-		return err
-	}
-	return bucket.Delete(pendingBatchTxKey)
+	// Finally, remove the reference to the pending batch ID.
+	return bucket.Delete(pendingBatchIDKey)
 }

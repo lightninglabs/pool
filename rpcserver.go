@@ -60,7 +60,6 @@ type rpcServer struct {
 	auctioneer     *auctioneer.Client
 	accountManager *account.Manager
 	orderManager   *order.Manager
-	fundingManager *funding.Manager
 
 	quit                           chan struct{}
 	wg                             sync.WaitGroup
@@ -83,7 +82,7 @@ type accountStore struct {
 var _ account.Store = (*accountStore)(nil)
 
 func (s *accountStore) PendingBatch() error {
-	_, _, err := s.DB.PendingBatch()
+	_, err := s.DB.PendingBatchSnapshot()
 	return err
 }
 
@@ -115,17 +114,6 @@ func newRPCServer(server *Server) *rpcServer {
 			Wallet:    lndServices.WalletKit,
 			Signer:    lndServices.Signer,
 		}),
-		fundingManager: &funding.Manager{
-			DB:               server.db,
-			WalletKit:        lndServices.WalletKit,
-			LightningClient:  lndServices.Client,
-			BaseClient:       server.lndClient,
-			BatchStepTimeout: funding.DefaultBatchStepTimeout,
-			PendingOpenChannels: make(
-				chan *lnrpc.ChannelEventUpdate_PendingOpenChannel,
-			),
-			NewNodesOnly: server.cfg.NewNodesOnly,
-		},
 		quit: make(chan struct{}),
 	}
 }
@@ -249,7 +237,7 @@ func (s *rpcServer) consumePendingOpenChannels(
 		}
 
 		select {
-		case s.fundingManager.PendingOpenChannels <- channel:
+		case s.server.fundingManager.PendingOpenChannels <- channel:
 		case <-s.quit:
 			return
 		}
@@ -379,7 +367,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		// will never be published.
 		if s.orderManager.HasPendingBatch() {
 			pendingBatch := s.orderManager.PendingBatch()
-			err = s.fundingManager.RemovePendingBatchArtifacts(
+			err = s.server.fundingManager.RemovePendingBatchArtifacts(
 				pendingBatch.MatchedOrders, pendingBatch.BatchTX,
 			)
 			if err != nil {
@@ -415,7 +403,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		// Before we accept the batch, we'll finish preparations on our
 		// end which include applying any order match predicates,
 		// connecting out to peers, and registering funding shim.
-		err = s.fundingManager.PrepChannelFunding(
+		err = s.server.fundingManager.PrepChannelFunding(
 			batch, nodeHasTorAddrs(nodeInfo.Uris), s.quit,
 		)
 		if err != nil {
@@ -436,7 +424,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 		// then start negotiating with the remote peers. We'll sign
 		// once all channel partners have responded.
 		batch := s.orderManager.PendingBatch()
-		channelKeys, err := s.fundingManager.BatchChannelSetup(
+		channelKeys, err := s.server.fundingManager.BatchChannelSetup(
 			batch, s.quit,
 		)
 		if err != nil {

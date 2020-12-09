@@ -88,6 +88,10 @@ type Config struct {
 	// BatchSource provides information about the current pending batch, if
 	// any.
 	BatchSource BatchSource
+
+	// BatchCleaner provides functionality to clean up the state of a
+	// trader's pending batch.
+	BatchCleaner BatchCleaner
 }
 
 // Client performs the client side part of auctions. This interface exists to be

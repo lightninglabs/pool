@@ -18,6 +18,7 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/clientdb"
+	"github.com/lightninglabs/pool/funding"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -67,6 +68,7 @@ type Server struct {
 
 	cfg             *Config
 	db              *clientdb.DB
+	fundingManager  *funding.Manager
 	lsatStore       *lsat.FileStore
 	lndServices     *lndclient.GrpcLndServices
 	lndClient       lnrpc.LightningClient
@@ -440,6 +442,19 @@ func (s *Server) setupClient() error {
 		),
 	)
 
+	// Create the funding manager.
+	s.fundingManager = &funding.Manager{
+		DB:               s.db,
+		WalletKit:        s.lndServices.WalletKit,
+		LightningClient:  s.lndServices.Client,
+		BaseClient:       s.lndClient,
+		BatchStepTimeout: funding.DefaultBatchStepTimeout,
+		NewNodesOnly:     s.cfg.NewNodesOnly,
+		PendingOpenChannels: make(
+			chan *lnrpc.ChannelEventUpdate_PendingOpenChannel,
+		),
+	}
+
 	// Create an instance of the auctioneer client library.
 	clientCfg := &auctioneer.Config{
 		ServerAddress: s.cfg.AuctionServer,
@@ -450,6 +465,7 @@ func (s *Server) setupClient() error {
 		MinBackoff:    s.cfg.MinBackoff,
 		MaxBackoff:    s.cfg.MaxBackoff,
 		BatchSource:   s.db,
+		BatchCleaner:  s.fundingManager,
 	}
 	s.AuctioneerClient, err = auctioneer.NewClient(clientCfg)
 	if err != nil {

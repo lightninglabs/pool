@@ -185,16 +185,16 @@ func dumpPendingBatch(ctx *cli.Context) error {
 		return fmt.Errorf("error loading DB: %v", err)
 	}
 
-	batchID, tx, err := db.PendingBatch()
+	snapshot, err := db.PendingBatchSnapshot()
 	if err != nil {
 		return fmt.Errorf("error getting pending batch: %v", err)
 	}
 
-	fmt.Printf("Batch ID:\t%x\n", batchID[:])
-	fmt.Printf("TXID:\t\t%s\n", tx.TxHash())
+	fmt.Printf("Batch ID:\t%x\n", snapshot.BatchID[:])
+	fmt.Printf("TXID:\t\t%s\n", snapshot.BatchTX.TxHash())
 
 	var buf bytes.Buffer
-	err = tx.Serialize(&buf)
+	err = snapshot.BatchTX.Serialize(&buf)
 	if err != nil {
 		return fmt.Errorf("error serializing TX: %v", err)
 	}
