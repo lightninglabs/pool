@@ -281,7 +281,7 @@ To reduce the value of this worst-case estimation, there are two possible flags 
 
   the mempools are almost empty.
   
-## Cancel orders
+## Cancelling orders
 
 To cancel an order. First get the order_nonce of the to be canceled order by using the list command and then cancel it: 
 
