@@ -712,8 +712,9 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 			return fmt.Errorf("unable to watch for spend: %v", err)
 		}
 
-	// If the account has already been closed, there's nothing to be done.
-	case StateClosed:
+	// If the account has already been closed or canceled, there's nothing
+	// to be done.
+	case StateClosed, StateCanceledAfterRecovery:
 		break
 
 	default:
