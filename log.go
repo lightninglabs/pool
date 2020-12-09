@@ -11,6 +11,7 @@ import (
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/clientdb"
+	"github.com/lightninglabs/pool/funding"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/signal"
@@ -25,7 +26,6 @@ var (
 	logWriter = build.NewRotatingLogWriter()
 	log       = build.NewSubLogger(Subsystem, logWriter.GenSubLogger)
 	rpcLog    = build.NewSubLogger("RPCS", logWriter.GenSubLogger)
-	fndgLog   = build.NewSubLogger("FNDG", logWriter.GenSubLogger)
 
 	// SupportedSubsystems is a function that returns a list of all
 	// supported logging sub systems.
@@ -35,7 +35,7 @@ var (
 func init() {
 	setSubLogger(Subsystem, log, nil)
 	setSubLogger("RPCS", rpcLog, nil)
-	setSubLogger("FNDG", fndgLog, nil)
+	addSubLogger(funding.Subsystem, funding.UseLogger)
 	addSubLogger(auctioneer.Subsystem, auctioneer.UseLogger)
 	addSubLogger(order.Subsystem, order.UseLogger)
 	addSubLogger("LNDC", lndclient.UseLogger)

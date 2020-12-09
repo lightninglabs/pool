@@ -311,7 +311,9 @@ func (v *batchVerifier) validateMatchedOrder(tally *AccountTally,
 func (v *batchVerifier) validateChannelOutput(batch *Batch, ourOrder Order,
 	otherOrder *MatchedOrder) error {
 
-	_, _, err := batch.channelOutput(v.wallet, ourOrder, otherOrder)
+	_, _, err := ChannelOutput(
+		batch.BatchTX, v.wallet, ourOrder, otherOrder,
+	)
 	return err
 }
 

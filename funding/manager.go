@@ -1,4 +1,4 @@
-package pool
+package funding
 
 import (
 	"context"
@@ -26,32 +26,34 @@ import (
 )
 
 var (
-	// defaultBatchStepTimeout is the default time we allow an action that
+	// DefaultBatchStepTimeout is the default time we allow an action that
 	// blocks the batch conversation (like peer connection establishment or
 	// channel open) to take. If any action takes longer, we might reject
 	// the order from that slow peer. This value SHOULD be lower than the
 	// defaultMsgTimeout on the server side otherwise nodes might get kicked
 	// out of the match making process for timing out even though it was
 	// their peer's fault.
-	defaultBatchStepTimeout = 15 * time.Second
+	DefaultBatchStepTimeout = 15 * time.Second
 )
 
-// matchRejectErr is an error type that is returned from the funding manager if
+// MatchRejectErr is an error type that is returned from the funding manager if
 // the trader rejects certain orders instead of the whole batch.
-type matchRejectErr struct {
-	rejectedOrders map[order.Nonce]*poolrpc.OrderReject
+type MatchRejectErr struct {
+	// RejectedOrders is the map of matches we reject, keyed with our order
+	// nonce.
+	RejectedOrders map[order.Nonce]*poolrpc.OrderReject
 }
 
 // Error returns the underlying error string.
 //
 // NOTE: This is part of the error interface.
-func (e *matchRejectErr) Error() string {
-	return fmt.Sprintf("trader rejected orders: %v", e.rejectedOrders)
+func (e *MatchRejectErr) Error() string {
+	return fmt.Sprintf("trader rejected orders: %v", e.RejectedOrders)
 }
 
-// fundingBaseClient is an interface that contains all methods necessary to open
-// a channel with a funding shim and query peer connections.
-type fundingBaseClient interface {
+// BaseClient is an interface that contains all methods necessary to open a
+// channel with a funding shim and query peer connections.
+type BaseClient interface {
 	// FundingStateStep is an advanced funding related call that allows the
 	// caller to either execute some preparatory steps for a funding
 	// workflow, or manually progress a funding workflow.
@@ -74,37 +76,54 @@ type fundingBaseClient interface {
 	SubscribePeerEvents(ctx context.Context, r *lnrpc.PeerEventSubscription,
 		opts ...grpc.CallOption) (
 		lnrpc.Lightning_SubscribePeerEventsClient, error)
+
+	// AbandonChannel removes all channel state from the database except for
+	// a close summary. This method can be used to get rid of permanently
+	// unusable channels due to bugs fixed in newer versions of lnd. This
+	// method can also be used to remove externally funded channels where
+	// the funding transaction was never broadcast. Only available for
+	// non-externally funded channels in dev build.
+	AbandonChannel(ctx context.Context, in *lnrpc.AbandonChannelRequest,
+		opts ...grpc.CallOption) (*lnrpc.AbandonChannelResponse, error)
 }
 
-type fundingMgr struct {
-	db              *clientdb.DB
-	walletKit       lndclient.WalletKitClient
-	lightningClient lndclient.LightningClient
-	baseClient      fundingBaseClient
+type Manager struct {
+	// DB is the client database.
+	DB *clientdb.DB
 
-	// newNodesOnly specifies if the funding manager should only accept
+	// WalletKit is an lndclient wrapped walletrpc client.
+	WalletKit lndclient.WalletKitClient
+
+	// LightningClient is an lndclient wrapped lnrpc client.
+	LightningClient lndclient.LightningClient
+
+	// BaseClient is a raw lnrpc client that implements all methods the
+	// funding manager needs.
+	BaseClient BaseClient
+
+	// NewNodesOnly specifies if the funding manager should only accept
 	// matched orders with channels from new nodes that the connected lnd
 	// node doesn't already have channels with.
-	newNodesOnly bool
+	NewNodesOnly bool
 
-	// pendingOpenChannels is a channel through which we'll receive
+	// PendingOpenChannels is a channel through which we'll receive
 	// notifications for pending open channels resulting from a successful
 	// batch.
-	pendingOpenChannels <-chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
+	PendingOpenChannels chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
 
-	batchStepTimeout time.Duration
-
-	quit chan struct{}
+	// BatchStepTimeout is the timeout the manager uses when executing a
+	// single batch step.
+	BatchStepTimeout time.Duration
 }
 
 // deriveFundingShim generates the proper funding shim that should be used by
 // the maker or taker to properly make a channel that stems off the main batch
 // funding transaction.
-func (f *fundingMgr) deriveFundingShim(ourOrder order.Order,
+func (m *Manager) deriveFundingShim(ourOrder order.Order,
 	matchedOrder *order.MatchedOrder,
 	batchTx *wire.MsgTx) (*lnrpc.FundingShim, error) {
 
-	fndgLog.Infof("Registering funding shim for Order(type=%v, amt=%v, "+
+	log.Infof("Registering funding shim for Order(type=%v, amt=%v, "+
 		"nonce=%v", ourOrder.Type(),
 		matchedOrder.UnitsFilled.ToSatoshis(), ourOrder.Nonce())
 
@@ -137,7 +156,7 @@ func (f *fundingMgr) deriveFundingShim(ourOrder order.Order,
 	// scratch.
 	ctxb := context.Background()
 	ourKeyLocator := ourOrder.Details().MultiSigKeyLocator
-	ourMultiSigKey, err := f.walletKit.DeriveKey(
+	ourMultiSigKey, err := m.WalletKit.DeriveKey(
 		ctxb, &ourKeyLocator,
 	)
 	if err != nil {
@@ -194,16 +213,16 @@ func (f *fundingMgr) deriveFundingShim(ourOrder order.Order,
 // registerFundingShim is used when we're on the taker (our bid was executed)
 // side of a new matched order. To prepare ourselves for their incoming funding
 // request, we'll register a shim with all the expected parameters.
-func (f *fundingMgr) registerFundingShim(ourOrder order.Order,
+func (m *Manager) registerFundingShim(ourOrder order.Order,
 	matchedOrder *order.MatchedOrder, batchTx *wire.MsgTx) error {
 
 	ctxb := context.Background()
 
-	fundingShim, err := f.deriveFundingShim(ourOrder, matchedOrder, batchTx)
+	fundingShim, err := m.deriveFundingShim(ourOrder, matchedOrder, batchTx)
 	if err != nil {
 		return err
 	}
-	_, err = f.baseClient.FundingStateStep(
+	_, err = m.BaseClient.FundingStateStep(
 		ctxb, &lnrpc.FundingTransitionMsg{
 			Trigger: &lnrpc.FundingTransitionMsg_ShimRegister{
 				ShimRegister: fundingShim,
@@ -217,27 +236,27 @@ func (f *fundingMgr) registerFundingShim(ourOrder order.Order,
 	return nil
 }
 
-// prepChannelFunding preps the backing node to either receive or initiate a
+// PrepChannelFunding preps the backing node to either receive or initiate a
 // channel funding based on the items in the order batch.
-func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
-	traderBehindTor bool) error {
+func (m *Manager) PrepChannelFunding(batch *order.Batch,
+	traderBehindTor bool, quit <-chan struct{}) error {
 
-	fndgLog.Infof("Batch(%x): preparing channel funding for %v orders",
+	log.Infof("Batch(%x): preparing channel funding for %v orders",
 		batch.ID[:], len(batch.MatchedOrders))
 
 	// We need to make sure our whole process doesn't take too long overall
 	// so we create a context that is valid for the whole funding step and
 	// use that everywhere.
 	setupCtx, cancel := context.WithTimeout(
-		context.Background(), f.batchStepTimeout,
+		context.Background(), m.BatchStepTimeout,
 	)
 	defer cancel()
 
 	// Before we connect out to peers, we check that we don't get any new
 	// channels from peers we already have channels with, in case this is
 	// requested by the trader.
-	if f.newNodesOnly {
-		fundingRejects, err := f.rejectDuplicateChannels(batch)
+	if m.NewNodesOnly {
+		fundingRejects, err := m.rejectDuplicateChannels(batch)
 		if err != nil {
 			return err
 		}
@@ -245,8 +264,8 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
 		// In case we have any orders we don't like, tell the auctioneer
 		// now. They'll hopefully prepare and send us another batch.
 		if len(fundingRejects) > 0 {
-			return &matchRejectErr{
-				rejectedOrders: fundingRejects,
+			return &MatchRejectErr{
+				RejectedOrders: fundingRejects,
 			}
 		}
 	}
@@ -255,7 +274,7 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
 	// all the funding shims we need to be able to respond
 	connsInitiated := make(map[route.Vertex]struct{})
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
-		ourOrder, err := f.db.GetOrder(ourOrderNonce)
+		ourOrder, err := m.DB.GetOrder(ourOrderNonce)
 		if err != nil {
 			return err
 		}
@@ -294,7 +313,7 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
 			//
 			// TODO(roasbeef): info leaks?
 			nodeKey := matchedOrder.NodeKey
-			fndgLog.Debugf("Connecting to node=%x for order_nonce="+
+			log.Debugf("Connecting to node=%x for order_nonce="+
 				"%v", nodeKey[:], matchedOrder.Order.Nonce())
 			_, initiated := connsInitiated[nodeKey]
 			if !initiated {
@@ -304,7 +323,7 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
 				// for now. Instead we will observe later
 				// whether the peer gets connected before the
 				// batch timeout.
-				go f.connectToMatchedTrader(
+				go m.connectToMatchedTrader(
 					setupCtx, nodeKey,
 					matchedOrder.NodeAddrs,
 				)
@@ -321,7 +340,7 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
 			// expected funding shims so we can execute the next
 			// phase w/o any issues and accept the incoming channel
 			// from the asker.
-			err := f.registerFundingShim(
+			err := m.registerFundingShim(
 				ourOrder, matchedOrder, batch.BatchTX,
 			)
 			if err != nil {
@@ -335,16 +354,16 @@ func (f *fundingMgr) prepChannelFunding(batch *order.Batch,
 	// We need to wait for all connections to be established now. Otherwise
 	// the asker won't be able to open the channel as it doesn't know the
 	// connection details of the bidder.
-	return f.waitForPeerConnections(setupCtx, connsInitiated, batch)
+	return m.waitForPeerConnections(setupCtx, connsInitiated, batch, quit)
 }
 
-// batchChannelSetup will attempt to establish new funding flows with all
+// BatchChannelSetup will attempt to establish new funding flows with all
 // matched takers (people buying our channels) in the passed batch. This method
 // will block until the channel is considered pending. Once this phase is
 // complete, and the batch execution transaction broadcast, the channel will be
 // finalized and locked in.
-func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
-	map[wire.OutPoint]*chaninfo.ChannelInfo, error) {
+func (m *Manager) BatchChannelSetup(batch *order.Batch,
+	quit <-chan struct{}) (map[wire.OutPoint]*chaninfo.ChannelInfo, error) {
 
 	var (
 		eg                errgroup.Group
@@ -373,18 +392,18 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	// so we create a context that is valid for the whole funding step and
 	// use that everywhere.
 	setupCtx, cancel := context.WithTimeout(
-		context.Background(), f.batchStepTimeout,
+		context.Background(), m.BatchStepTimeout,
 	)
 	defer cancel()
 
-	fndgLog.Infof("Batch(%x): opening channels for %v matched orders",
+	log.Infof("Batch(%x): opening channels for %v matched orders",
 		batch.ID[:], len(batch.MatchedOrders))
 
 	// For each ask order of ours that's matched, we'll make a new funding
 	// flow, blocking until they all progress to the final state.
 	batchTxHash := batch.BatchTX.TxHash()
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
-		ourOrder, err := f.db.GetOrder(ourOrderNonce)
+		ourOrder, err := m.DB.GetOrder(ourOrderNonce)
 		if err != nil {
 			return nil, err
 		}
@@ -393,7 +412,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 		// order, and complete the funding flow for each one in which
 		// our order was the ask.
 		for _, matchedOrder := range matchedOrders {
-			fundingShim, err := f.deriveFundingShim(
+			fundingShim, err := m.deriveFundingShim(
 				ourOrder, matchedOrder, batch.BatchTX,
 			)
 			if err != nil {
@@ -435,7 +454,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 				LocalFundingAmount: chanAmt,
 				FundingShim:        fundingShim,
 			}
-			chanStream, err := f.baseClient.OpenChannel(
+			chanStream, err := m.BaseClient.OpenChannel(
 				setupCtx, fundingReq,
 			)
 
@@ -450,7 +469,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 			nonce := matchedOrder.Order.Nonce()
 			nodeKey := matchedOrder.NodeKey
 			if err != nil {
-				fndgLog.Warnf("Error when trying to open "+
+				log.Warnf("Error when trying to open "+
 					"channel to node %x, going to reject "+
 					"channel: %v", nodeKey[:], err)
 				partialReject(nonce, err.Error(), chanPoint)
@@ -465,7 +484,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 				for {
 					select {
 
-					case <-f.quit:
+					case <-quit:
 						return fmt.Errorf("server " +
 							"shutting down")
 					default:
@@ -473,7 +492,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 
 					msg, err := chanStream.Recv()
 					if err != nil {
-						fndgLog.Errorf("unable to read "+
+						log.Errorf("unable to read "+
 							"chan open update "+
 							"event from node %x, "+
 							"going to reject "+
@@ -504,7 +523,7 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	// we can report that together with the other errors.
 	if err := eg.Wait(); err != nil {
 		select {
-		case <-f.quit:
+		case <-quit:
 			return nil, err
 		default:
 		}
@@ -520,13 +539,13 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 		map[wire.OutPoint]*chaninfo.ChannelInfo, len(chanPoints),
 	)
 
-	fndgLog.Debugf("Waiting for pending open events for %v channel(s)",
+	log.Debugf("Waiting for pending open events for %v channel(s)",
 		len(chanPoints))
 
 	for {
 		var chanPoint wire.OutPoint
 		select {
-		case channel := <-f.pendingOpenChannels:
+		case channel := <-m.PendingOpenChannels:
 			var hash chainhash.Hash
 			copy(hash[:], channel.PendingOpenChannel.Txid)
 			chanPoint = wire.OutPoint{
@@ -544,11 +563,11 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 			for chanPoint, nonce := range chanPoints {
 				partialReject(nonce, timeoutErrStr, chanPoint)
 			}
-			return nil, &matchRejectErr{
-				rejectedOrders: fundingRejects,
+			return nil, &MatchRejectErr{
+				RejectedOrders: fundingRejects,
 			}
 
-		case <-f.quit:
+		case <-quit:
 			return nil, fmt.Errorf("server shutting down")
 		}
 
@@ -559,10 +578,10 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 			continue
 		}
 
-		fndgLog.Debugf("Retrieving info for channel %v", chanPoint)
+		log.Debugf("Retrieving info for channel %v", chanPoint)
 
 		chanInfo, err := chaninfo.GatherChannelInfo(
-			setupCtx, f.lightningClient, f.walletKit, chanPoint,
+			setupCtx, m.LightningClient, m.WalletKit, chanPoint,
 		)
 		if err != nil {
 			return nil, err
@@ -580,28 +599,63 @@ func (f *fundingMgr) batchChannelSetup(batch *order.Batch) (
 	// channels failed directly when opening but the rest succeeded without
 	// a timeout. We still want to reject the batch because of the failures.
 	if len(fundingRejects) > 0 {
-		return nil, &matchRejectErr{
-			rejectedOrders: fundingRejects,
+		return nil, &MatchRejectErr{
+			RejectedOrders: fundingRejects,
 		}
 	}
 
 	return channelKeys, nil
 }
 
+// RemovePendingBatchArtifacts removes any funding shims or pending channels
+// from a batch that was never finalized. Some non-terminal errors are logged
+// only and not returned. Therefore if this method returns an error, it should
+// be handled as terminal error.
+func (m *Manager) RemovePendingBatchArtifacts(
+	matchedOrders map[order.Nonce][]*order.MatchedOrder,
+	batchTx *wire.MsgTx) error {
+
+	err := CancelPendingFundingShims(
+		matchedOrders, m.BaseClient, m.DB.GetOrder,
+	)
+	if err != nil {
+		// CancelPendingFundingShims only returns hard errors that
+		// justify us rejecting the batch or logging an actual error.
+		return fmt.Errorf("error canceling funding shims "+
+			"from previous pending batch: %v", err)
+	}
+
+	// Also abandon any channels that might still be pending
+	// from a previous round of the same batch or a previous
+	// batch that we didn't make it into the final round.
+	err = AbandonCanceledChannels(
+		matchedOrders, batchTx, m.WalletKit, m.BaseClient,
+		m.DB.GetOrder,
+	)
+	if err != nil {
+		// AbandonCanceledChannels also only returns hard errors that
+		// justify us rejecting the batch or logging an actual error.
+		return fmt.Errorf("error abandoning channels from "+
+			"previous pending batch: %v", err)
+	}
+
+	return nil
+}
+
 // connectToMatchedTrader attempts to connect to a trader that we've had an
 // order matched with, on all available addresses.
-func (f *fundingMgr) connectToMatchedTrader(ctx context.Context,
+func (m *Manager) connectToMatchedTrader(ctx context.Context,
 	nodeKey [33]byte, addrs []net.Addr) {
 
 	for _, addr := range addrs {
-		err := f.lightningClient.Connect(ctx, nodeKey, addr.String())
+		err := m.LightningClient.Connect(ctx, nodeKey, addr.String())
 		if err != nil {
 			// If we're already connected, then we can stop now.
 			if strings.Contains(err.Error(), "already connected") {
 				return
 			}
 
-			fndgLog.Warnf("unable to connect to trader at %x@%v",
+			log.Warnf("unable to connect to trader at %x@%v",
 				nodeKey[:], addr)
 
 			continue
@@ -620,14 +674,15 @@ func (f *fundingMgr) connectToMatchedTrader(ctx context.Context,
 //
 // NOTE: The passed context MUST have a timeout applied to it, otherwise this
 // method will block forever in case a connection doesn't succeed.
-func (f *fundingMgr) waitForPeerConnections(ctx context.Context,
-	peers map[route.Vertex]struct{}, batch *order.Batch) error {
+func (m *Manager) waitForPeerConnections(ctx context.Context,
+	peers map[route.Vertex]struct{}, batch *order.Batch,
+	quit <-chan struct{}) error {
 
 	// First of all, subscribe to new peer events so we certainly don't miss
 	// an update while we look for the already connected peers.
 	ctxc, cancel := context.WithCancel(ctx)
 	defer cancel()
-	subscription, err := f.baseClient.SubscribePeerEvents(
+	subscription, err := m.BaseClient.SubscribePeerEvents(
 		ctxc, &lnrpc.PeerEventSubscription{},
 	)
 	if err != nil {
@@ -637,7 +692,7 @@ func (f *fundingMgr) waitForPeerConnections(ctx context.Context,
 	// Query all connected peers. This only returns active peers so once a
 	// node key appears in this list, we can be reasonably sure the
 	// connection is established (flapping peers notwithstanding).
-	resp, err := f.baseClient.ListPeers(
+	resp, err := m.BaseClient.ListPeers(
 		ctx, &lnrpc.ListPeersRequest{},
 	)
 	if err != nil {
@@ -670,14 +725,14 @@ func (f *fundingMgr) waitForPeerConnections(ctx context.Context,
 		// to open all required connections, we reject the orders that
 		// came from the peers with the failed connections.
 		case <-ctx.Done():
-			return &matchRejectErr{
-				rejectedOrders: f.rejectFailedConnections(
+			return &MatchRejectErr{
+				RejectedOrders: m.rejectFailedConnections(
 					peers, batch,
 				),
 			}
 
 		// We're shutting down, nothing more to do here.
-		case <-f.quit:
+		case <-quit:
 			return nil
 
 		default:
@@ -728,17 +783,17 @@ func (f *fundingMgr) waitForPeerConnections(ctx context.Context,
 // rejectDuplicateChannels gathers a list of matched orders that should be
 // rejected because they would create channels to peers that the trader already
 // has channels with.
-func (f *fundingMgr) rejectDuplicateChannels(
+func (m *Manager) rejectDuplicateChannels(
 	batch *order.Batch) (map[order.Nonce]*poolrpc.OrderReject, error) {
 
 	// We gather all peers from the open and pending channels.
 	ctxb := context.Background()
 	peers := make(map[route.Vertex]struct{})
-	openChans, err := f.lightningClient.ListChannels(ctxb)
+	openChans, err := m.LightningClient.ListChannels(ctxb)
 	if err != nil {
 		return nil, fmt.Errorf("error listing open channels: %v", err)
 	}
-	pendingChans, err := f.lightningClient.PendingChannels(ctxb)
+	pendingChans, err := m.LightningClient.PendingChannels(ctxb)
 	if err != nil {
 		return nil, fmt.Errorf("error listing pending channels: %v",
 			err)
@@ -763,7 +818,7 @@ func (f *fundingMgr) rejectDuplicateChannels(
 				continue
 			}
 
-			fndgLog.Debugf("Rejecting channel to node %x: %v",
+			log.Debugf("Rejecting channel to node %x: %v",
 				matchedOrder.NodeKey[:], haveChannel)
 			otherNonce := matchedOrder.Order.Nonce()
 			fundingRejects[otherNonce] = &poolrpc.OrderReject{
@@ -778,7 +833,7 @@ func (f *fundingMgr) rejectDuplicateChannels(
 
 // rejectFailedConnections gathers a list of all matched orders that are to
 // peers to which we couldn't connect and want to reject because of that.
-func (f *fundingMgr) rejectFailedConnections(peers map[route.Vertex]struct{},
+func (m *Manager) rejectFailedConnections(peers map[route.Vertex]struct{},
 	batch *order.Batch) map[order.Nonce]*poolrpc.OrderReject {
 
 	// Gather the list of matches we reject because the connection to them
@@ -793,7 +848,7 @@ func (f *fundingMgr) rejectFailedConnections(peers map[route.Vertex]struct{},
 				continue
 			}
 
-			fndgLog.Debugf("Rejecting channel to node %x: %v",
+			log.Debugf("Rejecting channel to node %x: %v",
 				matchedOrder.NodeKey[:], connFailed)
 			otherNonce := matchedOrder.Order.Nonce()
 			fundingRejects[otherNonce] = &poolrpc.OrderReject{

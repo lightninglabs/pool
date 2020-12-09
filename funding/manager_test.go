@@ -1,4 +1,4 @@
-package pool
+package funding
 
 import (
 	"context"
@@ -184,6 +184,13 @@ func (m *fundingBaseClientMock) SubscribePeerEvents(ctx context.Context,
 	}, nil
 }
 
+func (m *fundingBaseClientMock) AbandonChannel(_ context.Context,
+	_ *lnrpc.AbandonChannelRequest,
+	_ ...grpc.CallOption) (*lnrpc.AbandonChannelResponse, error) {
+
+	return nil, nil
+}
+
 type managerHarness struct {
 	t              *testing.T
 	tempDir        string
@@ -192,7 +199,7 @@ type managerHarness struct {
 	msgChan        chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
 	lnMock         *test.MockLightning
 	baseClientMock *fundingBaseClientMock
-	mgr            *fundingMgr
+	mgr            *Manager
 }
 
 func newManagerHarness(t *testing.T) *managerHarness {
@@ -225,15 +232,14 @@ func newManagerHarness(t *testing.T) *managerHarness {
 		msgChan:        msgChan,
 		lnMock:         lightningClient,
 		baseClientMock: baseClientMock,
-		mgr: &fundingMgr{
-			db:                  db,
-			walletKit:           walletKitClient,
-			lightningClient:     lightningClient,
-			baseClient:          baseClientMock,
-			newNodesOnly:        true,
-			pendingOpenChannels: msgChan,
-			quit:                quit,
-			batchStepTimeout:    400 * time.Millisecond,
+		mgr: &Manager{
+			DB:                  db,
+			WalletKit:           walletKitClient,
+			LightningClient:     lightningClient,
+			BaseClient:          baseClientMock,
+			NewNodesOnly:        true,
+			PendingOpenChannels: msgChan,
+			BatchStepTimeout:    400 * time.Millisecond,
 		},
 	}
 }
@@ -329,7 +335,7 @@ func TestFundingManager(t *testing.T) {
 	h.baseClientMock.peerList = map[route.Vertex]string{
 		node1Key: "1.1.1.1",
 	}
-	err = h.mgr.prepChannelFunding(batch, false)
+	err = h.mgr.PrepChannelFunding(batch, false, h.quit)
 	require.NoError(t, err)
 
 	// Verify we have the expected connections and funding shims registered.
@@ -371,15 +377,15 @@ func TestFundingManager(t *testing.T) {
 
 	// Next, make sure we get a partial reject error if we enable the "new
 	// nodes only" flag and already have a channel with the matched node.
-	h.mgr.newNodesOnly = true
+	h.mgr.NewNodesOnly = true
 	h.lnMock.Channels = append(h.lnMock.Channels, lndclient.ChannelInfo{
 		PubKeyBytes: node1Key,
 	})
-	err = h.mgr.prepChannelFunding(batch, false)
+	err = h.mgr.PrepChannelFunding(batch, false, h.quit)
 	require.Error(t, err)
 
-	expectedErr := &matchRejectErr{
-		rejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
+	expectedErr := &MatchRejectErr{
+		RejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
 			ask.Nonce(): {
 				ReasonCode: poolrpc.OrderReject_DUPLICATE_PEER,
 				Reason: "already have open/pending channel " +
@@ -391,13 +397,13 @@ func TestFundingManager(t *testing.T) {
 
 	// As a last check of the funding preparation, make sure we get a reject
 	// error if the connections to the remote peers couldn't be established.
-	h.mgr.newNodesOnly = false
+	h.mgr.NewNodesOnly = false
 	h.baseClientMock.peerList = make(map[route.Vertex]string)
-	err = h.mgr.prepChannelFunding(batch, false)
+	err = h.mgr.PrepChannelFunding(batch, false, h.quit)
 	require.Error(t, err)
 
-	expectedErr = &matchRejectErr{
-		rejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
+	expectedErr = &MatchRejectErr{
+		RejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
 			ask.Nonce(): {
 				ReasonCode: poolrpc.OrderReject_CHANNEL_FUNDING_FAILED,
 				Reason: "connection not established before " +
@@ -446,13 +452,13 @@ func TestFundingManager(t *testing.T) {
 		ChannelPoint: fmt.Sprintf("%s:1", txidHash.String()),
 	})
 	h.lnMock.ScbKeyRing.EncryptionKey.PubKey = pubKeyAsk
-	chanInfo, err := h.mgr.batchChannelSetup(batch)
+	chanInfo, err := h.mgr.BatchChannelSetup(batch, h.quit)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(chanInfo))
 
 	// Finally, make sure we get a timeout error if no channel open messages
 	// are received.
-	_, err = h.mgr.batchChannelSetup(batch)
+	_, err = h.mgr.BatchChannelSetup(batch, h.quit)
 	require.Error(t, err)
 
 	code := &poolrpc.OrderReject{
@@ -460,8 +466,8 @@ func TestFundingManager(t *testing.T) {
 		Reason: "timed out waiting for pending open " +
 			"channel notification",
 	}
-	expectedErr = &matchRejectErr{
-		rejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
+	expectedErr = &MatchRejectErr{
+		RejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
 			ask.Nonce(): code,
 			bid.Nonce(): code,
 		},
@@ -487,7 +493,9 @@ func TestWaitForPeerConnections(t *testing.T) {
 		node1Key: {},
 		node2Key: {},
 	}
-	err := h.mgr.waitForPeerConnections(ctxt, expectedConnections, nil)
+	err := h.mgr.waitForPeerConnections(
+		ctxt, expectedConnections, nil, h.quit,
+	)
 	require.NoError(t, err)
 
 	// Next, make sure that connections established while waiting are
@@ -516,7 +524,9 @@ func TestWaitForPeerConnections(t *testing.T) {
 		node1Key: {},
 		node2Key: {},
 	}
-	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, nil)
+	err = h.mgr.waitForPeerConnections(
+		ctxt, expectedConnections, nil, h.quit,
+	)
 	require.NoError(t, err)
 
 	// Final test, make sure we get the correct error message back if we
@@ -551,15 +561,17 @@ func TestWaitForPeerConnections(t *testing.T) {
 		node1Key: {},
 		node2Key: {},
 	}
-	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, fakeBatch)
+	err = h.mgr.waitForPeerConnections(
+		ctxt, expectedConnections, fakeBatch, h.quit,
+	)
 	require.Error(t, err)
 
 	code := &poolrpc.OrderReject{
 		ReasonCode: poolrpc.OrderReject_CHANNEL_FUNDING_FAILED,
 		Reason:     "connection not established before timeout",
 	}
-	expectedErr := &matchRejectErr{
-		rejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
+	expectedErr := &MatchRejectErr{
+		RejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
 			fakeNonce2: code,
 		},
 	}
@@ -576,7 +588,9 @@ func TestWaitForPeerConnections(t *testing.T) {
 		close(h.baseClientMock.cancelSub)
 	}()
 
-	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, fakeBatch)
+	err = h.mgr.waitForPeerConnections(
+		ctxt, expectedConnections, fakeBatch, h.quit,
+	)
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
 }
