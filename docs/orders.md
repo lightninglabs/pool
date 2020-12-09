@@ -280,6 +280,14 @@ To reduce the value of this worst-case estimation, there are two possible flags 
   value too low might result in orders not being executed at all or only when
 
   the mempools are almost empty.
+  
+## Cancelling orders
+
+To cancel an order. First get the order_nonce of the to be canceled order by using the list command and then cancel it: 
+
+```text
+$ pool orders cancel order_nonce
+```
 
 ## Extensibility
 
