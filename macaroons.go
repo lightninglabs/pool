@@ -169,14 +169,19 @@ func (s *Server) startMacaroonService() error {
 
 	// Create macaroon files for pool CLI to use if they don't exist.
 	if !lnrpc.FileExists(s.cfg.MacaroonPath) {
-		ctx := context.Background()
+		// We don't offer the ability to rotate macaroon root keys yet,
+		// so just use the default one since the service expects some
+		// value to be set.
+		idCtx := macaroons.ContextWithRootKeyID(
+			context.Background(), macaroons.DefaultRootKeyID,
+		)
 
 		// We only generate one default macaroon that contains all
 		// existing permissions (equivalent to the admin.macaroon in
 		// lnd). Custom macaroons can be created through the bakery
 		// RPC.
 		poolMac, err := s.macaroonService.Oven.NewMacaroon(
-			ctx, bakery.LatestVersion, nil, allPermissions...,
+			idCtx, bakery.LatestVersion, nil, allPermissions...,
 		)
 		if err != nil {
 			return err
