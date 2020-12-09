@@ -88,6 +88,12 @@ const (
 	// StatePendingBatch denotes an account that recently participated in a
 	// batch and is not yet confirmed.
 	StatePendingBatch State = 8
+
+	// StateExpiredPendingUpdate denotes that the chain has reached an
+	// account's expiration height while the account had a pending update
+	// that has yet to confirm. This state exists to ensure an account can
+	// only be renewed once confirmed and expired.
+	StateExpiredPendingUpdate State = 9
 )
 
 // String returns a human-readable description of an account's state.
@@ -111,6 +117,8 @@ func (s State) String() string {
 		return "StateCanceledAfterRecovery"
 	case StatePendingBatch:
 		return "StatePendingBatch"
+	case StateExpiredPendingUpdate:
+		return "StateExpiredPendingUpdate"
 	default:
 		return "unknown"
 	}
