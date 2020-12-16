@@ -52,7 +52,6 @@ func TestValidateOrderAccountIsolation(t *testing.T) {
 	}
 
 	testTerms := &terms.AuctioneerTerms{
-		MaxOrderDuration: 100 * MinimumOrderDurationBlocks,
 		OrderExecBaseFee: 1,
 		OrderExecFeeRate: 100,
 	}

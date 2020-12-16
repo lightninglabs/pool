@@ -1163,7 +1163,6 @@ func (c *Client) Terms(ctx context.Context) (*terms.AuctioneerTerms, error) {
 
 	return &terms.AuctioneerTerms{
 		MaxAccountValue:     btcutil.Amount(resp.MaxAccountValue),
-		MaxOrderDuration:    resp.MaxOrderDurationBlocks,
 		OrderExecBaseFee:    btcutil.Amount(resp.ExecutionFee.BaseFee),
 		OrderExecFeeRate:    btcutil.Amount(resp.ExecutionFee.FeeRate),
 		LeaseDurations:      resp.LeaseDurations,
