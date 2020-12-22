@@ -223,9 +223,10 @@ func ParseRPCBatch(prepareMsg *poolrpc.OrderMatchPrepare) (*Batch,
 	error) {
 
 	b := &Batch{
-		Version:       BatchVersion(prepareMsg.BatchVersion),
-		MatchedOrders: make(map[Nonce][]*MatchedOrder),
-		BatchTX:       &wire.MsgTx{},
+		Version:        BatchVersion(prepareMsg.BatchVersion),
+		MatchedOrders:  make(map[Nonce][]*MatchedOrder),
+		BatchTX:        &wire.MsgTx{},
+		ClearingPrices: make(map[uint32]FixedRatePremium),
 	}
 
 	// Parse matched orders market by market.
@@ -266,7 +267,9 @@ func ParseRPCBatch(prepareMsg *poolrpc.OrderMatchPrepare) (*Batch,
 			b.MatchedOrders[ourOrder] = matchedOrders
 		}
 
-		// TODO(guggero): Add clearing price per lease duration bucket.
+		b.ClearingPrices[leaseDuration] = FixedRatePremium(
+			matchedMarket.ClearingPriceRate,
+		)
 	}
 
 	// Parse account diff.
@@ -298,7 +301,6 @@ func ParseRPCBatch(prepareMsg *poolrpc.OrderMatchPrepare) (*Batch,
 	}
 
 	// Convert clearing price, fee rate and rebate.
-	b.ClearingPrice = FixedRatePremium(prepareMsg.ClearingPriceRate)
 	b.BatchTxFeeRate = chainfee.SatPerKWeight(prepareMsg.FeeRateSatPerKw)
 	b.FeeRebate = btcutil.Amount(prepareMsg.FeeRebateSat)
 

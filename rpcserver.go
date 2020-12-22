@@ -1790,10 +1790,23 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					bidDuration = match.Order.(*order.Bid).LeaseDuration
 				}
 
+				// The clearing price is dependent on the lease
+				// duration, except for older batch versions
+				// where there was just one single duration
+				// which is returned in the default/legacy
+				// bucket independent of what bids were
+				// contained within.
+				duration := bidDuration
+				clearingPrice, ok := batch.ClearingPrices[duration]
+				if !ok {
+					duration = order.LegacyLeaseDurationBucket
+					clearingPrice = batch.ClearingPrices[duration]
+				}
+
 				// Calculate the premium paid/received to/from
 				// the maker/taker and the execution fee paid
 				// to the auctioneer and tally them.
-				premium := batch.ClearingPrice.LumpSumPremium(
+				premium := clearingPrice.LumpSumPremium(
 					chanAmt, bidDuration,
 				)
 				exeFee := batch.ExecutionFee.BaseFee() +
@@ -1822,13 +1835,15 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					ChannelDurationBlocks: bidDuration,
 					ChannelLeaseExpiry:    leaseExpiryHeight,
 					PremiumSat:            uint64(premium),
-					ClearingRatePrice:     uint64(batch.ClearingPrice),
-					OrderFixedRate:        uint64(ourOrder.Details().FixedRate),
-					ExecutionFeeSat:       uint64(exeFee),
-					OrderNonce:            nonce[:],
-					Purchased:             purchased,
-					ChannelRemoteNodeKey:  match.NodeKey[:],
-					ChannelNodeTier:       nodeTier,
+					ClearingRatePrice:     uint64(clearingPrice),
+					OrderFixedRate: uint64(
+						ourOrder.Details().FixedRate,
+					),
+					ExecutionFeeSat:      uint64(exeFee),
+					OrderNonce:           nonce[:],
+					Purchased:            purchased,
+					ChannelRemoteNodeKey: match.NodeKey[:],
+					ChannelNodeTier:      nodeTier,
 				})
 
 				numChans++
