@@ -978,7 +978,7 @@ message TermsResponse {
     uint64 max_account_value = 1;
 
     /*
-    The maximum order duration in blocks currently allowed by the auctioneer.
+    Deprecated, use explicit order duration from lease_duration_buckets.
     */
     uint32 max_order_duration_blocks = 2 [deprecated = true];
 

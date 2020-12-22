@@ -202,11 +202,6 @@ func (m *Manager) validateOrder(order Order, acct *account.Account,
 		return fmt.Errorf("invalid lease duration, must be "+
 			"at least %d", MinimumOrderDurationBlocks)
 	}
-	if order.Details().LeaseDuration > terms.MaxOrderDuration {
-		return fmt.Errorf("invalid lease duration, must be "+
-			"smaller than or equal to %d",
-			terms.MaxOrderDuration)
-	}
 	if order.Details().LeaseDuration%MinimumOrderDurationBlocks != 0 {
 		return fmt.Errorf("invalid lease duration, must be "+
 			"multiple of %d", MinimumOrderDurationBlocks)
