@@ -807,14 +807,14 @@
         "clearing_price_rate": {
           "type": "integer",
           "format": "int64",
-          "description": "The uniform clearing price rate in parts per billion of the batch."
+          "description": "Deprecated, use matched_markets."
         },
         "matched_orders": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/poolrpcMatchedOrderSnapshot"
           },
-          "description": "The set of all orders matched in the batch."
+          "description": "Deprecated, use matched_markets."
         },
         "batch_tx_id": {
           "type": "string",
@@ -834,6 +834,13 @@
           "type": "string",
           "format": "uint64",
           "description": "The unix timestamp in nanoseconds the batch was made."
+        },
+        "matched_markets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/poolrpcMatchedMarketSnapshot"
+          },
+          "description": "Maps the distinct lease duration markets to the orders that were matched\nwithin and the discovered market clearing price."
         }
       }
     },
@@ -1254,6 +1261,23 @@
       ],
       "default": "PREPARE",
       "description": " - PREPARE: The OrderMatchPrepare message from the auctioneer was received initially.\n - ACCEPTED: The OrderMatchPrepare message from the auctioneer was processed successfully\nand the batch was accepted.\n - REJECTED: The order was rejected by the trader daemon, either as an answer to a\nOrderMatchSignBegin or OrderMatchFinalize message from the auctioneer.\n - SIGNED: The OrderMatchSignBegin message from the auctioneer was processed\nsuccessfully.\n - FINALIZED: The OrderMatchFinalize message from the auctioneer was processed\nsuccessfully."
+    },
+    "poolrpcMatchedMarketSnapshot": {
+      "type": "object",
+      "properties": {
+        "matched_orders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/poolrpcMatchedOrderSnapshot"
+          },
+          "description": "The set of all orders matched in the batch."
+        },
+        "clearing_price_rate": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The uniform clearing price rate in parts per billion that was used for this\nbatch."
+        }
+      }
     },
     "poolrpcMatchedOrderSnapshot": {
       "type": "object",

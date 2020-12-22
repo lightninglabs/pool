@@ -445,7 +445,7 @@ message SubscribeSuccess {
     bytes trader_key = 1;
 }
 
-message OrderMatchPrepare {
+message MatchedMarket {
     /*
     Maps a user's own order_nonce to the opposite order type they were matched
     with. The order_nonce is a 32 byte hex encoded string because bytes is not
@@ -458,6 +458,18 @@ message OrderMatchPrepare {
     batch.
     */
     uint32 clearing_price_rate = 2;
+}
+
+message OrderMatchPrepare {
+    /*
+    Deprecated, use matched_markets.
+    */
+    map<string, MatchedOrder> matched_orders = 1 [deprecated = true];
+
+    /*
+    Deprecated, use matched_markets.
+    */
+    uint32 clearing_price_rate = 2 [deprecated = true];
 
     /*
     A list of the user's own accounts that are being spent by the matched
@@ -500,6 +512,12 @@ message OrderMatchPrepare {
     informed that a software update is required.
     */
     uint32 batch_version = 9;
+
+    /*
+    Maps the distinct lease duration markets to the orders that were matched
+    within and the discovered market clearing price.
+    */
+    map<uint32, MatchedMarket> matched_markets = 10;
 }
 
 message OrderMatchSignBegin {
@@ -1065,13 +1083,14 @@ message RelevantBatch {
     repeated AccountDiff charged_accounts = 3;
 
     /*
-    The set of orders that were matched against the orders belonging to the
-    requested accounts.
+    Deprecated, use matched_markets.
     */
-    map<string, MatchedOrder> matched_orders = 4;
+    map<string, MatchedOrder> matched_orders = 4 [deprecated = true];
 
-    // The uniform clearing price rate in parts per billion of the batch.
-    uint32 clearing_price_rate = 5;
+    /*
+    Deprecated, use matched_markets.
+    */
+    uint32 clearing_price_rate = 5 [deprecated = true];
 
     // The fee parameters used to calculate the execution fees.
     ExecutionFee execution_fee = 6;
@@ -1087,6 +1106,12 @@ message RelevantBatch {
 
     // The unix timestamp in nanoseconds the batch was made.
     uint64 creation_timestamp_ns = 9;
+
+    /*
+    Maps the distinct lease duration markets to the orders that were matched
+    within and the discovered market clearing price.
+    */
+    map<uint32, MatchedMarket> matched_markets = 10;
 }
 
 message ExecutionFee {
@@ -1166,6 +1191,19 @@ message BatchSnapshotRequest {
     bytes batch_id = 1;
 }
 
+message MatchedMarketSnapshot {
+    /*
+    The set of all orders matched in the batch.
+    */
+    repeated MatchedOrderSnapshot matched_orders = 1;
+
+    /*
+    The uniform clearing price rate in parts per billion that was used for this
+    batch.
+    */
+    uint32 clearing_price_rate = 2;
+}
+
 message BatchSnapshotResponse {
     // The version of the batch.
     uint32 version = 1;
@@ -1176,11 +1214,15 @@ message BatchSnapshotResponse {
     // The unique identifier of the prior batch.
     bytes prev_batch_id = 3;
 
-    // The uniform clearing price rate in parts per billion of the batch.
-    uint32 clearing_price_rate = 4;
+    /*
+    Deprecated, use matched_markets.
+    */
+    uint32 clearing_price_rate = 4 [deprecated = true];
 
-    // The set of all orders matched in the batch.
-    repeated MatchedOrderSnapshot matched_orders = 5;
+    /*
+    Deprecated, use matched_markets.
+    */
+    repeated MatchedOrderSnapshot matched_orders = 5 [deprecated = true];
 
     // The txid of the batch transaction.
     string batch_tx_id = 7;
@@ -1193,6 +1235,12 @@ message BatchSnapshotResponse {
 
     // The unix timestamp in nanoseconds the batch was made.
     uint64 creation_timestamp_ns = 9;
+
+    /*
+    Maps the distinct lease duration markets to the orders that were matched
+    within and the discovered market clearing price.
+    */
+    map<uint32, MatchedMarketSnapshot> matched_markets = 10;
 }
 
 message ServerNodeRatingRequest {
