@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -36,6 +37,8 @@ import (
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/signal"
 	"github.com/lightningnetwork/lnd/tor"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -221,6 +224,14 @@ func (s *rpcServer) consumePendingOpenChannels(
 			}
 
 			rpcLog.Errorf("Unable to read channel event: %v", err)
+
+			// If the lnd node shut down, there's no use continuing.
+			if err == io.EOF || err == io.ErrUnexpectedEOF ||
+				status.Code(err) == codes.Unavailable {
+
+				return
+			}
+
 			continue
 		}
 
