@@ -7,7 +7,6 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/lightninglabs/pool/poolrpc"
-	"github.com/lightninglabs/protobuf-hex-display/proto"
 	"github.com/urfave/cli"
 )
 
@@ -48,6 +47,48 @@ func NewLeaseFromProto(a *poolrpc.Lease) *Lease {
 		OrderNonce:            hex.EncodeToString(a.OrderNonce),
 		Purchased:             a.Purchased,
 	}
+}
+
+// Markets is a simple type alias to make the following Snapshot struct more
+// compact.
+type Markets = map[uint32]*poolrpc.MatchedMarketSnapshot
+
+// Snapshot is a copy of poolrpc.BatchSnapshotResponse that does not include the
+// deprecated fields.
+type Snapshot struct {
+	Version                uint32  `json:"version"`
+	BatchID                string  `json:"batch_id"`
+	PrevBatchID            string  `json:"prev_batch_id"`
+	BatchTxID              string  `json:"batch_tx_id"`
+	BatchTx                string  `json:"batch_tx"`
+	BatchTxFeeRateSatPerKw uint64  `json:"batch_tx_fee_rate_sat_per_kw"`
+	CreationTimestampNs    uint64  `json:"creation_timestamp_ns"`
+	MatchedMarkets         Markets `json:"matched_markets"`
+}
+
+// NewSnapshotsFromProtos creates a display Snapshot from its proto.
+func NewSnapshotsFromProto(s []*poolrpc.BatchSnapshotResponse) []*Snapshot {
+	result := make([]*Snapshot, len(s))
+	for idx, snapshot := range s {
+		result[idx] = &Snapshot{
+			Version: snapshot.Version,
+			BatchID: hex.EncodeToString(
+				snapshot.BatchId,
+			),
+			PrevBatchID: hex.EncodeToString(
+				snapshot.PrevBatchId,
+			),
+			BatchTxID: snapshot.BatchTxId,
+			BatchTx: hex.EncodeToString(
+				snapshot.BatchTx,
+			),
+			BatchTxFeeRateSatPerKw: snapshot.BatchTxFeeRateSatPerKw,
+			CreationTimestampNs:    snapshot.CreationTimestampNs,
+			MatchedMarkets:         snapshot.MatchedMarkets,
+		}
+	}
+
+	return result
 }
 
 var auctionCommands = []cli.Command{
@@ -136,7 +177,6 @@ func batchSnapshot(ctx *cli.Context) error {
 	var (
 		batchIDStr string
 		ctxb       = context.Background()
-		resp       proto.Message
 	)
 	switch {
 	case ctx.Args().Present():
@@ -151,7 +191,7 @@ func batchSnapshot(ctx *cli.Context) error {
 		return fmt.Errorf("unable to decode batch ID: %v", err)
 	}
 
-	resp, err = client.BatchSnapshots(
+	resp, err := client.BatchSnapshots(
 		ctxb, &poolrpc.BatchSnapshotsRequest{
 			StartBatchId:   batchID,
 			NumBatchesBack: uint32(ctx.Uint64("num_batches")),
@@ -161,7 +201,12 @@ func batchSnapshot(ctx *cli.Context) error {
 		return err
 	}
 
-	printRespJSON(resp)
+	// Get rid of the deprecated fields by copying the response into a new
+	// struct just for displaying. Can be removed once the deprecated fields
+	// are removed from the proto (alpha->beta transition?).
+	// TODO(guggero): Use original proto message once deprecated fields are
+	// removed.
+	printJSON(NewSnapshotsFromProto(resp.Batches))
 
 	return nil
 }
