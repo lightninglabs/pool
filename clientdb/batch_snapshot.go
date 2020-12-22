@@ -399,7 +399,7 @@ func getSnapshotBuckets(tx *bbolt.Tx) (*bbolt.Bucket, *bbolt.Bucket,
 
 func serializeLocalBatchSnapshot(w io.Writer, b *LocalBatchSnapshot) error {
 	err := WriteElements(
-		w, uint32(b.Version), b.BatchID[:], b.ClearingPrice,
+		w, b.Version, b.BatchID[:], b.ClearingPrice,
 		b.ExecutionFee, b.BatchTX, b.BatchTxFeeRate,
 	)
 	if err != nil {
@@ -447,16 +447,13 @@ func serializeLocalBatchSnapshot(w io.Writer, b *LocalBatchSnapshot) error {
 
 func deserializeLocalBatchSnapshot(r io.Reader) (*LocalBatchSnapshot, error) {
 	b := &LocalBatchSnapshot{}
-	var version uint32
 	err := ReadElements(
-		r, &version, b.BatchID[:], &b.ClearingPrice, &b.ExecutionFee,
+		r, &b.Version, b.BatchID[:], &b.ClearingPrice, &b.ExecutionFee,
 		&b.BatchTX, &b.BatchTxFeeRate,
 	)
 	if err != nil {
 		return nil, err
 	}
-
-	b.Version = order.BatchVersion(version)
 
 	b.Accounts, err = deserializeAccounts(r)
 	if err != nil {
