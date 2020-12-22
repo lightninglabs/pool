@@ -1056,6 +1056,9 @@ message RelevantBatch {
     units (sat/kW).
     */
     uint64 fee_rate_sat_per_kw = 8;
+
+    // The unix timestamp in nanoseconds the batch was made.
+    uint64 creation_timestamp_ns = 9;
 }
 
 message ExecutionFee {
@@ -1159,6 +1162,9 @@ message BatchSnapshotResponse {
 
     // The fee rate, in satoshis per kiloweight, of the batch transaction.
     uint64 batch_tx_fee_rate_sat_per_kw = 8;
+
+    // The unix timestamp in nanoseconds the batch was made.
+    uint64 creation_timestamp_ns = 9;
 }
 
 message ServerNodeRatingRequest {
