@@ -3118,7 +3118,7 @@ type TermsResponse struct {
 	//The maximum account size in satoshis currently allowed by the auctioneer.
 	MaxAccountValue uint64 `protobuf:"varint,1,opt,name=max_account_value,json=maxAccountValue,proto3" json:"max_account_value,omitempty"`
 	//
-	//The maximum order duration in blocks currently allowed by the auctioneer.
+	//Deprecated, use explicit order duration from lease_duration_buckets.
 	MaxOrderDurationBlocks uint32 `protobuf:"varint,2,opt,name=max_order_duration_blocks,json=maxOrderDurationBlocks,proto3" json:"max_order_duration_blocks,omitempty"` // Deprecated: Do not use.
 	//
 	//The execution fee charged per matched order.
