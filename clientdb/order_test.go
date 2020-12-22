@@ -145,7 +145,7 @@ func dummyOrder(amt btcutil.Amount, leaseDuration uint32) *order.Kit {
 		panic(fmt.Sprintf("could not create private key: %v", err))
 	}
 	kit := order.NewKitWithPreimage(testPreimage)
-	kit.Version = order.VersionDefault
+	kit.Version = order.VersionLeaseDurationBuckets
 	kit.State = order.StateExecuted
 	kit.FixedRate = 21
 	kit.Amt = amt

@@ -37,6 +37,12 @@ const (
 	// VersionNodeTierMinMatch is the order version that added recognition
 	// of the new node tier and min matchable order size fields.
 	VersionNodeTierMinMatch Version = 1
+
+	// VersionLeaseDurationBuckets is the order version that added use of
+	// multiple lease durations. Only orders with this version are allowed
+	// to use lease durations outside of the default/legacy 2016 block
+	// duration.
+	VersionLeaseDurationBuckets Version = 2
 )
 
 // Type is the type of an order. We don't use iota for the constants due to the
@@ -310,7 +316,7 @@ func NewKitWithPreimage(preimage lntypes.Preimage) *Kit {
 	return &Kit{
 		nonce:    nonce,
 		Preimage: preimage,
-		Version:  VersionNodeTierMinMatch,
+		Version:  VersionLeaseDurationBuckets,
 	}
 }
 
@@ -318,7 +324,7 @@ func NewKitWithPreimage(preimage lntypes.Preimage) *Kit {
 func NewKit(nonce Nonce) *Kit {
 	return &Kit{
 		nonce:   nonce,
-		Version: VersionNodeTierMinMatch,
+		Version: VersionLeaseDurationBuckets,
 	}
 }
 
@@ -357,7 +363,7 @@ func (a *Ask) Digest() ([sha256.Size]byte, error) {
 			return result, err
 		}
 
-	case VersionNodeTierMinMatch:
+	case VersionNodeTierMinMatch, VersionLeaseDurationBuckets:
 		err := lnwire.WriteElements(
 			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
 			a.Amt, a.LeaseDuration, uint64(a.MaxBatchFeeRate),
@@ -530,7 +536,7 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 			return result, err
 		}
 
-	case VersionNodeTierMinMatch:
+	case VersionNodeTierMinMatch, VersionLeaseDurationBuckets:
 		err := lnwire.WriteElements(
 			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
 			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
