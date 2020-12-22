@@ -891,7 +891,16 @@ message LeaseDurationRequest {
 }
 
 message LeaseDurationResponse {
-    map<uint32, bool> lease_durations = 1;
+    /*
+    Deprecated, use lease_duration_buckets.
+    */
+    map<uint32, bool> lease_durations = 1 [deprecated = true];
+
+    /*
+    The set of lease durations the market is currently accepting and the state
+    the duration buckets currently are in.
+    */
+    map<uint32, DurationBucketState> lease_duration_buckets = 2;
 }
 
 message NextBatchInfoRequest {
