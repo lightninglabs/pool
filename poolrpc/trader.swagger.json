@@ -829,6 +829,11 @@
           "type": "string",
           "format": "uint64",
           "description": "The fee rate, in satoshis per kiloweight, of the batch transaction."
+        },
+        "creation_timestamp_ns": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The unix timestamp in nanoseconds the batch was made."
         }
       }
     },
