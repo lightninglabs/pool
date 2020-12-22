@@ -73,7 +73,7 @@ func (v *batchVerifier) Verify(batch *Batch) error {
 	// as the server. Otherwise we bail out of the batch. This should
 	// already be handled when the client connects/authenticates. But
 	// doesn't hurt to check again.
-	if batch.Version != CurrentVersion {
+	if batch.Version != CurrentBatchVersion {
 		return ErrVersionMismatch
 	}
 
