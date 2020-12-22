@@ -36,9 +36,11 @@ func newOrderKit(nonce order.Nonce, duration uint32) *order.Kit {
 }
 
 var testSnapshot = &LocalBatchSnapshot{
-	Version:        5,
-	BatchID:        testBatchID,
-	ClearingPrice:  999,
+	Version: 5,
+	BatchID: testBatchID,
+	ClearingPrices: map[uint32]order.FixedRatePremium{
+		order.LegacyLeaseDurationBucket: 999,
+	},
 	ExecutionFee:   *terms.NewLinearFeeSchedule(101, 900),
 	BatchTX:        testBatchTx,
 	BatchTxFeeRate: 123456,
@@ -122,7 +124,7 @@ var testSnapshot = &LocalBatchSnapshot{
 }
 
 // TestSerializeLocalBatchSnapshot checks that (de)serialization of local batch
-// snapshots worsk as expected.
+// snapshots works as expected.
 func TestSerializeLocalBatchSnapshot(t *testing.T) {
 	pre := testSnapshot
 	buf := bytes.Buffer{}
@@ -198,10 +200,7 @@ func TestGetLocalBatchSnapshots(t *testing.T) {
 
 	for i, snapshot := range snapshots {
 		testSnapshot.BatchID[0] = byte(i)
-		if !reflect.DeepEqual(testSnapshot, snapshot) {
-			t.Fatalf("mismatch: %v vs %v",
-				spew.Sdump(testSnapshot), spew.Sdump(snapshot))
-		}
+		require.Equal(t, testSnapshot, snapshot)
 	}
 
 	// Store and delete a pending snapshot, and make sure all other batches are

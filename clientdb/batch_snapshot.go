@@ -65,8 +65,9 @@ type LocalBatchSnapshot struct {
 	// BatchID is the batch's unique ID.
 	BatchID order.BatchID
 
-	// ClearingPrice is the fixed rate the orders were cleared at.
-	ClearingPrice order.FixedRatePremium
+	// ClearingPrices is a map of the lease duration markets and the fixed
+	// rate the orders were cleared at within that market.
+	ClearingPrices map[uint32]order.FixedRatePremium
 
 	// ExecutionFee is the FeeSchedule that was used by the server to
 	// calculate the execution fee.
@@ -120,7 +121,7 @@ func NewSnapshot(batch *order.Batch, ourOrders []order.Order,
 	snapshot := &LocalBatchSnapshot{
 		Version:        batch.Version,
 		BatchID:        batch.ID,
-		ClearingPrice:  batch.ClearingPrice,
+		ClearingPrices: batch.ClearingPrices,
 		ExecutionFee:   *feeSched,
 		BatchTX:        batch.BatchTX,
 		BatchTxFeeRate: batch.BatchTxFeeRate,
@@ -398,8 +399,12 @@ func getSnapshotBuckets(tx *bbolt.Tx) (*bbolt.Bucket, *bbolt.Bucket,
 }
 
 func serializeLocalBatchSnapshot(w io.Writer, b *LocalBatchSnapshot) error {
+	// The previous batch versions had a single clearing price but because
+	// we now always store the price map afterwards, we signal a new batch
+	// by storing an explicit zero price.
+	var zeroPrice order.FixedRatePremium
 	err := WriteElements(
-		w, b.Version, b.BatchID[:], b.ClearingPrice,
+		w, b.Version, b.BatchID[:], zeroPrice,
 		b.ExecutionFee, b.BatchTX, b.BatchTxFeeRate,
 	)
 	if err != nil {
@@ -442,13 +447,31 @@ func serializeLocalBatchSnapshot(w io.Writer, b *LocalBatchSnapshot) error {
 		}
 	}
 
+	// New batch versions have an additional map of duration->price that we
+	// need to serialize. Since both values are uint32 this is pretty
+	// straightforward.
+	numPrices := uint32(len(b.ClearingPrices))
+	err = WriteElements(w, numPrices)
+	if err != nil {
+		return err
+	}
+	for duration, price := range b.ClearingPrices {
+		err = WriteElements(w, duration, price)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func deserializeLocalBatchSnapshot(r io.Reader) (*LocalBatchSnapshot, error) {
-	b := &LocalBatchSnapshot{}
+	b := &LocalBatchSnapshot{
+		ClearingPrices: make(map[uint32]order.FixedRatePremium),
+	}
+	var clearingPrice order.FixedRatePremium
 	err := ReadElements(
-		r, &b.Version, b.BatchID[:], &b.ClearingPrice, &b.ExecutionFee,
+		r, &b.Version, b.BatchID[:], &clearingPrice, &b.ExecutionFee,
 		&b.BatchTX, &b.BatchTxFeeRate,
 	)
 	if err != nil {
@@ -479,6 +502,34 @@ func deserializeLocalBatchSnapshot(r io.Reader) (*LocalBatchSnapshot, error) {
 		}
 
 		b.MatchedOrders[nonce] = append(b.MatchedOrders[nonce], m)
+	}
+
+	// Older batches had a single clearing price instead of a map. If we
+	// have a non-zero price, it means this is an old snapshot and we don't
+	// need to read any further.
+	if clearingPrice > 0 {
+		b.ClearingPrices[order.LegacyLeaseDurationBucket] = clearingPrice
+
+		return b, nil
+	}
+
+	var numPrices uint32
+	err = ReadElements(r, &numPrices)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := uint32(0); i < numPrices; i++ {
+		var (
+			price    order.FixedRatePremium
+			duration uint32
+		)
+		err = ReadElements(r, &duration, &price)
+		if err != nil {
+			return nil, err
+		}
+
+		b.ClearingPrices[duration] = price
 	}
 
 	return b, nil
