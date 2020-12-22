@@ -1124,10 +1124,10 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	// If the market isn't currently accepting orders for this particular
 	// lease duration, then we'll exit here as the order will be rejected.
 	leaseDuration := o.Details().LeaseDuration
-	if _, ok := auctionTerms.LeaseDurations[leaseDuration]; !ok {
+	if _, ok := auctionTerms.LeaseDurationBuckets[leaseDuration]; !ok {
 		return nil, fmt.Errorf("invalid channel lease duration %v "+
 			"blocks, active durations are: %v",
-			leaseDuration, auctionTerms.LeaseDurations)
+			leaseDuration, auctionTerms.LeaseDurationBuckets)
 	}
 
 	// Collect all the order data and sign it before sending it to the
@@ -1899,9 +1899,19 @@ func (s *rpcServer) LeaseDurations(ctx context.Context,
 		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
 			err)
 	}
+	legacyDurations := make(
+		map[uint32]bool, len(auctionTerms.LeaseDurationBuckets),
+	)
+	for duration, market := range auctionTerms.LeaseDurationBuckets {
+		const accept = poolrpc.DurationBucketState_ACCEPTING_ORDERS
+		const open = poolrpc.DurationBucketState_MARKET_OPEN
+
+		legacyDurations[duration] = market == accept || market == open
+	}
 
 	return &poolrpc.LeaseDurationResponse{
-		LeaseDurations: auctionTerms.LeaseDurations,
+		LeaseDurations:       legacyDurations,
+		LeaseDurationBuckets: auctionTerms.LeaseDurationBuckets,
 	}, nil
 }
 

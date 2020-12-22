@@ -971,6 +971,32 @@ message ServerOrderStateResponse {
 message TermsRequest {
 }
 
+enum DurationBucketState {
+    /*
+    NO_MARKET indicates that this bucket doesn't actually exist, in that no
+    market is present for this market.
+    */
+    NO_MARKET = 0;
+
+    /*
+    MARKET_CLOSED indicates that this market exists, but that it isn't currently
+    running.
+    */
+    MARKET_CLOSED = 1;
+
+    /*
+    ACCEPTING_ORDERS indicates that we're accepting orders for this bucket, but
+    not yet clearing for this duration.
+    */
+    ACCEPTING_ORDERS = 2;
+
+    /*
+    MARKET_OPEN indicates that we're accepting orders, and fully clearing the
+    market for this duration.
+    */
+    MARKET_OPEN = 3;
+}
+
 message TermsResponse {
     /*
     The maximum account size in satoshis currently allowed by the auctioneer.
@@ -988,13 +1014,9 @@ message TermsResponse {
     ExecutionFee execution_fee = 3;
 
     /*
-    The set of lease durations the market is currently accepting. If a duration
-    is mapped to false, then this means the durations are being accepted, but
-    the market may be paused (not clearing batches). This might happen if a new
-    duration is added, and the auction wishes to build of sufficient market
-    thickness before starting to clear batches.
+    Deprecated, use lease_duration_buckets.
     */
-    map<uint32, bool> lease_durations = 4;
+    map<uint32, bool> lease_durations = 4 [deprecated = true];
 
     // The confirmation target to use for fee estimation of the next batch.
     uint32 next_batch_conf_target = 5;
@@ -1010,6 +1032,12 @@ message TermsResponse {
     the next batch.
     */
     uint64 next_batch_clear_timestamp = 7;
+
+    /*
+    The set of lease durations the market is currently accepting and the state
+    the duration buckets currently are in.
+    */
+    map<uint32, DurationBucketState> lease_duration_buckets = 8;
 }
 
 message RelevantBatchRequest {
