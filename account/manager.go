@@ -431,16 +431,20 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		return fmt.Errorf("unable to construct account output: %v", err)
 	}
 
-	var accountTx *wire.MsgTx
 	switch account.State {
 	// In StateInitiated, we'll attempt to fund our account.
 	case StateInitiated:
 		// If we're resuming the account from a restart, we'll want to
 		// make sure we haven't created and broadcast a transaction for
 		// this account already, so we'll inspect our TxSource to do so.
-		createTx := true
+		var (
+			accountTx *wire.MsgTx
+			createTx  = true
+		)
 		if onRestart || onRecovery {
-			tx, err := m.locateTxByOutput(ctx, accountOutput)
+			tx, err := m.locateTxByOutput(
+				ctx, accountOutput, account.LatestTx,
+			)
 			switch err {
 			// If we do find one, we can rebroadcast it.
 			case nil:
@@ -548,14 +552,25 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		// find one in this state, so if we don't, that would indicate
 		// something has gone wrong.
 		if onRestart {
-			var err error
-			accountTx, err = m.locateTxByHash(
-				ctx, account.OutPoint.Hash,
-			)
-			if err != nil {
-				return fmt.Errorf("unable to locate "+
-					"transaction %v: %v",
-					account.OutPoint.Hash, err)
+			accountTx := account.LatestTx
+
+			// Since we store the latest account modification TX in
+			// the account itself, we don't need to rely on lnd
+			// keeping track of all our TXns anymore. If what we
+			// have in the DB is correct, we can just re-broadcast
+			// that TX.
+			if accountTx == nil ||
+				accountTx.TxHash() != account.OutPoint.Hash {
+
+				var err error
+				accountTx, err = m.locateTxByHash(
+					ctx, account.OutPoint.Hash,
+				)
+				if err != nil {
+					return fmt.Errorf("unable to locate "+
+						"transaction %v: %v",
+						account.OutPoint.Hash, err)
+				}
 			}
 
 			acctKey := account.TraderKey.PubKey.SerializeCompressed()
@@ -709,7 +724,17 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 // its outputs. If a transaction is not found containing the output, then
 // errTxNotFound is returned.
 func (m *Manager) locateTxByOutput(ctx context.Context,
-	output *wire.TxOut) (*wire.MsgTx, error) {
+	output *wire.TxOut, fullTx *wire.MsgTx) (*wire.MsgTx, error) {
+
+	// We now store the full raw transaction of the last modification. We
+	// can just use that if available. If for some reason that TX doesn't
+	// contain our current outpoint, we fall back to the previous behavior.
+	if fullTx != nil {
+		idx, ok := poolscript.LocateOutputScript(fullTx, output.PkScript)
+		if ok && fullTx.TxOut[idx].Value == output.Value {
+			return fullTx, nil
+		}
+	}
 
 	// Get all transactions, starting from block 0 and including unconfirmed
 	// TXes (end block = -1).
