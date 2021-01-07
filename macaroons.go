@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"time"
 
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/macaroons"
@@ -16,6 +17,10 @@ const (
 	// poolMacaroonLocation is the value we use for the pool macaroons'
 	// "Location" field when baking them.
 	poolMacaroonLocation = "pool"
+
+	// macDatabaseOpenTimeout is how long we wait for acquiring the lock on
+	// the macaroon database before we give up with an error.
+	macDatabaseOpenTimeout = time.Second * 5
 )
 
 var (
@@ -148,7 +153,8 @@ func (s *Server) startMacaroonService() error {
 	// Create the macaroon authentication/authorization service.
 	var err error
 	s.macaroonService, err = macaroons.NewService(
-		s.cfg.BaseDir, poolMacaroonLocation, macaroons.IPLockChecker,
+		s.cfg.BaseDir, poolMacaroonLocation, false,
+		macDatabaseOpenTimeout, macaroons.IPLockChecker,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to set up macaroon authentication: "+

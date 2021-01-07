@@ -29,8 +29,8 @@ import (
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/terms"
-	"github.com/lightningnetwork/lnd"
 	"github.com/lightningnetwork/lnd/chanbackup"
+	lndFunding "github.com/lightningnetwork/lnd/funding"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -1149,7 +1149,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	// Now that we now how large the order is, ensure that if it's a
 	// wumbo-sized order, then the backing lnd node is advertising wumbo
 	// support.
-	if o.Details().Amt > lnd.MaxBtcFundingAmount && !s.wumboSupported {
+	if o.Details().Amt > lndFunding.MaxBtcFundingAmount && !s.wumboSupported {
 		return nil, fmt.Errorf("order of %v is wumbo sized, but "+
 			"lnd node isn't signalling wumbo", o.Details().Amt)
 	}
