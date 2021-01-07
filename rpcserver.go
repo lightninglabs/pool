@@ -1586,7 +1586,16 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 		switch chanInfo.Version {
 		case chanbackup.TweaklessCommitVersion:
 			channelType = poolrpc.ChannelType_TWEAKLESS
-		case chanbackup.AnchorsCommitVersion:
+
+		// The AnchorsCommitVersion was never widely deployed (at least
+		// in mainnet) because the lnd version that included it guarded
+		// the anchor channels behind a config flag. Also, the two
+		// anchor versions only differ in the fee negotiation and not
+		// the commitment TX format, so we don't need to distinguish
+		// between them for our purpose.
+		case chanbackup.AnchorsCommitVersion,
+			chanbackup.AnchorsZeroFeeHtlcTxCommitVersion:
+
 			channelType = poolrpc.ChannelType_ANCHORS
 		default:
 			return fmt.Errorf("unknown channel type: %v",
