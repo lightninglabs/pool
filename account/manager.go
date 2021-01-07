@@ -15,6 +15,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcutil/txsort"
+	"github.com/btcsuite/btcwallet/wallet"
 	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/lndclient"
@@ -1249,7 +1250,13 @@ func (m *Manager) BumpAccountFee(ctx context.Context,
 		err := m.cfg.Wallet.BumpFee(ctx, op, newFeeRate)
 		if err != nil {
 			// Output isn't known to lnd, continue to the next one.
+			// Unfortunately there are two slightly different error
+			// messages that can be returned, depending on what code
+			// path is taken.
 			if strings.Contains(err.Error(), lnwallet.ErrNotMine.Error()) {
+				continue
+			}
+			if strings.Contains(err.Error(), wallet.ErrNotMine.Error()) {
 				continue
 			}
 
