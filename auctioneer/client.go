@@ -1105,7 +1105,11 @@ func unmarshallServerRecoveredAccount(keyDesc *keychain.KeyDescriptor,
 		state = account.StateInitiated
 
 	case poolrpc.AuctionAccountState_STATE_CLOSED:
-		state = account.StatePendingClosed
+		// The auctioneer will keep the state as STATE_OPEN until the
+		// closing TX confirms on chain. Therefore if we get the
+		// STATE_CLOSED here it's already confirmed and we don't need to
+		// watch anything or try to re-publish the closing TX.
+		state = account.StateClosed
 
 	case poolrpc.AuctionAccountState_STATE_PENDING_UPDATE:
 		state = account.StatePendingUpdate
