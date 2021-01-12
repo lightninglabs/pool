@@ -377,6 +377,16 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 					"artifacts: %v", err)
 				return s.sendRejectBatch(batch, err)
 			}
+
+			// Clear our staging area for the new batch proposal. We
+			// consider any errors as a hard failure and reject the
+			// batch.
+			err = s.server.fundingManager.DeletePendingBatch()
+			if err != nil {
+				rpcLog.Errorf("Error clearing previous "+
+					"pending batch: %v", err)
+				return s.sendRejectBatch(batch, err)
+			}
 		}
 
 		// Do an in-depth verification of the batch.
