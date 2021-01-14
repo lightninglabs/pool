@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"time"
 
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/macaroons"
@@ -16,6 +17,10 @@ const (
 	// poolMacaroonLocation is the value we use for the pool macaroons'
 	// "Location" field when baking them.
 	poolMacaroonLocation = "pool"
+
+	// macDatabaseOpenTimeout is how long we wait for acquiring the lock on
+	// the macaroon database before we give up with an error.
+	macDatabaseOpenTimeout = time.Second * 5
 )
 
 var (
@@ -43,6 +48,10 @@ var (
 			Action: "write",
 		}},
 		"/poolrpc.Trader/DepositAccount": {{
+			Entity: "account",
+			Action: "write",
+		}},
+		"/poolrpc.Trader/RenewAccount": {{
 			Entity: "account",
 			Action: "write",
 		}},
@@ -144,7 +153,8 @@ func (s *Server) startMacaroonService() error {
 	// Create the macaroon authentication/authorization service.
 	var err error
 	s.macaroonService, err = macaroons.NewService(
-		s.cfg.BaseDir, poolMacaroonLocation, macaroons.IPLockChecker,
+		s.cfg.BaseDir, poolMacaroonLocation, false,
+		macDatabaseOpenTimeout, macaroons.IPLockChecker,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to set up macaroon authentication: "+
@@ -159,14 +169,19 @@ func (s *Server) startMacaroonService() error {
 
 	// Create macaroon files for pool CLI to use if they don't exist.
 	if !lnrpc.FileExists(s.cfg.MacaroonPath) {
-		ctx := context.Background()
+		// We don't offer the ability to rotate macaroon root keys yet,
+		// so just use the default one since the service expects some
+		// value to be set.
+		idCtx := macaroons.ContextWithRootKeyID(
+			context.Background(), macaroons.DefaultRootKeyID,
+		)
 
 		// We only generate one default macaroon that contains all
 		// existing permissions (equivalent to the admin.macaroon in
 		// lnd). Custom macaroons can be created through the bakery
 		// RPC.
 		poolMac, err := s.macaroonService.Oven.NewMacaroon(
-			ctx, bakery.LatestVersion, nil, allPermissions...,
+			idCtx, bakery.LatestVersion, nil, allPermissions...,
 		)
 		if err != nil {
 			return err

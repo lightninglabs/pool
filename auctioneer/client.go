@@ -323,7 +323,8 @@ func (c *Client) ModifyAccount(ctx context.Context, account *account.Account,
 	modifiedAccount := account.Copy(modifiers...)
 	if len(modifiers) > 0 {
 		rpcNewParams = &poolrpc.ServerModifyAccountRequest_NewAccountParameters{
-			Value: uint64(modifiedAccount.Value),
+			Value:  uint64(modifiedAccount.Value),
+			Expiry: modifiedAccount.Expiry,
 		}
 	}
 
@@ -1166,14 +1167,13 @@ func (c *Client) Terms(ctx context.Context) (*terms.AuctioneerTerms, error) {
 	}
 
 	return &terms.AuctioneerTerms{
-		MaxAccountValue:     btcutil.Amount(resp.MaxAccountValue),
-		MaxOrderDuration:    resp.MaxOrderDurationBlocks,
-		OrderExecBaseFee:    btcutil.Amount(resp.ExecutionFee.BaseFee),
-		OrderExecFeeRate:    btcutil.Amount(resp.ExecutionFee.FeeRate),
-		LeaseDurations:      resp.LeaseDurations,
-		NextBatchConfTarget: resp.NextBatchConfTarget,
-		NextBatchFeeRate:    chainfee.SatPerKWeight(resp.NextBatchFeeRateSatPerKw),
-		NextBatchClear:      time.Unix(int64(resp.NextBatchClearTimestamp), 0),
+		MaxAccountValue:      btcutil.Amount(resp.MaxAccountValue),
+		OrderExecBaseFee:     btcutil.Amount(resp.ExecutionFee.BaseFee),
+		OrderExecFeeRate:     btcutil.Amount(resp.ExecutionFee.FeeRate),
+		LeaseDurationBuckets: resp.LeaseDurationBuckets,
+		NextBatchConfTarget:  resp.NextBatchConfTarget,
+		NextBatchFeeRate:     chainfee.SatPerKWeight(resp.NextBatchFeeRateSatPerKw),
+		NextBatchClear:       time.Unix(int64(resp.NextBatchClearTimestamp), 0),
 	}, nil
 }
 

@@ -32,7 +32,7 @@ var (
 	// ErrVersionMismatch is the error that is returned if we don't
 	// implement the same batch verification version as the server.
 	ErrVersionMismatch = fmt.Errorf("version %d mismatches server version",
-		CurrentVersion)
+		CurrentBatchVersion)
 )
 
 // ManagerConfig contains all of the required dependencies for the Manager to
@@ -198,18 +198,11 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 func (m *Manager) validateOrder(order Order, acct *account.Account,
 	terms *terms.AuctioneerTerms) error {
 
-	if order.Details().LeaseDuration < MinimumOrderDurationBlocks {
-		return fmt.Errorf("invalid lease duration, must be "+
-			"at least %d", MinimumOrderDurationBlocks)
-	}
-	if order.Details().LeaseDuration > terms.MaxOrderDuration {
-		return fmt.Errorf("invalid lease duration, must be "+
-			"smaller than or equal to %d",
-			terms.MaxOrderDuration)
-	}
-	if order.Details().LeaseDuration%MinimumOrderDurationBlocks != 0 {
-		return fmt.Errorf("invalid lease duration, must be "+
-			"multiple of %d", MinimumOrderDurationBlocks)
+	duration := order.Details().LeaseDuration
+	_, ok := terms.LeaseDurationBuckets[duration]
+	if !ok {
+		return fmt.Errorf("invalid lease duration, must be one of %v",
+			terms.LeaseDurationBuckets)
 	}
 
 	if order.Details().MaxBatchFeeRate < chainfee.FeePerKwFloor {

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -28,14 +29,16 @@ import (
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/terms"
-	"github.com/lightningnetwork/lnd"
 	"github.com/lightningnetwork/lnd/chanbackup"
+	lndFunding "github.com/lightningnetwork/lnd/funding"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/signal"
 	"github.com/lightningnetwork/lnd/tor"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -221,6 +224,14 @@ func (s *rpcServer) consumePendingOpenChannels(
 			}
 
 			rpcLog.Errorf("Unable to read channel event: %v", err)
+
+			// If the lnd node shut down, there's no use continuing.
+			if err == io.EOF || err == io.ErrUnexpectedEOF ||
+				status.Code(err) == codes.Unavailable {
+
+				return
+			}
+
 			continue
 		}
 
@@ -788,6 +799,62 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 	}, nil
 }
 
+// RenewAccount updates the expiration of an open/expired account. This
+// will always require a signature from the auctioneer, even after the account
+// has expired, to ensure the auctioneer is aware the account is being renewed.
+func (s *rpcServer) RenewAccount(ctx context.Context,
+	req *poolrpc.RenewAccountRequest) (
+	*poolrpc.RenewAccountResponse, error) {
+
+	rpcLog.Infof("Updating account expiration for account %x", req.AccountKey)
+
+	// Ensure the account key is well formed.
+	accountKey, err := btcec.ParsePubKey(req.AccountKey, btcec.S256())
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine the desired expiration value, can be relative or absolute.
+	bestHeight := atomic.LoadUint32(&s.bestHeight)
+	var expiryHeight uint32
+	switch {
+	case req.GetAbsoluteExpiry() != 0:
+		expiryHeight = req.GetAbsoluteExpiry()
+	case req.GetRelativeExpiry() != 0:
+		expiryHeight = req.GetRelativeExpiry() + bestHeight
+	default:
+		return nil, errors.New("either relative or absolute height " +
+			"must be specified")
+	}
+
+	// Enforce a minimum fee rate of 253 sat/kw.
+	feeRate := chainfee.SatPerKWeight(req.FeeRateSatPerKw)
+	if feeRate < chainfee.FeePerKwFloor {
+		return nil, fmt.Errorf("fee rate of %d sat/kw is too low, "+
+			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
+	}
+
+	// Proceed to process the expiration update and map its response to the
+	// RPC's response.
+	modifiedAccount, tx, err := s.accountManager.RenewAccount(
+		ctx, accountKey, expiryHeight, feeRate, bestHeight,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcModifiedAccount, err := MarshallAccount(modifiedAccount)
+	if err != nil {
+		return nil, err
+	}
+	txHash := tx.TxHash()
+
+	return &poolrpc.RenewAccountResponse{
+		Account:     rpcModifiedAccount,
+		RenewalTxid: txHash[:],
+	}, nil
+}
+
 // BumpAccountFee attempts to bump the fee of an account's transaction through
 // child-pays-for-parent (CPFP). Since the CPFP is performed through the backing
 // lnd node, the account transaction must contain an output under its control
@@ -1082,7 +1149,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	// Now that we now how large the order is, ensure that if it's a
 	// wumbo-sized order, then the backing lnd node is advertising wumbo
 	// support.
-	if o.Details().Amt > lnd.MaxBtcFundingAmount && !s.wumboSupported {
+	if o.Details().Amt > lndFunding.MaxBtcFundingAmount && !s.wumboSupported {
 		return nil, fmt.Errorf("order of %v is wumbo sized, but "+
 			"lnd node isn't signalling wumbo", o.Details().Amt)
 	}
@@ -1124,10 +1191,10 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	// If the market isn't currently accepting orders for this particular
 	// lease duration, then we'll exit here as the order will be rejected.
 	leaseDuration := o.Details().LeaseDuration
-	if _, ok := auctionTerms.LeaseDurations[leaseDuration]; !ok {
+	if _, ok := auctionTerms.LeaseDurationBuckets[leaseDuration]; !ok {
 		return nil, fmt.Errorf("invalid channel lease duration %v "+
 			"blocks, active durations are: %v",
-			leaseDuration, auctionTerms.LeaseDurations)
+			leaseDuration, auctionTerms.LeaseDurationBuckets)
 	}
 
 	// Collect all the order data and sign it before sending it to the
@@ -1519,7 +1586,16 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 		switch chanInfo.Version {
 		case chanbackup.TweaklessCommitVersion:
 			channelType = poolrpc.ChannelType_TWEAKLESS
-		case chanbackup.AnchorsCommitVersion:
+
+		// The AnchorsCommitVersion was never widely deployed (at least
+		// in mainnet) because the lnd version that included it guarded
+		// the anchor channels behind a config flag. Also, the two
+		// anchor versions only differ in the fee negotiation and not
+		// the commitment TX format, so we don't need to distinguish
+		// between them for our purpose.
+		case chanbackup.AnchorsCommitVersion,
+			chanbackup.AnchorsZeroFeeHtlcTxCommitVersion:
+
 			channelType = poolrpc.ChannelType_ANCHORS
 		default:
 			return fmt.Errorf("unknown channel type: %v",
@@ -1790,10 +1866,23 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					bidDuration = match.Order.(*order.Bid).LeaseDuration
 				}
 
+				// The clearing price is dependent on the lease
+				// duration, except for older batch versions
+				// where there was just one single duration
+				// which is returned in the default/legacy
+				// bucket independent of what bids were
+				// contained within.
+				duration := bidDuration
+				clearingPrice, ok := batch.ClearingPrices[duration]
+				if !ok {
+					duration = order.LegacyLeaseDurationBucket
+					clearingPrice = batch.ClearingPrices[duration]
+				}
+
 				// Calculate the premium paid/received to/from
 				// the maker/taker and the execution fee paid
 				// to the auctioneer and tally them.
-				premium := batch.ClearingPrice.LumpSumPremium(
+				premium := clearingPrice.LumpSumPremium(
 					chanAmt, bidDuration,
 				)
 				exeFee := batch.ExecutionFee.BaseFee() +
@@ -1822,13 +1911,15 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					ChannelDurationBlocks: bidDuration,
 					ChannelLeaseExpiry:    leaseExpiryHeight,
 					PremiumSat:            uint64(premium),
-					ClearingRatePrice:     uint64(batch.ClearingPrice),
-					OrderFixedRate:        uint64(ourOrder.Details().FixedRate),
-					ExecutionFeeSat:       uint64(exeFee),
-					OrderNonce:            nonce[:],
-					Purchased:             purchased,
-					ChannelRemoteNodeKey:  match.NodeKey[:],
-					ChannelNodeTier:       nodeTier,
+					ClearingRatePrice:     uint64(clearingPrice),
+					OrderFixedRate: uint64(
+						ourOrder.Details().FixedRate,
+					),
+					ExecutionFeeSat:      uint64(exeFee),
+					OrderNonce:           nonce[:],
+					Purchased:            purchased,
+					ChannelRemoteNodeKey: match.NodeKey[:],
+					ChannelNodeTier:      nodeTier,
 				})
 
 				numChans++
@@ -1899,9 +1990,19 @@ func (s *rpcServer) LeaseDurations(ctx context.Context,
 		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
 			err)
 	}
+	legacyDurations := make(
+		map[uint32]bool, len(auctionTerms.LeaseDurationBuckets),
+	)
+	for duration, market := range auctionTerms.LeaseDurationBuckets {
+		const accept = poolrpc.DurationBucketState_ACCEPTING_ORDERS
+		const open = poolrpc.DurationBucketState_MARKET_OPEN
+
+		legacyDurations[duration] = market == accept || market == open
+	}
 
 	return &poolrpc.LeaseDurationResponse{
-		LeaseDurations: auctionTerms.LeaseDurations,
+		LeaseDurations:       legacyDurations,
+		LeaseDurationBuckets: auctionTerms.LeaseDurationBuckets,
 	}, nil
 }
 

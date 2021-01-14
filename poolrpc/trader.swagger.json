@@ -284,6 +284,39 @@
         ]
       }
     },
+    "/v1/pool/accounts/renew": {
+      "post": {
+        "summary": "pool: `accounts renew`\nRenewAccount renews the expiration of an account.",
+        "operationId": "RenewAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcRenewAccountResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/poolrpcRenewAccountRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/pool/accounts/withdraw": {
       "post": {
         "summary": "pool: `accounts withdraw`\nWithdrawAccount splits off parts of the account balance into the specified\noutputs while recreating the account with a reduced balance.",
@@ -807,14 +840,14 @@
         "clearing_price_rate": {
           "type": "integer",
           "format": "int64",
-          "description": "The uniform clearing price rate in parts per billion of the batch."
+          "description": "Deprecated, use matched_markets."
         },
         "matched_orders": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/poolrpcMatchedOrderSnapshot"
           },
-          "description": "The set of all orders matched in the batch."
+          "description": "Deprecated, use matched_markets."
         },
         "batch_tx_id": {
           "type": "string",
@@ -829,6 +862,18 @@
           "type": "string",
           "format": "uint64",
           "description": "The fee rate, in satoshis per kiloweight, of the batch transaction."
+        },
+        "creation_timestamp_ns": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The unix timestamp in nanoseconds the batch was made."
+        },
+        "matched_markets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/poolrpcMatchedMarketSnapshot"
+          },
+          "description": "Maps the distinct lease duration markets to the orders that were matched\nwithin and the discovered market clearing price."
         }
       }
     },
@@ -956,6 +1001,17 @@
           "description": "The transaction used to deposit funds into the account."
         }
       }
+    },
+    "poolrpcDurationBucketState": {
+      "type": "string",
+      "enum": [
+        "NO_MARKET",
+        "MARKET_CLOSED",
+        "ACCEPTING_ORDERS",
+        "MARKET_OPEN"
+      ],
+      "default": "NO_MARKET",
+      "description": " - NO_MARKET: NO_MARKET indicates that this bucket doesn't actually exist, in that no\nmarket is present for this market.\n - MARKET_CLOSED: MARKET_CLOSED indicates that this market exists, but that it isn't currently\nrunning.\n - ACCEPTING_ORDERS: ACCEPTING_ORDERS indicates that we're accepting orders for this bucket, but\nnot yet clearing for this duration.\n - MARKET_OPEN: MARKET_OPEN indicates that we're accepting orders, and fully clearing the\nmarket for this duration."
     },
     "poolrpcExecutionFee": {
       "type": "object",
@@ -1085,7 +1141,15 @@
           "additionalProperties": {
             "type": "boolean",
             "format": "boolean"
-          }
+          },
+          "description": "Deprecated, use lease_duration_buckets."
+        },
+        "lease_duration_buckets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/poolrpcDurationBucketState"
+          },
+          "description": "The set of lease durations the market is currently accepting and the state\nthe duration buckets currently are in."
         }
       }
     },
@@ -1230,6 +1294,23 @@
       ],
       "default": "PREPARE",
       "description": " - PREPARE: The OrderMatchPrepare message from the auctioneer was received initially.\n - ACCEPTED: The OrderMatchPrepare message from the auctioneer was processed successfully\nand the batch was accepted.\n - REJECTED: The order was rejected by the trader daemon, either as an answer to a\nOrderMatchSignBegin or OrderMatchFinalize message from the auctioneer.\n - SIGNED: The OrderMatchSignBegin message from the auctioneer was processed\nsuccessfully.\n - FINALIZED: The OrderMatchFinalize message from the auctioneer was processed\nsuccessfully."
+    },
+    "poolrpcMatchedMarketSnapshot": {
+      "type": "object",
+      "properties": {
+        "matched_orders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/poolrpcMatchedOrderSnapshot"
+          },
+          "description": "The set of all orders matched in the batch."
+        },
+        "clearing_price_rate": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The uniform clearing price rate in parts per billion that was used for this\nbatch."
+        }
+      }
     },
     "poolrpcMatchedOrderSnapshot": {
       "type": "object",
@@ -1512,6 +1593,45 @@
           "type": "integer",
           "format": "int64",
           "description": "The number of accounts that were recovered."
+        }
+      }
+    },
+    "poolrpcRenewAccountRequest": {
+      "type": "object",
+      "properties": {
+        "account_key": {
+          "type": "string",
+          "format": "byte",
+          "description": "The key associated with the account to renew."
+        },
+        "absolute_expiry": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The new absolute expiration height of the account."
+        },
+        "relative_expiry": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The new relative expiration height of the account."
+        },
+        "fee_rate_sat_per_kw": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The fee rate, in satoshis per kw, to use for the renewal transaction."
+        }
+      }
+    },
+    "poolrpcRenewAccountResponse": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/definitions/poolrpcAccount",
+          "description": "The state of the account after processing the renewal."
+        },
+        "renewal_txid": {
+          "type": "string",
+          "format": "byte",
+          "description": "The transaction used to renew the expiration of the account."
         }
       }
     },

@@ -223,26 +223,53 @@ func ParseRPCBatch(prepareMsg *poolrpc.OrderMatchPrepare) (*Batch,
 	error) {
 
 	b := &Batch{
-		Version:       BatchVersion(prepareMsg.BatchVersion),
-		MatchedOrders: make(map[Nonce][]*MatchedOrder),
-		BatchTX:       &wire.MsgTx{},
+		Version:        BatchVersion(prepareMsg.BatchVersion),
+		MatchedOrders:  make(map[Nonce][]*MatchedOrder),
+		BatchTX:        &wire.MsgTx{},
+		ClearingPrices: make(map[uint32]FixedRatePremium),
 	}
 
-	// Parse matched orders.
-	for ourOrderHex, rpcMatchedOrders := range prepareMsg.MatchedOrders {
-		var ourOrder Nonce
-		ourOrderBytes, err := hex.DecodeString(ourOrderHex)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing nonce: %v", err)
+	// Parse matched orders market by market.
+	for leaseDuration, matchedMarket := range prepareMsg.MatchedMarkets {
+		orders := matchedMarket.MatchedOrders
+		for ourOrderHex, rpcMatchedOrders := range orders {
+			var ourOrder Nonce
+			ourOrderBytes, err := hex.DecodeString(ourOrderHex)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing nonce: "+
+					"%v", err)
+			}
+			copy(ourOrder[:], ourOrderBytes)
+			matchedOrders, err := ParseRPCMatchedOrders(
+				rpcMatchedOrders,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing matched "+
+					"order: %v", err)
+			}
+
+			// It is imperative that all matched orders have the
+			// correct lease duration. Otherwise assumptions in the
+			// batch verifier won't be correct. That's why we
+			// validate this here already.
+			for _, matchedOrder := range matchedOrders {
+				details := matchedOrder.Order.Details()
+				if details.LeaseDuration != leaseDuration {
+					return nil, fmt.Errorf("matched order "+
+						"%s has incorrect lease "+
+						"duration %d for bucket %d",
+						details.Nonce(),
+						details.LeaseDuration,
+						leaseDuration)
+				}
+			}
+
+			b.MatchedOrders[ourOrder] = matchedOrders
 		}
-		copy(ourOrder[:], ourOrderBytes)
-		b.MatchedOrders[ourOrder], err = ParseRPCMatchedOrders(
-			rpcMatchedOrders,
+
+		b.ClearingPrices[leaseDuration] = FixedRatePremium(
+			matchedMarket.ClearingPriceRate,
 		)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing matched order: "+
-				"%v", err)
-		}
 	}
 
 	// Parse account diff.
@@ -274,7 +301,6 @@ func ParseRPCBatch(prepareMsg *poolrpc.OrderMatchPrepare) (*Batch,
 	}
 
 	// Convert clearing price, fee rate and rebate.
-	b.ClearingPrice = FixedRatePremium(prepareMsg.ClearingPriceRate)
 	b.BatchTxFeeRate = chainfee.SatPerKWeight(prepareMsg.FeeRateSatPerKw)
 	b.FeeRebate = btcutil.Amount(prepareMsg.FeeRebateSat)
 

@@ -150,7 +150,10 @@ func fetchChannelBackup(ctx context.Context, client lndclient.LightningClient,
 // is supported.
 func isSupportedBackupVersion(backup *chanbackup.Single) bool {
 	switch backup.Version {
-	case chanbackup.TweaklessCommitVersion, chanbackup.AnchorsCommitVersion:
+	case chanbackup.TweaklessCommitVersion,
+		chanbackup.AnchorsCommitVersion,
+		chanbackup.AnchorsZeroFeeHtlcTxCommitVersion:
+
 		return true
 	default:
 		return false

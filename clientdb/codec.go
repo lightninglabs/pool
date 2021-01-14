@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"time"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
@@ -58,6 +59,9 @@ func WriteElement(w io.Writer, element interface{}) error {
 	case order.Version:
 		return lnwire.WriteElement(w, uint32(e))
 
+	case order.BatchVersion:
+		return lnwire.WriteElement(w, uint32(e))
+
 	case order.Type:
 		return lnwire.WriteElement(w, uint8(e))
 
@@ -102,6 +106,9 @@ func WriteElement(w io.Writer, element interface{}) error {
 
 	case [32]byte:
 		return lnwire.WriteElement(w, e[:])
+
+	case time.Time:
+		return lnwire.WriteElement(w, uint64(e.UnixNano()))
 
 	case *wire.MsgTx:
 		if err := e.Serialize(w); err != nil {
@@ -151,6 +158,13 @@ func ReadElement(r io.Reader, element interface{}) error { // nolint:gocyclo
 			return err
 		}
 		*e = order.Version(v)
+
+	case *order.BatchVersion:
+		var v uint32
+		if err := lnwire.ReadElement(r, &v); err != nil {
+			return err
+		}
+		*e = order.BatchVersion(v)
 
 	case *order.Type:
 		var v uint8
@@ -234,6 +248,13 @@ func ReadElement(r io.Reader, element interface{}) error { // nolint:gocyclo
 		if err := lnwire.ReadElement(r, e[:]); err != nil {
 			return err
 		}
+
+	case *time.Time:
+		var ns uint64
+		if err := lnwire.ReadElement(r, &ns); err != nil {
+			return err
+		}
+		*e = time.Unix(0, int64(ns))
 
 	case **wire.MsgTx:
 		var tx wire.MsgTx

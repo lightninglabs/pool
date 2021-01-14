@@ -50,7 +50,7 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 		Msg: &poolrpc.ClientAuctionMessage_Commit{
 			Commit: &poolrpc.AccountCommitment{
 				CommitHash:   s.commitHash[:],
-				BatchVersion: uint32(order.CurrentVersion),
+				BatchVersion: uint32(order.CurrentBatchVersion),
 			},
 		},
 	})

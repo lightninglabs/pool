@@ -5,6 +5,7 @@ import (
 
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 )
@@ -52,9 +53,11 @@ func TestValidateOrderAccountIsolation(t *testing.T) {
 	}
 
 	testTerms := &terms.AuctioneerTerms{
-		MaxOrderDuration: 100 * MinimumOrderDurationBlocks,
 		OrderExecBaseFee: 1,
 		OrderExecFeeRate: 100,
+		LeaseDurationBuckets: map[uint32]poolrpc.DurationBucketState{
+			144: poolrpc.DurationBucketState_MARKET_OPEN,
+		},
 	}
 
 	// Submitting this order for account B should pass validation.

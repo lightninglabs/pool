@@ -143,7 +143,7 @@ func TestWatcherExpiry(t *testing.T) {
 	// The HandleAccountExpiry closure will use a signal to indicate that
 	// it's been invoked once an expiry notification is received.
 	expirySignal := make(chan struct{})
-	handleExpiry := func(*btcec.PublicKey) error {
+	handleExpiry := func(*btcec.PublicKey, uint32) error {
 		close(expirySignal)
 		return nil
 	}
@@ -176,8 +176,38 @@ func TestWatcherExpiry(t *testing.T) {
 	case <-time.After(timeout):
 	}
 
+	// Override the existing watch request with a new one that expires at
+	// double the height.
+	err = watcher.WatchAccountExpiration(testTraderKey, expiryHeight*2)
+	if err != nil {
+		t.Fatalf("unable to watch account expiry: %v", err)
+	}
+
+	// HandleAccountExpiry should still not be invoked yet.
+	select {
+	case <-expirySignal:
+		t.Fatal("unexpected expiry signal")
+	case <-time.After(timeout):
+	}
+
+	// Notify the first expiration height. This should not cause
+	// HandleAccountExpiry to be invoked as the second request overwrote it.
 	select {
 	case notifier.blockChan <- expiryHeight:
+	case <-time.After(timeout):
+		t.Fatal("unable to notify expiry")
+	}
+
+	select {
+	case <-expirySignal:
+		t.Fatal("unexpected expiry signal")
+	case <-time.After(timeout):
+	}
+
+	// Notify the new expiration height. This should cause
+	// HandleAccountExpiry to be invoked.
+	select {
+	case notifier.blockChan <- expiryHeight * 2:
 	case <-time.After(timeout):
 		t.Fatal("unable to notify expiry")
 	}
@@ -203,7 +233,7 @@ func TestWatcherAccountAlreadyExpired(t *testing.T) {
 	// The HandleAccountExpiry closure will use a signal to indicate that
 	// it's been invoked once an expiry notification is received.
 	expirySignal := make(chan struct{})
-	handleExpiry := func(*btcec.PublicKey) error {
+	handleExpiry := func(*btcec.PublicKey, uint32) error {
 		close(expirySignal)
 		return nil
 	}
