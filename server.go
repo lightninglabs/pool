@@ -548,7 +548,8 @@ func getLnd(network string, cfg *LndConfig) (*lndclient.GrpcLndServices, error) 
 		TLSPath:               cfg.TLSPath,
 		CheckVersion:          minimalCompatibleVersion,
 		BlockUntilChainSynced: true,
-		ChainSyncCtx:          ctxc,
+		BlockUntilUnlocked:    true,
+		CallerCtx:             ctxc,
 	})
 }
 

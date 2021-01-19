@@ -13,10 +13,10 @@ require (
 	github.com/golang/protobuf v1.3.3
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6
 	github.com/jessevdk/go-flags v1.4.0
-	github.com/lightninglabs/aperture v0.1.3-beta
-	github.com/lightninglabs/lndclient v0.11.0-3
+	github.com/lightninglabs/aperture v0.1.5-beta
+	github.com/lightninglabs/lndclient v0.11.0-5
 	github.com/lightninglabs/protobuf-hex-display v1.3.3-0.20191212020323-b444784ce75d
-	github.com/lightningnetwork/lnd v0.12.0-beta.rc3
+	github.com/lightningnetwork/lnd v0.12.0-beta.rc5
 	github.com/lightningnetwork/lnd/cert v1.0.3
 	github.com/stretchr/testify v1.5.1
 	github.com/urfave/cli v1.20.0
