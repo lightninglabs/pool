@@ -1,8 +1,12 @@
 syntax = "proto3";
 
+// We can't rename this to auctioneerrpc, otherwise it would be a breaking
+// change since the package name is also contained in the HTTP URIs and old
+// clients would call the wrong endpoints. Luckily with the go_package option we
+// can have different golang and RPC package names.
 package poolrpc;
 
-option go_package = "github.com/lightninglabs/pool/poolrpc";
+option go_package = "github.com/lightninglabs/pool/auctioneerrpc";
 
 service ChannelAuctioneer {
     rpc ReserveAccount (ReserveAccountRequest) returns (ReserveAccountResponse);

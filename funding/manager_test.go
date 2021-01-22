@@ -13,10 +13,10 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/internal/test"
 	"github.com/lightninglabs/pool/order"
-	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -385,9 +385,9 @@ func TestFundingManager(t *testing.T) {
 	require.Error(t, err)
 
 	expectedErr := &MatchRejectErr{
-		RejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
+		RejectedOrders: map[order.Nonce]*auctioneerrpc.OrderReject{
 			ask.Nonce(): {
-				ReasonCode: poolrpc.OrderReject_DUPLICATE_PEER,
+				ReasonCode: auctioneerrpc.OrderReject_DUPLICATE_PEER,
 				Reason: "already have open/pending channel " +
 					"with peer",
 			},
@@ -403,9 +403,9 @@ func TestFundingManager(t *testing.T) {
 	require.Error(t, err)
 
 	expectedErr = &MatchRejectErr{
-		RejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
+		RejectedOrders: map[order.Nonce]*auctioneerrpc.OrderReject{
 			ask.Nonce(): {
-				ReasonCode: poolrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+				ReasonCode: auctioneerrpc.OrderReject_CHANNEL_FUNDING_FAILED,
 				Reason: "connection not established before " +
 					"timeout",
 			},
@@ -461,13 +461,13 @@ func TestFundingManager(t *testing.T) {
 	_, err = h.mgr.BatchChannelSetup(batch, h.quit)
 	require.Error(t, err)
 
-	code := &poolrpc.OrderReject{
-		ReasonCode: poolrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+	code := &auctioneerrpc.OrderReject{
+		ReasonCode: auctioneerrpc.OrderReject_CHANNEL_FUNDING_FAILED,
 		Reason: "timed out waiting for pending open " +
 			"channel notification",
 	}
 	expectedErr = &MatchRejectErr{
-		RejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
+		RejectedOrders: map[order.Nonce]*auctioneerrpc.OrderReject{
 			ask.Nonce(): code,
 			bid.Nonce(): code,
 		},
@@ -566,12 +566,12 @@ func TestWaitForPeerConnections(t *testing.T) {
 	)
 	require.Error(t, err)
 
-	code := &poolrpc.OrderReject{
-		ReasonCode: poolrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+	code := &auctioneerrpc.OrderReject{
+		ReasonCode: auctioneerrpc.OrderReject_CHANNEL_FUNDING_FAILED,
 		Reason:     "connection not established before timeout",
 	}
 	expectedErr := &MatchRejectErr{
-		RejectedOrders: map[order.Nonce]*poolrpc.OrderReject{
+		RejectedOrders: map[order.Nonce]*auctioneerrpc.OrderReject{
 			fakeNonce2: code,
 		},
 	}

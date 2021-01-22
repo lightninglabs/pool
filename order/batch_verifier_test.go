@@ -9,8 +9,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/internal/test"
-	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -29,8 +29,8 @@ var (
 	execFeeRate           = btcutil.Amount(50)
 	clearingPrice         = FixedRatePremium(5000)
 	leaseDuration         = uint32(1000)
-	stateRecreated        = poolrpc.AccountDiff_OUTPUT_RECREATED
-	stateExtendedOffchain = poolrpc.AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN
+	stateRecreated        = auctioneerrpc.AccountDiff_OUTPUT_RECREATED
+	stateExtendedOffchain = auctioneerrpc.AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN
 )
 
 func TestBatchVerifier(t *testing.T) {

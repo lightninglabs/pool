@@ -10,7 +10,7 @@ import (
 
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/account"
-	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
@@ -633,7 +633,7 @@ type Store interface {
 // an invalid action or information provided by the user.
 type UserError struct {
 	FailMsg string
-	Details *poolrpc.InvalidOrder
+	Details *auctioneerrpc.InvalidOrder
 }
 
 // Error returns the string representation of the underlying failure message.

@@ -145,10 +145,12 @@ list:
 rpc:
 	@$(call print, "Compiling protos.")
 	cd ./poolrpc; ./gen_protos.sh
+	cd ./auctioneerrpc; ./gen_protos.sh
 
 rpc-format:
 	@$(call print, "Formatting protos.")
 	cd ./poolrpc; find . -name "*.proto" | xargs clang-format --style=file -i
+	cd ./auctioneerrpc; find . -name "*.proto" | xargs clang-format --style=file -i
 
 clean:
 	@$(call print, "Cleaning source.$(NC)")

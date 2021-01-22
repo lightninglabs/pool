@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/urfave/cli"
 )
@@ -51,7 +52,7 @@ func NewLeaseFromProto(a *poolrpc.Lease) *Lease {
 
 // Markets is a simple type alias to make the following Snapshot struct more
 // compact.
-type Markets = map[uint32]*poolrpc.MatchedMarketSnapshot
+type Markets = map[uint32]*auctioneerrpc.MatchedMarketSnapshot
 
 // Snapshot is a copy of poolrpc.BatchSnapshotResponse that does not include the
 // deprecated fields.
@@ -67,7 +68,7 @@ type Snapshot struct {
 }
 
 // NewSnapshotsFromProtos creates a display Snapshot from its proto.
-func NewSnapshotsFromProto(s []*poolrpc.BatchSnapshotResponse) []*Snapshot {
+func NewSnapshotsFromProto(s []*auctioneerrpc.BatchSnapshotResponse) []*Snapshot {
 	result := make([]*Snapshot, len(s))
 	for idx, snapshot := range s {
 		result[idx] = &Snapshot{
@@ -192,7 +193,7 @@ func batchSnapshot(ctx *cli.Context) error {
 	}
 
 	resp, err := client.BatchSnapshots(
-		ctxb, &poolrpc.BatchSnapshotsRequest{
+		ctxb, &auctioneerrpc.BatchSnapshotsRequest{
 			StartBatchId:   batchID,
 			NumBatchesBack: uint32(ctx.Uint64("num_batches")),
 		},

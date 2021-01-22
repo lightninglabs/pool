@@ -11,6 +11,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/lntypes"
@@ -66,7 +67,8 @@ func ParseRPCOrder(version, leaseDuration uint32,
 
 // parseNodeAddrs parses the set of address in strong format as returned over
 // the RPC layer into a proper interface we can use.
-func parseNodeAddrs(rpcAddrs []*poolrpc.NodeAddress, orderIsAsk bool) ([]net.Addr, error) {
+func parseNodeAddrs(rpcAddrs []*auctioneerrpc.NodeAddress,
+	orderIsAsk bool) ([]net.Addr, error) {
 
 	if len(rpcAddrs) == 0 && orderIsAsk {
 		return nil, fmt.Errorf("ask order doesn't include any node " +
@@ -109,7 +111,7 @@ func parseNodeAddrs(rpcAddrs []*poolrpc.NodeAddress, orderIsAsk bool) ([]net.Add
 
 // ParseRPCServerOrder parses the incoming raw RPC server order into the go
 // native data types used in the order struct.
-func ParseRPCServerOrder(version uint32, details *poolrpc.ServerOrder,
+func ParseRPCServerOrder(version uint32, details *auctioneerrpc.ServerOrder,
 	orderIsAsk bool, leaseDuration uint32) (*Kit, [33]byte, []net.Addr, [33]byte, error) {
 
 	var (
@@ -171,7 +173,7 @@ func ParseRPCServerOrder(version uint32, details *poolrpc.ServerOrder,
 
 // ParseRPCServerAsk parses the incoming raw RPC server ask into the go
 // native data types used in the order struct.
-func ParseRPCServerAsk(details *poolrpc.ServerAsk) (*MatchedOrder, error) {
+func ParseRPCServerAsk(details *auctioneerrpc.ServerAsk) (*MatchedOrder, error) {
 	var (
 		o   = &MatchedOrder{}
 		kit *Kit
@@ -196,7 +198,7 @@ func ParseRPCServerAsk(details *poolrpc.ServerAsk) (*MatchedOrder, error) {
 
 // ParseRPCServerBid parses the incoming raw RPC server bid into the go
 // native data types used in the order struct.
-func ParseRPCServerBid(details *poolrpc.ServerBid) (*MatchedOrder, error) {
+func ParseRPCServerBid(details *auctioneerrpc.ServerBid) (*MatchedOrder, error) {
 	var (
 		o   = &MatchedOrder{}
 		kit *Kit
@@ -219,7 +221,7 @@ func ParseRPCServerBid(details *poolrpc.ServerBid) (*MatchedOrder, error) {
 
 // ParseRPCBatch parses the incoming raw RPC batch into the go native data types
 // used by the order manager.
-func ParseRPCBatch(prepareMsg *poolrpc.OrderMatchPrepare) (*Batch,
+func ParseRPCBatch(prepareMsg *auctioneerrpc.OrderMatchPrepare) (*Batch,
 	error) {
 
 	b := &Batch{
@@ -325,7 +327,7 @@ func ParseRPCBatch(prepareMsg *poolrpc.OrderMatchPrepare) (*Batch,
 
 // ParseRPCMatchedOrders parses the incoming raw RPC matched orders into the go
 // native structs used by the order manager.
-func ParseRPCMatchedOrders(orders *poolrpc.MatchedOrder) ([]*MatchedOrder,
+func ParseRPCMatchedOrders(orders *auctioneerrpc.MatchedOrder) ([]*MatchedOrder,
 	error) {
 
 	var result []*MatchedOrder

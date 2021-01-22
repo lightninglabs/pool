@@ -9,9 +9,9 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/order"
-	"github.com/lightninglabs/pool/poolrpc"
 )
 
 var (
@@ -89,7 +89,7 @@ func (c *Client) checkPendingBatch() error {
 func (c *Client) finalizedBatchTx(
 	snapshot *clientdb.LocalBatchSnapshot) (*wire.MsgTx, error) {
 
-	req := &poolrpc.BatchSnapshotRequest{BatchId: snapshot.BatchID[:]}
+	req := &auctioneerrpc.BatchSnapshotRequest{BatchId: snapshot.BatchID[:]}
 	batch, err := c.client.BatchSnapshot(context.Background(), req)
 	if err != nil {
 		return nil, fmt.Errorf("querying relevant batch snapshot "+
