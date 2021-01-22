@@ -15,6 +15,7 @@ require (
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/lightninglabs/aperture v0.1.5-beta
 	github.com/lightninglabs/lndclient v0.11.0-5
+	github.com/lightninglabs/pool/auctioneerrpc v0.0.0-20210114153650-930c5a87d701
 	github.com/lightninglabs/protobuf-hex-display v1.3.3-0.20191212020323-b444784ce75d
 	github.com/lightningnetwork/lnd v0.12.0-beta.rc5
 	github.com/lightningnetwork/lnd/cert v1.0.3
@@ -22,8 +23,9 @@ require (
 	github.com/urfave/cli v1.20.0
 	go.etcd.io/bbolt v1.3.5-0.20200615073812-232d8fc87f50
 	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a
-	google.golang.org/genproto v0.0.0-20200513103714-09dca8ec2884
 	google.golang.org/grpc v1.29.1
 	gopkg.in/macaroon-bakery.v2 v2.0.1
 	gopkg.in/macaroon.v2 v2.1.0
 )
+
+replace github.com/lightninglabs/pool/auctioneerrpc => ./auctioneerrpc
