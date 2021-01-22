@@ -17,6 +17,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/grpc-ecosystem/grpc-gateway/utilities"
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
@@ -515,7 +516,7 @@ var (
 )
 
 func request_Trader_BatchSnapshot_0(ctx context.Context, marshaler runtime.Marshaler, client TraderClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq BatchSnapshotRequest
+	var protoReq auctioneerrpc.BatchSnapshotRequest
 	var metadata runtime.ServerMetadata
 
 	if err := req.ParseForm(); err != nil {
@@ -531,7 +532,7 @@ func request_Trader_BatchSnapshot_0(ctx context.Context, marshaler runtime.Marsh
 }
 
 func local_request_Trader_BatchSnapshot_0(ctx context.Context, marshaler runtime.Marshaler, server TraderServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq BatchSnapshotRequest
+	var protoReq auctioneerrpc.BatchSnapshotRequest
 	var metadata runtime.ServerMetadata
 
 	if err := runtime.PopulateQueryParameters(&protoReq, req.URL.Query(), filter_Trader_BatchSnapshot_0); err != nil {
@@ -628,7 +629,7 @@ func local_request_Trader_NodeRatings_0(ctx context.Context, marshaler runtime.M
 }
 
 func request_Trader_BatchSnapshots_0(ctx context.Context, marshaler runtime.Marshaler, client TraderClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq BatchSnapshotsRequest
+	var protoReq auctioneerrpc.BatchSnapshotsRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -666,7 +667,7 @@ func request_Trader_BatchSnapshots_0(ctx context.Context, marshaler runtime.Mars
 }
 
 func local_request_Trader_BatchSnapshots_0(ctx context.Context, marshaler runtime.Marshaler, server TraderServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq BatchSnapshotsRequest
+	var protoReq auctioneerrpc.BatchSnapshotsRequest
 	var metadata runtime.ServerMetadata
 
 	var (

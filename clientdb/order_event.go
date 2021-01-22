@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
@@ -440,7 +441,7 @@ func (db *DB) StoreBatchEvents(batch *order.Batch, state order.MatchState,
 // orders involved in a batch and stores it to the main event store, including
 // the reason for the reject.
 func (db *DB) StoreBatchPartialRejectEvents(batch *order.Batch,
-	partialRejects map[order.Nonce]*poolrpc.OrderReject) error {
+	partialRejects map[order.Nonce]*auctioneerrpc.OrderReject) error {
 
 	// In case an order itself wasn't rejected but was just in the same
 	// batch as a reject, we mark it in the event as such. If it was, this
@@ -472,10 +473,10 @@ func (db *DB) StoreBatchPartialRejectEvents(batch *order.Batch,
 			reject, ok := partialRejects[otherNonce]
 			if ok {
 				switch reject.ReasonCode {
-				case poolrpc.OrderReject_CHANNEL_FUNDING_FAILED:
+				case auctioneerrpc.OrderReject_CHANNEL_FUNDING_FAILED:
 					evt.RejectReason = reasonFundingFailed
 
-				case poolrpc.OrderReject_DUPLICATE_PEER:
+				case auctioneerrpc.OrderReject_DUPLICATE_PEER:
 					evt.RejectReason = reasonDuplicatePeer
 				}
 			}

@@ -21,6 +21,7 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/chaninfo"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/event"
@@ -345,10 +346,12 @@ func (s *rpcServer) updateHeight(height int32) {
 
 // handleServerMessage reads a gRPC message received in the stream from the
 // auctioneer server and passes it to the correct manager.
-func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) error {
+func (s *rpcServer) handleServerMessage(
+	rpcMsg *auctioneerrpc.ServerAuctionMessage) error {
+
 	switch msg := rpcMsg.Msg.(type) {
 	// A new batch has been assembled with some of our orders.
-	case *poolrpc.ServerAuctionMessage_Prepare:
+	case *auctioneerrpc.ServerAuctionMessage_Prepare:
 		// Parse and formally validate what we got from the server.
 		rpcLog.Tracef("Received prepare msg from server, batch_id=%x: %v",
 			msg.Prepare.BatchId, spew.Sdump(msg))
@@ -440,7 +443,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 			return s.sendRejectBatch(batch, err)
 		}
 
-	case *poolrpc.ServerAuctionMessage_Sign:
+	case *auctioneerrpc.ServerAuctionMessage_Sign:
 		// We were able to accept the batch. Inform the auctioneer,
 		// then start negotiating with the remote peers. We'll sign
 		// once all channel partners have responded.
@@ -471,7 +474,7 @@ func (s *rpcServer) handleServerMessage(rpcMsg *poolrpc.ServerAuctionMessage) er
 
 	// The previously prepared batch has been executed and we can finalize
 	// it by opening the channel and persisting the account and order diffs.
-	case *poolrpc.ServerAuctionMessage_Finalize:
+	case *auctioneerrpc.ServerAuctionMessage_Finalize:
 		rpcLog.Tracef("Received finalize msg from server, batch_id=%x: %v",
 			msg.Finalize.BatchId, spew.Sdump(msg))
 
@@ -703,7 +706,7 @@ func MarshallAccount(a *account.Account) (*poolrpc.Account, error) {
 
 	return &poolrpc.Account{
 		TraderKey: a.TraderKey.PubKey.SerializeCompressed(),
-		Outpoint: &poolrpc.OutPoint{
+		Outpoint: &auctioneerrpc.OutPoint{
 			Txid:        a.OutPoint.Hash[:],
 			OutputIndex: a.OutPoint.Index,
 		},
@@ -1447,8 +1450,8 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 		return err
 	}
 
-	msg := &poolrpc.ClientAuctionMessage_Reject{
-		Reject: &poolrpc.OrderMatchReject{
+	msg := &auctioneerrpc.ClientAuctionMessage_Reject{
+		Reject: &auctioneerrpc.OrderMatchReject{
 			BatchId: batch.ID[:],
 			Reason:  failure.Error(),
 		},
@@ -1458,7 +1461,7 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	var partialReject *funding.MatchRejectErr
 	switch {
 	case errors.Is(failure, order.ErrVersionMismatch):
-		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_BATCH_VERSION_MISMATCH
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_BATCH_VERSION_MISMATCH
 
 		// Track this reject by adding an event to our orders.
 		err := s.server.db.StoreBatchEvents(
@@ -1470,7 +1473,7 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 		}
 
 	case errors.Is(failure, order.ErrMismatchErr):
-		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_SERVER_MISBEHAVIOR
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_SERVER_MISBEHAVIOR
 
 		// Track this reject by adding an event to our orders.
 		err := s.server.db.StoreBatchEvents(
@@ -1482,8 +1485,8 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 		}
 
 	case errors.As(failure, &partialReject):
-		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_PARTIAL_REJECT
-		msg.Reject.RejectedOrders = make(map[string]*poolrpc.OrderReject)
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_PARTIAL_REJECT
+		msg.Reject.RejectedOrders = make(map[string]*auctioneerrpc.OrderReject)
 		for nonce, reject := range partialReject.RejectedOrders {
 			msg.Reject.RejectedOrders[nonce.String()] = reject
 		}
@@ -1498,7 +1501,7 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 		}
 
 	default:
-		msg.Reject.ReasonCode = poolrpc.OrderMatchReject_UNKNOWN
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_UNKNOWN
 	}
 
 	rpcLog.Infof("Sending batch rejection message for batch %x with "+
@@ -1508,7 +1511,7 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	// Send the message to the server. If a new error happens we return that
 	// one because we know the causing error has at least been logged at
 	// some point before.
-	err = s.auctioneer.SendAuctionMessage(&poolrpc.ClientAuctionMessage{
+	err = s.auctioneer.SendAuctionMessage(&auctioneerrpc.ClientAuctionMessage{
 		Msg: msg,
 	})
 	if err != nil {
@@ -1534,9 +1537,9 @@ func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
 	}
 
 	// Send the message to the server.
-	return s.auctioneer.SendAuctionMessage(&poolrpc.ClientAuctionMessage{
-		Msg: &poolrpc.ClientAuctionMessage_Accept{
-			Accept: &poolrpc.OrderMatchAccept{
+	return s.auctioneer.SendAuctionMessage(&auctioneerrpc.ClientAuctionMessage{
+		Msg: &auctioneerrpc.ClientAuctionMessage_Accept{
+			Accept: &auctioneerrpc.OrderMatchAccept{
 				BatchId: batch.ID[:],
 			},
 		},
@@ -1590,12 +1593,12 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 		rpcSigs[key] = sig.Serialize()
 	}
 
-	rpcChannelInfos := make(map[string]*poolrpc.ChannelInfo, len(chanInfos))
+	rpcChannelInfos := make(map[string]*auctioneerrpc.ChannelInfo, len(chanInfos))
 	for chanPoint, chanInfo := range chanInfos {
-		var channelType poolrpc.ChannelType
+		var channelType auctioneerrpc.ChannelType
 		switch chanInfo.Version {
 		case chanbackup.TweaklessCommitVersion:
-			channelType = poolrpc.ChannelType_TWEAKLESS
+			channelType = auctioneerrpc.ChannelType_TWEAKLESS
 
 		// The AnchorsCommitVersion was never widely deployed (at least
 		// in mainnet) because the lnd version that included it guarded
@@ -1606,12 +1609,12 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 		case chanbackup.AnchorsCommitVersion,
 			chanbackup.AnchorsZeroFeeHtlcTxCommitVersion:
 
-			channelType = poolrpc.ChannelType_ANCHORS
+			channelType = auctioneerrpc.ChannelType_ANCHORS
 		default:
 			return fmt.Errorf("unknown channel type: %v",
 				chanInfo.Version)
 		}
-		rpcChannelInfos[chanPoint.String()] = &poolrpc.ChannelInfo{
+		rpcChannelInfos[chanPoint.String()] = &auctioneerrpc.ChannelInfo{
 			Type: channelType,
 			LocalNodeKey: chanInfo.LocalNodeKey.
 				SerializeCompressed(),
@@ -1634,9 +1637,9 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 		rpcLog.Errorf("Unable to store order events: %v", err)
 	}
 
-	return s.auctioneer.SendAuctionMessage(&poolrpc.ClientAuctionMessage{
-		Msg: &poolrpc.ClientAuctionMessage_Sign{
-			Sign: &poolrpc.OrderMatchSign{
+	return s.auctioneer.SendAuctionMessage(&auctioneerrpc.ClientAuctionMessage{
+		Msg: &auctioneerrpc.ClientAuctionMessage_Sign{
+			Sign: &auctioneerrpc.OrderMatchSign{
 				BatchId:      batch.ID[:],
 				AccountSigs:  rpcSigs,
 				ChannelInfos: rpcChannelInfos,
@@ -1658,7 +1661,7 @@ func (s *rpcServer) AuctionFee(ctx context.Context,
 
 	// TODO(roasbeef): accept the amt of order instead?
 	return &poolrpc.AuctionFeeResponse{
-		ExecutionFee: &poolrpc.ExecutionFee{
+		ExecutionFee: &auctioneerrpc.ExecutionFee{
 			BaseFee: uint64(auctionTerms.OrderExecBaseFee),
 			FeeRate: uint64(auctionTerms.OrderExecFeeRate),
 		},
@@ -1748,13 +1751,14 @@ func (s *rpcServer) Leases(ctx context.Context,
 // fetchNodeRatings returns an up to date set of ratings for each of the nodes
 // we matched with in the passed batch.
 func fetchNodeRatings(ctx context.Context, batches []*clientdb.LocalBatchSnapshot,
-	auctioneer *auctioneer.Client) (map[[33]byte]poolrpc.NodeTier, error) {
+	auctioneer *auctioneer.Client) (map[[33]byte]auctioneerrpc.NodeTier,
+	error) {
 
 	// As the node ratings call is batched, we'll first do a single query
 	// to fetch all the ratings that we'll want to populate below.
 	//
 	// TODO(roasbeef): capture rating at time of lease? also cache
-	nodeRatings := make(map[[33]byte]poolrpc.NodeTier)
+	nodeRatings := make(map[[33]byte]auctioneerrpc.NodeTier)
 	for _, batch := range batches {
 		for _, matches := range batch.MatchedOrders {
 			for _, match := range matches {
@@ -1913,7 +1917,7 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 				purchased := ourOrder.Type() == order.TypeBid
 				nodeTier := nodeRatings[match.NodeKey]
 				rpcLeases = append(rpcLeases, &poolrpc.Lease{
-					ChannelPoint: &poolrpc.OutPoint{
+					ChannelPoint: &auctioneerrpc.OutPoint{
 						Txid:        batchTxHash[:],
 						OutputIndex: chanOutputIdx,
 					},
@@ -1968,7 +1972,8 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 // BatchSnapshot returns information about a target batch including the
 // clearing price of the batch, and the set of orders matched within the batch.
 func (s *rpcServer) BatchSnapshot(ctx context.Context,
-	req *poolrpc.BatchSnapshotRequest) (*poolrpc.BatchSnapshotResponse, error) {
+	req *auctioneerrpc.BatchSnapshotRequest) (
+	*auctioneerrpc.BatchSnapshotResponse, error) {
 
 	// THe current version of this call just proxies the request to the
 	// auctioneer, as we may only have information about the batch if we
@@ -1984,8 +1989,8 @@ func (s *rpcServer) BatchSnapshot(ctx context.Context,
 // one call. If no start batch ID is provided, the most recent finalized batch
 // is used as the starting point to go back from.
 func (s *rpcServer) BatchSnapshots(ctx context.Context,
-	req *poolrpc.BatchSnapshotsRequest) (*poolrpc.BatchSnapshotsResponse,
-	error) {
+	req *auctioneerrpc.BatchSnapshotsRequest) (
+	*auctioneerrpc.BatchSnapshotsResponse, error) {
 
 	return s.auctioneer.BatchSnapshots(ctx, req)
 }
@@ -2004,8 +2009,8 @@ func (s *rpcServer) LeaseDurations(ctx context.Context,
 		map[uint32]bool, len(auctionTerms.LeaseDurationBuckets),
 	)
 	for duration, market := range auctionTerms.LeaseDurationBuckets {
-		const accept = poolrpc.DurationBucketState_ACCEPTING_ORDERS
-		const open = poolrpc.DurationBucketState_MARKET_OPEN
+		const accept = auctioneerrpc.DurationBucketState_ACCEPTING_ORDERS
+		const open = auctioneerrpc.DurationBucketState_MARKET_OPEN
 
 		legacyDurations[duration] = market == accept || market == open
 	}
@@ -2059,27 +2064,29 @@ func (s *rpcServer) NodeRatings(ctx context.Context,
 
 // rpcOrderStateToDBState maps the order state as received over the RPC
 // protocol to the local state that we use in the database.
-func rpcOrderStateToDBState(state poolrpc.OrderState) (order.State, error) {
+func rpcOrderStateToDBState(state auctioneerrpc.OrderState) (order.State,
+	error) {
+
 	switch state {
-	case poolrpc.OrderState_ORDER_SUBMITTED:
+	case auctioneerrpc.OrderState_ORDER_SUBMITTED:
 		return order.StateSubmitted, nil
 
-	case poolrpc.OrderState_ORDER_CLEARED:
+	case auctioneerrpc.OrderState_ORDER_CLEARED:
 		return order.StateCleared, nil
 
-	case poolrpc.OrderState_ORDER_PARTIALLY_FILLED:
+	case auctioneerrpc.OrderState_ORDER_PARTIALLY_FILLED:
 		return order.StatePartiallyFilled, nil
 
-	case poolrpc.OrderState_ORDER_EXECUTED:
+	case auctioneerrpc.OrderState_ORDER_EXECUTED:
 		return order.StateExecuted, nil
 
-	case poolrpc.OrderState_ORDER_CANCELED:
+	case auctioneerrpc.OrderState_ORDER_CANCELED:
 		return order.StateCanceled, nil
 
-	case poolrpc.OrderState_ORDER_EXPIRED:
+	case auctioneerrpc.OrderState_ORDER_EXPIRED:
 		return order.StateExpired, nil
 
-	case poolrpc.OrderState_ORDER_FAILED:
+	case auctioneerrpc.OrderState_ORDER_FAILED:
 		return order.StateFailed, nil
 
 	default:
@@ -2089,28 +2096,30 @@ func rpcOrderStateToDBState(state poolrpc.OrderState) (order.State, error) {
 
 // DBOrderStateToRPCState maps the order state as stored in the database to the
 // corresponding RPC enum type.
-func DBOrderStateToRPCState(state order.State) (poolrpc.OrderState, error) {
+func DBOrderStateToRPCState(state order.State) (auctioneerrpc.OrderState,
+	error) {
+
 	switch state {
 	case order.StateSubmitted:
-		return poolrpc.OrderState_ORDER_SUBMITTED, nil
+		return auctioneerrpc.OrderState_ORDER_SUBMITTED, nil
 
 	case order.StateCleared:
-		return poolrpc.OrderState_ORDER_CLEARED, nil
+		return auctioneerrpc.OrderState_ORDER_CLEARED, nil
 
 	case order.StatePartiallyFilled:
-		return poolrpc.OrderState_ORDER_PARTIALLY_FILLED, nil
+		return auctioneerrpc.OrderState_ORDER_PARTIALLY_FILLED, nil
 
 	case order.StateExecuted:
-		return poolrpc.OrderState_ORDER_EXECUTED, nil
+		return auctioneerrpc.OrderState_ORDER_EXECUTED, nil
 
 	case order.StateCanceled:
-		return poolrpc.OrderState_ORDER_CANCELED, nil
+		return auctioneerrpc.OrderState_ORDER_CANCELED, nil
 
 	case order.StateExpired:
-		return poolrpc.OrderState_ORDER_EXPIRED, nil
+		return auctioneerrpc.OrderState_ORDER_EXPIRED, nil
 
 	case order.StateFailed:
-		return poolrpc.OrderState_ORDER_FAILED, nil
+		return auctioneerrpc.OrderState_ORDER_FAILED, nil
 
 	default:
 		return 0, fmt.Errorf("unknown state: %v", state)
@@ -2226,15 +2235,17 @@ func nodeHasTorAddrs(nodeAddrs []string) bool {
 
 // unmarshallNodeTier maps the RPC node tier enum to the node tier used in
 // memory.
-func unmarshallNodeTier(nodeTier poolrpc.NodeTier) (order.NodeTier, error) {
+func unmarshallNodeTier(nodeTier auctioneerrpc.NodeTier) (order.NodeTier,
+	error) {
+
 	switch nodeTier {
-	case poolrpc.NodeTier_TIER_DEFAULT:
+	case auctioneerrpc.NodeTier_TIER_DEFAULT:
 		return order.DefaultMinNodeTier, nil
 
-	case poolrpc.NodeTier_TIER_0:
+	case auctioneerrpc.NodeTier_TIER_0:
 		return order.NodeTier0, nil
 
-	case poolrpc.NodeTier_TIER_1:
+	case auctioneerrpc.NodeTier_TIER_1:
 		return order.NodeTier1, nil
 
 	default:

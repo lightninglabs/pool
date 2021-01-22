@@ -7,8 +7,8 @@ import (
 
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/order"
-	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
@@ -18,9 +18,9 @@ import (
 type acctSubscription struct {
 	acctKey    *keychain.KeyDescriptor
 	commitHash [32]byte
-	sendMsg    func(*poolrpc.ClientAuctionMessage) error
+	sendMsg    func(*auctioneerrpc.ClientAuctionMessage) error
 	signer     lndclient.SignerClient
-	msgChan    chan *poolrpc.ServerAuctionMessage
+	msgChan    chan *auctioneerrpc.ServerAuctionMessage
 	errChan    chan error
 	quit       chan struct{}
 }
@@ -46,9 +46,9 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 	// a challenge back. We need to track the subscription from now on so
 	// the goroutine reading the incoming messages knows which subscription
 	// to add the received challenge to.
-	err = s.sendMsg(&poolrpc.ClientAuctionMessage{
-		Msg: &poolrpc.ClientAuctionMessage_Commit{
-			Commit: &poolrpc.AccountCommitment{
+	err = s.sendMsg(&auctioneerrpc.ClientAuctionMessage{
+		Msg: &auctioneerrpc.ClientAuctionMessage_Commit{
+			Commit: &auctioneerrpc.AccountCommitment{
 				CommitHash:   s.commitHash[:],
 				BatchVersion: uint32(order.CurrentBatchVersion),
 			},
@@ -67,7 +67,7 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 				"was received")
 		}
 
-		msg, ok := srvMsg.Msg.(*poolrpc.ServerAuctionMessage_Challenge)
+		msg, ok := srvMsg.Msg.(*auctioneerrpc.ServerAuctionMessage_Challenge)
 		if !ok {
 			return fmt.Errorf("unexpected server message in auth "+
 				"process: %v", msg)
@@ -85,9 +85,9 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		return s.sendMsg(&poolrpc.ClientAuctionMessage{
-			Msg: &poolrpc.ClientAuctionMessage_Subscribe{
-				Subscribe: &poolrpc.AccountSubscription{
+		return s.sendMsg(&auctioneerrpc.ClientAuctionMessage{
+			Msg: &auctioneerrpc.ClientAuctionMessage_Subscribe{
+				Subscribe: &auctioneerrpc.AccountSubscription{
 					TraderKey:   acctPubKey[:],
 					CommitNonce: nonce[:],
 					AuthSig:     sig,

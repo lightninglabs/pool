@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcutil"
-	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
@@ -22,7 +22,7 @@ type AuctioneerTerms struct {
 
 	// LeaseDurationBuckets lists the current set of lease durations and
 	// maps them to their current market state.
-	LeaseDurationBuckets map[uint32]poolrpc.DurationBucketState
+	LeaseDurationBuckets map[uint32]auctioneerrpc.DurationBucketState
 
 	// NextBatchConfTarget is the confirmation target the auctioneer will
 	// use to estimate the fee rate of the next batch.

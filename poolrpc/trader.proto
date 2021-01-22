@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "auctioneer.proto";
+import "auctioneerrpc/auctioneer.proto";
 
 package poolrpc;
 
