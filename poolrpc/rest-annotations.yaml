@@ -1,0 +1,56 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+
+    # trader.proto
+    - selector: poolrpc.Trader.QuoteAccount
+      post: "/v1/pool/accounts/quote"
+      body: "*"
+    - selector: poolrpc.Trader.InitAccount
+      post: "/v1/pool/accounts"
+      body: "*"
+    - selector: poolrpc.Trader.ListAccounts
+      get: "/v1/pool/accounts"
+    - selector: poolrpc.Trader.CloseAccount
+      delete: "/v1/pool/accounts"
+    - selector: poolrpc.Trader.WithdrawAccount
+      post: "/v1/pool/accounts/withdraw"
+      body: "*"
+    - selector: poolrpc.Trader.DepositAccount
+      post: "/v1/pool/accounts/deposit"
+      body: "*"
+    - selector: poolrpc.Trader.RenewAccount
+      post: "/v1/pool/accounts/renew"
+      body: "*"
+    - selector: poolrpc.Trader.BumpAccountFee
+      post: "/v1/pool/accounts/bump"
+      body: "*"
+    - selector: poolrpc.Trader.RecoverAccounts
+      post: "/v1/pool/accounts/recover"
+      body: "*"
+    - selector: poolrpc.Trader.SubmitOrder
+      post: "/v1/pool/orders"
+      body: "*"
+    - selector: poolrpc.Trader.ListOrders
+      get: "/v1/pool/orders"
+    - selector: poolrpc.Trader.CancelOrder
+      delete: "/v1/pool/orders/{order_nonce}"
+    - selector: poolrpc.Trader.AuctionFee
+      get: "/v1/pool/fee"
+    - selector: poolrpc.Trader.LeaseDurations
+      get: "/v1/pool/lease_durations"
+    - selector: poolrpc.Trader.NextBatchInfo
+      get: "/v1/pool/batch/next"
+    - selector: poolrpc.Trader.BatchSnapshot
+      get: "/v1/pool/batch/snapshot"
+    - selector: poolrpc.Trader.GetLsatTokens
+      get: "/v1/lsat/tokens"
+    - selector: poolrpc.Trader.Leases
+      get: "/v1/pool/leases"
+    - selector: poolrpc.Trader.NodeRatings
+      get: "/v1/pool/node_ratings"
+    - selector: poolrpc.Trader.BatchSnapshots
+      get: "/v1/pool/batch/snapshots/{start_batch_id}/{num_batches_back}"
+
