@@ -298,6 +298,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 			Details: &poolrpc.SubmitOrderRequest_Ask{
 				Ask: ask,
 			},
+			Initiator: defaultInitiator,
 		},
 	)
 	if err != nil {
@@ -475,6 +476,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 			Details: &poolrpc.SubmitOrderRequest_Bid{
 				Bid: bid,
 			},
+			Initiator: defaultInitiator,
 		},
 	)
 	if err != nil {
