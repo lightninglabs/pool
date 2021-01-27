@@ -573,8 +573,9 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 	}
 
 	acct, err := s.accountManager.InitAccount(
-		ctx, btcutil.Amount(req.AccountValue), expiryHeight,
-		bestHeight, confTarget,
+		ContextWithInitiator(ctx, req.Initiator),
+		btcutil.Amount(req.AccountValue), expiryHeight, bestHeight,
+		confTarget,
 	)
 	if err != nil {
 		return nil, err
@@ -1220,7 +1221,9 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	// Send the order to the server. If this fails, then the order is
 	// certain to never get into the order book. We don't need to keep it
 	// around in that case.
-	err = s.auctioneer.SubmitOrder(ctx, o, serverParams)
+	err = s.auctioneer.SubmitOrder(
+		ContextWithInitiator(ctx, req.Initiator), o, serverParams,
+	)
 	if err != nil {
 		// The server rejected the order. We keep it around for now,
 		// failed orders can be filtered by specifying --active_only
