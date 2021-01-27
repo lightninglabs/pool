@@ -466,6 +466,9 @@ func (s *Server) setupClient() error {
 		MaxBackoff:    s.cfg.MaxBackoff,
 		BatchSource:   s.db,
 		BatchCleaner:  s.fundingManager,
+		GenUserAgent: func(ctx context.Context) string {
+			return UserAgent(InitiatorFromContext(ctx))
+		},
 	}
 	s.AuctioneerClient, err = auctioneer.NewClient(clientCfg)
 	if err != nil {
