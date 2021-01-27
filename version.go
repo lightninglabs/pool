@@ -7,9 +7,12 @@ package pool
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
 	"strings"
+
+	"google.golang.org/grpc/metadata"
 )
 
 // Commit stores the current commit hash of this build, this should be set
@@ -35,6 +38,10 @@ const (
 	// defaultAgentName is the default name of the software that is added as
 	// the first part of the user agent string.
 	defaultAgentName = "poold"
+
+	// additionalInfoInitiator is the field name of the initiator in the
+	// additional information part of the user agent.
+	additionalInfoInitiator = "initiator"
 )
 
 // agentName stores the name of the software that is added as the first part of
@@ -92,7 +99,8 @@ func UserAgent(initiator string) string {
 		strings.TrimSpace(initiator), initiatorAlphabet,
 	)
 	if len(cleanInitiator) > 0 {
-		cleanInitiator = fmt.Sprintf(",initiator=%s", cleanInitiator)
+		cleanInitiator = fmt.Sprintf(",%s=%s", additionalInfoInitiator,
+			cleanInitiator)
 	}
 
 	// The whole user agent string is limited to 255 characters server side
@@ -107,6 +115,42 @@ func UserAgent(initiator string) string {
 		"%s/v%s/commit=%s%s", agentName, semanticVersion(), Commit,
 		cleanInitiator,
 	)
+}
+
+// ContextWithInitiator creates a new context with the given initiator string
+// added (provided it is not empty).
+func ContextWithInitiator(ctx context.Context,
+	initiator string) context.Context {
+
+	trimmed := strings.TrimSpace(initiator)
+	if trimmed == "" {
+		return ctx
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.MD{}
+	}
+
+	md[additionalInfoInitiator] = []string{trimmed}
+	return metadata.NewIncomingContext(ctx, md)
+}
+
+// InitiatorFromContext attempts to read the initiator string from a context and
+// returns it if successful. If no initiator string can be found then the empty
+// string is returned.
+func InitiatorFromContext(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+
+	initiators := md[additionalInfoInitiator]
+	if len(initiators) == 0 {
+		return ""
+	}
+
+	return initiators[0]
 }
 
 // normalizeVerString returns the passed string stripped of all characters
