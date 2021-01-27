@@ -22,6 +22,9 @@ GOFILES_NOVENDOR = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 GOLIST := go list -deps $(PKG)/... | grep '$(PKG)'| grep -v '/vendor/'
 GOLISTCOVER := $(shell go list -deps -f '{{.ImportPath}}' ./... | grep '$(PKG)' | sed -e 's/^$(ESCPKG)/./')
 
+COMMIT := $(shell git describe --abbrev=40 --dirty)
+LDFLAGS := -X $(PKG).Commit=$(COMMIT)
+
 RM := rm -f
 CP := cp
 MAKE := make
@@ -32,7 +35,7 @@ include make/release_flags.mk
 
 # For the release, we want to remove the symbol table and debug information (-s)
 # and omit the DWARF symbol table (-w). Also we clear the build ID.
-RELEASE_LDFLAGS := $(call make_ldflags, $(RELEASE_TAGS), -s -w -buildid=)
+RELEASE_LDFLAGS := -s -w -buildid= $(LDFLAGS)
 
 # Linting uses a lot of memory, so keep it under control by limiting the number
 # of workers if requested.
@@ -74,18 +77,18 @@ $(GOACC_BIN):
 
 build:
 	@$(call print, "Building Pool.")
-	$(GOBUILD) $(PKG)/cmd/pool
-	$(GOBUILD) $(PKG)/cmd/poold
+	$(GOBUILD) -ldflags="$(LDFLAGS)" $(PKG)/cmd/pool
+	$(GOBUILD) -ldflags="$(LDFLAGS)" $(PKG)/cmd/poold
 
 install:
 	@$(call print, "Installing Pool.")
-	$(GOINSTALL) $(PKG)/cmd/pool
-	$(GOINSTALL) $(PKG)/cmd/poold
+	$(GOINSTALL) -ldflags="$(LDFLAGS)" $(PKG)/cmd/pool
+	$(GOINSTALL) -ldflags="$(LDFLAGS)" $(PKG)/cmd/poold
 
 release:
 	@$(call print, "Releasing pool and poold binaries.")
 	$(VERSION_CHECK)
-	./scripts/release.sh build-release "$(VERSION_TAG)" "$(BUILD_SYSTEM)" "$(RELEASE_TAGS)" "$(RELEASE_LDFLAGS)"
+	./scripts/release.sh build-release "$(VERSION_TAG)" "$(BUILD_SYSTEM)" "" "$(RELEASE_LDFLAGS)"
 
 scratch: build
 
