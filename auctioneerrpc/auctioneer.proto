@@ -100,6 +100,15 @@ message ServerInitAccountRequest {
     The trader's account key.
     */
     bytes trader_key = 5;
+
+    // The user agent string that identifies the software running on the user's
+    // side. This can be changed in the user's client software but it _SHOULD_
+    // conform to the following pattern and use less than 256 characters:
+    //    Agent-Name/semver-version(/additional-info)
+    // Examples:
+    //    poold/v0.4.2-beta/commit=3b635821,initiator=pool-cli
+    //    litd/v0.4.0-alpha/commit=326d754,initiator=lit-ui
+    string user_agent = 6;
 }
 message ServerInitAccountResponse {
 }
@@ -116,6 +125,15 @@ message ServerSubmitOrderRequest {
         */
         ServerBid bid = 2;
     }
+
+    // The user agent string that identifies the software running on the user's
+    // side. This can be changed in the user's client software but it _SHOULD_
+    // conform to the following pattern and use less than 256 characters:
+    //    Agent-Name/semver-version(/additional-info)
+    // Examples:
+    //    poold/v0.4.2-beta/commit=3b635821,initiator=pool-cli
+    //    litd/v0.4.0-alpha/commit=326d754,initiator=lit-ui
+    string user_agent = 3;
 }
 message ServerSubmitOrderResponse {
     oneof details {
