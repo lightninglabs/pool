@@ -8,6 +8,7 @@ package pool
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -30,11 +31,42 @@ const (
 	// appPreRelease MUST only contain characters from semanticAlphabet per
 	// the semantic versioning spec.
 	appPreRelease = "alpha"
+
+	// defaultAgentName is the default name of the software that is added as
+	// the first part of the user agent string.
+	defaultAgentName = "poold"
 )
 
+// agentName stores the name of the software that is added as the first part of
+// the user agent string. This defaults to the value "poold" when being run as
+// a standalone component but can be overwritten by LiT for example when poold
+// is integrated into the UI.
+var agentName = defaultAgentName
+
+// SetAgentName overwrites the default agent name which can be used to identify
+// the software Pool is bundled in (for example LiT). This function panics if
+// the agent name contains characters outside of the allowed semantic alphabet.
+func SetAgentName(newAgentName string) {
+	for _, r := range newAgentName {
+		if !strings.ContainsRune(semanticAlphabet, r) {
+			panic(fmt.Errorf("rune: %v is not in the semantic "+
+				"alphabet", r))
+		}
+	}
+
+	agentName = newAgentName
+}
+
 // Version returns the application version as a properly formed string per the
-// semantic versioning 2.0.0 spec (http://semver.org/).
+// semantic versioning 2.0.0 spec (http://semver.org/) and the commit it was
+// built on.
 func Version() string {
+	// Append commit hash of current build to version.
+	return fmt.Sprintf("%s commit=%s", semanticVersion(), Commit)
+}
+
+// semanticVersion returns the SemVer part of the version.
+func semanticVersion() string {
 	// Start with the major, minor, and patch versions.
 	version := fmt.Sprintf("%d.%d.%d", appMajor, appMinor, appPatch)
 
@@ -47,10 +79,34 @@ func Version() string {
 		version = fmt.Sprintf("%s-%s", version, preRelease)
 	}
 
-	// Append commit hash of current build to version.
-	version = fmt.Sprintf("%s commit=%s", version, Commit)
-
 	return version
+}
+
+// UserAgent returns the full user agent string that identifies the software
+// that is submitting swaps to the loop server.
+func UserAgent(initiator string) string {
+	// We'll only allow "safe" characters in the initiator portion of the
+	// user agent string and spaces only if surrounded by other characters.
+	initiatorAlphabet := semanticAlphabet + ". "
+	cleanInitiator := normalizeVerString(
+		strings.TrimSpace(initiator), initiatorAlphabet,
+	)
+	if len(cleanInitiator) > 0 {
+		cleanInitiator = fmt.Sprintf(",initiator=%s", cleanInitiator)
+	}
+
+	// The whole user agent string is limited to 255 characters server side
+	// and also consists of the agent name, version and commit. So we only
+	// want to take up at most 150 characters for the initiator. Anything
+	// more will just be dropped.
+	strLen := len(cleanInitiator)
+	cleanInitiator = cleanInitiator[:int(math.Min(float64(strLen), 150))]
+
+	// Assemble full string, including the commit hash of current build.
+	return fmt.Sprintf(
+		"%s/v%s/commit=%s%s", agentName, semanticVersion(), Commit,
+		cleanInitiator,
+	)
 }
 
 // normalizeVerString returns the passed string stripped of all characters
