@@ -1047,6 +1047,10 @@
           "type": "integer",
           "format": "int64",
           "description": "The target number of blocks that the transaction should be confirmed in."
+        },
+        "initiator": {
+          "type": "string",
+          "description": "An optional identification string that will be appended to the user agent\nstring sent to the server to give information about the usage of pool. This\ninitiator part is meant for user interfaces to add their name to give the\nfull picture of the binary used (poold, LiT) and the method used for opening\nthe account (pool CLI, LiT UI, other 3rd party UI)."
         }
       }
     },
@@ -1643,6 +1647,10 @@
         },
         "bid": {
           "$ref": "#/definitions/poolrpcBid"
+        },
+        "initiator": {
+          "type": "string",
+          "description": "An optional identification string that will be appended to the user agent\nstring sent to the server to give information about the usage of pool. This\ninitiator part is meant for user interfaces to add their name to give the\nfull picture of the binary used (poold, LiT) and the method used for\nsubmitting the order (pool CLI, LiT UI, other 3rd party UI)."
         }
       }
     },

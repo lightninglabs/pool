@@ -93,6 +93,10 @@ type Config struct {
 	// BatchCleaner provides functionality to clean up the state of a
 	// trader's pending batch.
 	BatchCleaner BatchCleaner
+
+	// GenUserAgent is a function that generates a complete user agent
+	// string given the incoming request context.
+	GenUserAgent func(context.Context) string
 }
 
 // Client performs the client side part of auctions. This interface exists to be
@@ -287,6 +291,7 @@ func (c *Client) InitAccount(ctx context.Context, account *account.Account) erro
 			AccountValue:  uint64(account.Value),
 			AccountExpiry: account.Expiry,
 			TraderKey:     account.TraderKey.PubKey.SerializeCompressed(),
+			UserAgent:     c.cfg.GenUserAgent(ctx),
 		},
 	)
 	return err
@@ -355,7 +360,9 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 
 	// Prepare everything that is common to both ask and bid orders.
 	nonce := o.Nonce()
-	rpcRequest := &auctioneerrpc.ServerSubmitOrderRequest{}
+	rpcRequest := &auctioneerrpc.ServerSubmitOrderRequest{
+		UserAgent: c.cfg.GenUserAgent(ctx),
+	}
 	nodeAddrs := make([]*auctioneerrpc.NodeAddress, 0, len(serverParams.Addrs))
 	for _, addr := range serverParams.Addrs {
 		nodeAddrs = append(nodeAddrs, &auctioneerrpc.NodeAddress{

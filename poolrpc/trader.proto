@@ -154,6 +154,15 @@ message InitAccountRequest {
         // TODO(guggero): Add sat_per_vbyte as soon as lnd has a parameter for
         // that in rpcServer.EstimateFee.
     }
+
+    /*
+    An optional identification string that will be appended to the user agent
+    string sent to the server to give information about the usage of pool. This
+    initiator part is meant for user interfaces to add their name to give the
+    full picture of the binary used (poold, LiT) and the method used for opening
+    the account (pool CLI, LiT UI, other 3rd party UI).
+    */
+    string initiator = 5;
 }
 
 message QuoteAccountRequest {
@@ -407,6 +416,15 @@ message SubmitOrderRequest {
         Ask ask = 1;
         Bid bid = 2;
     }
+
+    /*
+    An optional identification string that will be appended to the user agent
+    string sent to the server to give information about the usage of pool. This
+    initiator part is meant for user interfaces to add their name to give the
+    full picture of the binary used (poold, LiT) and the method used for
+    submitting the order (pool CLI, LiT UI, other 3rd party UI).
+    */
+    string initiator = 3;
 }
 message SubmitOrderResponse {
     oneof details {

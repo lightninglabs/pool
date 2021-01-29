@@ -58,6 +58,14 @@ var (
 	}
 )
 
+const (
+	// defaultInitiator is the name of the pool CLI binary that is sent as
+	// the initiator field in some of the calls. The initiator identifies
+	// the software that initiated a certain RPC call and is appended to the
+	// static user agent string of the daemon binary.
+	defaultInitiator = "pool-cli"
+)
+
 type invalidUsageError struct {
 	ctx     *cli.Context
 	command string

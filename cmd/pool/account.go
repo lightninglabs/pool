@@ -122,6 +122,7 @@ func newAccount(ctx *cli.Context) error {
 		Fees: &poolrpc.InitAccountRequest_ConfTarget{
 			ConfTarget: uint32(ctx.Uint64("conf_target")),
 		},
+		Initiator: defaultInitiator,
 	}
 
 	// Parse the expiry in either of its forms. We'll always prefer the
