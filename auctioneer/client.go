@@ -492,10 +492,14 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		return sub, true, nil
 	}
 
+	// Guard the read access only. We can't use defer for the unlock because
+	// both the connectServerStream and SendAuctionMessage need to hold the
+	// mutex as well.
 	c.streamMutex.Lock()
-	defer c.streamMutex.Unlock()
+	needToConnect := c.serverStream == nil
+	c.streamMutex.Unlock()
 
-	if c.serverStream == nil {
+	if needToConnect {
 		err := c.connectServerStream(0, initialConnectRetries)
 		if err != nil {
 			return sub, false, fmt.Errorf("connecting server "+
@@ -769,6 +773,9 @@ func incompleteAcctFromErr(traderKey *keychain.KeyDescriptor,
 // the auction server. A message can only be sent as a response to a server
 // message, therefore the stream must already be open.
 func (c *Client) SendAuctionMessage(msg *auctioneerrpc.ClientAuctionMessage) error {
+	c.streamMutex.Lock()
+	defer c.streamMutex.Unlock()
+
 	if c.serverStream == nil {
 		return fmt.Errorf("cannot send message, stream not open")
 	}
@@ -801,6 +808,9 @@ func (c *Client) IsSubscribed() bool {
 // of account updates and handles reconnect trials with incremental backoff.
 func (c *Client) connectServerStream(initialBackoff time.Duration,
 	numRetries int) error {
+
+	c.streamMutex.Lock()
+	defer c.streamMutex.Unlock()
 
 	var (
 		backoff = initialBackoff
@@ -1069,12 +1079,8 @@ func (c *Client) HandleServerShutdown(err error) error {
 		log.Errorf("Error closing stream connection: %v", err)
 	}
 
-	// Guard the server stream from concurrent access. We can't use defer
-	// to unlock here because SubscribeAccountUpdates is called later on
-	// which requires access to the lock as well.
-	c.streamMutex.Lock()
+	// Try to get a new connection, retry if not successful immediately.
 	err = c.connectServerStream(c.cfg.MinBackoff, reconnectRetries)
-	c.streamMutex.Unlock()
 	if err != nil {
 		return err
 	}
