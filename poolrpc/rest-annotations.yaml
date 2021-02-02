@@ -56,6 +56,12 @@ http:
       get: "/v1/pool/leases"
     - selector: poolrpc.Trader.NodeRatings
       get: "/v1/pool/node_ratings"
+
+    # Make the URI convenient to be called in different ways, the shortest of
+    # them just returning the most recent batch.
+    - selector: poolrpc.Trader.BatchSnapshots
+      get: "/v1/pool/batch/snapshots"
+    - selector: poolrpc.Trader.BatchSnapshots
+      get: "/v1/pool/batch/snapshots/{start_batch_id}"
     - selector: poolrpc.Trader.BatchSnapshots
       get: "/v1/pool/batch/snapshots/{start_batch_id}/{num_batches_back}"
-

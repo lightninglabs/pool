@@ -1995,6 +1995,12 @@ func (s *rpcServer) BatchSnapshots(ctx context.Context,
 	req *auctioneerrpc.BatchSnapshotsRequest) (
 	*auctioneerrpc.BatchSnapshotsResponse, error) {
 
+	// To allow for easy querying through REST, we use the fallback value of
+	// showing one batch if no number is specified.
+	if req.NumBatchesBack == 0 {
+		req.NumBatchesBack = 1
+	}
+
 	return s.auctioneer.BatchSnapshots(ctx, req)
 }
 

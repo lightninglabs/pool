@@ -406,10 +406,92 @@
         ]
       }
     },
-    "/v1/pool/batch/snapshots/{start_batch_id}/{num_batches_back}": {
+    "/v1/pool/batch/snapshots": {
       "get": {
         "summary": "pool: `auction snapshot`\nBatchSnapshots returns a list of batch snapshots starting at the start batch\nID and going back through the history of batches, returning at most the\nnumber of specified batches. A maximum of 100 snapshots can be queried in\none call. If no start batch ID is provided, the most recent finalized batch\nis used as the starting point to go back from.",
         "operationId": "BatchSnapshots",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcBatchSnapshotsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "start_batch_id",
+            "description": "The unique identifier of the first batch to return, encoded as a compressed\npubkey. This represents the newest/most current batch to fetch. If this is\nempty or a zero batch ID, the most recent finalized batch is used as the\nstarting point to go back from.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "num_batches_back",
+            "description": "The number of batches to return at most, including the start batch.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/v1/pool/batch/snapshots/{start_batch_id}": {
+      "get": {
+        "summary": "pool: `auction snapshot`\nBatchSnapshots returns a list of batch snapshots starting at the start batch\nID and going back through the history of batches, returning at most the\nnumber of specified batches. A maximum of 100 snapshots can be queried in\none call. If no start batch ID is provided, the most recent finalized batch\nis used as the starting point to go back from.",
+        "operationId": "BatchSnapshots2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcBatchSnapshotsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "start_batch_id",
+            "description": "The unique identifier of the first batch to return, encoded as a compressed\npubkey. This represents the newest/most current batch to fetch. If this is\nempty or a zero batch ID, the most recent finalized batch is used as the\nstarting point to go back from.",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "num_batches_back",
+            "description": "The number of batches to return at most, including the start batch.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/v1/pool/batch/snapshots/{start_batch_id}/{num_batches_back}": {
+      "get": {
+        "summary": "pool: `auction snapshot`\nBatchSnapshots returns a list of batch snapshots starting at the start batch\nID and going back through the history of batches, returning at most the\nnumber of specified batches. A maximum of 100 snapshots can be queried in\none call. If no start batch ID is provided, the most recent finalized batch\nis used as the starting point to go back from.",
+        "operationId": "BatchSnapshots3",
         "responses": {
           "200": {
             "description": "A successful response.",
