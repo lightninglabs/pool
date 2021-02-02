@@ -58,6 +58,7 @@ type ManagerConfig struct {
 type Manager struct {
 	// NOTE: This must be used atomically.
 	hasPendingBatch uint32
+	isStarted       uint32
 
 	started sync.Once
 	stopped sync.Once
@@ -66,6 +67,8 @@ type Manager struct {
 
 	wg   sync.WaitGroup
 	quit chan struct{}
+
+	ourNodeInfo *lndclient.Info
 
 	batchVerifier BatchVerifier
 	batchSigner   BatchSigner
@@ -83,17 +86,20 @@ func NewManager(cfg *ManagerConfig) *Manager {
 
 // Start starts all concurrent tasks the manager is responsible for.
 func (m *Manager) Start() error {
+	if atomic.LoadUint32(&m.isStarted) == 1 {
+		return fmt.Errorf("manager can only be started once")
+	}
+
 	var err error
 	m.started.Do(func() {
 		// We'll need our node's identity public key for a bunch of
 		// different validations so we might as well cache it on
 		// startup as it cannot change.
-		var info *lndclient.Info
 		ctxt, cancel := context.WithTimeout(
 			context.Background(), defaultLndTimeout,
 		)
 		defer cancel()
-		info, err = m.cfg.Lightning.GetInfo(ctxt)
+		m.ourNodeInfo, err = m.cfg.Lightning.GetInfo(ctxt)
 		if err != nil {
 			return
 		}
@@ -101,7 +107,7 @@ func (m *Manager) Start() error {
 			orderStore:    m.cfg.Store,
 			getAccount:    m.cfg.AcctStore.Account,
 			wallet:        m.cfg.Wallet,
-			ourNodePubkey: info.IdentityPubkey,
+			ourNodePubkey: m.ourNodeInfo.IdentityPubkey,
 		}
 		m.batchSigner = &batchSigner{
 			getAccount: m.cfg.AcctStore.Account,
@@ -111,6 +117,8 @@ func (m *Manager) Start() error {
 			orderStore: m.cfg.Store,
 			getAccount: m.cfg.AcctStore.Account,
 		}
+
+		atomic.StoreUint32(&m.isStarted, 1)
 	})
 	return err
 }
@@ -306,6 +314,16 @@ func (m *Manager) BatchFinalize(batchID BatchID) error {
 	atomic.StoreUint32(&m.hasPendingBatch, 0)
 
 	return nil
+}
+
+// OurNodePubkey returns our lnd node's public identity key or an error if the
+// manager wasn't fully started yet.
+func (m *Manager) OurNodePubkey() ([33]byte, error) {
+	if atomic.LoadUint32(&m.isStarted) != 1 {
+		return [33]byte{}, fmt.Errorf("manager not started yet")
+	}
+
+	return m.ourNodeInfo.IdentityPubkey, nil
 }
 
 // parseOnionAddr parses an onion address specified in host:port format.
