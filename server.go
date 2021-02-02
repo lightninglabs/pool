@@ -195,11 +195,23 @@ func (s *Server) Start() error {
 				s.cfg.RPCListen)
 		}
 
+		// The default JSON marshaler of the REST proxy only sets
+		// OrigName to true, which instructs it to use the same field
+		// names as specified in the proto file and not switch to camel
+		// case. What we also want is that the marshaler prints all
+		// values, even if they are falsey.
+		customMarshalerOption := proxy.WithMarshalerOption(
+			proxy.MIMEWildcard, &proxy.JSONPb{
+				OrigName:     true,
+				EmitDefaults: true,
+			},
+		)
+
 		// We'll also create and start an accompanying proxy to serve
 		// clients through REST.
 		var ctx context.Context
 		ctx, s.restCancel = context.WithCancel(context.Background())
-		mux := proxy.NewServeMux()
+		mux := proxy.NewServeMux(customMarshalerOption)
 		proxyOpts := []grpc.DialOption{
 			grpc.WithTransportCredentials(*restClientCreds),
 		}
