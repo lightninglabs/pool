@@ -788,6 +788,15 @@ func (c *Client) wait(backoff time.Duration) error {
 	}
 }
 
+// IsSubscribed returns true if at least one account is in an active state and
+// the subscription stream to the server was established successfully.
+func (c *Client) IsSubscribed() bool {
+	c.streamMutex.Lock()
+	defer c.streamMutex.Unlock()
+
+	return c.serverStream != nil
+}
+
 // connectServerStream opens the initial connection to the server for the stream
 // of account updates and handles reconnect trials with incremental backoff.
 func (c *Client) connectServerStream(initialBackoff time.Duration,
