@@ -114,12 +114,14 @@ type Client struct {
 	serverConn *grpc.ClientConn
 	client     auctioneerrpc.ChannelAuctioneerClient
 
-	quit            chan struct{}
-	wg              sync.WaitGroup
-	serverStream    auctioneerrpc.ChannelAuctioneer_SubscribeBatchAuctionClient
-	streamMutex     sync.Mutex
-	streamCancel    func()
-	subscribedAccts map[[33]byte]*acctSubscription
+	quit         chan struct{}
+	wg           sync.WaitGroup
+	serverStream auctioneerrpc.ChannelAuctioneer_SubscribeBatchAuctionClient
+	streamMutex  sync.Mutex
+	streamCancel func()
+
+	subscribedAccts    map[[33]byte]*acctSubscription
+	subscribedAcctsMtx sync.Mutex
 }
 
 // NewClient returns a new instance to initiate auctions with.
@@ -228,10 +230,12 @@ func (c *Client) closeStream() error {
 	c.serverStream = nil
 
 	// Close all pending subscriptions.
+	c.subscribedAcctsMtx.Lock()
 	for _, subscription := range c.subscribedAccts {
 		close(subscription.quit)
 		close(subscription.msgChan)
 	}
+	c.subscribedAcctsMtx.Unlock()
 
 	return err
 }
@@ -483,7 +487,9 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 	copy(acctPubKey[:], acctKey.PubKey.SerializeCompressed())
 
 	// Don't subscribe more than once.
+	c.subscribedAcctsMtx.Lock()
 	sub, ok := c.subscribedAccts[acctPubKey]
+	c.subscribedAcctsMtx.Unlock()
 	if ok {
 		if recovery {
 			return sub, true, fmt.Errorf("account %x is already "+
@@ -534,7 +540,9 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		errChan: tempErrChan,
 		quit:    make(chan struct{}),
 	}
+	c.subscribedAcctsMtx.Lock()
 	c.subscribedAccts[acctPubKey] = sub
+	c.subscribedAcctsMtx.Unlock()
 	err := sub.authenticate(ctx)
 	if err != nil {
 		return sub, false, err
@@ -945,11 +953,13 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 			var commitHash [32]byte
 			copy(commitHash[:], t.Challenge.CommitHash)
 			var acctSub *acctSubscription
+			c.subscribedAcctsMtx.Lock()
 			for traderKey, sub := range c.subscribedAccts {
 				if sub.commitHash == commitHash {
 					acctSub = c.subscribedAccts[traderKey]
 				}
 			}
+			c.subscribedAcctsMtx.Unlock()
 			if acctSub == nil {
 				c.errChanSwitch.ErrChan() <- fmt.Errorf("no "+
 					"subscription found for commit hash %x",
@@ -1048,7 +1058,9 @@ func (c *Client) sendToSubscription(traderAccountKey []byte,
 	// added.
 	var traderKey [33]byte
 	copy(traderKey[:], traderAccountKey)
+	c.subscribedAcctsMtx.Lock()
 	acctSub, ok := c.subscribedAccts[traderKey]
+	c.subscribedAcctsMtx.Unlock()
 	if !ok {
 		return fmt.Errorf("no subscription found for account key %x",
 			traderAccountKey)
@@ -1094,11 +1106,13 @@ func (c *Client) HandleServerShutdown(err error) error {
 
 	// Subscribe to all accounts again. Remove the old subscriptions in the
 	// same move as new ones will be created.
+	c.subscribedAcctsMtx.Lock()
 	acctKeys := make([]*keychain.KeyDescriptor, 0, len(c.subscribedAccts))
 	for key, subscription := range c.subscribedAccts {
 		acctKeys = append(acctKeys, subscription.acctKey)
 		delete(c.subscribedAccts, key)
 	}
+	c.subscribedAcctsMtx.Unlock()
 	for _, acctKey := range acctKeys {
 		err := c.SubscribeAccountUpdates(context.Background(), acctKey)
 		if err != nil {
