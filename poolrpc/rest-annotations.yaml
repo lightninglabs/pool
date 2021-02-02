@@ -5,6 +5,11 @@ http:
   rules:
 
     # trader.proto
+    - selector: poolrpc.Trader.GetInfo
+      get: "/v1/pool/info"
+    - selector: poolrpc.Trader.StopDaemon
+      post: "/v1/pool/stop"
+      body: "*"
     - selector: poolrpc.Trader.QuoteAccount
       post: "/v1/pool/accounts/quote"
       body: "*"
