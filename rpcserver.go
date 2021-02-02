@@ -1995,6 +1995,12 @@ func (s *rpcServer) BatchSnapshots(ctx context.Context,
 	req *auctioneerrpc.BatchSnapshotsRequest) (
 	*auctioneerrpc.BatchSnapshotsResponse, error) {
 
+	// To allow for easy querying through REST, we use the fallback value of
+	// showing one batch if no number is specified.
+	if req.NumBatchesBack == 0 {
+		req.NumBatchesBack = 1
+	}
+
 	return s.auctioneer.BatchSnapshots(ctx, req)
 }
 
@@ -2063,6 +2069,104 @@ func (s *rpcServer) NodeRatings(ctx context.Context,
 	}
 
 	return s.auctioneer.NodeRating(ctx, pubKeys...)
+}
+
+// GetInfo returns general information about the state of the Pool trader
+// daemon.
+func (s *rpcServer) GetInfo(ctx context.Context,
+	_ *poolrpc.GetInfoRequest) (*poolrpc.GetInfoResponse, error) {
+
+	info := &poolrpc.GetInfoResponse{
+		Version:                Version(),
+		CurrentBlockHeight:     atomic.LoadUint32(&s.bestHeight),
+		SubscribedToAuctioneer: s.auctioneer.IsSubscribed(),
+	}
+
+	// Query our own node's rating. We want the GetInfo call to be available
+	// in an offline situation to simplify debugging. Therefore if there's
+	// an error getting our node rating from the auctioneer, we just log a
+	// warning and the rating will be returned as nil.
+	nodePubkeyRaw, err := s.orderManager.OurNodePubkey()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get our node pubkey: %v", err)
+	}
+	nodePubkey, err := btcec.ParsePubKey(nodePubkeyRaw[:], btcec.S256())
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse our node pubkey: %v", err)
+	}
+	ratings, err := s.auctioneer.NodeRating(ctx, nodePubkey)
+	if err != nil {
+		rpcLog.Warnf("Error querying node rating from auctioneer: %v",
+			err)
+	} else {
+		// If we do get a response, we expect exactly one rating though.
+		if len(ratings.NodeRatings) != 1 {
+			return nil, fmt.Errorf("unexpected number of node "+
+				"ratings %d", len(ratings.NodeRatings))
+		}
+		info.NodeRating = ratings.NodeRatings[0]
+	}
+
+	// Tally up account statistics.
+	accounts, err := s.server.db.Accounts()
+	if err != nil {
+		return nil, fmt.Errorf("error loading accounts: %v", err)
+	}
+	for _, acct := range accounts {
+		info.AccountsTotal++
+
+		if acct.State.IsActive() {
+			info.AccountsActive++
+
+			if acct.State == account.StateExpired {
+				info.AccountsActiveExpired++
+			}
+		} else {
+			info.AccountsArchived++
+		}
+	}
+
+	// Tally up order statistics.
+	orders, err := s.server.db.GetOrders()
+	if err != nil {
+		return nil, fmt.Errorf("error loading orders: %v", err)
+	}
+	for _, o := range orders {
+		info.OrdersTotal++
+
+		if o.Details().State.Archived() {
+			info.OrdersArchived++
+		} else {
+			info.OrdersActive++
+		}
+	}
+
+	// Count the number of local batch snapshots which should be equivalent
+	// to the number of batches a local account was involved in.
+	batches, err := s.server.db.GetLocalBatchSnapshots()
+	if err != nil {
+		return nil, fmt.Errorf("error loading batches: %v", err)
+	}
+	info.BatchesInvolved = uint32(len(batches))
+
+	// Finally count the number of LSAT tokens in our store.
+	tokens, err := s.server.lsatStore.AllTokens()
+	if err != nil {
+		return nil, fmt.Errorf("error loading tokens: %v", err)
+	}
+	info.LsatTokens = uint32(len(tokens))
+
+	return info, nil
+}
+
+// StopDaemon gracefully shuts down the Pool trader daemon.
+func (s *rpcServer) StopDaemon(_ context.Context,
+	_ *poolrpc.StopDaemonRequest) (*poolrpc.StopDaemonResponse, error) {
+
+	rpcLog.Infof("Stop requested through RPC, gracefully shutting down")
+	signal.RequestShutdown()
+
+	return &poolrpc.StopDaemonResponse{}, nil
 }
 
 // rpcOrderStateToDBState maps the order state as received over the RPC

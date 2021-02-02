@@ -114,12 +114,14 @@ type Client struct {
 	serverConn *grpc.ClientConn
 	client     auctioneerrpc.ChannelAuctioneerClient
 
-	quit            chan struct{}
-	wg              sync.WaitGroup
-	serverStream    auctioneerrpc.ChannelAuctioneer_SubscribeBatchAuctionClient
-	streamMutex     sync.Mutex
-	streamCancel    func()
-	subscribedAccts map[[33]byte]*acctSubscription
+	quit         chan struct{}
+	wg           sync.WaitGroup
+	serverStream auctioneerrpc.ChannelAuctioneer_SubscribeBatchAuctionClient
+	streamMutex  sync.Mutex
+	streamCancel func()
+
+	subscribedAccts    map[[33]byte]*acctSubscription
+	subscribedAcctsMtx sync.Mutex
 }
 
 // NewClient returns a new instance to initiate auctions with.
@@ -228,10 +230,12 @@ func (c *Client) closeStream() error {
 	c.serverStream = nil
 
 	// Close all pending subscriptions.
+	c.subscribedAcctsMtx.Lock()
 	for _, subscription := range c.subscribedAccts {
 		close(subscription.quit)
 		close(subscription.msgChan)
 	}
+	c.subscribedAcctsMtx.Unlock()
 
 	return err
 }
@@ -483,7 +487,9 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 	copy(acctPubKey[:], acctKey.PubKey.SerializeCompressed())
 
 	// Don't subscribe more than once.
+	c.subscribedAcctsMtx.Lock()
 	sub, ok := c.subscribedAccts[acctPubKey]
+	c.subscribedAcctsMtx.Unlock()
 	if ok {
 		if recovery {
 			return sub, true, fmt.Errorf("account %x is already "+
@@ -492,10 +498,14 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		return sub, true, nil
 	}
 
+	// Guard the read access only. We can't use defer for the unlock because
+	// both the connectServerStream and SendAuctionMessage need to hold the
+	// mutex as well.
 	c.streamMutex.Lock()
-	defer c.streamMutex.Unlock()
+	needToConnect := c.serverStream == nil
+	c.streamMutex.Unlock()
 
-	if c.serverStream == nil {
+	if needToConnect {
 		err := c.connectServerStream(0, initialConnectRetries)
 		if err != nil {
 			return sub, false, fmt.Errorf("connecting server "+
@@ -530,7 +540,9 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 		errChan: tempErrChan,
 		quit:    make(chan struct{}),
 	}
+	c.subscribedAcctsMtx.Lock()
 	c.subscribedAccts[acctPubKey] = sub
+	c.subscribedAcctsMtx.Unlock()
 	err := sub.authenticate(ctx)
 	if err != nil {
 		return sub, false, err
@@ -769,6 +781,9 @@ func incompleteAcctFromErr(traderKey *keychain.KeyDescriptor,
 // the auction server. A message can only be sent as a response to a server
 // message, therefore the stream must already be open.
 func (c *Client) SendAuctionMessage(msg *auctioneerrpc.ClientAuctionMessage) error {
+	c.streamMutex.Lock()
+	defer c.streamMutex.Unlock()
+
 	if c.serverStream == nil {
 		return fmt.Errorf("cannot send message, stream not open")
 	}
@@ -788,10 +803,22 @@ func (c *Client) wait(backoff time.Duration) error {
 	}
 }
 
+// IsSubscribed returns true if at least one account is in an active state and
+// the subscription stream to the server was established successfully.
+func (c *Client) IsSubscribed() bool {
+	c.streamMutex.Lock()
+	defer c.streamMutex.Unlock()
+
+	return c.serverStream != nil
+}
+
 // connectServerStream opens the initial connection to the server for the stream
 // of account updates and handles reconnect trials with incremental backoff.
 func (c *Client) connectServerStream(initialBackoff time.Duration,
 	numRetries int) error {
+
+	c.streamMutex.Lock()
+	defer c.streamMutex.Unlock()
 
 	var (
 		backoff = initialBackoff
@@ -926,11 +953,13 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 			var commitHash [32]byte
 			copy(commitHash[:], t.Challenge.CommitHash)
 			var acctSub *acctSubscription
+			c.subscribedAcctsMtx.Lock()
 			for traderKey, sub := range c.subscribedAccts {
 				if sub.commitHash == commitHash {
 					acctSub = c.subscribedAccts[traderKey]
 				}
 			}
+			c.subscribedAcctsMtx.Unlock()
 			if acctSub == nil {
 				c.errChanSwitch.ErrChan() <- fmt.Errorf("no "+
 					"subscription found for commit hash %x",
@@ -1029,7 +1058,9 @@ func (c *Client) sendToSubscription(traderAccountKey []byte,
 	// added.
 	var traderKey [33]byte
 	copy(traderKey[:], traderAccountKey)
+	c.subscribedAcctsMtx.Lock()
 	acctSub, ok := c.subscribedAccts[traderKey]
+	c.subscribedAcctsMtx.Unlock()
 	if !ok {
 		return fmt.Errorf("no subscription found for account key %x",
 			traderAccountKey)
@@ -1060,12 +1091,8 @@ func (c *Client) HandleServerShutdown(err error) error {
 		log.Errorf("Error closing stream connection: %v", err)
 	}
 
-	// Guard the server stream from concurrent access. We can't use defer
-	// to unlock here because SubscribeAccountUpdates is called later on
-	// which requires access to the lock as well.
-	c.streamMutex.Lock()
+	// Try to get a new connection, retry if not successful immediately.
 	err = c.connectServerStream(c.cfg.MinBackoff, reconnectRetries)
-	c.streamMutex.Unlock()
 	if err != nil {
 		return err
 	}
@@ -1079,11 +1106,13 @@ func (c *Client) HandleServerShutdown(err error) error {
 
 	// Subscribe to all accounts again. Remove the old subscriptions in the
 	// same move as new ones will be created.
+	c.subscribedAcctsMtx.Lock()
 	acctKeys := make([]*keychain.KeyDescriptor, 0, len(c.subscribedAccts))
 	for key, subscription := range c.subscribedAccts {
 		acctKeys = append(acctKeys, subscription.acctKey)
 		delete(c.subscribedAccts, key)
 	}
+	c.subscribedAcctsMtx.Unlock()
 	for _, acctKey := range acctKeys {
 		err := c.SubscribeAccountUpdates(context.Background(), acctKey)
 		if err != nil {

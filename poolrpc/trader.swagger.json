@@ -406,10 +406,92 @@
         ]
       }
     },
-    "/v1/pool/batch/snapshots/{start_batch_id}/{num_batches_back}": {
+    "/v1/pool/batch/snapshots": {
       "get": {
         "summary": "pool: `auction snapshot`\nBatchSnapshots returns a list of batch snapshots starting at the start batch\nID and going back through the history of batches, returning at most the\nnumber of specified batches. A maximum of 100 snapshots can be queried in\none call. If no start batch ID is provided, the most recent finalized batch\nis used as the starting point to go back from.",
         "operationId": "BatchSnapshots",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcBatchSnapshotsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "start_batch_id",
+            "description": "The unique identifier of the first batch to return, encoded as a compressed\npubkey. This represents the newest/most current batch to fetch. If this is\nempty or a zero batch ID, the most recent finalized batch is used as the\nstarting point to go back from.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "num_batches_back",
+            "description": "The number of batches to return at most, including the start batch.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/v1/pool/batch/snapshots/{start_batch_id}": {
+      "get": {
+        "summary": "pool: `auction snapshot`\nBatchSnapshots returns a list of batch snapshots starting at the start batch\nID and going back through the history of batches, returning at most the\nnumber of specified batches. A maximum of 100 snapshots can be queried in\none call. If no start batch ID is provided, the most recent finalized batch\nis used as the starting point to go back from.",
+        "operationId": "BatchSnapshots2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcBatchSnapshotsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "start_batch_id",
+            "description": "The unique identifier of the first batch to return, encoded as a compressed\npubkey. This represents the newest/most current batch to fetch. If this is\nempty or a zero batch ID, the most recent finalized batch is used as the\nstarting point to go back from.",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "num_batches_back",
+            "description": "The number of batches to return at most, including the start batch.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/v1/pool/batch/snapshots/{start_batch_id}/{num_batches_back}": {
+      "get": {
+        "summary": "pool: `auction snapshot`\nBatchSnapshots returns a list of batch snapshots starting at the start batch\nID and going back through the history of batches, returning at most the\nnumber of specified batches. A maximum of 100 snapshots can be queried in\none call. If no start batch ID is provided, the most recent finalized batch\nis used as the starting point to go back from.",
+        "operationId": "BatchSnapshots3",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -456,6 +538,29 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/poolrpcAuctionFeeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/v1/pool/info": {
+      "get": {
+        "summary": "pool: `getinfo`\nGetInfo returns general information about the state of the Pool trader\ndaemon.",
+        "operationId": "GetInfo",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcGetInfoResponse"
             }
           },
           "default": {
@@ -676,6 +781,39 @@
             "required": true,
             "type": "string",
             "format": "byte"
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/v1/pool/stop": {
+      "post": {
+        "summary": "pool: `stop`\nStop gracefully shuts down the Pool trader daemon.",
+        "operationId": "StopDaemon",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcStopDaemonResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/poolrpcStopDaemonRequest"
+            }
           }
         ],
         "tags": [
@@ -1025,6 +1163,74 @@
           "type": "string",
           "format": "uint64",
           "description": "The fee rate in parts per million."
+        }
+      }
+    },
+    "poolrpcGetInfoResponse": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "The version of the Pool daemon that is running."
+        },
+        "accounts_total": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The total number of accounts in the local database."
+        },
+        "accounts_active": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The total number of accounts that are in an active, non-archived state,\nincluding expired accounts."
+        },
+        "accounts_active_expired": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The total number of accounts that are active but have expired."
+        },
+        "accounts_archived": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The total number of accounts that are in an archived/closed state."
+        },
+        "orders_total": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The total number of orders in the local database."
+        },
+        "orders_active": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The total number of active/pending orders that are still waiting for\nexecution."
+        },
+        "orders_archived": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The total number of orders that have been archived."
+        },
+        "current_block_height": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The current block height as seen by the connected lnd node."
+        },
+        "batches_involved": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The number of batches an account of this node was ever involved in."
+        },
+        "node_rating": {
+          "$ref": "#/definitions/poolrpcNodeRating",
+          "description": "Our lnd node's rating as judged by the auctioneer server."
+        },
+        "lsat_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The number of available LSAT tokens."
+        },
+        "subscribed_to_auctioneer": {
+          "type": "boolean",
+          "format": "boolean",
+          "description": "Indicates whether there is an active subscription connection to the\nauctioneer. This will never be true if there is no active account. If there\nare active accounts, this value represents the network connection status to\nthe auctioneer server."
         }
       }
     },
@@ -1638,6 +1844,12 @@
           "description": "The transaction used to renew the expiration of the account."
         }
       }
+    },
+    "poolrpcStopDaemonRequest": {
+      "type": "object"
+    },
+    "poolrpcStopDaemonResponse": {
+      "type": "object"
     },
     "poolrpcSubmitOrderRequest": {
       "type": "object",

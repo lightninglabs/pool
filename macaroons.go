@@ -27,6 +27,23 @@ var (
 	// RequiredPermissions is a map of all pool RPC methods and their
 	// required macaroon permissions to access poold.
 	RequiredPermissions = map[string][]bakery.Op{
+		"/poolrpc.Trader/GetInfo": {{
+			Entity: "account",
+			Action: "read",
+		}, {
+			Entity: "order",
+			Action: "read",
+		}, {
+			Entity: "auction",
+			Action: "read",
+		}, {
+			Entity: "auth",
+			Action: "read",
+		}},
+		"/poolrpc.Trader/StopDaemon": {{
+			Entity: "account",
+			Action: "write",
+		}},
 		"/poolrpc.Trader/QuoteAccount": {{
 			Entity: "account",
 			Action: "read",

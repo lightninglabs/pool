@@ -7,6 +7,17 @@ package poolrpc;
 option go_package = "github.com/lightninglabs/pool/poolrpc";
 
 service Trader {
+    /* pool: `getinfo`
+    GetInfo returns general information about the state of the Pool trader
+    daemon.
+    */
+    rpc GetInfo (GetInfoRequest) returns (GetInfoResponse);
+
+    /* pool: `stop`
+    Stop gracefully shuts down the Pool trader daemon.
+    */
+    rpc StopDaemon (StopDaemonRequest) returns (StopDaemonResponse);
+
     /*
     QuoteAccount gets a fee quote to fund an account of the given size with the
     given confirmation target. If the connected lnd wallet doesn't have enough
@@ -893,4 +904,65 @@ message NodeRatingRequest {
 message NodeRatingResponse {
     // A series of node ratings for each of the queried nodes.
     repeated NodeRating node_ratings = 1;
+}
+
+message GetInfoRequest {
+}
+
+message GetInfoResponse {
+    // The version of the Pool daemon that is running.
+    string version = 1;
+
+    // The total number of accounts in the local database.
+    uint32 accounts_total = 2;
+
+    /*
+    The total number of accounts that are in an active, non-archived state,
+    including expired accounts.
+    */
+    uint32 accounts_active = 3;
+
+    // The total number of accounts that are active but have expired.
+    uint32 accounts_active_expired = 4;
+
+    // The total number of accounts that are in an archived/closed state.
+    uint32 accounts_archived = 5;
+
+    // The total number of orders in the local database.
+    uint32 orders_total = 6;
+
+    /*
+    The total number of active/pending orders that are still waiting for
+    execution.
+    */
+    uint32 orders_active = 7;
+
+    // The total number of orders that have been archived.
+    uint32 orders_archived = 8;
+
+    // The current block height as seen by the connected lnd node.
+    uint32 current_block_height = 9;
+
+    // The number of batches an account of this node was ever involved in.
+    uint32 batches_involved = 10;
+
+    // Our lnd node's rating as judged by the auctioneer server.
+    NodeRating node_rating = 11;
+
+    // The number of available LSAT tokens.
+    uint32 lsat_tokens = 12;
+
+    /*
+    Indicates whether there is an active subscription connection to the
+    auctioneer. This will never be true if there is no active account. If there
+    are active accounts, this value represents the network connection status to
+    the auctioneer server.
+    */
+    bool subscribed_to_auctioneer = 13;
+}
+
+message StopDaemonRequest {
+}
+
+message StopDaemonResponse {
 }

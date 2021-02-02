@@ -54,13 +54,13 @@ $ poold &
 $ poold --network=testnet
 ```
 
-In the case that `lnd` is running on a remote node, the `tls.cert` and all `*.macaroon` files from the `lnd` data directory need to be copied to the machine where `poold` is running.
+In the case that `lnd` is running on a remote node, the `tls.cert` and the `admin.macaroon` files from the `lnd` data directory need to be copied to the machine where `poold` is running.
 
 The daemon can then be configured to connect to the remote `lnd` node by using the following command line flags:
 
 ```text
 $ poold --lnd.host=<the_remote_host_IP_address>:10009 \
-        --lnd.macaroondir=/some/directory/with/lnd/data/macaroons \
+        --lnd.macaroonpath=/some/directory/with/lnd/data/macaroons/admin.macaroon \
         --lnd.tlspath=/some/directory/with/lnd/data/tls.cert
 ```
 
@@ -70,7 +70,7 @@ To persist this configuration, these values can also be written to a configurati
 >
 > ```text
 > lnd.host=<the_remote_host_IP_address>:10009
-> lnd.macaroondir=/some/directory/with/lnd/data/macaroons
+> lnd.macaroonpath=/some/directory/with/lnd/data/macaroons/admin.macaroon
 > lnd.tlspath=/some/directory/with/lnd/data/tls.cert
 > ```
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -134,12 +135,35 @@ func main() {
 	app.Commands = append(app.Commands, ordersCommands...)
 	app.Commands = append(app.Commands, auctionCommands...)
 	app.Commands = append(app.Commands, listAuthCommand)
+	app.Commands = append(app.Commands, getInfoCommand)
 	app.Commands = append(app.Commands, debugCommands...)
+	app.Commands = append(app.Commands, stopDaemonCommand)
 
 	err := app.Run(os.Args)
 	if err != nil {
 		fatal(err)
 	}
+}
+
+var stopDaemonCommand = cli.Command{
+	Name:  "stop",
+	Usage: "gracefully shut down the daemon",
+	Description: "Sends the stop command to the Pool trader daemon to " +
+		"initiate a graceful shutdown",
+	Action: stop,
+}
+
+func stop(ctx *cli.Context) error {
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	_, err = client.StopDaemon(
+		context.Background(), &poolrpc.StopDaemonRequest{},
+	)
+	return err
 }
 
 func getClient(ctx *cli.Context) (poolrpc.TraderClient, func(),
