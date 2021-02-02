@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -127,8 +128,9 @@ func (s *Server) Start() error {
 	// TODO(roasbeef): more granular macaroons, can ask user to make just
 	// what we need
 	s.lndClient, err = lndclient.NewBasicClient(
-		s.cfg.Lnd.Host, s.cfg.Lnd.TLSPath, s.cfg.Lnd.MacaroonDir,
-		s.cfg.Network,
+		s.cfg.Lnd.Host, s.cfg.Lnd.TLSPath,
+		path.Dir(s.cfg.Lnd.MacaroonPath), s.cfg.Network,
+		lndclient.MacFilename(path.Base(s.cfg.Lnd.MacaroonPath)),
 	)
 	if err != nil {
 		return err
@@ -559,7 +561,7 @@ func getLnd(network string, cfg *LndConfig) (*lndclient.GrpcLndServices, error) 
 	return lndclient.NewLndServices(&lndclient.LndServicesConfig{
 		LndAddress:            cfg.Host,
 		Network:               lndclient.Network(network),
-		MacaroonDir:           cfg.MacaroonDir,
+		CustomMacaroonPath:    cfg.MacaroonPath,
 		TLSPath:               cfg.TLSPath,
 		CheckVersion:          minimalCompatibleVersion,
 		BlockUntilChainSynced: true,
