@@ -101,6 +101,7 @@ type Config struct {
 	Insecure       bool   `long:"insecure" description:"disable tls"`
 	Network        string `long:"network" description:"network to run on" choice:"regtest" choice:"testnet" choice:"mainnet" choice:"simnet"`
 	AuctionServer  string `long:"auctionserver" description:"auction server address host:port"`
+	Proxy          string `long:"proxy" description:"The host:port of a SOCKS proxy through which all connections to the pool server will be established over"`
 	TLSPathAuctSrv string `long:"tlspathauctserver" description:"Path to auction server tls certificate"`
 	RPCListen      string `long:"rpclisten" description:"Address to listen on for gRPC clients"`
 	RESTListen     string `long:"restlisten" description:"Address to listen on for REST clients"`
