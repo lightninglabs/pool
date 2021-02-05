@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
+	"github.com/lightningnetwork/lnd/tor"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -60,6 +62,10 @@ var (
 type Config struct {
 	// ServerAddress is the domain:port of the auctioneer server.
 	ServerAddress string
+
+	// ProxyAddress is the SOCKS proxy that should be used to establish the
+	// connection.
+	ProxyAddress string
 
 	// Insecure signals that no TLS should be used if set to true.
 	Insecure bool
@@ -128,7 +134,7 @@ type Client struct {
 func NewClient(cfg *Config) (*Client, error) {
 	var err error
 	cfg.DialOpts, err = getAuctionServerDialOpts(
-		cfg.Insecure, cfg.TLSPathServer, cfg.DialOpts...,
+		cfg.Insecure, cfg.ProxyAddress, cfg.TLSPathServer, cfg.DialOpts...,
 	)
 	if err != nil {
 		return nil, err
@@ -168,7 +174,7 @@ func (c *Client) Start() error {
 
 // getAuctionServerDialOpts returns the dial options to connect to the auction
 // server.
-func getAuctionServerDialOpts(insecure bool, tlsPath string,
+func getAuctionServerDialOpts(insecure bool, proxyAddress, tlsPath string,
 	dialOpts ...grpc.DialOption) ([]grpc.DialOption, error) {
 
 	// Create a copy of the dial options array.
@@ -193,6 +199,20 @@ func getAuctionServerDialOpts(insecure bool, tlsPath string,
 	default:
 		creds := credentials.NewTLS(&tls.Config{})
 		opts = append(opts, grpc.WithTransportCredentials(creds))
+	}
+	// If a SOCKS proxy address was specified,
+	// then we should dial through it.
+	if proxyAddress != "" {
+		log.Infof("Proxying connection to auction server "+
+			"over Tor SOCKS proxy %v",
+			proxyAddress)
+		torDialer := func(_ context.Context, addr string) (net.Conn, error) {
+			return tor.Dial(
+				addr, proxyAddress, false,
+				tor.DefaultConnTimeout,
+			)
+		}
+		opts = append(opts, grpc.WithContextDialer(torDialer))
 	}
 
 	return opts, nil

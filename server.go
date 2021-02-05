@@ -472,6 +472,7 @@ func (s *Server) setupClient() error {
 	// Create an instance of the auctioneer client library.
 	clientCfg := &auctioneer.Config{
 		ServerAddress: s.cfg.AuctionServer,
+		ProxyAddress:  s.cfg.Proxy,
 		Insecure:      s.cfg.Insecure,
 		TLSPathServer: s.cfg.TLSPathAuctSrv,
 		DialOpts:      s.cfg.AuctioneerDialOpts,
