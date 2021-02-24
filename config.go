@@ -77,6 +77,17 @@ var (
 	DefaultMacaroonPath = filepath.Join(
 		DefaultBaseDir, DefaultNetwork, DefaultMacaroonFilename,
 	)
+
+	// DefaultLndDir is the default location where we look for lnd's tls and
+	// macaroon files.
+	DefaultLndDir = btcutil.AppDataDir("lnd", false)
+
+	// DefaultLndMacaroonPath is the default location where we look for a
+	// macaroon to use when connecting to lnd.
+	DefaultLndMacaroonPath = filepath.Join(
+		DefaultLndDir, "data", "chain", "bitcoin", DefaultNetwork,
+		defaultLndMacaroon,
+	)
 )
 
 type LndConfig struct {
@@ -173,7 +184,8 @@ func DefaultConfig() Config {
 		TLSKeyPath:     DefaultTLSKeyPath,
 		MacaroonPath:   DefaultMacaroonPath,
 		Lnd: &LndConfig{
-			Host: "localhost:10009",
+			Host:         "localhost:10009",
+			MacaroonPath: DefaultLndMacaroonPath,
 		},
 	}
 }
@@ -258,7 +270,9 @@ func Validate(cfg *Config) error {
 
 	// Make sure only one of the macaroon options is used.
 	switch {
-	case cfg.Lnd.MacaroonPath != "" && cfg.Lnd.MacaroonDir != "":
+	case cfg.Lnd.MacaroonPath != DefaultLndMacaroonPath &&
+		cfg.Lnd.MacaroonDir != "":
+
 		return fmt.Errorf("use --lnd.macaroonpath only")
 
 	case cfg.Lnd.MacaroonDir != "":
@@ -278,6 +292,17 @@ func Validate(cfg *Config) error {
 
 	default:
 		return fmt.Errorf("must specify --lnd.macaroonpath")
+	}
+
+	// Adjust the default lnd macaroon path if only the network is
+	// specified.
+	if cfg.Network != DefaultNetwork &&
+		cfg.Lnd.MacaroonPath == DefaultLndMacaroonPath {
+
+		cfg.Lnd.MacaroonPath = path.Join(
+			DefaultLndDir, "data", "chain", "bitcoin", cfg.Network,
+			defaultLndMacaroon,
+		)
 	}
 
 	return nil

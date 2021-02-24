@@ -510,7 +510,11 @@ func (s *Server) Stop() error {
 	if err != nil {
 		shutdownErr = err
 	}
-	s.grpcServer.GracefulStop()
+
+	// The gRPC server might be nil if started as a subserver.
+	if s.grpcServer != nil {
+		s.grpcServer.GracefulStop()
+	}
 
 	if s.restCancel != nil {
 		s.restCancel()
