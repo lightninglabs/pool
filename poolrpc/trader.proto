@@ -959,6 +959,13 @@ message GetInfoResponse {
     the auctioneer server.
     */
     bool subscribed_to_auctioneer = 13;
+
+    /*
+    Indicates whether the global `--newnodesonly` command line flag or
+    `newnodesonly=true` configuration parameter was set on the Pool trader
+    daemon.
+    */
+    bool new_nodes_only = 14;
 }
 
 message StopDaemonRequest {

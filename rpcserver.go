@@ -2080,6 +2080,7 @@ func (s *rpcServer) GetInfo(ctx context.Context,
 		Version:                Version(),
 		CurrentBlockHeight:     atomic.LoadUint32(&s.bestHeight),
 		SubscribedToAuctioneer: s.auctioneer.IsSubscribed(),
+		NewNodesOnly:           s.server.cfg.NewNodesOnly,
 	}
 
 	// Query our own node's rating. We want the GetInfo call to be available
