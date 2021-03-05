@@ -1231,6 +1231,11 @@
           "type": "boolean",
           "format": "boolean",
           "description": "Indicates whether there is an active subscription connection to the\nauctioneer. This will never be true if there is no active account. If there\nare active accounts, this value represents the network connection status to\nthe auctioneer server."
+        },
+        "new_nodes_only": {
+          "type": "boolean",
+          "format": "boolean",
+          "description": "Indicates whether the global `--newnodesonly` command line flag or\n`newnodesonly=true` configuration parameter was set on the Pool trader\ndaemon."
         }
       }
     },
