@@ -110,6 +110,5 @@ Incrementally _withdrawing_ from an account is also supported. The command is si
 Finally, if you wish to send _all_ your funds elsewhere, it's possible to close your account out before the main expiration period. We can close out the account we created above with the following command:
 
 ```text
-🏔 pool accounts close --trader_key=0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732
+🏔 pool accounts close --trader_key=0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732 --sat_per_vbyte 11
 ```
-
