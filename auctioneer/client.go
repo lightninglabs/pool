@@ -1294,6 +1294,17 @@ func (c *Client) NodeRating(ctx context.Context,
 	}, nil
 }
 
+// MarketInfo returns information about the current number of open orders and
+// open interest in units of all open markets.
+//
+// NOTE: This isn't wrapped in "native" types, as atm we only use this to
+// shuffle information back to the client over our RPC interface.
+func (c *Client) MarketInfo(ctx context.Context) (
+	*auctioneerrpc.MarketInfoResponse, error) {
+
+	return c.client.MarketInfo(ctx, &auctioneerrpc.MarketInfoRequest{})
+}
+
 // MarshallNodeTier maps the node tier integer into the enum used on the RPC
 // interface.
 func MarshallNodeTier(nodeTier order.NodeTier) (auctioneerrpc.NodeTier, error) {

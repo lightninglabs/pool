@@ -966,6 +966,13 @@ message GetInfoResponse {
     daemon.
     */
     bool new_nodes_only = 14;
+
+    /*
+    A map of all markets identified by their lease duration and the current
+    set of statistics such as number of open orders and total units of open
+    interest.
+    */
+    map<uint32, MarketInfo> market_info = 15;
 }
 
 message StopDaemonRequest {

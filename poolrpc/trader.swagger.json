@@ -830,6 +830,18 @@
       ],
       "default": "INVALID_AMT"
     },
+    "MarketInfoTierValue": {
+      "type": "object",
+      "properties": {
+        "tier": {
+          "$ref": "#/definitions/poolrpcNodeTier"
+        },
+        "value": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
     "gatewayruntimeError": {
       "type": "object",
       "properties": {
@@ -1236,6 +1248,13 @@
           "type": "boolean",
           "format": "boolean",
           "description": "Indicates whether the global `--newnodesonly` command line flag or\n`newnodesonly=true` configuration parameter was set on the Pool trader\ndaemon."
+        },
+        "market_info": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/poolrpcMarketInfo"
+          },
+          "description": "A map of all markets identified by their lease duration and the current\nset of statistics such as number of open orders and total units of open\ninterest."
         }
       }
     },
@@ -1459,6 +1478,39 @@
         "storage_name": {
           "type": "string",
           "description": "*\nIdentifying attribute of this token in the store. Currently represents the\nfile name of the token where it's stored on the file system."
+        }
+      }
+    },
+    "poolrpcMarketInfo": {
+      "type": "object",
+      "properties": {
+        "num_asks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MarketInfoTierValue"
+          },
+          "description": "The number of open/pending ask orders per node tier."
+        },
+        "num_bids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MarketInfoTierValue"
+          },
+          "description": "The number of open/pending bid orders per node tier."
+        },
+        "ask_open_interest_units": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MarketInfoTierValue"
+          },
+          "description": "The total number of open/unmatched units in open/pending ask orders per node\ntier."
+        },
+        "bid_open_interest_units": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MarketInfoTierValue"
+          },
+          "description": "The total number of open/unmatched units in open/pending bid orders per node\ntier."
         }
       }
     },
