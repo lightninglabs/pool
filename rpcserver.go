@@ -2108,6 +2108,16 @@ func (s *rpcServer) GetInfo(ctx context.Context,
 		info.NodeRating = ratings.NodeRatings[0]
 	}
 
+	// The same goes for the market info, we don't fail if the call to the
+	// server fails.
+	marketInfo, err := s.auctioneer.MarketInfo(ctx)
+	if err != nil {
+		rpcLog.Warnf("Error querying market info from auctioneer: %v",
+			err)
+	} else {
+		info.MarketInfo = marketInfo.Markets
+	}
+
 	// Tally up account statistics.
 	accounts, err := s.server.db.Accounts()
 	if err != nil {

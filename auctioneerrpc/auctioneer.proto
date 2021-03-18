@@ -37,6 +37,8 @@ service ChannelAuctioneer {
     rpc NodeRating (ServerNodeRatingRequest) returns (ServerNodeRatingResponse);
 
     rpc BatchSnapshots (BatchSnapshotsRequest) returns (BatchSnapshotsResponse);
+
+    rpc MarketInfo (MarketInfoRequest) returns (MarketInfoResponse);
 }
 
 message ReserveAccountRequest {
@@ -1304,4 +1306,38 @@ message BatchSnapshotsRequest {
 message BatchSnapshotsResponse {
     // The list of batches requested.
     repeated BatchSnapshotResponse batches = 1;
+}
+
+message MarketInfoRequest {
+}
+
+message MarketInfo {
+    message TierValue {
+        NodeTier tier = 1;
+        uint32 value = 2;
+    }
+
+    // The number of open/pending ask orders per node tier.
+    repeated TierValue num_asks = 1;
+
+    // The number of open/pending bid orders per node tier.
+    repeated TierValue num_bids = 2;
+
+    /*
+    The total number of open/unmatched units in open/pending ask orders per node
+    tier.
+    */
+    repeated TierValue ask_open_interest_units = 3;
+
+    /*
+    The total number of open/unmatched units in open/pending bid orders per node
+    tier.
+    */
+    repeated TierValue bid_open_interest_units = 4;
+}
+
+message MarketInfoResponse {
+    // A map of all markets identified by their lease duration and the current
+    // set of statistics.
+    map<uint32, MarketInfo> markets = 1;
 }
