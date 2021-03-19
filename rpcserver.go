@@ -28,6 +28,7 @@ import (
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/poolscript"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/chanbackup"
 	lndFunding "github.com/lightningnetwork/lnd/funding"
@@ -191,7 +192,7 @@ func (s *rpcServer) Start() error {
 		return fmt.Errorf("unable to start order manager: %v", err)
 	}
 	if err := s.server.sidecarAcceptor.Start(blockErrChan); err != nil {
-		return fmt.Errorf("unable to start channel acceptor: %v", err)
+		return fmt.Errorf("unable to start sidecar acceptor: %v", err)
 	}
 
 	s.wg.Add(2)
@@ -268,7 +269,7 @@ func (s *rpcServer) Stop() error {
 	s.accountManager.Stop()
 	s.orderManager.Stop()
 	if err := s.auctioneer.Stop(); err != nil {
-		rpcLog.Errorf("Error closing server stream: %v")
+		rpcLog.Errorf("Error closing server stream: %v", err)
 	}
 
 	close(s.quit)
@@ -2167,6 +2168,69 @@ func (s *rpcServer) StopDaemon(_ context.Context,
 	signal.RequestShutdown()
 
 	return &poolrpc.StopDaemonResponse{}, nil
+}
+
+// OfferSidecar is step 1/4 of the sidecar negotiation between the provider
+// (the trader submitting the bid order) and the recipient (the trader
+// receiving the sidecar channel).
+// This step must be run by the provider. The result is a sidecar ticket with
+// an offer to lease a sidecar channel for the recipient. The offer will be
+// signed with the provider's lnd node public key. The ticket returned by this
+// call will have the state "offered".
+func (s *rpcServer) OfferSidecar(ctx context.Context,
+	req *poolrpc.OfferSidecarRequest) (*poolrpc.SidecarTicket, error) {
+
+	// Do some basic sanity checks first.
+	if req.ChannelCapacitySat == 0 {
+		return nil, fmt.Errorf("channel capacity missing")
+	}
+
+	// The funding manager does all the work, including signing and storing
+	// the new ticket.
+	ticket, err := s.server.fundingManager.OfferSidecar(
+		ctx, btcutil.Amount(req.ChannelCapacitySat),
+		btcutil.Amount(req.SelfChanBalance), req.LeaseDurationBlocks,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// We'll return a nice string encoded version of the ticket to the user.
+	ticketStr, err := sidecar.EncodeToString(ticket)
+	if err != nil {
+		return nil, err
+	}
+	return &poolrpc.SidecarTicket{Ticket: ticketStr}, nil
+}
+
+// RegisterSidecarRequest is step 2/4 of the sidecar negotiation between the
+// provider (the trader submitting the bid order) and the recipient (the trader
+// receiving the sidecar channel).
+// This step must be run by the recipient. The result is a sidecar ticket with
+// the recipient's node information and channel funding multisig pubkey filled
+// in. The ticket returned by this call will have the state "registered".
+func (s *rpcServer) RegisterSidecar(ctx context.Context,
+	req *poolrpc.RegisterSidecarRequest) (*poolrpc.SidecarTicket, error) {
+
+	// Parse the ticket from its string encoded representation.
+	ticket, err := sidecar.DecodeString(req.Ticket)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding ticket: %v", err)
+	}
+
+	// The sidecar acceptor will add all required information and add the
+	// ticket to our DB.
+	err = s.server.sidecarAcceptor.RegisterSidecar(ctx, ticket)
+	if err != nil {
+		return nil, err
+	}
+
+	// We'll return a nice string encoded version of the ticket to the user.
+	ticketStr, err := sidecar.EncodeToString(ticket)
+	if err != nil {
+		return nil, err
+	}
+	return &poolrpc.SidecarTicket{Ticket: ticketStr}, nil
 }
 
 // rpcOrderStateToDBState maps the order state as received over the RPC

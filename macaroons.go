@@ -124,6 +124,14 @@ var (
 			Entity: "auction",
 			Action: "read",
 		}},
+		"/poolrpc.Trader/OfferSidecar": {{
+			Entity: "order",
+			Action: "write",
+		}},
+		"/poolrpc.Trader/RegisterSidecar": {{
+			Entity: "order",
+			Action: "write",
+		}},
 	}
 
 	// allPermissions is the list of all existing permissions that exist

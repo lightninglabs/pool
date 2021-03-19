@@ -788,6 +788,72 @@
         ]
       }
     },
+    "/v1/pool/sidecar/offer": {
+      "post": {
+        "summary": "pool: `sidecar offer`\nOfferSidecar is step 1/4 of the sidecar negotiation between the provider\n(the trader submitting the bid order) and the recipient (the trader\nreceiving the sidecar channel).\nThis step must be run by the provider. The result is a sidecar ticket with\nan offer to lease a sidecar channel for the recipient. The offer will be\nsigned with the provider's lnd node public key. The ticket returned by this\ncall will have the state \"offered\".",
+        "operationId": "OfferSidecar",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcSidecarTicket"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/poolrpcOfferSidecarRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/v1/pool/sidecar/register": {
+      "post": {
+        "summary": "pool: `sidecar register`\nRegisterSidecarRequest is step 2/4 of the sidecar negotiation between the\nprovider (the trader submitting the bid order) and the recipient (the trader\nreceiving the sidecar channel).\nThis step must be run by the recipient. The result is a sidecar ticket with\nthe recipient's node information and channel funding multisig pubkey filled\nin. The ticket returned by this call will have the state \"registered\".",
+        "operationId": "RegisterSidecar",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/poolrpcSidecarTicket"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/gatewayruntimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/poolrpcRegisterSidecarRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
     "/v1/pool/stop": {
       "post": {
         "summary": "pool: `stop`\nStop gracefully shuts down the Pool trader daemon.",
@@ -1668,6 +1734,26 @@
       "default": "TIER_DEFAULT",
       "description": " - TIER_DEFAULT: The default node tier. This value will be determined at run-time by the\ncurrent order version.\n - TIER_0: Tier 0, bid with this tier are opting out of the smaller \"higher\nquality\" pool of nodes to match their bids. Nodes in this tier are\nconsidered to have \"no rating\".\n - TIER_1: Tier 1, the \"base\" node tier. Nodes in this tier are shown to have a\nhigher degree of up time and route-ability compared to the rest of the\nnodes in the network. This is the current default node tier when\nsubmitting bid orders."
     },
+    "poolrpcOfferSidecarRequest": {
+      "type": "object",
+      "properties": {
+        "channel_capacity_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The total channel capacity in satoshis. This will be used for the bid\norder's amount and min channel/match size values."
+        },
+        "self_chan_balance": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The number of satoshis that will be pushed to the recipient in the sidecar\nchannel resulting from the bid order submitted by the offering trader\n(=provider). The initial outbound channel balance will be transferred from\nthe provider's pool account (=taker account) to the maker's account to\nreimburse them for the balance they'll effectively be giving away. The\nreimbursement between the recipient of the sidecar channel and the provider\n(=taker) is _not_ part of the protocol and must happen out of band. The\nsidecar protocol simply deducts all fees for the sidecar channel (execution\nfee, lease premium, chain fees, push amount) from the taker's trading\naccount."
+        },
+        "lease_duration_blocks": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The number of blocks the resulting leased channel should be open for."
+        }
+      }
+    },
     "poolrpcOrder": {
       "type": "object",
       "properties": {
@@ -1868,6 +1954,15 @@
         }
       }
     },
+    "poolrpcRegisterSidecarRequest": {
+      "type": "object",
+      "properties": {
+        "ticket": {
+          "type": "string",
+          "description": "The sidecar ticket to register and add the node and channel funding\ninformation to. The ticket must be in the state \"offered\"."
+        }
+      }
+    },
     "poolrpcRenewAccountRequest": {
       "type": "object",
       "properties": {
@@ -1904,6 +1999,15 @@
           "type": "string",
           "format": "byte",
           "description": "The transaction used to renew the expiration of the account."
+        }
+      }
+    },
+    "poolrpcSidecarTicket": {
+      "type": "object",
+      "properties": {
+        "ticket": {
+          "type": "string",
+          "description": "The complete sidecar ticket in its string encoded form which is base64 URL\nencoded, has a human readable prefix ('sidecar...') and a checksum built in.\nThe string encoded version will only be used on the trader side of the API.\nAll requests to the auctioneer expect the ticket to be in its raw, tlv\nencoded byte form."
         }
       }
     },
