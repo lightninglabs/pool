@@ -27,6 +27,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var (
+	// rpcCodeFundingFailed is the error code we send if the channel funding
+	// fails because of a timeout or another problem.
+	rpcCodeFundingFailed = auctioneerrpc.OrderReject_CHANNEL_FUNDING_FAILED
+)
+
 // MatchRejectErr is an error type that is returned from the funding manager if
 // the trader rejects certain orders instead of the whole batch.
 type MatchRejectErr struct {
@@ -396,7 +402,7 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 		defer fundingRejectsMtx.Unlock()
 
 		fundingRejects[nonce] = &auctioneerrpc.OrderReject{
-			ReasonCode: auctioneerrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+			ReasonCode: rpcCodeFundingFailed,
 			Reason:     reason,
 		}
 
@@ -555,6 +561,20 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 		}
 	}
 
+	// We've kicked off all channel open streams. We'll now need to wait for
+	// either completion of the funding process or a timeout.
+	return m.waitForChannelOpen(setupCtx, quit, chanPoints, fundingRejects)
+}
+
+// waitForChannelOpen waits until we get a pending open channel message for each
+// of the channel outpoints provided. If we don't get all of them in time, we'll
+// instead return a reject error with all the orders for which the funding
+// failed.
+func (m *Manager) waitForChannelOpen(ctx context.Context, quit <-chan struct{},
+	chanPoints map[wire.OutPoint]order.Nonce,
+	fundingRejects map[order.Nonce]*auctioneerrpc.OrderReject) (
+	map[wire.OutPoint]*chaninfo.ChannelInfo, error) {
+
 	// Once we've waited for the operations to complete, we'll wait to
 	// receive each channel's pending open notification in order to retrieve
 	// some keys from their SCB we'll need to submit to the auctioneer in
@@ -579,15 +599,18 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 				Index: channel.PendingOpenChannel.OutputIndex,
 			}
 
-		case <-setupCtx.Done():
+		case <-ctx.Done():
 			// One or more of our peers timed out. At this point the
 			// chanPoints map should only contain channels that
 			// failed/timed out. So we can partially reject all of
 			// them.
 			const timeoutErrStr = "timed out waiting for pending " +
 				"open channel notification"
-			for chanPoint, nonce := range chanPoints {
-				partialReject(nonce, timeoutErrStr, chanPoint)
+			for _, nonce := range chanPoints {
+				fundingRejects[nonce] = &auctioneerrpc.OrderReject{
+					ReasonCode: rpcCodeFundingFailed,
+					Reason:     timeoutErrStr,
+				}
 			}
 			return nil, &MatchRejectErr{
 				RejectedOrders: fundingRejects,
@@ -607,7 +630,7 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 		log.Debugf("Retrieving info for channel %v", chanPoint)
 
 		chanInfo, err := chaninfo.GatherChannelInfo(
-			setupCtx, m.LightningClient, m.WalletKit, chanPoint,
+			ctx, m.LightningClient, m.WalletKit, chanPoint,
 		)
 		if err != nil {
 			return nil, err
