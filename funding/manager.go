@@ -512,6 +512,18 @@ func (m *Manager) PrepChannelFunding(batch *order.Batch,
 				continue
 			}
 
+			// If we are the provider for a sidecar ticket, we don't
+			// have to do anything either in this step.
+			ourOrderBid, ourOrderIsBid := ourOrder.(*order.Bid)
+			if ourOrderIsBid && ourOrderBid.SidecarTicket != nil {
+				r := ourOrderBid.SidecarTicket.Recipient
+				if r != nil &&
+					!m.cfg.NodePubKey.IsEqual(r.NodePubKey) {
+
+					continue
+				}
+			}
+
 			// As the bidder, we're the one that needs to make the
 			// connection as we're possibly not reachable from the
 			// outside. Let's kick off the connection now. However
@@ -550,8 +562,7 @@ func (m *Manager) PrepChannelFunding(batch *order.Batch,
 			// phase w/o any issues and accept the incoming channel
 			// from the asker.
 			err := m.registerFundingShim(
-				ourOrder.(*order.Bid), matchedOrder,
-				batch.BatchTX,
+				ourOrderBid, matchedOrder, batch.BatchTX,
 			)
 			if err != nil {
 				return fmt.Errorf("unable to register funding "+
