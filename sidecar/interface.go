@@ -264,3 +264,21 @@ func (t *Ticket) OrderDigest() ([32]byte, error) {
 	}
 	return sha256.Sum256(msg.Bytes()), nil
 }
+
+// Store is the interface a persistent storage must implement for storing and
+// retrieving sidecar tickets.
+type Store interface {
+	// AddSidecar adds a record for the sidecar order to the database.
+	AddSidecar(sidecar *Ticket) error
+
+	// UpdateSidecar updates a sidecar order in the database.
+	UpdateSidecar(sidecar *Ticket) error
+
+	// Sidecar retrieves a specific sidecar by its ID and provider signing
+	// key (offer signature pubkey) or returns ErrNoSidecar if it's not
+	// found.
+	Sidecar(id [8]byte, offerSignPubKey *btcec.PublicKey) (*Ticket, error)
+
+	// Sidecars retrieves all known sidecar orders from the database.
+	Sidecars() ([]*Ticket, error)
+}
