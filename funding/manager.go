@@ -20,6 +20,7 @@ import (
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/routing/route"
+	"github.com/lightningnetwork/lnd/tor"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -232,10 +233,19 @@ func (m *Manager) registerFundingShim(ourOrder order.Order,
 // PrepChannelFunding preps the backing node to either receive or initiate a
 // channel funding based on the items in the order batch.
 func (m *Manager) PrepChannelFunding(batch *order.Batch,
-	traderBehindTor bool, quit <-chan struct{}) error {
+	quit <-chan struct{}) error {
 
 	log.Infof("Batch(%x): preparing channel funding for %v orders",
 		batch.ID[:], len(batch.MatchedOrders))
+
+	// As we need to change our behavior if the node has any Tor addresses,
+	// we'll fetch the current state of our advertised addrs now.
+	nodeInfo, err := m.LightningClient.GetInfo(context.Background())
+	if err != nil {
+		log.Errorf("error in GetInfo: %v", err)
+		return err
+	}
+	traderBehindTor := nodeHasTorAddrs(nodeInfo.Uris)
 
 	// We need to make sure our whole process doesn't take too long overall
 	// so we create a context that is valid for the whole funding step and
@@ -873,4 +883,22 @@ func (m *Manager) rejectFailedConnections(peers map[route.Vertex]struct{},
 	}
 
 	return fundingRejects
+}
+
+// nodeHasTorAddrs returns true if there exists a Tor address amongst the set
+// of active Uris for a node.
+func nodeHasTorAddrs(nodeAddrs []string) bool {
+	for _, nodeAddr := range nodeAddrs {
+		// Obtain the host to determine if this is a Tor address.
+		host, _, err := net.SplitHostPort(nodeAddr)
+		if err != nil {
+			host = nodeAddr
+		}
+
+		if tor.IsOnionHost(host) {
+			return true
+		}
+	}
+
+	return false
 }

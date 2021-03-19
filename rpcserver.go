@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,7 +36,6 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/signal"
-	"github.com/lightningnetwork/lnd/tor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -411,25 +409,10 @@ func (s *rpcServer) handleServerMessage(
 			return s.sendRejectBatch(batch, err)
 		}
 
-		// As we need to change our behavior if the node has any Tor
-		// addresses, we'll fetch the current state of our advertised
-		// addrs now.
-		nodeInfo, err := s.lndServices.Client.GetInfo(
-			context.Background(),
-		)
-		if err != nil {
-			log.Errorf("error in GetInfo: %v", err)
-			return s.sendRejectBatch(
-				batch, fmt.Errorf("internal error"),
-			)
-		}
-
 		// Before we accept the batch, we'll finish preparations on our
 		// end which include applying any order match predicates,
 		// connecting out to peers, and registering funding shim.
-		err = s.server.fundingManager.PrepChannelFunding(
-			batch, nodeHasTorAddrs(nodeInfo.Uris), s.quit,
-		)
+		err = s.server.fundingManager.PrepChannelFunding(batch, s.quit)
 		if err != nil {
 			rpcLog.Warnf("Error preparing channel funding: %v",
 				err)
@@ -2333,24 +2316,6 @@ func dbEventsToRPCEvents(dbEvents []event.Event) ([]*poolrpc.OrderEvent,
 	}
 
 	return rpcEvents, nil
-}
-
-// nodeHasTorAddrs returns true if there exists a Tor address amongst the set
-// of active Uris for a node.
-func nodeHasTorAddrs(nodeAddrs []string) bool {
-	for _, nodeAddr := range nodeAddrs {
-		// Obtain the host to determine if this is a Tor address.
-		host, _, err := net.SplitHostPort(nodeAddr)
-		if err != nil {
-			host = nodeAddr
-		}
-
-		if tor.IsOnionHost(host) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // unmarshallNodeTier maps the RPC node tier enum to the node tier used in

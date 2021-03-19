@@ -335,7 +335,7 @@ func TestFundingManager(t *testing.T) {
 	h.baseClientMock.peerList = map[route.Vertex]string{
 		node1Key: "1.1.1.1",
 	}
-	err = h.mgr.PrepChannelFunding(batch, false, h.quit)
+	err = h.mgr.PrepChannelFunding(batch, h.quit)
 	require.NoError(t, err)
 
 	// Verify we have the expected connections and funding shims registered.
@@ -381,7 +381,7 @@ func TestFundingManager(t *testing.T) {
 	h.lnMock.Channels = append(h.lnMock.Channels, lndclient.ChannelInfo{
 		PubKeyBytes: node1Key,
 	})
-	err = h.mgr.PrepChannelFunding(batch, false, h.quit)
+	err = h.mgr.PrepChannelFunding(batch, h.quit)
 	require.Error(t, err)
 
 	expectedErr := &MatchRejectErr{
@@ -399,7 +399,7 @@ func TestFundingManager(t *testing.T) {
 	// error if the connections to the remote peers couldn't be established.
 	h.mgr.NewNodesOnly = false
 	h.baseClientMock.peerList = make(map[route.Vertex]string)
-	err = h.mgr.PrepChannelFunding(batch, false, h.quit)
+	err = h.mgr.PrepChannelFunding(batch, h.quit)
 	require.Error(t, err)
 
 	expectedErr = &MatchRejectErr{
