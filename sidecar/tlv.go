@@ -19,12 +19,14 @@ const (
 	offerType          tlv.Type = 10
 	capacityType       tlv.Type = 11
 	pushAmtType        tlv.Type = 12
-	signPubKeyType     tlv.Type = 13
-	sigOfferDigestType tlv.Type = 14
+	leaseDurationType  tlv.Type = 13
+	signPubKeyType     tlv.Type = 14
+	sigOfferDigestType tlv.Type = 15
 
-	recipientType      tlv.Type = 20
-	nodePubKeyType     tlv.Type = 21
-	multiSigPubKeyType tlv.Type = 22
+	recipientType        tlv.Type = 20
+	nodePubKeyType       tlv.Type = 21
+	multiSigPubKeyType   tlv.Type = 22
+	multiSigKeyIndexType tlv.Type = 23
 
 	orderType          tlv.Type = 30
 	bidNonceType       tlv.Type = 31
@@ -177,6 +179,9 @@ func serializeOffer(o Offer) ([]byte, error) {
 	tlvRecords := []tlv.Record{
 		tlv.MakePrimitiveRecord(capacityType, &capacity),
 		tlv.MakePrimitiveRecord(pushAmtType, &pushAmt),
+		tlv.MakePrimitiveRecord(
+			leaseDurationType, &o.LeaseDurationBlocks,
+		),
 	}
 
 	if o.SignPubKey != nil {
@@ -206,6 +211,9 @@ func deserializeOffer(offerBytes []byte) (Offer, error) {
 		offerBytes,
 		tlv.MakePrimitiveRecord(capacityType, &capacity),
 		tlv.MakePrimitiveRecord(pushAmtType, &pushAmt),
+		tlv.MakePrimitiveRecord(
+			leaseDurationType, &o.LeaseDurationBlocks,
+		),
 		tlv.MakePrimitiveRecord(signPubKeyType, &o.SignPubKey),
 		tlv.MakeStaticRecord(
 			sigOfferDigestType, &o.SigOfferDigest, 64, ESig, DSig,
@@ -236,6 +244,10 @@ func serializeRecipient(r Recipient) ([]byte, error) {
 		))
 	}
 
+	tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
+		multiSigKeyIndexType, &r.MultiSigKeyIndex,
+	))
+
 	return encodeBytes(tlvRecords...)
 }
 
@@ -247,6 +259,9 @@ func deserializeRecipient(recipientBytes []byte) (Recipient, error) {
 		recipientBytes,
 		tlv.MakePrimitiveRecord(nodePubKeyType, &r.NodePubKey),
 		tlv.MakePrimitiveRecord(multiSigPubKeyType, &r.MultiSigPubKey),
+		tlv.MakePrimitiveRecord(
+			multiSigKeyIndexType, &r.MultiSigKeyIndex,
+		),
 	)
 }
 
