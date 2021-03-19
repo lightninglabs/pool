@@ -178,7 +178,7 @@ func (s *rpcServer) Start() error {
 	if err := s.server.fundingManager.Start(); err != nil {
 		return fmt.Errorf("unable to start funding manager: %v", err)
 	}
-	if err := s.server.channelAcceptor.Start(blockErrChan); err != nil {
+	if err := s.server.sidecarAcceptor.Start(blockErrChan); err != nil {
 		return fmt.Errorf("unable to start channel acceptor: %v", err)
 	}
 
@@ -200,7 +200,7 @@ func (s *rpcServer) Stop() error {
 	if err := s.server.fundingManager.Stop(); err != nil {
 		rpcLog.Errorf("Error stopping funding manager: %v", err)
 	}
-	s.server.channelAcceptor.Stop()
+	s.server.sidecarAcceptor.Stop()
 	s.accountManager.Stop()
 	s.orderManager.Stop()
 	if err := s.auctioneer.Stop(); err != nil {

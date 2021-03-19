@@ -20,12 +20,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const Subsystem = "LLMD"
+const Subsystem = "POOL"
 
 var (
 	logWriter = build.NewRotatingLogWriter()
 	log       = build.NewSubLogger(Subsystem, logWriter.GenSubLogger)
 	rpcLog    = build.NewSubLogger("RPCS", logWriter.GenSubLogger)
+	sdcrLog   = build.NewSubLogger("SDCR", logWriter.GenSubLogger)
 
 	// SupportedSubsystems is a function that returns a list of all
 	// supported logging sub systems.
@@ -35,6 +36,7 @@ var (
 func init() {
 	setSubLogger(Subsystem, log, nil)
 	setSubLogger("RPCS", rpcLog, nil)
+	setSubLogger("SDCR", sdcrLog, nil)
 	addSubLogger(funding.Subsystem, funding.UseLogger)
 	addSubLogger(auctioneer.Subsystem, auctioneer.UseLogger)
 	addSubLogger(order.Subsystem, order.UseLogger)
