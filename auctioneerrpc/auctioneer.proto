@@ -28,6 +28,9 @@ service ChannelAuctioneer {
     rpc SubscribeBatchAuction (stream ClientAuctionMessage)
         returns (stream ServerAuctionMessage);
 
+    rpc SubscribeSidecar (stream ClientAuctionMessage)
+        returns (stream ServerAuctionMessage);
+
     rpc Terms (TermsRequest) returns (TermsResponse);
 
     rpc RelevantBatchSnapshot (RelevantBatchRequest) returns (RelevantBatch);

@@ -103,6 +103,11 @@ type Config struct {
 	// GenUserAgent is a function that generates a complete user agent
 	// string given the incoming request context.
 	GenUserAgent func(context.Context) string
+
+	// ConnectSidecar is a flag indicating that instead of connecting to the
+	// default SubscribeBatchAuction RPC the client should connect to
+	// SubscribeSidecar for getting batch updates.
+	ConnectSidecar bool
 }
 
 // Client performs the client side part of auctions. This interface exists to be
@@ -894,7 +899,11 @@ func (c *Client) connectServerStream(initialBackoff time.Duration,
 	// Now that we know the connection itself is established, we also re-
 	// connect the long-lived stream.
 	ctx, c.streamCancel = context.WithCancel(ctxb)
-	c.serverStream, err = c.client.SubscribeBatchAuction(ctx)
+	if c.cfg.ConnectSidecar {
+		c.serverStream, err = c.client.SubscribeSidecar(ctx)
+	} else {
+		c.serverStream, err = c.client.SubscribeBatchAuction(ctx)
+	}
 	if err != nil {
 		log.Errorf("Subscribing to batch auction failed: %v", err)
 		return err
