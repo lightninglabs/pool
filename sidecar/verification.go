@@ -134,6 +134,57 @@ func SignOrder(ctx context.Context, ticket *Ticket, bidNonce [32]byte,
 	return nil
 }
 
+// VerifyOrder verifies the state of a ticket to be in the ordered state and
+// also makes sure the order signature is valid.
+func VerifyOrder(ctx context.Context, ticket *Ticket,
+	signer lndclient.SignerClient) error {
+
+	// The ticket needs to be in the correct state for us to verify it.
+	if ticket == nil || ticket.State < StateOrdered {
+		return fmt.Errorf("ticket is in invalid state")
+	}
+
+	// The ticket also needs to have a pubkey in the offer and needs to be
+	// signed. We don't need to verify the signature again, the provider
+	// wouldn't sign the order if the offer itself isn't valid.
+	offer := ticket.Offer
+	if offer.SignPubKey == nil || offer.SigOfferDigest == nil {
+		return fmt.Errorf("offer in ticket is not signed")
+	}
+
+	order := ticket.Order
+	if order == nil || order.SigOrderDigest == nil {
+		return fmt.Errorf("order in ticket is not signed")
+	}
+
+	// The nonce shouldn't be empty either.
+	if order.BidNonce == [32]byte{} {
+		return fmt.Errorf("nonce in order part of ticket is empty")
+	}
+
+	var orderPubKeyRaw [33]byte
+	copy(orderPubKeyRaw[:], ticket.Offer.SignPubKey.SerializeCompressed())
+
+	// Make sure the provider's signature over the order is valid.
+	orderDigest, err := ticket.OrderDigest()
+	if err != nil {
+		return fmt.Errorf("error calculating order digest: %v", err)
+	}
+	sigValid, err := signer.VerifyMessage(
+		ctx, orderDigest[:], order.SigOrderDigest.Serialize(),
+		orderPubKeyRaw,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to verify order signature: %v", err)
+	}
+	if !sigValid {
+		return fmt.Errorf("signature not valid for public key %x",
+			orderPubKeyRaw[:])
+	}
+
+	return nil
+}
+
 // CheckOfferParams makes sure the offer parameters of a sidecar ticket are
 // valid and sane.
 func CheckOfferParams(capacity, pushAmt, baseSupplyUnit btcutil.Amount) error {
