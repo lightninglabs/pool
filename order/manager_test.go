@@ -1,11 +1,17 @@
 package order
 
 import (
+	"context"
+	"encoding/hex"
+	"math/big"
 	"testing"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneerrpc"
+	"github.com/lightninglabs/pool/internal/test"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/stretchr/testify/require"
@@ -246,5 +252,156 @@ func TestValidateOrder(t *testing.T) {
 				require.Contains(t, err.Error(), tc.expectedErr)
 			}
 		})
+	}
+}
+
+type mockAccountStore struct {
+	account.Store
+}
+
+// TestPrepareOrderSidecarTicket makes sure that a bid order with a sidecar
+// ticket can be submitted and verified successfully.
+func TestPrepareOrderSidecarTicket(t *testing.T) {
+	t.Parallel()
+
+	mockLightning := test.NewMockLightning()
+	mockSigner := test.NewMockSigner()
+	mgr := NewManager(&ManagerConfig{
+		AcctStore: &mockAccountStore{},
+		Wallet:    test.NewMockWalletKit(),
+		Lightning: mockLightning,
+		Signer:    mockSigner,
+	})
+	require.NoError(t, mgr.Start())
+	defer mgr.Stop()
+
+	acct := &account.Account{
+		Value: btcutil.SatoshiPerBitcoin,
+		TraderKey: &keychain.KeyDescriptor{
+			PubKey: acctKeySmall,
+		},
+	}
+	var acctKey [33]byte
+	copy(acctKey[:], acct.TraderKey.PubKey.SerializeCompressed())
+	bid := &Bid{
+		Kit: newKitFromTemplate(Nonce{0x01}, &Kit{
+			Amt:             5_000_000,
+			State:           StateSubmitted,
+			AcctKey:         acctKey,
+			MaxBatchFeeRate: 1000,
+			LeaseDuration:   2016,
+			MinUnitsMatch:   50,
+		}),
+	}
+
+	testTerms := &terms.AuctioneerTerms{
+		OrderExecBaseFee: 1,
+		OrderExecFeeRate: 100,
+		LeaseDurationBuckets: map[uint32]auctioneerrpc.DurationBucketState{
+			2016: auctioneerrpc.DurationBucketState_MARKET_OPEN,
+		},
+	}
+
+	testSig := &btcec.Signature{
+		R: new(big.Int).SetInt64(44),
+		S: new(big.Int).SetInt64(22),
+	}
+	mockSigner.Signature = testSig.Serialize()
+	ourPubKeyRaw, err := hex.DecodeString(mockLightning.NodePubkey)
+	require.NoError(t, err)
+	ourPubKey, err := btcec.ParsePubKey(ourPubKeyRaw, btcec.S256())
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name        string
+		ticket      *sidecar.Ticket
+		expectedErr string
+	}{{
+		name:        "no ticket",
+		expectedErr: "",
+	}, {
+		name:        "empty ticket",
+		ticket:      &sidecar.Ticket{},
+		expectedErr: "invalid sidecar ticket state",
+	}, {
+		name: "wrong data for state",
+		ticket: &sidecar.Ticket{
+			State: sidecar.StateRegistered,
+		},
+		expectedErr: "invalid sidecar ticket, missing recipient",
+	}, {
+		name: "wrong data for state",
+		ticket: &sidecar.Ticket{
+			State: sidecar.StateRegistered,
+			Recipient: &sidecar.Recipient{
+				NodePubKey:     acctKeySmall,
+				MultiSigPubKey: acctKeySmall,
+			},
+		},
+		expectedErr: "offer in ticket is not signed",
+	}, {
+		name: "good signature, incorrect offer amount",
+		ticket: &sidecar.Ticket{
+			State: sidecar.StateRegistered,
+			Offer: sidecar.Offer{
+				SigOfferDigest: testSig,
+				SignPubKey:     ourPubKey,
+			},
+			Recipient: &sidecar.Recipient{
+				NodePubKey:     acctKeySmall,
+				MultiSigPubKey: acctKeyBig,
+			},
+		},
+		expectedErr: "channel capacity must be positive multiple of",
+	}, {
+		name: "all valid",
+		ticket: &sidecar.Ticket{
+			State: sidecar.StateRegistered,
+			Offer: sidecar.Offer{
+				SigOfferDigest: testSig,
+				SignPubKey:     ourPubKey,
+				Capacity:       5_000_000,
+			},
+			Recipient: &sidecar.Recipient{
+				NodePubKey:     acctKeySmall,
+				MultiSigPubKey: acctKeyBig,
+			},
+		},
+		expectedErr: "",
+	}}
+
+	for _, tc := range testCases {
+		tc := tc
+
+		bid.SidecarTicket = tc.ticket
+		if tc.ticket != nil {
+			digest, err := tc.ticket.OfferDigest()
+			require.NoError(t, err)
+			mockSigner.SignatureMsg = string(digest[:])
+		}
+
+		mgr.cfg.Store = newMockStore()
+		_, err := mgr.PrepareOrder(
+			context.Background(), bid, acct, testTerms,
+		)
+
+		if tc.expectedErr == "" {
+			require.NoError(t, err)
+
+			if tc.ticket != nil {
+				require.NotNil(t, tc.ticket.Order)
+				require.Equal(
+					t, testSig,
+					tc.ticket.Order.SigOrderDigest,
+				)
+				require.Equal(
+					t, [32]byte(bid.nonce),
+					tc.ticket.Order.BidNonce,
+				)
+			}
+		} else {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.expectedErr)
+		}
 	}
 }

@@ -10,8 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -33,6 +36,13 @@ var (
 	// implement the same batch verification version as the server.
 	ErrVersionMismatch = fmt.Errorf("version %d mismatches server version",
 		CurrentBatchVersion)
+
+	// nodeIdentityKeyLoc is the key locator from which the identity key of
+	// an lnd node is derived.
+	nodeIdentityKeyLoc = keychain.KeyLocator{
+		Family: keychain.KeyFamilyNodeKey,
+		Index:  0,
+	}
 )
 
 // ManagerConfig contains all of the required dependencies for the Manager to
@@ -142,30 +152,75 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 		return nil, err
 	}
 
-	// Grab the additional information needed from our local node.
-	nextMultiSigKey, err := m.cfg.Wallet.DeriveNextKey(
-		ctx, int32(keychain.KeyFamilyMultiSig),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("unable to derive "+
-			"multi sig key: %v", err)
-	}
-	order.Details().MultiSigKeyLocator = nextMultiSigKey.KeyLocator
-	var multiSigKey [33]byte
-	copy(multiSigKey[:], nextMultiSigKey.PubKey.SerializeCompressed())
-	info, err := m.cfg.Lightning.GetInfo(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get local node info: %v", err)
-	}
-	nodeAddrs, err := parseNodeUris(info.Uris)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse node uris: %v", err)
+	params := &ServerOrderParams{}
+	bid, isBid := order.(*Bid)
+	isSidecar := isBid && bid.SidecarTicket != nil
+
+	// Using a sidecar ticket with a bid order means we won't be receiving
+	// the channel ourselves and are instead leasing a channel for another
+	// node. Therefore we need to add the other node's identity and multisig
+	// public key in the bid order we send to the auctioneer.
+	if isSidecar {
+		ticket := bid.SidecarTicket
+
+		// Make sure the sidecar ticket is in the correct state. It
+		// needs to have been registered with the recipient's node and
+		// that node's information must be present. If everything checks
+		// out, we add our signature over it since we are now sure that
+		// we have an order nonce set.
+		err := m.validateAndSignTicketForOrder(ctx, ticket, bid)
+		if err != nil {
+			return nil, fmt.Errorf("error validating sidecar "+
+				"ticket: %v", err)
+		}
+
+		copy(
+			params.NodePubkey[:],
+			ticket.Recipient.NodePubKey.SerializeCompressed(),
+		)
+		copy(
+			params.MultiSigKey[:],
+			ticket.Recipient.MultiSigPubKey.SerializeCompressed(),
+		)
+
+		// Most sidecar recipients won't be public nodes and therefore
+		// don't have connectable addresses.
+		//
+		// TODO(guggero): Add addresses to the Receiver part of the
+		// ticket too? Probably won't be used often unless set up with
+		// tor by default.
+		params.Addrs = nil
+	} else {
+		// Grab the additional information needed from our local node.
+		nextMultiSigKey, err := m.cfg.Wallet.DeriveNextKey(
+			ctx, int32(keychain.KeyFamilyMultiSig),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("unable to derive multi sig "+
+				"key: %v", err)
+		}
+		order.Details().MultiSigKeyLocator = nextMultiSigKey.KeyLocator
+		copy(
+			params.MultiSigKey[:],
+			nextMultiSigKey.PubKey.SerializeCompressed(),
+		)
+		info, err := m.cfg.Lightning.GetInfo(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get local node "+
+				"info: %v", err)
+		}
+		params.NodePubkey = info.IdentityPubkey
+		params.Addrs, err = parseNodeUris(info.Uris)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse node uris: %v",
+				err)
+		}
 	}
 
 	// If the order is a ask, then this means they should be an effective
 	// routing node, so we require them to have at least a single
 	// advertised address.
-	if len(nodeAddrs) == 0 && order.Type() == TypeAsk {
+	if len(params.Addrs) == 0 && order.Type() == TypeAsk {
 		return nil, fmt.Errorf("the lnd node must " +
 			"be reachable on clearnet to negotiate channel " +
 			"ask order")
@@ -177,7 +232,7 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 		return nil, fmt.Errorf("could not digest "+
 			"order: %v", err)
 	}
-	rawSig, err := m.cfg.Signer.SignMessage(
+	params.RawSig, err = m.cfg.Signer.SignMessage(
 		ctx, digest[:], acct.TraderKey.KeyLocator,
 	)
 	if err != nil {
@@ -193,12 +248,7 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 			"order: %v", err)
 	}
 
-	return &ServerOrderParams{
-		NodePubkey:  info.IdentityPubkey,
-		Addrs:       nodeAddrs,
-		RawSig:      rawSig,
-		MultiSigKey: multiSigKey,
-	}, nil
+	return params, nil
 }
 
 // validateOrder makes sure an order is formally correct and that the associated
@@ -332,6 +382,59 @@ func (m *Manager) OurNodePubkey() ([33]byte, error) {
 	}
 
 	return m.ourNodeInfo.IdentityPubkey, nil
+}
+
+// validateAndSignTicketForOrder makes sure that the given sidecar ticket is in
+// the correct state for being used in a bid order and has all the necessary
+// information set. We also check that our node initially offered to lease this
+// channel by checking the embedded signature. If everything checks out, we add
+// our signature over the order part to the ticket.
+func (m *Manager) validateAndSignTicketForOrder(ctx context.Context,
+	t *sidecar.Ticket, bid *Bid) error {
+
+	if t.State != sidecar.StateRegistered {
+		return fmt.Errorf("invalid sidecar ticket state: %d", t.State)
+	}
+
+	// In theory a ticket should never be in the "registered" state if the
+	// information in the following checks is missing. But we never know...
+	r := t.Recipient
+	if r == nil || r.NodePubKey == nil || r.MultiSigPubKey == nil {
+		return fmt.Errorf("invalid sidecar ticket, missing recipient " +
+			"information")
+	}
+
+	// Make sure the offer is valid and actually came from us.
+	o := t.Offer
+	if err := sidecar.VerifyOffer(ctx, t, m.cfg.Signer); err != nil {
+		return fmt.Errorf("error verifying sidecar offer: %v", err)
+	}
+
+	ourNodeKeyRaw, err := m.OurNodePubkey()
+	if err != nil {
+		return fmt.Errorf("error getting own node public key: %v", err)
+	}
+	ourNodeKey, err := btcec.ParsePubKey(ourNodeKeyRaw[:], btcec.S256())
+	if err != nil {
+		return fmt.Errorf("error parsing own node public key: %v", err)
+	}
+	if !ourNodeKey.IsEqual(o.SignPubKey) {
+		return fmt.Errorf("invalid sidecar ticket, not offered by us")
+	}
+
+	// The signature is valid! Let's now make sure the offer and the order
+	// parameters actually match.
+	err = sidecar.CheckOfferParamsForOrder(
+		o, bid.Amt, btcutil.Amount(bid.MinUnitsMatch), BaseSupplyUnit,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Everything checks out, let's add our signature to the ticket now.
+	return sidecar.SignOrder(
+		ctx, t, bid.nonce, nodeIdentityKeyLoc, m.cfg.Signer,
+	)
 }
 
 // parseOnionAddr parses an onion address specified in host:port format.
