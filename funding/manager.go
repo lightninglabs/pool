@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
@@ -17,7 +18,9 @@ import (
 	"github.com/lightninglabs/pool/chaninfo"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/routing/route"
 	"github.com/lightningnetwork/lnd/tor"
@@ -25,6 +28,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+)
+
+var (
+	// nodeIdentityKeyLoc is the key locator from which the identity key of
+	// an lnd node is derived.
+	nodeIdentityKeyLoc = keychain.KeyLocator{
+		Family: keychain.KeyFamilyNodeKey,
+		Index:  0,
+	}
 )
 
 // MatchRejectErr is an error type that is returned from the funding manager if
@@ -88,9 +100,15 @@ type Manager struct {
 	// LightningClient is an lndclient wrapped lnrpc client.
 	LightningClient lndclient.LightningClient
 
+	// SignerClient is an lndclient wrapped signrpc client.
+	SignerClient lndclient.SignerClient
+
 	// BaseClient is a raw lnrpc client that implements all methods the
 	// funding manager needs.
 	BaseClient BaseClient
+
+	// NodePubKey is the connected lnd node's identity public key.
+	NodePubKey *btcec.PublicKey
 
 	// NewNodesOnly specifies if the funding manager should only accept
 	// matched orders with channels from new nodes that the connected lnd
@@ -677,6 +695,44 @@ func (m *Manager) RemovePendingBatchArtifacts(
 	}
 
 	return nil
+}
+
+// OfferSidecar creates a sidecar channel offer and embeds it in a new sidecar
+// ticket. The offer is signed with the local lnd's node public key.
+func (m *Manager) OfferSidecar(ctx context.Context, capacity,
+	pushAmt btcutil.Amount, duration uint32) (*sidecar.Ticket, error) {
+
+	// Make sure the capacity and push amounts are sane.
+	err := sidecar.CheckOfferParams(capacity, pushAmt, order.BaseSupplyUnit)
+	if err != nil {
+		return nil, err
+	}
+
+	// So far everything looks good. Let's create the ticket with the offer
+	// now.
+	ticket, err := sidecar.NewTicket(
+		sidecar.VersionDefault, capacity, pushAmt, duration,
+		m.NodePubKey,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error creating sidecar ticket: %v", err)
+	}
+
+	// Let's sign the offer part of the ticket with our node's identity key
+	// now.
+	if err := sidecar.SignOffer(
+		ctx, ticket, nodeIdentityKeyLoc, m.SignerClient,
+	); err != nil {
+		return nil, fmt.Errorf("error signing offer: %v", err)
+	}
+
+	// Let's now store and return the ticket with the signed offer.
+	err = m.DB.AddSidecar(ticket)
+	if err != nil {
+		return nil, fmt.Errorf("error storing sidecar ticket: %v", err)
+	}
+
+	return ticket, nil
 }
 
 // connectToMatchedTrader attempts to connect to a trader that we've had an

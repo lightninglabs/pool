@@ -474,7 +474,9 @@ func (s *Server) setupClient() error {
 		DB:               s.db,
 		WalletKit:        s.lndServices.WalletKit,
 		LightningClient:  s.lndServices.Client,
+		SignerClient:     s.lndServices.Signer,
 		BaseClient:       s.lndClient,
+		NodePubKey:       nodePubKey,
 		BatchStepTimeout: order.DefaultBatchStepTimeout,
 		NewNodesOnly:     s.cfg.NewNodesOnly,
 		PendingOpenChannels: make(
