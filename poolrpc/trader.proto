@@ -146,6 +146,39 @@ service Trader {
     is used as the starting point to go back from.
     */
     rpc BatchSnapshots (BatchSnapshotsRequest) returns (BatchSnapshotsResponse);
+
+    /* pool: `sidecar offer`
+    OfferSidecar is step 1/4 of the sidecar negotiation between the provider
+    (the trader submitting the bid order) and the recipient (the trader
+    receiving the sidecar channel).
+    This step must be run by the provider. The result is a sidecar ticket with
+    an offer to lease a sidecar channel for the recipient. The offer will be
+    signed with the provider's lnd node public key. The ticket returned by this
+    call will have the state "offered".
+    */
+    rpc OfferSidecar (OfferSidecarRequest) returns (SidecarTicket);
+
+    /* pool: `sidecar register`
+    RegisterSidecarRequest is step 2/4 of the sidecar negotiation between the
+    provider (the trader submitting the bid order) and the recipient (the trader
+    receiving the sidecar channel).
+    This step must be run by the recipient. The result is a sidecar ticket with
+    the recipient's node information and channel funding multisig pubkey filled
+    in. The ticket returned by this call will have the state "registered".
+    */
+    rpc RegisterSidecar (RegisterSidecarRequest) returns (SidecarTicket);
+
+    /* pool: `sidecar expect-channel`
+    ExpectSidecarChannel is step 4/4 of the sidecar negotiation between the
+    provider (the trader submitting the bid order) and the recipient (the trader
+    receiving the sidecar channel).
+    This step must be run by the recipient once the provider has submitted the
+    bid order for the sidecar channel. From this point onwards the Pool trader
+    daemon of both the provider as well as the recipient need to be online to
+    receive and react to match making events from the server.
+    */
+    rpc ExpectSidecarChannel (ExpectSidecarChannelRequest)
+        returns (ExpectSidecarChannelResponse);
 }
 
 message InitAccountRequest {
@@ -997,4 +1030,61 @@ message StopDaemonRequest {
 }
 
 message StopDaemonResponse {
+}
+
+message OfferSidecarRequest {
+    /*
+    The total channel capacity in satoshis. This will be used for the bid
+    order's amount and min channel/match size values.
+    */
+    uint64 channel_capacity_sat = 1;
+
+    /*
+    The number of satoshis that will be pushed to the recipient in the sidecar
+    channel resulting from the bid order submitted by the offering trader
+    (=provider). The initial outbound channel balance will be transferred from
+    the provider's pool account (=taker account) to the maker's account to
+    reimburse them for the balance they'll effectively be giving away. The
+    reimbursement between the recipient of the sidecar channel and the provider
+    (=taker) is _not_ part of the protocol and must happen out of band. The
+    sidecar protocol simply deducts all fees for the sidecar channel (execution
+    fee, lease premium, chain fees, push amount) from the taker's trading
+    account.
+    */
+    uint64 self_chan_balance = 2;
+    
+    /*
+    The number of blocks the resulting leased channel should be open for.
+    */
+    uint32 lease_duration_blocks = 3;
+}
+
+message SidecarTicket {
+    /*
+    The complete sidecar ticket in its string encoded form which is base64 URL
+    encoded, has a human readable prefix ('sidecar...') and a checksum built in.
+    The string encoded version will only be used on the trader side of the API.
+    All requests to the auctioneer expect the ticket to be in its raw, tlv
+    encoded byte form.
+    */
+    string ticket = 1;
+}
+
+message RegisterSidecarRequest {
+    /*
+    The sidecar ticket to register and add the node and channel funding
+    information to. The ticket must be in the state "offered".
+    */
+    string ticket = 1;
+}
+
+message ExpectSidecarChannelRequest {
+    /*
+    The sidecar ticket to expect an incoming channel for. The ticket must be in
+    the state "ordered".
+    */
+    string ticket = 1;
+}
+
+message ExpectSidecarChannelResponse {
 }
