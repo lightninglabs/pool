@@ -305,12 +305,15 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 		thawHeight      uint32
 		selfChanBalance btcutil.Amount
 	)
-	if ourOrder.Type() == order.TypeBid {
+	ourOrderBid, ourOrderIsBid := ourOrder.(*order.Bid)
+	ourOrderIsSidecar := ourOrderIsBid && ourOrderBid.SidecarTicket != nil
+
+	if ourOrderIsBid {
 		bidNonce = ourOrder.Nonce()
 		askNonce = matchedOrder.Order.Nonce()
 
-		thawHeight = ourOrder.(*order.Bid).LeaseDuration
-		selfChanBalance = ourOrder.(*order.Bid).SelfChanBalance
+		thawHeight = ourOrderBid.LeaseDuration
+		selfChanBalance = ourOrderBid.SelfChanBalance
 	} else {
 		bidNonce = matchedOrder.Order.Nonce()
 		askNonce = ourOrder.Nonce()
@@ -326,15 +329,30 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 
 	// Next, we'll need to find the location of this channel output on the
 	// funding transaction, so we'll re-compute the funding script from
-	// scratch.
-	ctxb := context.Background()
-	ourKeyLocator := ourOrder.Details().MultiSigKeyLocator
-	ourMultiSigKey, err := m.cfg.WalletKit.DeriveKey(
-		ctxb, &ourKeyLocator,
-	)
-	if err != nil {
-		return nil, [32]byte{}, err
+	// scratch. If we're a taker or otherwise uninvolved in a sidecar order
+	// we have to re-derive our key from the locator.
+	var ourMultiSigKey *keychain.KeyDescriptor
+	if ourOrderIsSidecar && ourOrderBid.SidecarTicket.Recipient != nil {
+		recipient := ourOrderBid.SidecarTicket.Recipient
+		ourMultiSigKey = &keychain.KeyDescriptor{
+			KeyLocator: keychain.KeyLocator{
+				Family: keychain.KeyFamilyMultiSig,
+				Index:  recipient.MultiSigKeyIndex,
+			},
+			PubKey: recipient.MultiSigPubKey,
+		}
+	} else {
+		var err error
+		ctxb := context.Background()
+		ourKeyLocator := ourOrder.Details().MultiSigKeyLocator
+		ourMultiSigKey, err = m.cfg.WalletKit.DeriveKey(
+			ctxb, &ourKeyLocator,
+		)
+		if err != nil {
+			return nil, [32]byte{}, err
+		}
 	}
+
 	_, fundingOutput, err := input.GenFundingPkScript(
 		ourMultiSigKey.PubKey.SerializeCompressed(),
 		matchedOrder.MultiSigKey[:], int64(chanSize),
@@ -367,8 +385,8 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 		LocalKey: &lnrpc.KeyDescriptor{
 			RawKeyBytes: ourMultiSigKey.PubKey.SerializeCompressed(),
 			KeyLoc: &lnrpc.KeyLocator{
-				KeyFamily: int32(ourKeyLocator.Family),
-				KeyIndex:  int32(ourKeyLocator.Index),
+				KeyFamily: int32(ourMultiSigKey.Family),
+				KeyIndex:  int32(ourMultiSigKey.Index),
 			},
 		},
 		RemoteKey:     matchedOrder.MultiSigKey[:],

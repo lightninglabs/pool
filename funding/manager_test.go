@@ -21,6 +21,7 @@ import (
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/internal/test"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -384,7 +385,6 @@ func TestFundingManager(t *testing.T) {
 		},
 		BatchTX: batchTx,
 	}
-	txidHash := batchTx.TxHash()
 	pendingChanID := order.PendingChanKey(ask.Nonce(), bid.Nonce())
 
 	// Make sure the channel preparations work as expected. We expect the
@@ -410,28 +410,15 @@ func TestFundingManager(t *testing.T) {
 	// Validate the shim.
 	shim := h.baseClientMock.fundingShims[pendingChanID]
 	require.NotNil(t, shim)
-	require.Equal(t, uint32(2500), shim.ThawHeight)
-	require.Equal(t, int64(order.SupplyUnit(4).ToSatoshis()), shim.Amt)
-
-	chanPoint := &lnrpc.ChannelPoint{
-		FundingTxid: &lnrpc.ChannelPoint_FundingTxidBytes{
-			FundingTxidBytes: txidHash[:],
-		},
-		OutputIndex: 1,
-	}
-	require.Equal(t, chanPoint, shim.ChanPoint)
-	require.Equal(
-		t, pubKeyBid.SerializeCompressed(), shim.LocalKey.RawKeyBytes,
-	)
-	require.Equal(
-		t, int32(bid.Kit.MultiSigKeyLocator.Family),
-		shim.LocalKey.KeyLoc.KeyFamily,
-	)
-	require.Equal(
-		t, int32(bid.Kit.MultiSigKeyLocator.Index),
-		shim.LocalKey.KeyLoc.KeyIndex,
-	)
-	require.Equal(t, matchedAsk.MultiSigKey[:], shim.RemoteKey)
+	assertFundingShim(
+		t, shim, uint32(2500), int64(order.SupplyUnit(4).ToSatoshis()),
+		batchTx, 1, &keychain.KeyDescriptor{
+			KeyLocator: keychain.KeyLocator{
+				Family: bid.Kit.MultiSigKeyLocator.Family,
+				Index:  bid.Kit.MultiSigKeyLocator.Index,
+			},
+			PubKey: pubKeyBid,
+		}, matchedAsk.MultiSigKey[:])
 
 	// Next, make sure we get a partial reject error if we enable the "new
 	// nodes only" flag and already have a channel with the matched node.
@@ -564,6 +551,136 @@ func callBatchChannelSetup(t *testing.T, h *managerHarness, batch *order.Batch,
 	}
 	require.NoError(t, err)
 	require.Equal(t, 2, len(chanInfo))
+}
+
+// TestDeriveFundingShim makes sure the correct keys are used for creating a
+// funding shim.
+func TestDeriveFundingShim(t *testing.T) {
+	h := newManagerHarness(t)
+	defer h.stop()
+
+	var (
+		bidKeyIndex        int32 = 101
+		sidecarKeyIndex    int32 = 102
+		_, pubKeyAsk             = test.CreateKey(100)
+		_, pubKeyBid             = test.CreateKey(bidKeyIndex)
+		_, pubKeySidecar         = test.CreateKey(sidecarKeyIndex)
+		askNonce                 = order.Nonce{1, 2, 3}
+		bidNonce                 = order.Nonce{3, 2, 1}
+		expectedKeyLocator       = keychain.KeyLocator{
+			Family: 1234,
+			Index:  uint32(bidKeyIndex),
+		}
+		expectedKeyLocatorSidecar = keychain.KeyLocator{
+			Family: keychain.KeyFamilyMultiSig,
+			Index:  uint32(sidecarKeyIndex),
+		}
+		batchTx = &wire.MsgTx{
+			TxOut: []*wire.TxOut{{}},
+		}
+	)
+
+	askKit := order.NewKit(askNonce)
+	matchedAsk := &order.MatchedOrder{
+		Order:       &order.Ask{Kit: *askKit},
+		UnitsFilled: 4,
+	}
+	copy(matchedAsk.MultiSigKey[:], pubKeyAsk.SerializeCompressed())
+
+	// First test is a normal bid where the funding key should be derived
+	// from the wallet
+	bid := &order.Bid{
+		Kit: newKitFromTemplate(bidNonce, &order.Kit{
+			MultiSigKeyLocator: expectedKeyLocator,
+			Units:              4,
+			LeaseDuration:      12345,
+		}),
+	}
+	_, batchTx.TxOut[0], _ = input.GenFundingPkScript(
+		pubKeyBid.SerializeCompressed(),
+		matchedAsk.MultiSigKey[:], int64(4*order.BaseSupplyUnit),
+	)
+	shim, pendingChanID, err := h.mgr.deriveFundingShim(
+		bid, matchedAsk, batchTx,
+	)
+	require.NoError(t, err)
+	require.Equal(t, order.PendingChanKey(askNonce, bidNonce), pendingChanID)
+	require.IsType(t, shim.Shim, &lnrpc.FundingShim_ChanPointShim{})
+
+	expectedKeyDescriptor := &keychain.KeyDescriptor{
+		PubKey:     pubKeyBid,
+		KeyLocator: expectedKeyLocator,
+	}
+	chanPointShim := shim.Shim.(*lnrpc.FundingShim_ChanPointShim)
+	assertFundingShim(
+		t, chanPointShim.ChanPointShim, 12345, 400_000, batchTx, 0,
+		expectedKeyDescriptor, pubKeyAsk.SerializeCompressed(),
+	)
+
+	// And the second test is with a sidecar channel bid.
+	ticket, err := sidecar.NewTicket(
+		sidecar.VersionDefault, 400_000, 0, 12345, pubKeyBid,
+	)
+	require.NoError(t, err)
+	ticket.Recipient = &sidecar.Recipient{
+		MultiSigPubKey:   pubKeySidecar,
+		MultiSigKeyIndex: uint32(sidecarKeyIndex),
+	}
+	bid = &order.Bid{
+		Kit: newKitFromTemplate(bidNonce, &order.Kit{
+			MultiSigKeyLocator: expectedKeyLocator,
+			Units:              4,
+			LeaseDuration:      12345,
+		}),
+		SidecarTicket: ticket,
+	}
+	_, batchTx.TxOut[0], _ = input.GenFundingPkScript(
+		pubKeySidecar.SerializeCompressed(),
+		matchedAsk.MultiSigKey[:], int64(4*order.BaseSupplyUnit),
+	)
+	shim, pendingChanID, err = h.mgr.deriveFundingShim(
+		bid, matchedAsk, batchTx,
+	)
+	require.NoError(t, err)
+	require.Equal(t, order.PendingChanKey(askNonce, bidNonce), pendingChanID)
+	require.IsType(t, shim.Shim, &lnrpc.FundingShim_ChanPointShim{})
+
+	expectedKeyDescriptor = &keychain.KeyDescriptor{
+		PubKey:     pubKeySidecar,
+		KeyLocator: expectedKeyLocatorSidecar,
+	}
+	chanPointShim = shim.Shim.(*lnrpc.FundingShim_ChanPointShim)
+	assertFundingShim(
+		t, chanPointShim.ChanPointShim, 12345, 400_000, batchTx, 0,
+		expectedKeyDescriptor, pubKeyAsk.SerializeCompressed(),
+	)
+}
+
+// assertFundingShim asserts that the funding shim contains the data that we
+// expect.
+func assertFundingShim(t *testing.T, shim *lnrpc.ChanPointShim,
+	thawHeight uint32, amt int64, fundingTx *wire.MsgTx,
+	fundingOutputIndex uint32, localKey *keychain.KeyDescriptor,
+	remoteKey []byte) {
+
+	require.Equal(t, thawHeight, shim.ThawHeight)
+	require.Equal(t, amt, shim.Amt)
+
+	fundingTxHash := fundingTx.TxHash()
+	chanPoint := &lnrpc.ChannelPoint{
+		FundingTxid: &lnrpc.ChannelPoint_FundingTxidBytes{
+			FundingTxidBytes: fundingTxHash[:],
+		},
+		OutputIndex: fundingOutputIndex,
+	}
+	require.Equal(t, chanPoint, shim.ChanPoint)
+	require.Equal(
+		t, localKey.PubKey.SerializeCompressed(),
+		shim.LocalKey.RawKeyBytes,
+	)
+	require.Equal(t, int32(localKey.Family), shim.LocalKey.KeyLoc.KeyFamily)
+	require.Equal(t, int32(localKey.Index), shim.LocalKey.KeyLoc.KeyIndex)
+	require.Equal(t, remoteKey, shim.RemoteKey)
 }
 
 // TestWaitForPeerConnections tests the function that waits for peer connections

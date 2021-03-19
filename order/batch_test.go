@@ -5,7 +5,12 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/lightninglabs/pool/internal/test"
 	"github.com/lightninglabs/pool/poolscript"
+	"github.com/lightninglabs/pool/sidecar"
+	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,4 +49,80 @@ func TestDecrementingBatchIDs(t *testing.T) {
 	// We don't use require.Len() here, otherwise if this ever fails, the
 	// library prints the whole result which is huuuuuge.
 	require.Equal(t, MaxBatchIDHistoryLookup, len(ids))
+}
+
+// TestChannelOutput makes sure the correct keys are used for looking up an
+// expected channel output.
+func TestChannelOutput(t *testing.T) {
+	var (
+		bidKeyIndex      int32 = 101
+		sidecarKeyIndex  int32 = 102
+		_, pubKeyAsk           = test.CreateKey(100)
+		_, pubKeyBid           = test.CreateKey(bidKeyIndex)
+		_, pubKeySidecar       = test.CreateKey(sidecarKeyIndex)
+		mockWallet             = test.NewMockWalletKit()
+		askNonce               = Nonce{1, 2, 3}
+		bidNonce               = Nonce{3, 2, 1}
+		batchTx                = &wire.MsgTx{
+			TxOut: []*wire.TxOut{{}},
+		}
+	)
+
+	askKit := NewKit(askNonce)
+	matchedAsk := &MatchedOrder{
+		Order:       &Ask{Kit: *askKit},
+		UnitsFilled: 4,
+	}
+	copy(matchedAsk.MultiSigKey[:], pubKeyAsk.SerializeCompressed())
+
+	// First test is a normal bid where the funding key should be derived
+	// from the wallet
+	bid := &Bid{
+		Kit: newKitFromTemplate(bidNonce, &Kit{
+			MultiSigKeyLocator: keychain.KeyLocator{
+				Family: 1234,
+				Index:  uint32(bidKeyIndex),
+			},
+			Units:         4,
+			LeaseDuration: 12345,
+		}),
+	}
+	_, batchTx.TxOut[0], _ = input.GenFundingPkScript(
+		pubKeyBid.SerializeCompressed(),
+		matchedAsk.MultiSigKey[:], int64(4*BaseSupplyUnit),
+	)
+	out, idx, err := ChannelOutput(batchTx, mockWallet, bid, matchedAsk)
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), idx)
+	require.Equal(t, batchTx.TxOut[0], out)
+
+	// And the second test is with a sidecar channel bid.
+	ticket, err := sidecar.NewTicket(
+		sidecar.VersionDefault, 400_000, 0, 12345, pubKeyBid,
+	)
+	require.NoError(t, err)
+	ticket.Recipient = &sidecar.Recipient{
+		MultiSigPubKey:   pubKeySidecar,
+		MultiSigKeyIndex: uint32(sidecarKeyIndex),
+	}
+	bid = &Bid{
+		Kit: newKitFromTemplate(bidNonce, &Kit{
+			MultiSigKeyLocator: keychain.KeyLocator{
+				Family: 1234,
+				Index:  uint32(bidKeyIndex),
+			},
+			Units:         4,
+			LeaseDuration: 12345,
+		}),
+		SidecarTicket: ticket,
+	}
+	_, batchTx.TxOut[0], _ = input.GenFundingPkScript(
+		pubKeySidecar.SerializeCompressed(),
+		matchedAsk.MultiSigKey[:], int64(4*BaseSupplyUnit),
+	)
+
+	out, idx, err = ChannelOutput(batchTx, mockWallet, bid, matchedAsk)
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), idx)
+	require.Equal(t, batchTx.TxOut[0], out)
 }
