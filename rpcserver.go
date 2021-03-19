@@ -1587,38 +1587,9 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 		rpcSigs[key] = sig.Serialize()
 	}
 
-	rpcChannelInfos := make(map[string]*auctioneerrpc.ChannelInfo, len(chanInfos))
-	for chanPoint, chanInfo := range chanInfos {
-		var channelType auctioneerrpc.ChannelType
-		switch chanInfo.Version {
-		case chanbackup.TweaklessCommitVersion:
-			channelType = auctioneerrpc.ChannelType_TWEAKLESS
-
-		// The AnchorsCommitVersion was never widely deployed (at least
-		// in mainnet) because the lnd version that included it guarded
-		// the anchor channels behind a config flag. Also, the two
-		// anchor versions only differ in the fee negotiation and not
-		// the commitment TX format, so we don't need to distinguish
-		// between them for our purpose.
-		case chanbackup.AnchorsCommitVersion,
-			chanbackup.AnchorsZeroFeeHtlcTxCommitVersion:
-
-			channelType = auctioneerrpc.ChannelType_ANCHORS
-		default:
-			return fmt.Errorf("unknown channel type: %v",
-				chanInfo.Version)
-		}
-		rpcChannelInfos[chanPoint.String()] = &auctioneerrpc.ChannelInfo{
-			Type: channelType,
-			LocalNodeKey: chanInfo.LocalNodeKey.
-				SerializeCompressed(),
-			RemoteNodeKey: chanInfo.RemoteNodeKey.
-				SerializeCompressed(),
-			LocalPaymentBasePoint: chanInfo.LocalPaymentBasePoint.
-				SerializeCompressed(),
-			RemotePaymentBasePoint: chanInfo.RemotePaymentBasePoint.
-				SerializeCompressed(),
-		}
+	rpcChannelInfos, err := marshallChannelInfo(chanInfos)
+	if err != nil {
+		return fmt.Errorf("error marshalling channel info: %v", err)
 	}
 
 	rpcLog.Infof("Sending OrderMatchSign for batch %x", batch.ID[:])
@@ -2342,4 +2313,48 @@ func unmarshallNodeTier(nodeTier auctioneerrpc.NodeTier) (order.NodeTier,
 	default:
 		return 0, fmt.Errorf("unknown node tier: %v", nodeTier)
 	}
+}
+
+// marshallChannelInfo turns the given channel information map into its RPC
+// counterpart.
+func marshallChannelInfo(chanInfos map[wire.OutPoint]*chaninfo.ChannelInfo) (
+	map[string]*auctioneerrpc.ChannelInfo, error) {
+
+	rpcChannelInfos := make(
+		map[string]*auctioneerrpc.ChannelInfo, len(chanInfos),
+	)
+	for chanPoint, chanInfo := range chanInfos {
+		var channelType auctioneerrpc.ChannelType
+		switch chanInfo.Version {
+		case chanbackup.TweaklessCommitVersion:
+			channelType = auctioneerrpc.ChannelType_TWEAKLESS
+
+		// The AnchorsCommitVersion was never widely deployed (at least
+		// in mainnet) because the lnd version that included it guarded
+		// the anchor channels behind a config flag. Also, the two
+		// anchor versions only differ in the fee negotiation and not
+		// the commitment TX format, so we don't need to distinguish
+		// between them for our purpose.
+		case chanbackup.AnchorsCommitVersion,
+			chanbackup.AnchorsZeroFeeHtlcTxCommitVersion:
+
+			channelType = auctioneerrpc.ChannelType_ANCHORS
+		default:
+			return nil, fmt.Errorf("unknown channel type: %v",
+				chanInfo.Version)
+		}
+		rpcChannelInfos[chanPoint.String()] = &auctioneerrpc.ChannelInfo{
+			Type: channelType,
+			LocalNodeKey: chanInfo.LocalNodeKey.
+				SerializeCompressed(),
+			RemoteNodeKey: chanInfo.RemoteNodeKey.
+				SerializeCompressed(),
+			LocalPaymentBasePoint: chanInfo.LocalPaymentBasePoint.
+				SerializeCompressed(),
+			RemotePaymentBasePoint: chanInfo.RemotePaymentBasePoint.
+				SerializeCompressed(),
+		}
+	}
+
+	return rpcChannelInfos, nil
 }
