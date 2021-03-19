@@ -219,6 +219,14 @@ func (m *Manager) validateOrder(order Order, acct *account.Account,
 			chainfee.FeePerKwFloor)
 	}
 
+	// Check all conditions that come with the use of the self chan balance.
+	bid, isBid := order.(*Bid)
+	if isBid && bid.SelfChanBalance > 0 {
+		if err := bid.ValidateSelfChanBalance(); err != nil {
+			return err
+		}
+	}
+
 	// Get all existing orders.
 	dbOrders, err := m.cfg.Store.GetOrders()
 	if err != nil {

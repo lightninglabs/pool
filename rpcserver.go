@@ -1152,8 +1152,9 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		}
 
 		o = &order.Bid{
-			Kit:         *kit,
-			MinNodeTier: nodeTier,
+			Kit:             *kit,
+			MinNodeTier:     nodeTier,
+			SelfChanBalance: btcutil.Amount(b.SelfChanBalance),
 		}
 
 	default:
@@ -1374,6 +1375,7 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 				LeaseDurationBlocks: dbDetails.LeaseDuration,
 				Version:             uint32(o.Version),
 				MinNodeTier:         nodeTier,
+				SelfChanBalance:     uint64(o.SelfChanBalance),
 			}
 			bids = append(bids, rpcBid)
 
