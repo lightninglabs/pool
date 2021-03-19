@@ -105,6 +105,11 @@ type Manager struct {
 	// BatchStepTimeout is the timeout the manager uses when executing a
 	// single batch step.
 	BatchStepTimeout time.Duration
+
+	// NotifyShimCreated is a function that should be called whenever a
+	// funding shim is created for a bid order where we expect an incoming
+	// channel at any moment.
+	NotifyShimCreated func(ourBid *order.Bid, pendingChanID [32]byte)
 }
 
 // deriveFundingShim generates the proper funding shim that should be used by
@@ -112,7 +117,7 @@ type Manager struct {
 // funding transaction.
 func (m *Manager) deriveFundingShim(ourOrder order.Order,
 	matchedOrder *order.MatchedOrder,
-	batchTx *wire.MsgTx) (*lnrpc.FundingShim, error) {
+	batchTx *wire.MsgTx) (*lnrpc.FundingShim, [32]byte, error) {
 
 	log.Infof("Registering funding shim for Order(type=%v, amt=%v, "+
 		"nonce=%v", ourOrder.Type(),
@@ -154,14 +159,14 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 		ctxb, &ourKeyLocator,
 	)
 	if err != nil {
-		return nil, err
+		return nil, [32]byte{}, err
 	}
 	_, fundingOutput, err := input.GenFundingPkScript(
 		ourMultiSigKey.PubKey.SerializeCompressed(),
 		matchedOrder.MultiSigKey[:], int64(chanSize),
 	)
 	if err != nil {
-		return nil, err
+		return nil, [32]byte{}, err
 	}
 
 	// Now that we have the funding script, we'll find the output index
@@ -201,18 +206,20 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 		Shim: &lnrpc.FundingShim_ChanPointShim{
 			ChanPointShim: chanPointShim,
 		},
-	}, nil
+	}, pendingChanID, nil
 }
 
 // registerFundingShim is used when we're on the taker (our bid was executed)
 // side of a new matched order. To prepare ourselves for their incoming funding
 // request, we'll register a shim with all the expected parameters.
-func (m *Manager) registerFundingShim(ourOrder order.Order,
+func (m *Manager) registerFundingShim(ourBid *order.Bid,
 	matchedOrder *order.MatchedOrder, batchTx *wire.MsgTx) error {
 
 	ctxb := context.Background()
 
-	fundingShim, err := m.deriveFundingShim(ourOrder, matchedOrder, batchTx)
+	fundingShim, pendingChanID, err := m.deriveFundingShim(
+		ourBid, matchedOrder, batchTx,
+	)
 	if err != nil {
 		return err
 	}
@@ -225,6 +232,13 @@ func (m *Manager) registerFundingShim(ourOrder order.Order,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to register funding shim: %v", err)
+	}
+
+	// In case there is a self chan balance involved, we need our channel
+	// acceptor to be aware of the incoming order so it can verify the push
+	// amount accordingly.
+	if m.NotifyShimCreated != nil {
+		m.NotifyShimCreated(ourBid, pendingChanID)
 	}
 
 	return nil
@@ -344,7 +358,8 @@ func (m *Manager) PrepChannelFunding(batch *order.Batch,
 			// phase w/o any issues and accept the incoming channel
 			// from the asker.
 			err := m.registerFundingShim(
-				ourOrder, matchedOrder, batch.BatchTX,
+				ourOrder.(*order.Bid), matchedOrder,
+				batch.BatchTX,
 			)
 			if err != nil {
 				return fmt.Errorf("unable to register funding "+
@@ -415,7 +430,7 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 		// order, and complete the funding flow for each one in which
 		// our order was the ask.
 		for _, matchedOrder := range matchedOrders {
-			fundingShim, err := m.deriveFundingShim(
+			fundingShim, _, err := m.deriveFundingShim(
 				ourOrder, matchedOrder, batch.BatchTX,
 			)
 			if err != nil {
