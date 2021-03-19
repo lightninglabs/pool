@@ -2,14 +2,17 @@ package funding
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
@@ -240,6 +243,7 @@ type managerHarness struct {
 	quit           chan struct{}
 	lnMock         *test.MockLightning
 	baseClientMock *fundingBaseClientMock
+	signerMock     *test.MockSigner
 	mgr            *Manager
 }
 
@@ -256,6 +260,7 @@ func newManagerHarness(t *testing.T) *managerHarness {
 	quit := make(chan struct{})
 	lightningClient := test.NewMockLightning()
 	walletKitClient := test.NewMockWalletKit()
+	signerClient := test.NewMockSigner()
 	baseClientMock := &fundingBaseClientMock{
 		lightningClient: lightningClient,
 		fundingShims:    make(map[[32]byte]*lnrpc.ChanPointShim),
@@ -266,10 +271,16 @@ func newManagerHarness(t *testing.T) *managerHarness {
 		quit:            quit,
 	}
 	mgr := NewManager(&ManagerConfig{
-		DB:               db,
-		WalletKit:        walletKitClient,
-		LightningClient:  lightningClient,
-		BaseClient:       baseClientMock,
+		DB:              db,
+		WalletKit:       walletKitClient,
+		LightningClient: lightningClient,
+		BaseClient:      baseClientMock,
+		SignerClient:    signerClient,
+		NodePubKey: &btcec.PublicKey{
+			Curve: btcec.S256(),
+			X:     new(big.Int),
+			Y:     new(big.Int),
+		},
 		NewNodesOnly:     true,
 		BatchStepTimeout: 400 * time.Millisecond,
 	})
@@ -284,6 +295,7 @@ func newManagerHarness(t *testing.T) *managerHarness {
 		quit:           quit,
 		lnMock:         lightningClient,
 		baseClientMock: baseClientMock,
+		signerMock:     signerClient,
 		mgr:            mgr,
 	}
 }
@@ -634,6 +646,80 @@ func TestWaitForPeerConnections(t *testing.T) {
 	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, fakeBatch)
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
+}
+
+// TestOfferSidecarValidation checks the validation logic in the sidecar
+// offering process.
+func TestOfferSidecarValidation(t *testing.T) {
+	h := newManagerHarness(t)
+	defer h.stop()
+
+	negativeCases := []struct {
+		name        string
+		capacity    btcutil.Amount
+		pushAmt     btcutil.Amount
+		expectedErr string
+	}{{
+		name:        "empty capacity",
+		expectedErr: "channel capacity must be positive multiple of",
+	}, {
+		name:        "invalid capacity",
+		capacity:    123,
+		expectedErr: "channel capacity must be positive multiple of",
+	}, {
+		name:     "invalid push amount",
+		capacity: 100000,
+		pushAmt:  100001,
+		expectedErr: "self channel balance must be smaller than " +
+			"or equal to capacity",
+	}}
+	for _, testCase := range negativeCases {
+		_, err := h.mgr.OfferSidecar(
+			context.Background(), testCase.capacity,
+			testCase.pushAmt, 2016,
+		)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), testCase.expectedErr)
+	}
+}
+
+// TestOfferSidecar makes sure sidecar offers can be created and signed with the
+// lnd node's identity key.
+func TestOfferSidecar(t *testing.T) {
+	h := newManagerHarness(t)
+	defer h.stop()
+
+	// We'll need a formally valid signature to pass the parsing. So we'll
+	// just create a dummy signature from a random key pair.
+	privKey, err := btcec.NewPrivateKey(btcec.S256())
+	require.NoError(t, err)
+	hash := sha256.New()
+	_, _ = hash.Write([]byte("foo"))
+	digest := hash.Sum(nil)
+	sig, err := privKey.Sign(digest)
+	require.NoError(t, err)
+
+	h.mgr.cfg.NodePubKey = privKey.PubKey()
+	h.signerMock.Signature = sig.Serialize()
+	var nodeKeyRaw [33]byte
+	copy(nodeKeyRaw[:], privKey.PubKey().SerializeCompressed())
+
+	// Let's create our offer now.
+	capacity, pushAmt := btcutil.Amount(100_000), btcutil.Amount(40_000)
+	ticket, err := h.mgr.OfferSidecar(
+		context.Background(), capacity, pushAmt, 2016,
+	)
+	require.NoError(t, err)
+
+	require.Equal(t, capacity, ticket.Offer.Capacity)
+	require.Equal(t, pushAmt, ticket.Offer.PushAmt)
+	require.Equal(t, privKey.PubKey(), ticket.Offer.SignPubKey)
+	require.Equal(t, sig, ticket.Offer.SigOfferDigest)
+
+	// Make sure the DB has the exact same ticket now.
+	dbTicket, err := h.db.Sidecar(ticket.ID, privKey.PubKey())
+	require.NoError(t, err)
+	require.Equal(t, ticket, dbTicket)
 }
 
 func newKitFromTemplate(nonce order.Nonce, tpl *order.Kit) order.Kit {
