@@ -889,10 +889,20 @@ message ServerBid {
     uint32 version = 4;
 
     /*
-    The minium node tier this order should be matched with. Only asks backed by
+    The minimum node tier this order should be matched with. Only asks backed by
     a node this tier or higher will be eligible for matching with this bid.
     */
     NodeTier min_node_tier = 5;
+    
+    /*
+    Give the incoming channel that results from this bid being matched an
+    initial outbound balance by adding additional funds from the taker's account
+    into the channel. As a simplification for the execution protocol and the
+    channel reserve calculations, the self_chan_balance can be at most the same
+    as the order amount and the min_chan_amt must be set to the full order
+    amount.
+    */
+    uint64 self_chan_balance = 6;
 }
 
 message ServerAsk {
