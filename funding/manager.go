@@ -618,6 +618,17 @@ func (m *Manager) BatchChannelSetup(
 			return nil, err
 		}
 
+		bid, orderIsBid := ourOrder.(*order.Bid)
+
+		// If our order is a sidecar channel, we don't need to do
+		// anything at all in this step. The channel will be opened to
+		// another node and we don't need to wait for it here. If we are
+		// the receiver of the sidecar channel, this code won't be hit
+		// as that's separated out into the ChannelAcceptor type.
+		if orderIsBid && bid.SidecarTicket != nil {
+			continue
+		}
+
 		// We'll obtain the expected channel point for each matched
 		// order, and complete the funding flow for each one in which
 		// our order was the ask.
@@ -644,7 +655,6 @@ func (m *Manager) BatchChannelSetup(
 			// anything, as we should've already connected and
 			// registered the funding shim during the prior phase.
 			// The asker is going to open the channel.
-			orderIsBid := ourOrder.Type() == order.TypeBid
 			if orderIsBid {
 				continue
 			}
@@ -745,6 +755,16 @@ func (m *Manager) BatchChannelSetup(
 			return nil, err
 		default:
 		}
+	}
+
+	// If the only order that we were involved in is a sidecar channel and
+	// we are the provider, not the ultimate recipient, then there's nothing
+	// to wait for since the channel is going to be opened to another node.
+	if len(chanPoints) == 0 {
+		log.Debugf("Don't need to wait for channel events, only " +
+			"sidecar channels matched")
+
+		return nil, nil
 	}
 
 	// We've kicked off all channel open streams. We'll now need to wait for
