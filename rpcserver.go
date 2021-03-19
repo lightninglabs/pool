@@ -430,6 +430,18 @@ func (s *rpcServer) handleServerMessage(
 			rpcLog.Errorf("Unable to store order events: %v", err)
 		}
 
+		// If we were the provider for any sidecar channels, we want to
+		// update our own state of the tickets to complete now.
+		for ourOrderNonce := range batch.MatchedOrders {
+			if err := s.setTicketStateForOrder(
+				sidecar.StateCompleted, ourOrderNonce,
+			); err != nil {
+				rpcLog.Errorf("Unable to update our sidecar "+
+					"ticket after completing batch: %v",
+					err)
+			}
+		}
+
 		// Accounts that were updated in the batch need to start new
 		// confirmation watchers, now that we expect a batch TX to be
 		// published.
@@ -1387,6 +1399,14 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 		return nil, err
 	}
 
+	// If this order was for a sidecar ticket, we also want to cancel the
+	// ticket itself since it will never be completed anyway.
+	err = s.setTicketStateForOrder(sidecar.StateCanceled, nonce)
+	if err != nil {
+		return nil, fmt.Errorf("error updating our sidecar ticket "+
+			"after canceling order: %v", err)
+	}
+
 	return &poolrpc.CancelOrderResponse{}, nil
 }
 
@@ -2102,6 +2122,32 @@ func (s *rpcServer) StopDaemon(_ context.Context,
 	signal.RequestShutdown()
 
 	return &poolrpc.StopDaemonResponse{}, nil
+}
+
+// setTicketStateForOrder updates the sidecar ticket state we have for a given
+// order in our local database to the new state.
+func (s *rpcServer) setTicketStateForOrder(newState sidecar.State,
+	nonce order.Nonce) error {
+
+	tickets, err := s.server.db.Sidecars()
+	if err != nil {
+		return fmt.Errorf("error reading sidecar tickets: %v", err)
+	}
+
+	for _, ticket := range tickets {
+		if ticket.Order == nil || ticket.Order.BidNonce != nonce {
+			continue
+		}
+
+		ticket.State = newState
+		if err := s.server.db.UpdateSidecar(ticket); err != nil {
+			return fmt.Errorf("error updating sidecar ticket "+
+				"with ID %x to state %d: %v", ticket.ID[:],
+				newState, err)
+		}
+	}
+
+	return nil
 }
 
 // rpcOrderStateToDBState maps the order state as received over the RPC
