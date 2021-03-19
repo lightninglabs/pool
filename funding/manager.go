@@ -26,17 +26,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var (
-	// DefaultBatchStepTimeout is the default time we allow an action that
-	// blocks the batch conversation (like peer connection establishment or
-	// channel open) to take. If any action takes longer, we might reject
-	// the order from that slow peer. This value SHOULD be lower than the
-	// defaultMsgTimeout on the server side otherwise nodes might get kicked
-	// out of the match making process for timing out even though it was
-	// their peer's fault.
-	DefaultBatchStepTimeout = 15 * time.Second
-)
-
 // MatchRejectErr is an error type that is returned from the funding manager if
 // the trader rejects certain orders instead of the whole batch.
 type MatchRejectErr struct {

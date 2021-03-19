@@ -462,7 +462,7 @@ func (s *Server) setupClient() error {
 		WalletKit:        s.lndServices.WalletKit,
 		LightningClient:  s.lndServices.Client,
 		BaseClient:       s.lndClient,
-		BatchStepTimeout: funding.DefaultBatchStepTimeout,
+		BatchStepTimeout: order.DefaultBatchStepTimeout,
 		NewNodesOnly:     s.cfg.NewNodesOnly,
 		PendingOpenChannels: make(
 			chan *lnrpc.ChannelEventUpdate_PendingOpenChannel,

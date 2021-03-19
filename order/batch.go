@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
@@ -25,6 +26,17 @@ const (
 	// ever have more than that many batches, we need to handle them in
 	// multiple steps anyway.
 	MaxBatchIDHistoryLookup = 10_000
+)
+
+var (
+	// DefaultBatchStepTimeout is the default time we allow an action that
+	// blocks the batch conversation (like peer connection establishment or
+	// channel open) to take. If any action takes longer, we might reject
+	// the order from that slow peer. This value SHOULD be lower than the
+	// defaultMsgTimeout on the server side otherwise nodes might get kicked
+	// out of the match making process for timing out even though it was
+	// their peer's fault.
+	DefaultBatchStepTimeout = 15 * time.Second
 )
 
 // BatchVersion is the type for the batch verification protocol.
