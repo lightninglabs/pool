@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/internal/test"
 	"github.com/lightninglabs/pool/sidecar"
@@ -51,6 +52,7 @@ func TestRegisterSidecar(t *testing.T) {
 
 	acceptor := NewSidecarAcceptor(
 		nil, mockSigner, mockWallet, nil, ourNodePubKey,
+		auctioneer.Config{},
 	)
 
 	existingTicket, err := sidecar.NewTicket(

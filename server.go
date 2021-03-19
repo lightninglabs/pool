@@ -499,12 +499,16 @@ func (s *Server) setupClient() error {
 		},
 	}
 
-	// Create the acceptors for receiving sidecar channels.
+	// Create the acceptors for receiving sidecar channels. We need to
+	// create a copy of the auctioneer client configuration because the
+	// acceptor is going to overwrite some of its values.
+	clientCfgCopy := *clientCfg
 	s.sidecarAcceptor = NewSidecarAcceptor(
 		s.db, s.lndServices.Signer, s.lndServices.WalletKit,
-		channelAcceptor, nodePubKey,
+		channelAcceptor, nodePubKey, clientCfgCopy,
 	)
 
+	// Create an instance of the auctioneer client library.
 	s.AuctioneerClient, err = auctioneer.NewClient(clientCfg)
 	if err != nil {
 		return err

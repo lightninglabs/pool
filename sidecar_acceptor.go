@@ -7,6 +7,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -32,6 +33,9 @@ type SidecarAcceptor struct {
 	nodePubKey *btcec.PublicKey
 	acceptor   *ChannelAcceptor
 
+	clientCfg *auctioneer.Config
+	client    *auctioneer.Client
+
 	quit chan struct{}
 	wg   sync.WaitGroup
 }
@@ -39,7 +43,10 @@ type SidecarAcceptor struct {
 // NewSidecarAcceptor creates a new sidecar acceptor.
 func NewSidecarAcceptor(store sidecar.Store, signer lndclient.SignerClient,
 	wallet lndclient.WalletKitClient, acceptor *ChannelAcceptor,
-	nodePubKey *btcec.PublicKey) *SidecarAcceptor {
+	nodePubKey *btcec.PublicKey,
+	clientCfg auctioneer.Config) *SidecarAcceptor {
+
+	clientCfg.ConnectSidecar = true
 
 	return &SidecarAcceptor{
 		store:      store,
@@ -47,21 +54,42 @@ func NewSidecarAcceptor(store sidecar.Store, signer lndclient.SignerClient,
 		wallet:     wallet,
 		nodePubKey: nodePubKey,
 		acceptor:   acceptor,
+		clientCfg:  &clientCfg,
 		quit:       make(chan struct{}),
 	}
 }
 
 // Start starts the sidecar acceptor.
 func (a *SidecarAcceptor) Start(errChan chan error) error {
-	return a.acceptor.Start(errChan)
+	var err error
+	a.client, err = auctioneer.NewClient(a.clientCfg)
+	if err != nil {
+		return fmt.Errorf("error creating auctioneer client: %v", err)
+	}
+	if err := a.client.Start(); err != nil {
+		return fmt.Errorf("error starting auctioneer client: %v", err)
+	}
+	if err := a.acceptor.Start(errChan); err != nil {
+		return fmt.Errorf("error starting channel acceptor: %v", err)
+	}
+
+	return nil
 }
 
 // Stop stops the sidecar acceptor.
-func (a *SidecarAcceptor) Stop() {
+func (a *SidecarAcceptor) Stop() error {
+	var returnErr error
+	if err := a.client.Stop(); err != nil {
+		sdcrLog.Errorf("Error stopping auctioneer client: %v", err)
+		returnErr = err
+	}
+
 	a.acceptor.Stop()
 	close(a.quit)
 
 	a.wg.Wait()
+
+	return returnErr
 }
 
 // RegisterSidecar derives a new multisig key for a potential future channel

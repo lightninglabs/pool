@@ -197,11 +197,15 @@ func (s *rpcServer) Stop() error {
 		return nil
 	}
 
+	var returnErr error
 	rpcLog.Info("Trader server stopping")
+	if err := s.server.sidecarAcceptor.Stop(); err != nil {
+		rpcLog.Errorf("Error stopping sidecar acceptor: %v", err)
+		returnErr = err
+	}
 	if err := s.server.fundingManager.Stop(); err != nil {
 		rpcLog.Errorf("Error stopping funding manager: %v", err)
 	}
-	s.server.sidecarAcceptor.Stop()
 	s.accountManager.Stop()
 	s.orderManager.Stop()
 	if err := s.auctioneer.Stop(); err != nil {
@@ -214,7 +218,8 @@ func (s *rpcServer) Stop() error {
 	s.blockNtfnCancel()
 
 	rpcLog.Info("Stopped trader server")
-	return nil
+
+	return returnErr
 }
 
 // serverHandler is the main event loop of the server.
