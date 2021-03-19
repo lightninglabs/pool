@@ -100,6 +100,35 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 			"events: %v", err)
 	}
 
+	// If we weren't able to complete all expected sidecar channels, we want
+	// to resume them now.
+	tickets, err := a.store.Sidecars()
+	if err != nil {
+		return fmt.Errorf("error reading sidecar tickets: %v", err)
+	}
+	for _, ticket := range tickets {
+		if ticket.State != sidecar.StateExpectingChannel {
+			continue
+		}
+
+		if ticket.Recipient == nil {
+			continue
+		}
+
+		r := ticket.Recipient
+		if !r.NodePubKey.IsEqual(a.nodePubKey) {
+			continue
+		}
+
+		// This is a ticket for our node that is still being expected,
+		// add it to our map of expected channels.
+		ctxb := context.Background()
+		if err := a.ExpectChannel(ctxb, ticket); err != nil {
+			return fmt.Errorf("error subscribing to batch "+
+				"updates for sidecar ticket: %v", err)
+		}
+	}
+
 	a.wg.Add(1)
 	go a.subscribe()
 
