@@ -580,13 +580,14 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 // account if the bid is is matched under the worst case fee conditions.
 func (b *Bid) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
 	// For a bid, the final clearing price is never higher that the bid's
-	// fixed rate, resulting in the highest possible premium paid bu the
+	// fixed rate, resulting in the highest possible premium paid by the
 	// bidder.
 	clearingPrice := FixedRatePremium(b.FixedRate)
 
 	return reservedValue(b, func(amt btcutil.Amount) btcutil.Amount {
 		delta, _, _ := takerDelta(
-			feeSchedule, clearingPrice, amt, b.LeaseDuration,
+			feeSchedule, clearingPrice, amt, b.SelfChanBalance,
+			b.LeaseDuration,
 		)
 		return delta
 	})

@@ -214,8 +214,16 @@ func ChannelOutput(batchTx *wire.MsgTx, wallet lndclient.WalletKitClient,
 			"%v", err)
 	}
 
+	// A self channel balance is added on top of the number of units filled.
+	var selfChanBalance btcutil.Amount
+	if ourOrder.Type() == TypeBid {
+		selfChanBalance = ourOrder.(*Bid).SelfChanBalance
+	} else {
+		selfChanBalance = otherOrder.Order.(*Bid).SelfChanBalance
+	}
+
 	// Gather the information we expect to find in the batch TX.
-	expectedOutputSize := otherOrder.UnitsFilled.ToSatoshis()
+	expectedOutputSize := selfChanBalance + otherOrder.UnitsFilled.ToSatoshis()
 	_, expectedOut, err := input.GenFundingPkScript(
 		ourKey.PubKey.SerializeCompressed(), otherOrder.MultiSigKey[:],
 		int64(expectedOutputSize),
