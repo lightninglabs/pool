@@ -903,6 +903,14 @@ message ServerBid {
     amount.
     */
     uint64 self_chan_balance = 6;
+
+    /*
+    If this bid order is meant to lease a channel for another node (which is
+    dubbed a "sidecar channel") then this boolean needs to be set to true. The
+    multi_sig_key, node_pub and node_addr fields of the order details must then
+    correspond to the recipient node's details.
+    */
+    bool is_sidecar_channel = 7;
 }
 
 message ServerAsk {

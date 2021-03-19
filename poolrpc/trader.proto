@@ -568,6 +568,14 @@ message Bid {
     amount.
     */
     uint64 self_chan_balance = 5;
+
+    /*
+    If this bid order is meant to lease a channel for another node (which is
+    dubbed a "sidecar channel") then this ticket contains all information
+    required for setting up that sidecar channel. The ticket is expected to be
+    the base64 encoded ticket, including the prefix and the checksum.
+    */
+    string sidecar_ticket = 6;
 }
 
 message Ask {

@@ -27,6 +27,7 @@ import (
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/poolscript"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/chanbackup"
 	lndFunding "github.com/lightningnetwork/lnd/funding"
@@ -1071,11 +1072,16 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
+		ticket, err := unmarshallSidecar(kit.Version, b.SidecarTicket)
+		if err != nil {
+			return nil, err
+		}
 
 		o = &order.Bid{
 			Kit:             *kit,
 			MinNodeTier:     nodeTier,
 			SelfChanBalance: btcutil.Amount(b.SelfChanBalance),
+			SidecarTicket:   ticket,
 		}
 
 	default:
@@ -1298,6 +1304,25 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 				MinNodeTier:         nodeTier,
 				SelfChanBalance:     uint64(o.SelfChanBalance),
 			}
+
+			// The sidecar ticket was given to the auction server
+			// and stored as the raw tlv stream. We only want the
+			// user to see the more human readable base64 encoded
+			// version of the ticket though. That's why we string
+			// encode it here instead of sending the raw bytes back.
+			// If we did bytes it would be shown hex encoded and not
+			// base64 with the nice prefix.
+			if o.SidecarTicket != nil {
+				rpcBid.SidecarTicket, err = sidecar.EncodeToString(
+					o.SidecarTicket,
+				)
+				if err != nil {
+					return nil, fmt.Errorf("error "+
+						"encoding sidecar ticket: %v",
+						err)
+				}
+			}
+
 			bids = append(bids, rpcBid)
 
 		default:
@@ -2289,4 +2314,23 @@ func marshallChannelInfo(chanInfos map[wire.OutPoint]*chaninfo.ChannelInfo) (
 	}
 
 	return rpcChannelInfos, nil
+}
+
+func unmarshallSidecar(version order.Version,
+	encodedTicket string) (*sidecar.Ticket, error) {
+
+	// An empty ticket means no ticket at all.
+	if len(encodedTicket) == 0 {
+		return nil, nil
+	}
+
+	// Versions previous to the sidecar order version aren't allowed to set
+	// the bool value.
+	if len(encodedTicket) > 0 && version < order.VersionSidecarChannel {
+		return nil, fmt.Errorf("cannot set sidecar for old order " +
+			"version")
+	}
+
+	// Try to deserialize the ticket.
+	return sidecar.DecodeString(encodedTicket)
 }
