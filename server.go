@@ -505,7 +505,8 @@ func (s *Server) setupClient() error {
 	clientCfgCopy := *clientCfg
 	s.sidecarAcceptor = NewSidecarAcceptor(
 		s.db, s.lndServices.Signer, s.lndServices.WalletKit,
-		channelAcceptor, nodePubKey, clientCfgCopy,
+		s.lndClient, channelAcceptor, nodePubKey, clientCfgCopy,
+		s.fundingManager,
 	)
 
 	// Create an instance of the auctioneer client library.

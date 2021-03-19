@@ -51,8 +51,8 @@ func TestRegisterSidecar(t *testing.T) {
 	mockSigner.Signature = testOfferSig.Serialize()
 
 	acceptor := NewSidecarAcceptor(
-		nil, mockSigner, mockWallet, nil, ourNodePubKey,
-		auctioneer.Config{},
+		nil, mockSigner, mockWallet, nil, nil, ourNodePubKey,
+		auctioneer.Config{}, nil,
 	)
 
 	existingTicket, err := sidecar.NewTicket(
