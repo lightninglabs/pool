@@ -11,6 +11,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneerrpc"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
@@ -43,6 +44,11 @@ const (
 	// to use lease durations outside of the default/legacy 2016 block
 	// duration.
 	VersionLeaseDurationBuckets Version = 2
+
+	// VersionSelfChanBalance is the order version that added use of the
+	// self channel balance field. Only orders with this version are allowed
+	// to use the self channel balance field.
+	VersionSelfChanBalance Version = 3
 )
 
 // Type is the type of an order. We don't use iota for the constants due to the
@@ -363,7 +369,9 @@ func (a *Ask) Digest() ([sha256.Size]byte, error) {
 			return result, err
 		}
 
-	case VersionNodeTierMinMatch, VersionLeaseDurationBuckets:
+	case VersionNodeTierMinMatch, VersionLeaseDurationBuckets,
+		VersionSelfChanBalance:
+
 		err := lnwire.WriteElements(
 			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
 			a.Amt, a.LeaseDuration, uint64(a.MaxBatchFeeRate),
@@ -507,6 +515,11 @@ type Bid struct {
 	// matched with. Only Asks backed by nodes on this tier or above will
 	// be matched with this bid.
 	MinNodeTier NodeTier
+
+	// SelfChanBalance is the initial outbound balance that should be added
+	// to the channel resulting from matching this bid by moving additional
+	// funds from the taker's account into the channel.
+	SelfChanBalance btcutil.Amount
 }
 
 // Type returns the order type.
@@ -546,6 +559,17 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 			return result, err
 		}
 
+	case VersionSelfChanBalance:
+		err := lnwire.WriteElements(
+			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
+			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
+			uint32(b.MinNodeTier), uint32(b.MinUnitsMatch),
+			uint64(b.SelfChanBalance),
+		)
+		if err != nil {
+			return result, err
+		}
+
 	default:
 		return result, fmt.Errorf("unknown version %d", b.Kit.Version)
 	}
@@ -566,6 +590,28 @@ func (b *Bid) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
 		)
 		return delta
 	})
+}
+
+// ValidateSelfChanBalance makes sure that all conditions to use the
+// SelfChanBalance field on a bid order are met.
+func (b *Bid) ValidateSelfChanBalance() error {
+	if b.Version < VersionSelfChanBalance {
+		return fmt.Errorf("cannot use self chan balance with old " +
+			"order version")
+	}
+
+	if err := sidecar.CheckOfferParams(
+		b.Amt, b.SelfChanBalance, BaseSupplyUnit,
+	); err != nil {
+		return fmt.Errorf("invalid self chan balance: %v", err)
+	}
+
+	if b.Units != b.MinUnitsMatch {
+		return fmt.Errorf("to use self chan balance the min units " +
+			"match must be equal to the order amount in units")
+	}
+
+	return nil
 }
 
 // This is a compile time check to make certain that both Ask and Bid implement
