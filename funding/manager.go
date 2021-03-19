@@ -736,6 +736,76 @@ func (m *Manager) BatchChannelSetup(
 	)
 }
 
+// SidecarBatchChannelSetup will attempt to establish new funding flows with all
+// matched takers (people buying our channels) in the passed batch. This method
+// will block until the channel is considered pending. Once this phase is
+// complete, and the batch execution transaction broadcast, the channel will be
+// finalized and locked in.
+func (m *Manager) SidecarBatchChannelSetup(batch *order.Batch,
+	chanUpdates *subscribe.Client,
+	getOrder order.Fetcher) (map[wire.OutPoint]*chaninfo.ChannelInfo,
+	error) {
+
+	var (
+		chanPoints     = make(map[wire.OutPoint]order.Nonce)
+		fundingRejects = make(map[order.Nonce]*auctioneerrpc.OrderReject)
+	)
+
+	// We need to make sure our whole process doesn't take too long overall
+	// so we create a context that is valid for the whole funding step and
+	// use that everywhere.
+	setupCtx, cancel := context.WithTimeout(
+		context.Background(), m.cfg.BatchStepTimeout,
+	)
+	defer cancel()
+
+	log.Infof("Batch(%x): opening channels for %v matched orders",
+		batch.ID[:], len(batch.MatchedOrders))
+
+	// For each ask order of ours that's matched, we'll make a new funding
+	// flow, blocking until they all progress to the final state.
+	batchTxHash := batch.BatchTX.TxHash()
+	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
+		ourOrder, err := getOrder(ourOrderNonce)
+		if err != nil {
+			// There can be sidecar and non-sidecar orders in the
+			// same batch. If we get an error here, it means it's
+			// not a sidecar order. The "normal" funding flow will
+			// take care of it.
+			log.Debugf("unexpected channel funding "+
+				"for order %v as it's not a sidecar order: %v",
+				ourOrderNonce.String(), err)
+
+			continue
+		}
+
+		// We'll obtain the expected channel point for each matched
+		// order, and complete the funding flow for each one in which
+		// our order was the ask.
+		for _, matchedOrder := range matchedOrders {
+			fundingShim, _, err := m.deriveFundingShim(
+				ourOrder, matchedOrder, batch.BatchTX,
+			)
+			if err != nil {
+				return nil, err
+			}
+			chanPoint := wire.OutPoint{
+				Hash: batchTxHash,
+				Index: fundingShim.GetChanPointShim().ChanPoint.
+					OutputIndex,
+			}
+
+			chanPoints[chanPoint] = matchedOrder.Order.Nonce()
+		}
+	}
+
+	// We've kicked off all channel open streams. We'll now need to wait for
+	// either completion of the funding process or a timeout.
+	return m.waitForChannelOpen(
+		setupCtx, chanPoints, chanUpdates, fundingRejects,
+	)
+}
+
 // waitForChannelOpen waits until we get a pending open channel message for each
 // of the channel outpoints provided. If we don't get all of them in time, we'll
 // instead return a reject error with all the orders for which the funding

@@ -17,6 +17,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/auctioneerrpc"
+	"github.com/lightninglabs/pool/chaninfo"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/internal/test"
 	"github.com/lightninglabs/pool/order"
@@ -470,6 +471,43 @@ func TestFundingManager(t *testing.T) {
 	}
 	require.Equal(t, expectedErr, err)
 
+	// With everything set up, let's now test the normal and sidecar batch
+	// channel setup.
+	h.lnMock.ScbKeyRing.EncryptionKey.PubKey = pubKeyAsk
+	callBatchChannelSetup(t, h, batch, false)
+	callBatchChannelSetup(t, h, batch, true)
+
+	// Finally, make sure we get a timeout error if no channel open messages
+	// are received.
+	_, err = h.mgr.BatchChannelSetup(batch)
+	require.Error(t, err)
+
+	code := &auctioneerrpc.OrderReject{
+		ReasonCode: auctioneerrpc.OrderReject_CHANNEL_FUNDING_FAILED,
+		Reason: "timed out waiting for pending open " +
+			"channel notification",
+	}
+	expectedErr = &MatchRejectErr{
+		RejectedOrders: map[order.Nonce]*auctioneerrpc.OrderReject{
+			ask.Nonce(): code,
+			bid.Nonce(): code,
+		},
+	}
+	require.Equal(t, expectedErr, err)
+
+	// Make sure the sidecar setup also times out if no updates come in.
+	_, err = h.mgr.SidecarBatchChannelSetup(
+		batch, h.mgr.pendingOpenChanClient, h.db.GetOrder,
+	)
+	require.Error(t, err)
+	require.Equal(t, expectedErr, err)
+}
+
+func callBatchChannelSetup(t *testing.T, h *managerHarness, batch *order.Batch,
+	sidecar bool) {
+
+	txidHash := batch.BatchTX.TxHash()
+
 	// Next, make sure we can complete the channel funding by opening the
 	// channel for which we are the bidder. We'll also expect a channel open
 	// message for the one where we are the asker so we simulate two msgs.
@@ -512,28 +550,20 @@ func TestFundingManager(t *testing.T) {
 	h.lnMock.Channels = append(h.lnMock.Channels, lndclient.ChannelInfo{
 		ChannelPoint: fmt.Sprintf("%s:1", txidHash.String()),
 	})
-	h.lnMock.ScbKeyRing.EncryptionKey.PubKey = pubKeyAsk
-	chanInfo, err := h.mgr.BatchChannelSetup(batch)
+
+	var (
+		chanInfo map[wire.OutPoint]*chaninfo.ChannelInfo
+		err      error
+	)
+	if sidecar {
+		chanInfo, err = h.mgr.SidecarBatchChannelSetup(
+			batch, h.mgr.pendingOpenChanClient, h.db.GetOrder,
+		)
+	} else {
+		chanInfo, err = h.mgr.BatchChannelSetup(batch)
+	}
 	require.NoError(t, err)
 	require.Equal(t, 2, len(chanInfo))
-
-	// Finally, make sure we get a timeout error if no channel open messages
-	// are received.
-	_, err = h.mgr.BatchChannelSetup(batch)
-	require.Error(t, err)
-
-	code := &auctioneerrpc.OrderReject{
-		ReasonCode: auctioneerrpc.OrderReject_CHANNEL_FUNDING_FAILED,
-		Reason: "timed out waiting for pending open " +
-			"channel notification",
-	}
-	expectedErr = &MatchRejectErr{
-		RejectedOrders: map[order.Nonce]*auctioneerrpc.OrderReject{
-			ask.Nonce(): code,
-			bid.Nonce(): code,
-		},
-	}
-	require.Equal(t, expectedErr, err)
 }
 
 // TestWaitForPeerConnections tests the function that waits for peer connections
