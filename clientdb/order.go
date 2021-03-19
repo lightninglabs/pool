@@ -9,6 +9,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/tlv"
 	"go.etcd.io/bbolt"
 )
@@ -17,6 +18,10 @@ const (
 	// bidSelfChanBalanceType is the tlv type we use to store the self
 	// channel balance on bid orders.
 	bidSelfChanBalanceType tlv.Type = 1
+
+	// bidSidecarTicketType is the tlv type we use to store the sidecar
+	// ticket on bid orders.
+	bidSidecarTicketType tlv.Type = 2
 )
 
 var (
@@ -631,14 +636,18 @@ func DeserializeOrder(nonce order.Nonce, r io.Reader) (
 func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 	var (
 		selfChanBalance uint64
+		sidecarTicket   []byte
 	)
 
 	// We'll add records for all possible additional order data fields here
 	// but will check below which of them were actually set, depending on
 	// the order type as well.
-	tlvStream, err := tlv.NewStream(tlv.MakePrimitiveRecord(
-		bidSelfChanBalanceType, &selfChanBalance,
-	))
+	tlvStream, err := tlv.NewStream(
+		tlv.MakePrimitiveRecord(
+			bidSelfChanBalanceType, &selfChanBalance,
+		),
+		tlv.MakePrimitiveRecord(bidSidecarTicketType, &sidecarTicket),
+	)
 	if err != nil {
 		return err
 	}
@@ -659,6 +668,15 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 				selfChanBalance,
 			)
 		}
+
+		if t, ok := parsedTypes[bidSidecarTicketType]; ok && t == nil {
+			castOrder.SidecarTicket, err = sidecar.DeserializeTicket(
+				bytes.NewReader(sidecarTicket),
+			)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -677,6 +695,20 @@ func serializeOrderTlvData(w io.Writer, o order.Order) error {
 			selfChanBalance := uint64(castOrder.SelfChanBalance)
 			tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
 				bidSelfChanBalanceType, &selfChanBalance,
+			))
+		}
+
+		if castOrder.SidecarTicket != nil {
+			var buf bytes.Buffer
+			if err := sidecar.SerializeTicket(
+				&buf, castOrder.SidecarTicket,
+			); err != nil {
+				return err
+			}
+
+			sidecarBytes := buf.Bytes()
+			tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
+				bidSidecarTicketType, &sidecarBytes,
 			))
 		}
 	}

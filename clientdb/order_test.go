@@ -9,6 +9,7 @@ import (
 	"github.com/btcsuite/btcutil"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -26,6 +27,19 @@ func TestSubmitOrder(t *testing.T) {
 		Kit:             *dummyOrder(500000, 1337),
 		MinNodeTier:     2,
 		SelfChanBalance: 123,
+		SidecarTicket: &sidecar.Ticket{
+			ID:    [8]byte{11, 22, 33, 44, 55, 66, 77},
+			State: sidecar.StateRegistered,
+			Offer: sidecar.Offer{
+				Capacity:            1000000,
+				PushAmt:             200000,
+				LeaseDurationBlocks: 2016,
+			},
+			Recipient: &sidecar.Recipient{
+				MultiSigPubKey:   testTraderKey,
+				MultiSigKeyIndex: 7,
+			},
+		},
 	}
 	o.Details().MinUnitsMatch = 10
 	err := store.SubmitOrder(o)
