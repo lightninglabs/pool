@@ -190,6 +190,9 @@ func (s *rpcServer) Start() error {
 	if err := s.orderManager.Start(); err != nil {
 		return fmt.Errorf("unable to start order manager: %v", err)
 	}
+	if err := s.server.channelAcceptor.Start(blockErrChan); err != nil {
+		return fmt.Errorf("unable to start channel acceptor: %v", err)
+	}
 
 	s.wg.Add(2)
 	go s.serverHandler(blockChan, blockErrChan)
@@ -261,6 +264,7 @@ func (s *rpcServer) Stop() error {
 	}
 
 	rpcLog.Info("Trader server stopping")
+	s.server.channelAcceptor.Stop()
 	s.accountManager.Stop()
 	s.orderManager.Stop()
 	if err := s.auctioneer.Stop(); err != nil {

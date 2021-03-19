@@ -70,6 +70,7 @@ type Server struct {
 	cfg             *Config
 	db              *clientdb.DB
 	fundingManager  *funding.Manager
+	channelAcceptor *ChannelAcceptor
 	lsatStore       *lsat.FileStore
 	lndServices     *lndclient.GrpcLndServices
 	lndClient       lnrpc.LightningClient
@@ -456,7 +457,10 @@ func (s *Server) setupClient() error {
 		),
 	)
 
-	// Create the funding manager.
+	// Create the funding manager. The RPC server is responsible for
+	// starting/stopping it though as all that logic is currently there for
+	// the other managers as well.
+	s.channelAcceptor = NewChannelAcceptor(s.lndServices.Client)
 	s.fundingManager = &funding.Manager{
 		DB:               s.db,
 		WalletKit:        s.lndServices.WalletKit,
@@ -467,6 +471,7 @@ func (s *Server) setupClient() error {
 		PendingOpenChannels: make(
 			chan *lnrpc.ChannelEventUpdate_PendingOpenChannel,
 		),
+		NotifyShimCreated: s.channelAcceptor.ShimRegistered,
 	}
 
 	// Create an instance of the auctioneer client library.
