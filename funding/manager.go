@@ -252,7 +252,7 @@ func (m *Manager) registerFundingShim(ourBid *order.Bid,
 
 // PrepChannelFunding preps the backing node to either receive or initiate a
 // channel funding based on the items in the order batch.
-func (m *Manager) PrepChannelFunding(batch *order.Batch,
+func (m *Manager) PrepChannelFunding(batch *order.Batch, getOrder order.Fetcher,
 	quit <-chan struct{}) error {
 
 	log.Infof("Batch(%x): preparing channel funding for %v orders",
@@ -297,7 +297,7 @@ func (m *Manager) PrepChannelFunding(batch *order.Batch,
 	// all the funding shims we need to be able to respond
 	connsInitiated := make(map[route.Vertex]struct{})
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
-		ourOrder, err := m.DB.GetOrder(ourOrderNonce)
+		ourOrder, err := getOrder(ourOrderNonce)
 		if err != nil {
 			return err
 		}

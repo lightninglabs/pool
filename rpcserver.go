@@ -416,7 +416,9 @@ func (s *rpcServer) handleServerMessage(
 		// Before we accept the batch, we'll finish preparations on our
 		// end which include applying any order match predicates,
 		// connecting out to peers, and registering funding shim.
-		err = s.server.fundingManager.PrepChannelFunding(batch, s.quit)
+		err = s.server.fundingManager.PrepChannelFunding(
+			batch, s.server.db.GetOrder, s.quit,
+		)
 		if err != nil {
 			rpcLog.Warnf("Error preparing channel funding: %v",
 				err)
