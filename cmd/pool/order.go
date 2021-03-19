@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -283,7 +284,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 			ask.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
 				ask.Details.MaxBatchFeeRateSatPerKw,
-			), true,
+			), true, nil,
 		); err != nil {
 			return fmt.Errorf("unable to print order details: %v", err)
 		}
@@ -313,7 +314,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 func printOrderDetails(client poolrpc.TraderClient, amt,
 	minChanAmt, selfChanBalance btcutil.Amount, rate order.FixedRatePremium,
 	leaseDuration uint32, maxBatchFeeRate chainfee.SatPerKWeight,
-	isAsk bool) error {
+	isAsk bool, sidecarTicket *sidecar.Ticket) error {
 
 	auctionFee, err := client.AuctionFee(
 		context.Background(), &poolrpc.AuctionFeeRequest{},
@@ -354,6 +355,12 @@ func printOrderDetails(client poolrpc.TraderClient, amt,
 
 	if selfChanBalance > 0 {
 		fmt.Printf("Self channel balance: %v\n", selfChanBalance)
+	}
+
+	if sidecarTicket != nil {
+		fmt.Println("Sidecar order: ")
+		fmt.Printf("  Recipient node: %x\n",
+			sidecarTicket.Recipient.NodePubKey.SerializeCompressed())
 	}
 
 	return nil
@@ -413,6 +420,17 @@ var ordersSubmitBidCommand = cli.Command{
 				"from our account into the channel; can be " +
 				"used to create up to 50/50 balanced channels",
 		},
+		cli.StringFlag{
+			Name: "sidecar_ticket",
+			Usage: "instead of leasing a channel for the node " +
+				"connected to this pool instance, lease a " +
+				"channel for another node; use the " +
+				"information within the ticket to identify " +
+				"the receiver of the sidecar channel; using " +
+				"a sidecar ticket will also overwrite the " +
+				"amt, min_chan_amt, lease_duration_blocks " +
+				"and self_chan_balance fields",
+		},
 	}, sharedFlags...),
 	Action: ordersSubmitBid,
 }
@@ -444,8 +462,52 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 
 	bid := &poolrpc.Bid{
 		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
-		Version:             uint32(order.VersionSelfChanBalance),
+		Version:             uint32(order.VersionSidecarChannel),
 		MinNodeTier:         nodeTier,
+	}
+
+	// Let's find out if this is an order for a sidecar channel because if
+	// it is, we can take some of the information out of the ticket and
+	// don't require the user to enter them manually again.
+	var ticket *sidecar.Ticket
+	if ctx.IsSet("sidecar_ticket") {
+		// The ticket is expected in the string encoded version which
+		// has a prefix and a checksum. We're supposed to send it to
+		// the daemon in its raw format though. So let's decode and
+		// check it in the process.
+		ticket, err = sidecar.DecodeString(ctx.String("sidecar_ticket"))
+		if err != nil {
+			return fmt.Errorf("unable to parse sidecar ticket: %v",
+				err)
+		}
+
+		// Let's make sure the ticket is in the correct state. This will
+		// be checked by the server as well but we want to make sure we
+		// don't run into a nil reference when printing the order
+		// details below.
+		if ticket.State != sidecar.StateRegistered ||
+			ticket.Recipient == nil {
+
+			return fmt.Errorf("unexpected sidecar ticket state "+
+				"%d, possibly not registered with recipient "+
+				"node yet", ticket.State)
+		}
+
+		// With the ticket parsed and formally checked, we can now pre-
+		// fill the amount and min channel amount. Those values must
+		// match the offered capacity, otherwise the push amount won't
+		// work as expected and the protocol would get more complex as
+		// well.
+		amtStr := fmt.Sprintf("%d", ticket.Offer.Capacity)
+		pushAmtStr := fmt.Sprintf("%d", ticket.Offer.PushAmt)
+		_ = ctx.Set("amt", amtStr)
+		_ = ctx.Set("min_chan_amt", amtStr)
+		_ = ctx.Set("self_chan_balance", pushAmtStr)
+		bid.LeaseDurationBlocks = ticket.Offer.LeaseDurationBlocks
+
+		// Looks good so far. The rest will be checked server side. For
+		// now we can just add the ticket to the order.
+		bid.SidecarTicket = ctx.String("sidecar_ticket")
 	}
 
 	params, err := parseCommonParams(ctx, bid.LeaseDurationBlocks)
@@ -495,7 +557,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 			bid.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
 				bid.Details.MaxBatchFeeRateSatPerKw,
-			), false,
+			), false, ticket,
 		); err != nil {
 			return fmt.Errorf("unable to print order details: %v", err)
 		}
@@ -517,7 +579,37 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 	if err != nil {
 		return err
 	}
+
 	printRespJSON(resp)
+
+	// If there was a sidecar ticket, we now also need to display the
+	// updated ticket that contains the order nonce (and a signature over
+	// that). This ticket needs to be given to the recipient for them to
+	// initiate the last step of the sidecar channel protocol.
+	// The signed ticket is available in the output of the ListOrders call.
+	if ticket != nil {
+		newBidNonce := resp.GetAcceptedOrderNonce()
+		allOrders, err := client.ListOrders(
+			context.Background(), &poolrpc.ListOrdersRequest{
+				ActiveOnly: true,
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("error listing orders to print "+
+				"updated sidecar ticket: %v", err)
+		}
+
+		// Find the order we just created.
+		for _, bid := range allOrders.Bids {
+			if bytes.Equal(newBidNonce, bid.Details.OrderNonce) {
+				printJSON(struct {
+					SidecarTicket string
+				}{
+					SidecarTicket: bid.SidecarTicket,
+				})
+			}
+		}
+	}
 
 	return nil
 }
