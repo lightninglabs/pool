@@ -6,9 +6,17 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightningnetwork/lnd/tlv"
 	"go.etcd.io/bbolt"
+)
+
+const (
+	// bidSelfChanBalanceType is the tlv type we use to store the self
+	// channel balance on bid orders.
+	bidSelfChanBalanceType tlv.Type = 1
 )
 
 var (
@@ -621,11 +629,62 @@ func DeserializeOrder(nonce order.Nonce, r io.Reader) (
 // supplied reader by interpreting it as a tlv stream. If successful any
 // non-default values of the additional data will be set on the given order.
 func deserializeOrderTlvData(r io.Reader, o order.Order) error {
+	var (
+		selfChanBalance uint64
+	)
+
+	// We'll add records for all possible additional order data fields here
+	// but will check below which of them were actually set, depending on
+	// the order type as well.
+	tlvStream, err := tlv.NewStream(tlv.MakePrimitiveRecord(
+		bidSelfChanBalanceType, &selfChanBalance,
+	))
+	if err != nil {
+		return err
+	}
+
+	parsedTypes, err := tlvStream.DecodeWithParsedTypes(r)
+	if err != nil {
+		return err
+	}
+
+	// Now check what records were actually parsed from the stream and
+	// assign any parsed fields to our order.
+	switch castOrder := o.(type) {
+	case *order.Ask:
+
+	case *order.Bid:
+		if t, ok := parsedTypes[bidSelfChanBalanceType]; ok && t == nil {
+			castOrder.SelfChanBalance = btcutil.Amount(
+				selfChanBalance,
+			)
+		}
+	}
+
 	return nil
 }
 
 // serializeOrderTlvData encodes all additional data of an order as a single tlv
 // stream.
 func serializeOrderTlvData(w io.Writer, o order.Order) error {
-	return nil
+	var tlvRecords []tlv.Record
+
+	switch castOrder := o.(type) {
+	case *order.Ask:
+
+	case *order.Bid:
+		if castOrder.SelfChanBalance != 0 {
+			selfChanBalance := uint64(castOrder.SelfChanBalance)
+			tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
+				bidSelfChanBalanceType, &selfChanBalance,
+			))
+		}
+	}
+
+	tlvStream, err := tlv.NewStream(tlvRecords...)
+	if err != nil {
+		return err
+	}
+
+	return tlvStream.Encode(w)
 }
