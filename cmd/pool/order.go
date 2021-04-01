@@ -12,6 +12,7 @@ import (
 	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli"
@@ -255,7 +256,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 
 	ask := &poolrpc.Ask{
 		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
-		Version:             uint32(order.VersionLeaseDurationBuckets),
+		Version:             uint32(order.VersionSelfChanBalance),
 	}
 
 	params, err := parseCommonParams(ctx, ask.LeaseDurationBlocks)
@@ -278,7 +279,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 		if err := printOrderDetails(
 			client, btcutil.Amount(ask.Details.Amt),
 			order.SupplyUnit(ask.Details.MinUnitsMatch).ToSatoshis(),
-			order.FixedRatePremium(ask.Details.RateFixed),
+			0, order.FixedRatePremium(ask.Details.RateFixed),
 			ask.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
 				ask.Details.MaxBatchFeeRateSatPerKw,
@@ -310,7 +311,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 }
 
 func printOrderDetails(client poolrpc.TraderClient, amt,
-	minChanAmt btcutil.Amount, rate order.FixedRatePremium,
+	minChanAmt, selfChanBalance btcutil.Amount, rate order.FixedRatePremium,
 	leaseDuration uint32, maxBatchFeeRate chainfee.SatPerKWeight,
 	isAsk bool) error {
 
@@ -350,6 +351,10 @@ func printOrderDetails(client poolrpc.TraderClient, amt,
 	fmt.Printf("Max batch fee rate: %d sat/vByte\n",
 		maxBatchFeeRate.FeePerKVByte()/1000)
 	fmt.Println("Max chain fee:", chainFee)
+
+	if selfChanBalance > 0 {
+		fmt.Printf("Self channel balance: %v\n", selfChanBalance)
+	}
 
 	return nil
 }
@@ -401,6 +406,13 @@ var ordersSubmitBidCommand = cli.Command{
 			Name:  "force",
 			Usage: "skip order placement confirmation",
 		},
+		cli.Uint64Flag{
+			Name: "self_chan_balance",
+			Usage: "give the channel leased by this bid order an " +
+				"initial balance by adding additional funds " +
+				"from our account into the channel; can be " +
+				"used to create up to 50/50 balanced channels",
+		},
 	}, sharedFlags...),
 	Action: ordersSubmitBid,
 }
@@ -432,7 +444,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 
 	bid := &poolrpc.Bid{
 		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
-		Version:             uint32(order.VersionLeaseDurationBuckets),
+		Version:             uint32(order.VersionSelfChanBalance),
 		MinNodeTier:         nodeTier,
 	}
 
@@ -442,6 +454,28 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 	}
 
 	bid.Details = params
+
+	// Make sure the self channel balance is within reasonable limits
+	// (currently max the same of the total order amount) and that the min
+	// units matched is also set to 100% of the order amount.
+	if ctx.IsSet("self_chan_balance") {
+		bid.SelfChanBalance = ctx.Uint64("self_chan_balance")
+		bidAmt := btcutil.Amount(bid.Details.Amt)
+		err := sidecar.CheckOfferParams(
+			bidAmt, btcutil.Amount(bid.SelfChanBalance),
+			order.BaseSupplyUnit,
+		)
+		if err != nil {
+			return err
+		}
+
+		bidUnits := order.NewSupplyFromSats(bidAmt)
+		if bid.Details.MinUnitsMatch != uint32(bidUnits) {
+			return fmt.Errorf("when using self_chan_balance the " +
+				"min_chan_amt must be set to the same value " +
+				"as amt")
+		}
+	}
 
 	client, cleanup, err := getClient(ctx)
 	if err != nil {
@@ -456,6 +490,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 		if err := printOrderDetails(
 			client, btcutil.Amount(bid.Details.Amt),
 			order.SupplyUnit(bid.Details.MinUnitsMatch).ToSatoshis(),
+			btcutil.Amount(bid.SelfChanBalance),
 			order.FixedRatePremium(bid.Details.RateFixed),
 			bid.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(

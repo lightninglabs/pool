@@ -11,6 +11,7 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/chaninfo"
@@ -19,21 +20,11 @@ import (
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/routing/route"
+	"github.com/lightningnetwork/lnd/tor"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-)
-
-var (
-	// DefaultBatchStepTimeout is the default time we allow an action that
-	// blocks the batch conversation (like peer connection establishment or
-	// channel open) to take. If any action takes longer, we might reject
-	// the order from that slow peer. This value SHOULD be lower than the
-	// defaultMsgTimeout on the server side otherwise nodes might get kicked
-	// out of the match making process for timing out even though it was
-	// their peer's fault.
-	DefaultBatchStepTimeout = 15 * time.Second
 )
 
 // MatchRejectErr is an error type that is returned from the funding manager if
@@ -114,6 +105,11 @@ type Manager struct {
 	// BatchStepTimeout is the timeout the manager uses when executing a
 	// single batch step.
 	BatchStepTimeout time.Duration
+
+	// NotifyShimCreated is a function that should be called whenever a
+	// funding shim is created for a bid order where we expect an incoming
+	// channel at any moment.
+	NotifyShimCreated func(ourBid *order.Bid, pendingChanID [32]byte)
 }
 
 // deriveFundingShim generates the proper funding shim that should be used by
@@ -121,7 +117,7 @@ type Manager struct {
 // funding transaction.
 func (m *Manager) deriveFundingShim(ourOrder order.Order,
 	matchedOrder *order.MatchedOrder,
-	batchTx *wire.MsgTx) (*lnrpc.FundingShim, error) {
+	batchTx *wire.MsgTx) (*lnrpc.FundingShim, [32]byte, error) {
 
 	log.Infof("Registering funding shim for Order(type=%v, amt=%v, "+
 		"nonce=%v", ourOrder.Type(),
@@ -132,18 +128,21 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 	var (
 		askNonce, bidNonce order.Nonce
 
-		thawHeight uint32
+		thawHeight      uint32
+		selfChanBalance btcutil.Amount
 	)
 	if ourOrder.Type() == order.TypeBid {
 		bidNonce = ourOrder.Nonce()
 		askNonce = matchedOrder.Order.Nonce()
 
 		thawHeight = ourOrder.(*order.Bid).LeaseDuration
+		selfChanBalance = ourOrder.(*order.Bid).SelfChanBalance
 	} else {
 		bidNonce = matchedOrder.Order.Nonce()
 		askNonce = ourOrder.Nonce()
 
 		thawHeight = matchedOrder.Order.(*order.Bid).LeaseDuration
+		selfChanBalance = matchedOrder.Order.(*order.Bid).SelfChanBalance
 	}
 
 	pendingChanID := order.PendingChanKey(
@@ -160,14 +159,14 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 		ctxb, &ourKeyLocator,
 	)
 	if err != nil {
-		return nil, err
+		return nil, [32]byte{}, err
 	}
 	_, fundingOutput, err := input.GenFundingPkScript(
 		ourMultiSigKey.PubKey.SerializeCompressed(),
 		matchedOrder.MultiSigKey[:], int64(chanSize),
 	)
 	if err != nil {
-		return nil, err
+		return nil, [32]byte{}, err
 	}
 
 	// Now that we have the funding script, we'll find the output index
@@ -189,7 +188,7 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 	// shim, and register it so we use the proper funding key when we
 	// receive the marker's incoming funding request.
 	chanPointShim := &lnrpc.ChanPointShim{
-		Amt:       int64(chanSize),
+		Amt:       int64(chanSize + selfChanBalance),
 		ChanPoint: chanPoint,
 		LocalKey: &lnrpc.KeyDescriptor{
 			RawKeyBytes: ourMultiSigKey.PubKey.SerializeCompressed(),
@@ -207,18 +206,20 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 		Shim: &lnrpc.FundingShim_ChanPointShim{
 			ChanPointShim: chanPointShim,
 		},
-	}, nil
+	}, pendingChanID, nil
 }
 
 // registerFundingShim is used when we're on the taker (our bid was executed)
 // side of a new matched order. To prepare ourselves for their incoming funding
 // request, we'll register a shim with all the expected parameters.
-func (m *Manager) registerFundingShim(ourOrder order.Order,
+func (m *Manager) registerFundingShim(ourBid *order.Bid,
 	matchedOrder *order.MatchedOrder, batchTx *wire.MsgTx) error {
 
 	ctxb := context.Background()
 
-	fundingShim, err := m.deriveFundingShim(ourOrder, matchedOrder, batchTx)
+	fundingShim, pendingChanID, err := m.deriveFundingShim(
+		ourBid, matchedOrder, batchTx,
+	)
 	if err != nil {
 		return err
 	}
@@ -233,16 +234,32 @@ func (m *Manager) registerFundingShim(ourOrder order.Order,
 		return fmt.Errorf("unable to register funding shim: %v", err)
 	}
 
+	// In case there is a self chan balance involved, we need our channel
+	// acceptor to be aware of the incoming order so it can verify the push
+	// amount accordingly.
+	if m.NotifyShimCreated != nil {
+		m.NotifyShimCreated(ourBid, pendingChanID)
+	}
+
 	return nil
 }
 
 // PrepChannelFunding preps the backing node to either receive or initiate a
 // channel funding based on the items in the order batch.
 func (m *Manager) PrepChannelFunding(batch *order.Batch,
-	traderBehindTor bool, quit <-chan struct{}) error {
+	quit <-chan struct{}) error {
 
 	log.Infof("Batch(%x): preparing channel funding for %v orders",
 		batch.ID[:], len(batch.MatchedOrders))
+
+	// As we need to change our behavior if the node has any Tor addresses,
+	// we'll fetch the current state of our advertised addrs now.
+	nodeInfo, err := m.LightningClient.GetInfo(context.Background())
+	if err != nil {
+		log.Errorf("error in GetInfo: %v", err)
+		return err
+	}
+	traderBehindTor := nodeHasTorAddrs(nodeInfo.Uris)
 
 	// We need to make sure our whole process doesn't take too long overall
 	// so we create a context that is valid for the whole funding step and
@@ -341,7 +358,8 @@ func (m *Manager) PrepChannelFunding(batch *order.Batch,
 			// phase w/o any issues and accept the incoming channel
 			// from the asker.
 			err := m.registerFundingShim(
-				ourOrder, matchedOrder, batch.BatchTX,
+				ourOrder.(*order.Bid), matchedOrder,
+				batch.BatchTX,
 			)
 			if err != nil {
 				return fmt.Errorf("unable to register funding "+
@@ -412,7 +430,7 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 		// order, and complete the funding flow for each one in which
 		// our order was the ask.
 		for _, matchedOrder := range matchedOrders {
-			fundingShim, err := m.deriveFundingShim(
+			fundingShim, _, err := m.deriveFundingShim(
 				ourOrder, matchedOrder, batch.BatchTX,
 			)
 			if err != nil {
@@ -439,6 +457,10 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 				continue
 			}
 
+			// We know the matched order must be a bid now since our
+			// order is an ask.
+			matchedOrderBid := matchedOrder.Order.(*order.Bid)
+
 			// Otherwise, we'll now initiate the funding request to
 			// establish all the channels generated by this order
 			// with the remote parties. It's the bidder's job to
@@ -448,11 +470,15 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 			//
 			// TODO(roasbeef): sat per byte from order?
 			//  * also other params to set as well
-			chanAmt := int64(matchedOrder.UnitsFilled.ToSatoshis())
+			chanAmt := matchedOrder.UnitsFilled.ToSatoshis()
+			chanAmt += matchedOrderBid.SelfChanBalance
 			fundingReq := &lnrpc.OpenChannelRequest{
 				NodePubkey:         matchedOrder.NodeKey[:],
-				LocalFundingAmount: chanAmt,
+				LocalFundingAmount: int64(chanAmt),
 				FundingShim:        fundingShim,
+				PushSat: int64(
+					matchedOrderBid.SelfChanBalance,
+				),
 			}
 			chanStream, err := m.BaseClient.OpenChannel(
 				setupCtx, fundingReq,
@@ -872,4 +898,22 @@ func (m *Manager) rejectFailedConnections(peers map[route.Vertex]struct{},
 	}
 
 	return fundingRejects
+}
+
+// nodeHasTorAddrs returns true if there exists a Tor address amongst the set
+// of active Uris for a node.
+func nodeHasTorAddrs(nodeAddrs []string) bool {
+	for _, nodeAddr := range nodeAddrs {
+		// Obtain the host to determine if this is a Tor address.
+		host, _, err := net.SplitHostPort(nodeAddr)
+		if err != nil {
+			host = nodeAddr
+		}
+
+		if tor.IsOnionHost(host) {
+			return true
+		}
+	}
+
+	return false
 }

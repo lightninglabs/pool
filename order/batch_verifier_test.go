@@ -2,7 +2,6 @@ package order
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec"
@@ -15,6 +14,7 @@ import (
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -298,6 +298,29 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
+			name: "self chan balance not added to funding " +
+				"output",
+			expectedErr: "error finding channel output for " +
+				"matched order",
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
+				b1.SelfChanBalance = 100
+				return v.Verify(b)
+			},
+		},
+		{
+			name:        "invalid self chan balance",
+			expectedErr: "server sent unexpected ending balance",
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
+				b.BatchTX.TxOut[0].Value += 100
+				b1.SelfChanBalance = 100
+				return v.Verify(b)
+			},
+		},
+		{
 			name:        "happy path",
 			expectedErr: "",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
@@ -310,7 +333,7 @@ func TestBatchVerifier(t *testing.T) {
 
 	// Run through all the test cases, creating a new, valid batch each
 	// time so no state carries over from the last run.
-	for i, tc := range testCases {
+	for _, tc := range testCases {
 		tc := tc
 
 		// We'll create two accounts: A smaller one that has one ask for
@@ -378,6 +401,7 @@ func TestBatchVerifier(t *testing.T) {
 				// 2000 * (200_000 * 5000 / 1_000_000_000) = 1000 sats premium
 				LeaseDuration: leaseDuration,
 			}),
+			SelfChanBalance: 50,
 		}
 		batchTx := &wire.MsgTx{
 			Version: 2,
@@ -395,7 +419,7 @@ func TestBatchVerifier(t *testing.T) {
 				// Channel output for channel between ask and
 				// bid2.
 				{
-					Value: 200_000,
+					Value: 200_050,
 					PkScript: scriptForChan(
 						t, walletKit,
 						ask.MultiSigKeyLocator,
@@ -406,9 +430,10 @@ func TestBatchVerifier(t *testing.T) {
 				{
 					// balance - bid1Premium - bid2Premium -
 					// bid1ExecFee - bid2ExecFee - chainFees
+					// - bid2SelfChanBalance
 					// 500_000 - 1000 - 1000 -
-					// 1_110 - 1_110 - 186
-					Value:    495_594,
+					// 1_110 - 1_110 - 186 - 50
+					Value:    495_544,
 					PkScript: scriptForAcct(t, bigAcct),
 				},
 			},
@@ -423,7 +448,7 @@ func TestBatchVerifier(t *testing.T) {
 				AccountKey:    acctKeyBig,
 				EndingState:   stateRecreated,
 				OutpointIndex: 2,
-				EndingBalance: 495_594,
+				EndingBalance: 495_544,
 			},
 			{
 				AccountKeyRaw: acctIDSmall,
@@ -501,16 +526,16 @@ func TestBatchVerifier(t *testing.T) {
 		}
 
 		// Finally run the test case itself.
-		i := i
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.doVerify(verifier, ask, bid1, bid2, batch)
-			if (err == nil && tc.expectedErr != "") ||
-				(err != nil && !strings.Contains(
-					err.Error(), tc.expectedErr,
-				)) {
 
-				t.Fatalf("test #%v: unexpected error, got '%v' wanted "+
-					"'%v'", i, err, tc.expectedErr)
+			if tc.expectedErr == "" {
+				require.NoError(t, err, tc.name)
+			} else {
+				require.Error(t, err)
+				require.Contains(
+					t, err.Error(), tc.expectedErr, tc.name,
+				)
 			}
 		})
 	}

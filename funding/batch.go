@@ -133,8 +133,9 @@ func AbandonCanceledChannels(matchedOrders map[order.Nonce][]*order.MatchedOrder
 					"pending channel in lnd was "+
 					"unsuccessful for order=%v "+
 					"(channel_point=%v:%d), assuming "+
-					"timeout when funding: %v", txHash, idx,
-					ourOrderNonce, err)
+					"timeout when funding: %v",
+					ourOrderNonce.String(), txHash, idx,
+					err)
 			}
 		}
 	}

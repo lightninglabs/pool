@@ -23,8 +23,9 @@ func TestSubmitOrder(t *testing.T) {
 
 	// Store a dummy order and see if we can retrieve it again.
 	o := &order.Bid{
-		Kit:         *dummyOrder(500000, 1337),
-		MinNodeTier: 2,
+		Kit:             *dummyOrder(500000, 1337),
+		MinNodeTier:     2,
+		SelfChanBalance: 123,
 	}
 	o.Details().MinUnitsMatch = 10
 	err := store.SubmitOrder(o)

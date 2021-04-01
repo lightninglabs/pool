@@ -6,9 +6,17 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightningnetwork/lnd/tlv"
 	"go.etcd.io/bbolt"
+)
+
+const (
+	// bidSelfChanBalanceType is the tlv type we use to store the self
+	// channel balance on bid orders.
+	bidSelfChanBalanceType tlv.Type = 1
 )
 
 var (
@@ -42,11 +50,16 @@ var (
 	//
 	// path: ordersBucketKey -> orderBucket[nonce] -> orderMinUnitsMatchKey
 	orderMinUnitsMatchKey = []byte("order-min-units-match")
+
+	// orderTlvKey is a key within the order bucket for additional, tlv
+	// encoded data.
+	orderTlvKey = []byte("order-tlv")
 )
 
 type extraOrderData struct {
 	minNodeTier   order.NodeTier
 	minUnitsMatch order.SupplyUnit
+	tlvData       []byte
 }
 
 // orderCallback is a function type that is used to pass as a callback into the
@@ -106,6 +119,13 @@ func (db *DB) SubmitOrder(newOrder order.Order) error {
 			newOrder.Details().MinUnitsMatch,
 		)
 		if err != nil {
+			return err
+		}
+
+		// Next, store any additional order data as a tlv stream.
+		if err := storeOrderTlvTX(
+			rootBucket, newOrder.Nonce(), newOrder,
+		); err != nil {
 			return err
 		}
 
@@ -184,6 +204,12 @@ func (db *DB) GetOrder(nonce order.Nonce) (order.Order, error) {
 				return err
 			}
 
+			tlvReader := bytes.NewReader(extraData.tlvData)
+			err = deserializeOrderTlvData(tlvReader, o)
+			if err != nil {
+				return err
+			}
+
 			// TODO(roasbeef): factory func to de-dup w/ all other
 			// instances?
 			if bidOrder, ok := o.(*order.Bid); ok {
@@ -215,6 +241,12 @@ func (db *DB) GetOrders() ([]order.Order, error) {
 
 			r := bytes.NewReader(rawOrder)
 			o, err := DeserializeOrder(nonce, r)
+			if err != nil {
+				return err
+			}
+
+			tlvReader := bytes.NewReader(extraData.tlvData)
+			err = deserializeOrderTlvData(tlvReader, o)
 			if err != nil {
 				return err
 			}
@@ -278,7 +310,7 @@ func storeOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 	return orderBucket.Put(orderKey, orderBytes)
 }
 
-// storeOrderMinNoderTierTX saves the currnet node tier for a given order to
+// storeOrderMinNoderTierTX saves the current node tier for a given order to
 // the proper bucket.
 func storeOrderMinNoderTierTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 	minNodeTier order.NodeTier) error {
@@ -317,6 +349,24 @@ func storeOrderMinUnitsMatchTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 	return orderBucket.Put(orderMinUnitsMatchKey, buf.Bytes())
 }
 
+// storeOrderTlvTX saves the order's additional information as a tlv stream
+// within the order's root bucket.
+func storeOrderTlvTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
+	o order.Order) error {
+
+	orderBucket, err := rootBucket.CreateBucketIfNotExists(nonce[:])
+	if err != nil {
+		return err
+	}
+
+	var b bytes.Buffer
+	if err := serializeOrderTlvData(&b, o); err != nil {
+		return err
+	}
+
+	return orderBucket.Put(orderTlvKey, b.Bytes())
+}
+
 // fetchOrderTX fetches the binary data of one order specified by its nonce from
 // the root orders bucket.
 func fetchOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
@@ -338,34 +388,36 @@ func fetchOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 		return nil
 	}
 
-	var minNodeTier uint32
+	// Try to read our extra order data. Use a default of 1 for the min
+	// units matched if the field does not exist (possible for older
+	// orders).
+	extraData := &extraOrderData{
+		minUnitsMatch: order.SupplyUnit(1),
+		tlvData:       orderBucket.Get(orderTlvKey),
+	}
+
 	nodeTierBytes := orderBucket.Get(orderTierKey)
 	if nodeTierBytes != nil {
 		err := ReadElements(
-			bytes.NewReader(nodeTierBytes), &minNodeTier,
+			bytes.NewReader(nodeTierBytes), &extraData.minNodeTier,
 		)
 		if err != nil {
 			return err
 		}
 	}
 
-	// Use a default of 1 if the field does not exist (possible for older
-	// orders).
-	minUnitsMatch := order.SupplyUnit(1)
 	minUnitsMatchBytes := orderBucket.Get(orderMinUnitsMatchKey)
 	if minUnitsMatchBytes != nil {
 		err := ReadElements(
-			bytes.NewReader(minUnitsMatchBytes), &minUnitsMatch,
+			bytes.NewReader(minUnitsMatchBytes),
+			&extraData.minUnitsMatch,
 		)
 		if err != nil {
 			return err
 		}
 	}
 
-	return callback(nonce, orderBytes, &extraOrderData{
-		minNodeTier:   order.NodeTier(minNodeTier),
-		minUnitsMatch: minUnitsMatch,
-	})
+	return callback(nonce, orderBytes, extraData)
 }
 
 // updateOrder fetches the binary data of one order specified by its nonce from
@@ -385,6 +437,12 @@ func updateOrder(ordersBucket, dst *bbolt.Bucket, nonce order.Nonce,
 
 			r := bytes.NewReader(rawOrder)
 			o, err = DeserializeOrder(nonce, r)
+			if err != nil {
+				return err
+			}
+
+			tlvReader := bytes.NewReader(extraData.tlvData)
+			err = deserializeOrderTlvData(tlvReader, o)
 			if err != nil {
 				return err
 			}
@@ -442,6 +500,11 @@ func updateOrder(ordersBucket, dst *bbolt.Bucket, nonce order.Nonce,
 		return nil, err
 	}
 
+	// Next, store any additional order data as a tlv stream.
+	if err := storeOrderTlvTX(dst, nonce, o); err != nil {
+		return nil, err
+	}
+
 	if bidOrder, ok := o.(*order.Bid); ok {
 		err = storeOrderMinNoderTierTX(dst, nonce, bidOrder.MinNodeTier)
 		if err != nil {
@@ -474,6 +537,13 @@ func copyOrder(src, dst *bbolt.Bucket, nonce order.Nonce) error {
 			if err != nil {
 				return err
 			}
+
+			tlvReader := bytes.NewReader(extraData.tlvData)
+			err = deserializeOrderTlvData(tlvReader, o)
+			if err != nil {
+				return err
+			}
+
 			nodeTier = extraData.minNodeTier
 			minUnitsMatch = extraData.minUnitsMatch
 			return nil
@@ -490,6 +560,12 @@ func copyOrder(src, dst *bbolt.Bucket, nonce order.Nonce) error {
 	if err := storeOrderTX(dst, nonce, orderBytes, nil); err != nil {
 		return err
 	}
+
+	// Next, store any additional order data as a tlv stream.
+	if err := storeOrderTlvTX(dst, nonce, o); err != nil {
+		return err
+	}
+
 	if _, ok := o.(*order.Bid); ok {
 		err := storeOrderMinNoderTierTX(dst, nonce, nodeTier)
 		if err != nil {
@@ -547,4 +623,68 @@ func DeserializeOrder(nonce order.Nonce, r io.Reader) (
 	default:
 		return nil, fmt.Errorf("unknown order type: %d", orderType)
 	}
+}
+
+// deserializeOrderTlvData attempts to decode the remaining bytes in the
+// supplied reader by interpreting it as a tlv stream. If successful any
+// non-default values of the additional data will be set on the given order.
+func deserializeOrderTlvData(r io.Reader, o order.Order) error {
+	var (
+		selfChanBalance uint64
+	)
+
+	// We'll add records for all possible additional order data fields here
+	// but will check below which of them were actually set, depending on
+	// the order type as well.
+	tlvStream, err := tlv.NewStream(tlv.MakePrimitiveRecord(
+		bidSelfChanBalanceType, &selfChanBalance,
+	))
+	if err != nil {
+		return err
+	}
+
+	parsedTypes, err := tlvStream.DecodeWithParsedTypes(r)
+	if err != nil {
+		return err
+	}
+
+	// Now check what records were actually parsed from the stream and
+	// assign any parsed fields to our order.
+	switch castOrder := o.(type) {
+	case *order.Ask:
+
+	case *order.Bid:
+		if t, ok := parsedTypes[bidSelfChanBalanceType]; ok && t == nil {
+			castOrder.SelfChanBalance = btcutil.Amount(
+				selfChanBalance,
+			)
+		}
+	}
+
+	return nil
+}
+
+// serializeOrderTlvData encodes all additional data of an order as a single tlv
+// stream.
+func serializeOrderTlvData(w io.Writer, o order.Order) error {
+	var tlvRecords []tlv.Record
+
+	switch castOrder := o.(type) {
+	case *order.Ask:
+
+	case *order.Bid:
+		if castOrder.SelfChanBalance != 0 {
+			selfChanBalance := uint64(castOrder.SelfChanBalance)
+			tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
+				bidSelfChanBalanceType, &selfChanBalance,
+			))
+		}
+	}
+
+	tlvStream, err := tlv.NewStream(tlvRecords...)
+	if err != nil {
+		return err
+	}
+
+	return tlvStream.Encode(w)
 }

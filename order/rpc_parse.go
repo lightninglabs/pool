@@ -112,7 +112,8 @@ func parseNodeAddrs(rpcAddrs []*auctioneerrpc.NodeAddress,
 // ParseRPCServerOrder parses the incoming raw RPC server order into the go
 // native data types used in the order struct.
 func ParseRPCServerOrder(version uint32, details *auctioneerrpc.ServerOrder,
-	orderIsAsk bool, leaseDuration uint32) (*Kit, [33]byte, []net.Addr, [33]byte, error) {
+	orderIsAsk bool, leaseDuration uint32) (*Kit, [33]byte, []net.Addr,
+	[33]byte, error) {
 
 	var (
 		nonce       Nonce
@@ -213,7 +214,8 @@ func ParseRPCServerBid(details *auctioneerrpc.ServerBid) (*MatchedOrder, error) 
 	}
 
 	o.Order = &Bid{
-		Kit: *kit,
+		Kit:             *kit,
+		SelfChanBalance: btcutil.Amount(details.SelfChanBalance),
 	}
 
 	return o, nil

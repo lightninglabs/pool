@@ -47,7 +47,7 @@ Download the latest binaries from the
 ## LND
 
 Note that Pool requires `lnd` to be built with **all of its subservers** and
-requires running at least `v0.11.1`. Download the latest [official release
+requires running at least `v0.12.0`. Download the latest [official release
 binary](https://github.com/lightningnetwork/lnd/releases/latest) or build `lnd`
 from source by following the [installation
 instructions](https://github.com/lightningnetwork/lnd/blob/master/docs/INSTALL.md).

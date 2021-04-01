@@ -430,6 +430,7 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 			LeaseDurationBlocks: castOrder.LeaseDuration,
 			Version:             uint32(castOrder.Version),
 			MinNodeTier:         nodeTierEnum,
+			SelfChanBalance:     uint64(castOrder.SelfChanBalance),
 		}
 		rpcRequest.Details = &auctioneerrpc.ServerSubmitOrderRequest_Bid{
 			Bid: serverBid,

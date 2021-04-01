@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
@@ -25,6 +26,17 @@ const (
 	// ever have more than that many batches, we need to handle them in
 	// multiple steps anyway.
 	MaxBatchIDHistoryLookup = 10_000
+)
+
+var (
+	// DefaultBatchStepTimeout is the default time we allow an action that
+	// blocks the batch conversation (like peer connection establishment or
+	// channel open) to take. If any action takes longer, we might reject
+	// the order from that slow peer. This value SHOULD be lower than the
+	// defaultMsgTimeout on the server side otherwise nodes might get kicked
+	// out of the match making process for timing out even though it was
+	// their peer's fault.
+	DefaultBatchStepTimeout = 15 * time.Second
 )
 
 // BatchVersion is the type for the batch verification protocol.
@@ -214,8 +226,16 @@ func ChannelOutput(batchTx *wire.MsgTx, wallet lndclient.WalletKitClient,
 			"%v", err)
 	}
 
+	// A self channel balance is added on top of the number of units filled.
+	var selfChanBalance btcutil.Amount
+	if ourOrder.Type() == TypeBid {
+		selfChanBalance = ourOrder.(*Bid).SelfChanBalance
+	} else {
+		selfChanBalance = otherOrder.Order.(*Bid).SelfChanBalance
+	}
+
 	// Gather the information we expect to find in the batch TX.
-	expectedOutputSize := otherOrder.UnitsFilled.ToSatoshis()
+	expectedOutputSize := selfChanBalance + otherOrder.UnitsFilled.ToSatoshis()
 	_, expectedOut, err := input.GenFundingPkScript(
 		ourKey.PubKey.SerializeCompressed(), otherOrder.MultiSigKey[:],
 		int64(expectedOutputSize),

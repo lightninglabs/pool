@@ -300,7 +300,7 @@ func (v *batchVerifier) validateMatchedOrder(tally *AccountTally,
 		tally.CalcTakerDelta(
 			executionFee, clearingPrice,
 			otherOrder.UnitsFilled.ToSatoshis(),
-			ours.LeaseDuration,
+			ours.SelfChanBalance, ours.LeaseDuration,
 		)
 	}
 
