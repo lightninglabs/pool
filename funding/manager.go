@@ -84,7 +84,8 @@ type BaseClient interface {
 		opts ...grpc.CallOption) (*lnrpc.AbandonChannelResponse, error)
 }
 
-type Manager struct {
+// ManagerConfig holds all the items passed into the funding manager externally.
+type ManagerConfig struct {
 	// DB is the client database.
 	DB *clientdb.DB
 
@@ -116,6 +117,19 @@ type Manager struct {
 	// funding shim is created for a bid order where we expect an incoming
 	// channel at any moment.
 	NotifyShimCreated func(ourBid *order.Bid, pendingChanID [32]byte)
+}
+
+// Manager is responsible for everything channel funding related during the
+// match making process.
+type Manager struct {
+	cfg *ManagerConfig
+}
+
+// NewManager creates a new funding manager from the given config.
+func NewManager(cfg *ManagerConfig) *Manager {
+	return &Manager{
+		cfg: cfg,
+	}
 }
 
 // deriveFundingShim generates the proper funding shim that should be used by
@@ -161,7 +175,7 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 	// scratch.
 	ctxb := context.Background()
 	ourKeyLocator := ourOrder.Details().MultiSigKeyLocator
-	ourMultiSigKey, err := m.WalletKit.DeriveKey(
+	ourMultiSigKey, err := m.cfg.WalletKit.DeriveKey(
 		ctxb, &ourKeyLocator,
 	)
 	if err != nil {
@@ -229,7 +243,7 @@ func (m *Manager) registerFundingShim(ourBid *order.Bid,
 	if err != nil {
 		return err
 	}
-	_, err = m.BaseClient.FundingStateStep(
+	_, err = m.cfg.BaseClient.FundingStateStep(
 		ctxb, &lnrpc.FundingTransitionMsg{
 			Trigger: &lnrpc.FundingTransitionMsg_ShimRegister{
 				ShimRegister: fundingShim,
@@ -243,8 +257,8 @@ func (m *Manager) registerFundingShim(ourBid *order.Bid,
 	// In case there is a self chan balance involved, we need our channel
 	// acceptor to be aware of the incoming order so it can verify the push
 	// amount accordingly.
-	if m.NotifyShimCreated != nil {
-		m.NotifyShimCreated(ourBid, pendingChanID)
+	if m.cfg.NotifyShimCreated != nil {
+		m.cfg.NotifyShimCreated(ourBid, pendingChanID)
 	}
 
 	return nil
@@ -260,7 +274,7 @@ func (m *Manager) PrepChannelFunding(batch *order.Batch, getOrder order.Fetcher,
 
 	// As we need to change our behavior if the node has any Tor addresses,
 	// we'll fetch the current state of our advertised addrs now.
-	nodeInfo, err := m.LightningClient.GetInfo(context.Background())
+	nodeInfo, err := m.cfg.LightningClient.GetInfo(context.Background())
 	if err != nil {
 		log.Errorf("error in GetInfo: %v", err)
 		return err
@@ -271,14 +285,14 @@ func (m *Manager) PrepChannelFunding(batch *order.Batch, getOrder order.Fetcher,
 	// so we create a context that is valid for the whole funding step and
 	// use that everywhere.
 	setupCtx, cancel := context.WithTimeout(
-		context.Background(), m.BatchStepTimeout,
+		context.Background(), m.cfg.BatchStepTimeout,
 	)
 	defer cancel()
 
 	// Before we connect out to peers, we check that we don't get any new
 	// channels from peers we already have channels with, in case this is
 	// requested by the trader.
-	if m.NewNodesOnly {
+	if m.cfg.NewNodesOnly {
 		fundingRejects, err := m.rejectDuplicateChannels(batch)
 		if err != nil {
 			return err
@@ -416,7 +430,7 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 	// so we create a context that is valid for the whole funding step and
 	// use that everywhere.
 	setupCtx, cancel := context.WithTimeout(
-		context.Background(), m.BatchStepTimeout,
+		context.Background(), m.cfg.BatchStepTimeout,
 	)
 	defer cancel()
 
@@ -427,7 +441,7 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 	// flow, blocking until they all progress to the final state.
 	batchTxHash := batch.BatchTX.TxHash()
 	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
-		ourOrder, err := m.DB.GetOrder(ourOrderNonce)
+		ourOrder, err := m.cfg.DB.GetOrder(ourOrderNonce)
 		if err != nil {
 			return nil, err
 		}
@@ -486,7 +500,7 @@ func (m *Manager) BatchChannelSetup(batch *order.Batch,
 					matchedOrderBid.SelfChanBalance,
 				),
 			}
-			chanStream, err := m.BaseClient.OpenChannel(
+			chanStream, err := m.cfg.BaseClient.OpenChannel(
 				setupCtx, fundingReq,
 			)
 
@@ -591,7 +605,7 @@ func (m *Manager) waitForChannelOpen(ctx context.Context, quit <-chan struct{},
 	for {
 		var chanPoint wire.OutPoint
 		select {
-		case channel := <-m.PendingOpenChannels:
+		case channel := <-m.cfg.PendingOpenChannels:
 			var hash chainhash.Hash
 			copy(hash[:], channel.PendingOpenChannel.Txid)
 			chanPoint = wire.OutPoint{
@@ -630,7 +644,7 @@ func (m *Manager) waitForChannelOpen(ctx context.Context, quit <-chan struct{},
 		log.Debugf("Retrieving info for channel %v", chanPoint)
 
 		chanInfo, err := chaninfo.GatherChannelInfo(
-			ctx, m.LightningClient, m.WalletKit, chanPoint,
+			ctx, m.cfg.LightningClient, m.cfg.WalletKit, chanPoint,
 		)
 		if err != nil {
 			return nil, err
@@ -662,7 +676,7 @@ func (m *Manager) waitForChannelOpen(ctx context.Context, quit <-chan struct{},
 //
 // NOTE: This is part of the auctioneer.BatchCleaner interface.
 func (m *Manager) DeletePendingBatch() error {
-	return m.DB.DeletePendingBatch()
+	return m.cfg.DB.DeletePendingBatch()
 }
 
 // RemovePendingBatchArtifacts removes any funding shims or pending channels
@@ -676,7 +690,7 @@ func (m *Manager) RemovePendingBatchArtifacts(
 	batchTx *wire.MsgTx) error {
 
 	err := CancelPendingFundingShims(
-		matchedOrders, m.BaseClient, m.DB.GetOrder,
+		matchedOrders, m.cfg.BaseClient, m.cfg.DB.GetOrder,
 	)
 	if err != nil {
 		// CancelPendingFundingShims only returns hard errors that
@@ -689,8 +703,8 @@ func (m *Manager) RemovePendingBatchArtifacts(
 	// from a previous round of the same batch or a previous
 	// batch that we didn't make it into the final round.
 	err = AbandonCanceledChannels(
-		matchedOrders, batchTx, m.WalletKit, m.BaseClient,
-		m.DB.GetOrder,
+		matchedOrders, batchTx, m.cfg.WalletKit, m.cfg.BaseClient,
+		m.cfg.DB.GetOrder,
 	)
 	if err != nil {
 		// AbandonCanceledChannels also only returns hard errors that
@@ -708,7 +722,7 @@ func (m *Manager) connectToMatchedTrader(ctx context.Context,
 	nodeKey [33]byte, addrs []net.Addr) {
 
 	for _, addr := range addrs {
-		err := m.LightningClient.Connect(
+		err := m.cfg.LightningClient.Connect(
 			ctx, nodeKey, addr.String(), false,
 		)
 		if err != nil {
@@ -744,7 +758,7 @@ func (m *Manager) waitForPeerConnections(ctx context.Context,
 	// an update while we look for the already connected peers.
 	ctxc, cancel := context.WithCancel(ctx)
 	defer cancel()
-	subscription, err := m.BaseClient.SubscribePeerEvents(
+	subscription, err := m.cfg.BaseClient.SubscribePeerEvents(
 		ctxc, &lnrpc.PeerEventSubscription{},
 	)
 	if err != nil {
@@ -754,7 +768,7 @@ func (m *Manager) waitForPeerConnections(ctx context.Context,
 	// Query all connected peers. This only returns active peers so once a
 	// node key appears in this list, we can be reasonably sure the
 	// connection is established (flapping peers notwithstanding).
-	resp, err := m.BaseClient.ListPeers(
+	resp, err := m.cfg.BaseClient.ListPeers(
 		ctx, &lnrpc.ListPeersRequest{},
 	)
 	if err != nil {
@@ -851,11 +865,11 @@ func (m *Manager) rejectDuplicateChannels(
 	// We gather all peers from the open and pending channels.
 	ctxb := context.Background()
 	peers := make(map[route.Vertex]struct{})
-	openChans, err := m.LightningClient.ListChannels(ctxb)
+	openChans, err := m.cfg.LightningClient.ListChannels(ctxb)
 	if err != nil {
 		return nil, fmt.Errorf("error listing open channels: %v", err)
 	}
-	pendingChans, err := m.LightningClient.PendingChannels(ctxb)
+	pendingChans, err := m.cfg.LightningClient.PendingChannels(ctxb)
 	if err != nil {
 		return nil, fmt.Errorf("error listing pending channels: %v",
 			err)

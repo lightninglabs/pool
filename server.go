@@ -461,7 +461,7 @@ func (s *Server) setupClient() error {
 	// starting/stopping it though as all that logic is currently there for
 	// the other managers as well.
 	s.channelAcceptor = NewChannelAcceptor(s.lndServices.Client)
-	s.fundingManager = &funding.Manager{
+	s.fundingManager = funding.NewManager(&funding.ManagerConfig{
 		DB:               s.db,
 		WalletKit:        s.lndServices.WalletKit,
 		LightningClient:  s.lndServices.Client,
@@ -472,7 +472,7 @@ func (s *Server) setupClient() error {
 			chan *lnrpc.ChannelEventUpdate_PendingOpenChannel,
 		),
 		NotifyShimCreated: s.channelAcceptor.ShimRegistered,
-	}
+	})
 
 	// Create an instance of the auctioneer client library.
 	clientCfg := &auctioneer.Config{

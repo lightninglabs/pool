@@ -232,7 +232,7 @@ func newManagerHarness(t *testing.T) *managerHarness {
 		msgChan:        msgChan,
 		lnMock:         lightningClient,
 		baseClientMock: baseClientMock,
-		mgr: &Manager{
+		mgr: NewManager(&ManagerConfig{
 			DB:                  db,
 			WalletKit:           walletKitClient,
 			LightningClient:     lightningClient,
@@ -240,7 +240,7 @@ func newManagerHarness(t *testing.T) *managerHarness {
 			NewNodesOnly:        true,
 			PendingOpenChannels: msgChan,
 			BatchStepTimeout:    400 * time.Millisecond,
-		},
+		}),
 	}
 }
 
@@ -377,7 +377,7 @@ func TestFundingManager(t *testing.T) {
 
 	// Next, make sure we get a partial reject error if we enable the "new
 	// nodes only" flag and already have a channel with the matched node.
-	h.mgr.NewNodesOnly = true
+	h.mgr.cfg.NewNodesOnly = true
 	h.lnMock.Channels = append(h.lnMock.Channels, lndclient.ChannelInfo{
 		PubKeyBytes: node1Key,
 	})
@@ -397,7 +397,7 @@ func TestFundingManager(t *testing.T) {
 
 	// As a last check of the funding preparation, make sure we get a reject
 	// error if the connections to the remote peers couldn't be established.
-	h.mgr.NewNodesOnly = false
+	h.mgr.cfg.NewNodesOnly = false
 	h.baseClientMock.peerList = make(map[route.Vertex]string)
 	err = h.mgr.PrepChannelFunding(batch, h.db.GetOrder, h.quit)
 	require.Error(t, err)

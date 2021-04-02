@@ -238,7 +238,7 @@ func (s *rpcServer) consumePendingOpenChannels(
 		}
 
 		// Skip any events other than the pending open channel one.
-		channel, ok := msg.Channel.(*lnrpc.ChannelEventUpdate_PendingOpenChannel)
+		_, ok := msg.Channel.(*lnrpc.ChannelEventUpdate_PendingOpenChannel)
 		if !ok {
 			continue
 		}
@@ -249,11 +249,12 @@ func (s *rpcServer) consumePendingOpenChannels(
 			continue
 		}
 
-		select {
-		case s.server.fundingManager.PendingOpenChannels <- channel:
-		case <-s.quit:
-			return
-		}
+		// TODO(guggero): Move this in next commit
+		//select {
+		//case s.server.fundingManager.PendingOpenChannels <- channel:
+		//case <-s.quit:
+		//	return
+		//}
 	}
 }
 
