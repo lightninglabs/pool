@@ -462,15 +462,12 @@ func (s *Server) setupClient() error {
 	// the other managers as well.
 	s.channelAcceptor = NewChannelAcceptor(s.lndServices.Client)
 	s.fundingManager = funding.NewManager(&funding.ManagerConfig{
-		DB:               s.db,
-		WalletKit:        s.lndServices.WalletKit,
-		LightningClient:  s.lndServices.Client,
-		BaseClient:       s.lndClient,
-		BatchStepTimeout: order.DefaultBatchStepTimeout,
-		NewNodesOnly:     s.cfg.NewNodesOnly,
-		PendingOpenChannels: make(
-			chan *lnrpc.ChannelEventUpdate_PendingOpenChannel,
-		),
+		DB:                s.db,
+		WalletKit:         s.lndServices.WalletKit,
+		LightningClient:   s.lndServices.Client,
+		BaseClient:        s.lndClient,
+		BatchStepTimeout:  order.DefaultBatchStepTimeout,
+		NewNodesOnly:      s.cfg.NewNodesOnly,
 		NotifyShimCreated: s.channelAcceptor.ShimRegistered,
 	})
 

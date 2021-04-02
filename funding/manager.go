@@ -22,6 +22,7 @@ import (
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/routing/route"
+	"github.com/lightningnetwork/lnd/subscribe"
 	"github.com/lightningnetwork/lnd/tor"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -114,11 +115,6 @@ type ManagerConfig struct {
 	// node doesn't already have channels with.
 	NewNodesOnly bool
 
-	// PendingOpenChannels is a channel through which we'll receive
-	// notifications for pending open channels resulting from a successful
-	// batch.
-	PendingOpenChannels chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
-
 	// BatchStepTimeout is the timeout the manager uses when executing a
 	// single batch step.
 	BatchStepTimeout time.Duration
@@ -141,13 +137,16 @@ type Manager struct {
 	quit chan struct{}
 
 	pendingOpenChanCancel func()
+	pendingOpenChanServer *subscribe.Server
+	pendingOpenChanClient *subscribe.Client
 }
 
 // NewManager creates a new funding manager from the given config.
 func NewManager(cfg *ManagerConfig) *Manager {
 	return &Manager{
-		cfg:  cfg,
-		quit: make(chan struct{}),
+		cfg:                   cfg,
+		quit:                  make(chan struct{}),
+		pendingOpenChanServer: subscribe.NewServer(),
 	}
 }
 
@@ -170,6 +169,20 @@ func (m *Manager) Start() error {
 		return err
 	}
 
+	if err := m.pendingOpenChanServer.Start(); err != nil {
+		return fmt.Errorf("error starting pending chan subscription "+
+			"server: %v", err)
+	}
+
+	// We want to make sure we don't miss any channel updates as long as we
+	// are running. But we might not be the only manager interested in the
+	// updates, that's why we are a client to our own server.
+	m.pendingOpenChanClient, err = m.SubscribePendingOpenChan()
+	if err != nil {
+		return fmt.Errorf("error subscribing to pending open "+
+			"channel events: %v", err)
+	}
+
 	m.wg.Add(1)
 	go m.consumePendingOpenChannels(subStream)
 
@@ -190,6 +203,11 @@ func (m *Manager) Stop() error {
 
 	// We call this before Wait to ensure the goroutine is stopped by this
 	// call.
+	m.pendingOpenChanClient.Cancel()
+	if err := m.pendingOpenChanServer.Stop(); err != nil {
+		return fmt.Errorf("error stopping pending chan subscription "+
+			"server: %v", err)
+	}
 	m.pendingOpenChanCancel()
 
 	m.wg.Wait()
@@ -239,12 +257,17 @@ func (m *Manager) consumePendingOpenChannels(
 			continue
 		}
 
-		select {
-		case m.cfg.PendingOpenChannels <- channel:
-		case <-m.quit:
-			return
+		update := channel.PendingOpenChannel
+		if err := m.pendingOpenChanServer.SendUpdate(update); err != nil {
+			log.Errorf("Error sending open channel update: %v", err)
 		}
 	}
+}
+
+// SubscribePendingOpenChan creates a new subscription client to receive events
+// for pending open channels from lnd.
+func (m *Manager) SubscribePendingOpenChan() (*subscribe.Client, error) {
+	return m.pendingOpenChanServer.Subscribe()
 }
 
 // deriveFundingShim generates the proper funding shim that should be used by
@@ -692,7 +715,9 @@ func (m *Manager) BatchChannelSetup(
 
 	// We've kicked off all channel open streams. We'll now need to wait for
 	// either completion of the funding process or a timeout.
-	return m.waitForChannelOpen(setupCtx, chanPoints, fundingRejects)
+	return m.waitForChannelOpen(
+		setupCtx, chanPoints, m.pendingOpenChanClient, fundingRejects,
+	)
 }
 
 // waitForChannelOpen waits until we get a pending open channel message for each
@@ -700,7 +725,7 @@ func (m *Manager) BatchChannelSetup(
 // instead return a reject error with all the orders for which the funding
 // failed.
 func (m *Manager) waitForChannelOpen(ctx context.Context,
-	chanPoints map[wire.OutPoint]order.Nonce,
+	chanPoints map[wire.OutPoint]order.Nonce, chanUpdates *subscribe.Client,
 	fundingRejects map[order.Nonce]*auctioneerrpc.OrderReject) (
 	map[wire.OutPoint]*chaninfo.ChannelInfo, error) {
 
@@ -720,12 +745,17 @@ func (m *Manager) waitForChannelOpen(ctx context.Context,
 	for {
 		var chanPoint wire.OutPoint
 		select {
-		case channel := <-m.cfg.PendingOpenChannels:
+		case channel := <-chanUpdates.Updates():
+			pendingChannel, ok := channel.(*lnrpc.PendingUpdate)
+			if !ok || pendingChannel == nil {
+				continue
+			}
+
 			var hash chainhash.Hash
-			copy(hash[:], channel.PendingOpenChannel.Txid)
+			copy(hash[:], pendingChannel.Txid)
 			chanPoint = wire.OutPoint{
 				Hash:  hash,
-				Index: channel.PendingOpenChannel.OutputIndex,
+				Index: pendingChannel.OutputIndex,
 			}
 
 		case <-ctx.Done():
@@ -744,6 +774,9 @@ func (m *Manager) waitForChannelOpen(ctx context.Context,
 			return nil, &MatchRejectErr{
 				RejectedOrders: fundingRejects,
 			}
+
+		case <-m.pendingOpenChanClient.Quit():
+			return nil, fmt.Errorf("server shutting down")
 
 		case <-m.quit:
 			return nil, fmt.Errorf("server shutting down")

@@ -254,7 +254,6 @@ func newManagerHarness(t *testing.T) *managerHarness {
 	}
 
 	quit := make(chan struct{})
-	msgChan := make(chan *lnrpc.ChannelEventUpdate_PendingOpenChannel)
 	lightningClient := test.NewMockLightning()
 	walletKitClient := test.NewMockWalletKit()
 	baseClientMock := &fundingBaseClientMock{
@@ -267,13 +266,12 @@ func newManagerHarness(t *testing.T) *managerHarness {
 		quit:            quit,
 	}
 	mgr := NewManager(&ManagerConfig{
-		DB:                  db,
-		WalletKit:           walletKitClient,
-		LightningClient:     lightningClient,
-		BaseClient:          baseClientMock,
-		NewNodesOnly:        true,
-		PendingOpenChannels: msgChan,
-		BatchStepTimeout:    400 * time.Millisecond,
+		DB:               db,
+		WalletKit:        walletKitClient,
+		LightningClient:  lightningClient,
+		BaseClient:       baseClientMock,
+		NewNodesOnly:     true,
+		BatchStepTimeout: 400 * time.Millisecond,
 	})
 
 	err = mgr.Start()
