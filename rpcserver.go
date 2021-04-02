@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,8 +35,6 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/signal"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -63,12 +60,11 @@ type rpcServer struct {
 	accountManager *account.Manager
 	orderManager   *order.Manager
 
-	quit                           chan struct{}
-	wg                             sync.WaitGroup
-	blockNtfnCancel                func()
-	pendingOpenChannelStreamCancel func()
-	recoveryMutex                  sync.Mutex
-	recoveryPending                bool
+	quit            chan struct{}
+	wg              sync.WaitGroup
+	blockNtfnCancel func()
+	recoveryMutex   sync.Mutex
+	recoveryPending bool
 
 	// wumboSupported is true if the backing lnd node supports wumbo
 	// channels.
@@ -167,17 +163,6 @@ func (s *rpcServer) Start() error {
 
 	s.updateHeight(height)
 
-	// Subscribe to pending open channel notifications. This will be useful
-	// when we're creating channels with a matched order as part of a batch.
-	streamCtx, streamCancel := context.WithCancel(ctx)
-	s.pendingOpenChannelStreamCancel = streamCancel
-	subStream, err := s.lndClient.SubscribeChannelEvents(
-		streamCtx, &lnrpc.ChannelEventSubscription{},
-	)
-	if err != nil {
-		return err
-	}
-
 	// Start the auctioneer client first to establish a connection.
 	if err := s.auctioneer.Start(); err != nil {
 		return fmt.Errorf("unable to start auctioneer client: %v", err)
@@ -190,72 +175,19 @@ func (s *rpcServer) Start() error {
 	if err := s.orderManager.Start(); err != nil {
 		return fmt.Errorf("unable to start order manager: %v", err)
 	}
+	if err := s.server.fundingManager.Start(); err != nil {
+		return fmt.Errorf("unable to start funding manager: %v", err)
+	}
 	if err := s.server.channelAcceptor.Start(blockErrChan); err != nil {
 		return fmt.Errorf("unable to start channel acceptor: %v", err)
 	}
 
-	s.wg.Add(2)
+	s.wg.Add(1)
 	go s.serverHandler(blockChan, blockErrChan)
-	go s.consumePendingOpenChannels(subStream)
 
 	rpcLog.Infof("Trader server is now active")
 
 	return nil
-}
-
-// consumePendingOpenChannels consumes pending open channel events from the
-// stream and notifies them if the trader currently has an ongoing batch.
-func (s *rpcServer) consumePendingOpenChannels(
-	subStream lnrpc.Lightning_SubscribeChannelEventsClient) {
-
-	defer s.wg.Done()
-
-	for {
-		select {
-		case <-s.quit:
-			return
-		default:
-		}
-
-		msg, err := subStream.Recv()
-		if err != nil {
-			select {
-			case <-s.quit:
-				return
-			default:
-			}
-
-			rpcLog.Errorf("Unable to read channel event: %v", err)
-
-			// If the lnd node shut down, there's no use continuing.
-			if err == io.EOF || err == io.ErrUnexpectedEOF ||
-				status.Code(err) == codes.Unavailable {
-
-				return
-			}
-
-			continue
-		}
-
-		// Skip any events other than the pending open channel one.
-		_, ok := msg.Channel.(*lnrpc.ChannelEventUpdate_PendingOpenChannel)
-		if !ok {
-			continue
-		}
-
-		// If we don't have a pending batch, then there's no need to
-		// notify any pending open channels..
-		if !s.orderManager.HasPendingBatch() {
-			continue
-		}
-
-		// TODO(guggero): Move this in next commit
-		//select {
-		//case s.server.fundingManager.PendingOpenChannels <- channel:
-		//case <-s.quit:
-		//	return
-		//}
-	}
 }
 
 // Stop stops the server.
@@ -265,6 +197,9 @@ func (s *rpcServer) Stop() error {
 	}
 
 	rpcLog.Info("Trader server stopping")
+	if err := s.server.fundingManager.Stop(); err != nil {
+		rpcLog.Errorf("Error stopping funding manager: %v", err)
+	}
 	s.server.channelAcceptor.Stop()
 	s.accountManager.Stop()
 	s.orderManager.Stop()
@@ -273,10 +208,6 @@ func (s *rpcServer) Stop() error {
 	}
 
 	close(s.quit)
-
-	// We call this before Wait to ensure the goroutine is stopped by this
-	// call.
-	s.pendingOpenChannelStreamCancel()
 
 	s.wg.Wait()
 	s.blockNtfnCancel()
@@ -418,7 +349,7 @@ func (s *rpcServer) handleServerMessage(
 		// end which include applying any order match predicates,
 		// connecting out to peers, and registering funding shim.
 		err = s.server.fundingManager.PrepChannelFunding(
-			batch, s.server.db.GetOrder, s.quit,
+			batch, s.server.db.GetOrder,
 		)
 		if err != nil {
 			rpcLog.Warnf("Error preparing channel funding: %v",
@@ -439,7 +370,7 @@ func (s *rpcServer) handleServerMessage(
 		// once all channel partners have responded.
 		batch := s.orderManager.PendingBatch()
 		channelKeys, err := s.server.fundingManager.BatchChannelSetup(
-			batch, s.quit,
+			batch,
 		)
 		if err != nil {
 			rpcLog.Errorf("Error setting up channels: %v", err)
