@@ -49,6 +49,16 @@ const (
 	// self channel balance field. Only orders with this version are allowed
 	// to use the self channel balance field.
 	VersionSelfChanBalance Version = 3
+
+	// VersionSidecarChannel is the order version that added sidecar
+	// channels for bid orders. Only orders with this version are allowed
+	// to set the sidecar ticket field on bid orders. Since sidecar orders
+	// also add the feature of push amounts on the leased channels, this
+	// affects makers as well. Makers that don't want to support leasing out
+	// channels with a push amount (because it might screw up their
+	// accounting or whatever) can opt out by explicitly submitting their
+	// ask orders with a version previous to this one.
+	VersionSidecarChannel Version = 4
 )
 
 // Type is the type of an order. We don't use iota for the constants due to the
@@ -370,7 +380,7 @@ func (a *Ask) Digest() ([sha256.Size]byte, error) {
 		}
 
 	case VersionNodeTierMinMatch, VersionLeaseDurationBuckets,
-		VersionSelfChanBalance:
+		VersionSelfChanBalance, VersionSidecarChannel:
 
 		err := lnwire.WriteElements(
 			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
@@ -520,6 +530,15 @@ type Bid struct {
 	// to the channel resulting from matching this bid by moving additional
 	// funds from the taker's account into the channel.
 	SelfChanBalance btcutil.Amount
+
+	// SidecarTicket indicates, if non-nil, that the channel being purchased
+	// with this bid should be opened to a node other than the caller's
+	// node. The lease recipient is another Pool (light) node that
+	// authenticates itself to the auctioneer using the information in this
+	// ticket (the information exchange between bidder and lease recipient
+	// happens out of band). This will only be used if the order version is
+	// VersionSidecarChannel or greater.
+	SidecarTicket *sidecar.Ticket
 }
 
 // Type returns the order type.
@@ -565,6 +584,22 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
 			uint32(b.MinNodeTier), uint32(b.MinUnitsMatch),
 			uint64(b.SelfChanBalance),
+		)
+		if err != nil {
+			return result, err
+		}
+
+	case VersionSidecarChannel:
+		var isSidecar uint8
+		if b.SidecarTicket != nil {
+			isSidecar = 1
+		}
+
+		err := lnwire.WriteElements(
+			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
+			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
+			uint32(b.MinNodeTier), uint32(b.MinUnitsMatch),
+			uint64(b.SelfChanBalance), isSidecar,
 		)
 		if err != nil {
 			return result, err

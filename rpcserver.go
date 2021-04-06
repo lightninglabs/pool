@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,8 +35,6 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/signal"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -63,12 +60,11 @@ type rpcServer struct {
 	accountManager *account.Manager
 	orderManager   *order.Manager
 
-	quit                           chan struct{}
-	wg                             sync.WaitGroup
-	blockNtfnCancel                func()
-	pendingOpenChannelStreamCancel func()
-	recoveryMutex                  sync.Mutex
-	recoveryPending                bool
+	quit            chan struct{}
+	wg              sync.WaitGroup
+	blockNtfnCancel func()
+	recoveryMutex   sync.Mutex
+	recoveryPending bool
 
 	// wumboSupported is true if the backing lnd node supports wumbo
 	// channels.
@@ -167,17 +163,6 @@ func (s *rpcServer) Start() error {
 
 	s.updateHeight(height)
 
-	// Subscribe to pending open channel notifications. This will be useful
-	// when we're creating channels with a matched order as part of a batch.
-	streamCtx, streamCancel := context.WithCancel(ctx)
-	s.pendingOpenChannelStreamCancel = streamCancel
-	subStream, err := s.lndClient.SubscribeChannelEvents(
-		streamCtx, &lnrpc.ChannelEventSubscription{},
-	)
-	if err != nil {
-		return err
-	}
-
 	// Start the auctioneer client first to establish a connection.
 	if err := s.auctioneer.Start(); err != nil {
 		return fmt.Errorf("unable to start auctioneer client: %v", err)
@@ -190,71 +175,19 @@ func (s *rpcServer) Start() error {
 	if err := s.orderManager.Start(); err != nil {
 		return fmt.Errorf("unable to start order manager: %v", err)
 	}
+	if err := s.server.fundingManager.Start(); err != nil {
+		return fmt.Errorf("unable to start funding manager: %v", err)
+	}
 	if err := s.server.channelAcceptor.Start(blockErrChan); err != nil {
 		return fmt.Errorf("unable to start channel acceptor: %v", err)
 	}
 
-	s.wg.Add(2)
+	s.wg.Add(1)
 	go s.serverHandler(blockChan, blockErrChan)
-	go s.consumePendingOpenChannels(subStream)
 
 	rpcLog.Infof("Trader server is now active")
 
 	return nil
-}
-
-// consumePendingOpenChannels consumes pending open channel events from the
-// stream and notifies them if the trader currently has an ongoing batch.
-func (s *rpcServer) consumePendingOpenChannels(
-	subStream lnrpc.Lightning_SubscribeChannelEventsClient) {
-
-	defer s.wg.Done()
-
-	for {
-		select {
-		case <-s.quit:
-			return
-		default:
-		}
-
-		msg, err := subStream.Recv()
-		if err != nil {
-			select {
-			case <-s.quit:
-				return
-			default:
-			}
-
-			rpcLog.Errorf("Unable to read channel event: %v", err)
-
-			// If the lnd node shut down, there's no use continuing.
-			if err == io.EOF || err == io.ErrUnexpectedEOF ||
-				status.Code(err) == codes.Unavailable {
-
-				return
-			}
-
-			continue
-		}
-
-		// Skip any events other than the pending open channel one.
-		channel, ok := msg.Channel.(*lnrpc.ChannelEventUpdate_PendingOpenChannel)
-		if !ok {
-			continue
-		}
-
-		// If we don't have a pending batch, then there's no need to
-		// notify any pending open channels..
-		if !s.orderManager.HasPendingBatch() {
-			continue
-		}
-
-		select {
-		case s.server.fundingManager.PendingOpenChannels <- channel:
-		case <-s.quit:
-			return
-		}
-	}
 }
 
 // Stop stops the server.
@@ -264,6 +197,9 @@ func (s *rpcServer) Stop() error {
 	}
 
 	rpcLog.Info("Trader server stopping")
+	if err := s.server.fundingManager.Stop(); err != nil {
+		rpcLog.Errorf("Error stopping funding manager: %v", err)
+	}
 	s.server.channelAcceptor.Stop()
 	s.accountManager.Stop()
 	s.orderManager.Stop()
@@ -272,10 +208,6 @@ func (s *rpcServer) Stop() error {
 	}
 
 	close(s.quit)
-
-	// We call this before Wait to ensure the goroutine is stopped by this
-	// call.
-	s.pendingOpenChannelStreamCancel()
 
 	s.wg.Wait()
 	s.blockNtfnCancel()
@@ -416,7 +348,9 @@ func (s *rpcServer) handleServerMessage(
 		// Before we accept the batch, we'll finish preparations on our
 		// end which include applying any order match predicates,
 		// connecting out to peers, and registering funding shim.
-		err = s.server.fundingManager.PrepChannelFunding(batch, s.quit)
+		err = s.server.fundingManager.PrepChannelFunding(
+			batch, s.server.db.GetOrder,
+		)
 		if err != nil {
 			rpcLog.Warnf("Error preparing channel funding: %v",
 				err)
@@ -436,7 +370,7 @@ func (s *rpcServer) handleServerMessage(
 		// once all channel partners have responded.
 		batch := s.orderManager.PendingBatch()
 		channelKeys, err := s.server.fundingManager.BatchChannelSetup(
-			batch, s.quit,
+			batch,
 		)
 		if err != nil {
 			rpcLog.Errorf("Error setting up channels: %v", err)
@@ -1585,38 +1519,9 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 		rpcSigs[key] = sig.Serialize()
 	}
 
-	rpcChannelInfos := make(map[string]*auctioneerrpc.ChannelInfo, len(chanInfos))
-	for chanPoint, chanInfo := range chanInfos {
-		var channelType auctioneerrpc.ChannelType
-		switch chanInfo.Version {
-		case chanbackup.TweaklessCommitVersion:
-			channelType = auctioneerrpc.ChannelType_TWEAKLESS
-
-		// The AnchorsCommitVersion was never widely deployed (at least
-		// in mainnet) because the lnd version that included it guarded
-		// the anchor channels behind a config flag. Also, the two
-		// anchor versions only differ in the fee negotiation and not
-		// the commitment TX format, so we don't need to distinguish
-		// between them for our purpose.
-		case chanbackup.AnchorsCommitVersion,
-			chanbackup.AnchorsZeroFeeHtlcTxCommitVersion:
-
-			channelType = auctioneerrpc.ChannelType_ANCHORS
-		default:
-			return fmt.Errorf("unknown channel type: %v",
-				chanInfo.Version)
-		}
-		rpcChannelInfos[chanPoint.String()] = &auctioneerrpc.ChannelInfo{
-			Type: channelType,
-			LocalNodeKey: chanInfo.LocalNodeKey.
-				SerializeCompressed(),
-			RemoteNodeKey: chanInfo.RemoteNodeKey.
-				SerializeCompressed(),
-			LocalPaymentBasePoint: chanInfo.LocalPaymentBasePoint.
-				SerializeCompressed(),
-			RemotePaymentBasePoint: chanInfo.RemotePaymentBasePoint.
-				SerializeCompressed(),
-		}
+	rpcChannelInfos, err := marshallChannelInfo(chanInfos)
+	if err != nil {
+		return fmt.Errorf("error marshalling channel info: %v", err)
 	}
 
 	rpcLog.Infof("Sending OrderMatchSign for batch %x", batch.ID[:])
@@ -2340,4 +2245,48 @@ func unmarshallNodeTier(nodeTier auctioneerrpc.NodeTier) (order.NodeTier,
 	default:
 		return 0, fmt.Errorf("unknown node tier: %v", nodeTier)
 	}
+}
+
+// marshallChannelInfo turns the given channel information map into its RPC
+// counterpart.
+func marshallChannelInfo(chanInfos map[wire.OutPoint]*chaninfo.ChannelInfo) (
+	map[string]*auctioneerrpc.ChannelInfo, error) {
+
+	rpcChannelInfos := make(
+		map[string]*auctioneerrpc.ChannelInfo, len(chanInfos),
+	)
+	for chanPoint, chanInfo := range chanInfos {
+		var channelType auctioneerrpc.ChannelType
+		switch chanInfo.Version {
+		case chanbackup.TweaklessCommitVersion:
+			channelType = auctioneerrpc.ChannelType_TWEAKLESS
+
+		// The AnchorsCommitVersion was never widely deployed (at least
+		// in mainnet) because the lnd version that included it guarded
+		// the anchor channels behind a config flag. Also, the two
+		// anchor versions only differ in the fee negotiation and not
+		// the commitment TX format, so we don't need to distinguish
+		// between them for our purpose.
+		case chanbackup.AnchorsCommitVersion,
+			chanbackup.AnchorsZeroFeeHtlcTxCommitVersion:
+
+			channelType = auctioneerrpc.ChannelType_ANCHORS
+		default:
+			return nil, fmt.Errorf("unknown channel type: %v",
+				chanInfo.Version)
+		}
+		rpcChannelInfos[chanPoint.String()] = &auctioneerrpc.ChannelInfo{
+			Type: channelType,
+			LocalNodeKey: chanInfo.LocalNodeKey.
+				SerializeCompressed(),
+			RemoteNodeKey: chanInfo.RemoteNodeKey.
+				SerializeCompressed(),
+			LocalPaymentBasePoint: chanInfo.LocalPaymentBasePoint.
+				SerializeCompressed(),
+			RemotePaymentBasePoint: chanInfo.RemotePaymentBasePoint.
+				SerializeCompressed(),
+		}
+	}
+
+	return rpcChannelInfos, nil
 }

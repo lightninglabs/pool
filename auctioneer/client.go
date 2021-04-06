@@ -481,14 +481,16 @@ func (c *Client) OrderState(ctx context.Context, nonce order.Nonce) (
 	})
 }
 
-// SubscribeAccountUpdates opens a stream to the server and subscribes
-// to all updates that concern the given account, including all orders
-// that spend from that account. Only a single stream is ever open to
-// the server, so a second call to this method will send a second
-// subscription over the same stream, multiplexing all messages into the
-// same connection. A stream can be long-lived, so this can be called
-// for every account as soon as it's confirmed open.
-func (c *Client) SubscribeAccountUpdates(ctx context.Context,
+// StartAccountSubscription opens a stream to the server and subscribes to all
+// updates that concern the given account, including all orders that spend from
+// that account. Only a single stream is ever open to the server, so a second
+// call to this method will send a second subscription over the same stream,
+// multiplexing all messages into the same connection. A stream can be
+// long-lived, so this can be called for every account as soon as it's confirmed
+// open. This method will return as soon as the authentication was successful.
+// Messages sent from the server can then be received on the FromServerChan
+// channel.
+func (c *Client) StartAccountSubscription(ctx context.Context,
 	acctKey *keychain.KeyDescriptor) error {
 
 	_, _, err := c.connectAndAuthenticate(ctx, acctKey, false)
@@ -1135,7 +1137,7 @@ func (c *Client) HandleServerShutdown(err error) error {
 	}
 	c.subscribedAcctsMtx.Unlock()
 	for _, acctKey := range acctKeys {
-		err := c.SubscribeAccountUpdates(context.Background(), acctKey)
+		err := c.StartAccountSubscription(context.Background(), acctKey)
 		if err != nil {
 			return err
 		}

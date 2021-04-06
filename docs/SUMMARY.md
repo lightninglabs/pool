@@ -8,5 +8,6 @@
 * [Orders](orders.md)
 * [Channel Leases](channel_leases.md)
 * [Batch Execution](batch_execution.md)
+* [Sidecar Channels](sidecar_channels.md)
 * [FAQs](faq.md)
 

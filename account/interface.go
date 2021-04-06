@@ -380,14 +380,16 @@ type Auctioneer interface {
 	ModifyAccount(context.Context, *Account, []*wire.TxIn,
 		[]*wire.TxOut, []Modifier) ([]byte, error)
 
-	// SubscribeAccountUpdates opens a stream to the server and subscribes
+	// StartAccountSubscription opens a stream to the server and subscribes
 	// to all updates that concern the given account, including all orders
 	// that spend from that account. Only a single stream is ever open to
 	// the server, so a second call to this method will send a second
 	// subscription over the same stream, multiplexing all messages into the
 	// same connection. A stream can be long-lived, so this can be called
-	// for every account as soon as it's confirmed open.
-	SubscribeAccountUpdates(context.Context, *keychain.KeyDescriptor) error
+	// for every account as soon as it's confirmed open. This method will
+	// return as soon as the authentication was successful. Messages sent
+	// from the server can then be received on the FromServerChan channel.
+	StartAccountSubscription(context.Context, *keychain.KeyDescriptor) error
 
 	// Terms returns the current dynamic auctioneer terms like max account
 	// size, max order duration in blocks and the auction fee schedule.

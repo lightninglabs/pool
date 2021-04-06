@@ -195,7 +195,7 @@ func (a *mockAuctioneer) ModifyAccount(_ context.Context, _ *Account,
 	return []byte("auctioneer sig"), nil
 }
 
-func (a *mockAuctioneer) SubscribeAccountUpdates(_ context.Context,
+func (a *mockAuctioneer) StartAccountSubscription(_ context.Context,
 	accountKey *keychain.KeyDescriptor) error {
 
 	var traderKey [33]byte

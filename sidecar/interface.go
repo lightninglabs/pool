@@ -102,6 +102,10 @@ type Offer struct {
 	// reduce the matching chances somewhat.
 	PushAmt btcutil.Amount
 
+	// LeaseDurationBlocks is the number of blocks the offered channel in
+	// this offer would be leased for.
+	LeaseDurationBlocks uint32
+
 	// SignPubKey is the public key for corresponding to the private key
 	// that signed the SigOfferDigest below and, in a later state, the
 	// SigOrderDigest of the Order struct.
@@ -124,6 +128,9 @@ type Recipient struct {
 	// multisig keys of the channel funding transaction output and is
 	// advertised in the bid order.
 	MultiSigPubKey *btcec.PublicKey
+
+	// MultiSigKeyIndex is the derivation index of the MultiSigPubKey.
+	MultiSigKeyIndex uint32
 }
 
 // Order is a struct holding the information about the sidecar bid order after
@@ -189,15 +196,16 @@ type Ticket struct {
 // NewTicket creates a new sidecar ticket with the given version and offer
 // information.
 func NewTicket(version Version, capacity, pushAmt btcutil.Amount,
-	offerPubKey *btcec.PublicKey) (*Ticket, error) {
+	duration uint32, offerPubKey *btcec.PublicKey) (*Ticket, error) {
 
 	t := &Ticket{
 		Version: version,
 		State:   StateOffered,
 		Offer: Offer{
-			Capacity:   capacity,
-			PushAmt:    pushAmt,
-			SignPubKey: offerPubKey,
+			Capacity:            capacity,
+			PushAmt:             pushAmt,
+			LeaseDurationBlocks: duration,
+			SignPubKey:          offerPubKey,
 		},
 	}
 
@@ -255,4 +263,22 @@ func (t *Ticket) OrderDigest() ([32]byte, error) {
 		return result, fmt.Errorf("unknown version %d", t.Version)
 	}
 	return sha256.Sum256(msg.Bytes()), nil
+}
+
+// Store is the interface a persistent storage must implement for storing and
+// retrieving sidecar tickets.
+type Store interface {
+	// AddSidecar adds a record for the sidecar order to the database.
+	AddSidecar(sidecar *Ticket) error
+
+	// UpdateSidecar updates a sidecar order in the database.
+	UpdateSidecar(sidecar *Ticket) error
+
+	// Sidecar retrieves a specific sidecar by its ID and provider signing
+	// key (offer signature pubkey) or returns ErrNoSidecar if it's not
+	// found.
+	Sidecar(id [8]byte, offerSignPubKey *btcec.PublicKey) (*Ticket, error)
+
+	// Sidecars retrieves all known sidecar orders from the database.
+	Sidecars() ([]*Ticket, error)
 }

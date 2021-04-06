@@ -85,13 +85,44 @@ func (i *peerEventStream) Recv() (*lnrpc.PeerEvent, error) {
 	}
 }
 
+type channelEventStream struct {
+	lnrpc.Lightning_SubscribeChannelEventsClient
+
+	updateChan         chan *lnrpc.ChannelEventUpdate
+	ctx                context.Context
+	cancelSubscription chan struct{}
+	quit               chan struct{}
+}
+
+func (c *channelEventStream) Recv() (*lnrpc.ChannelEventUpdate, error) {
+	select {
+	case msg := <-c.updateChan:
+		return msg, nil
+
+	// To mimic the real GRPC client, we'll return an error status.
+	case <-c.ctx.Done():
+		return nil, status.Error(
+			codes.DeadlineExceeded, c.ctx.Err().Error(),
+		)
+
+	case <-c.cancelSubscription:
+		return nil, status.Error(
+			codes.Canceled, "subscription canceled",
+		)
+
+	case <-c.quit:
+		return nil, context.Canceled
+	}
+}
+
 type fundingBaseClientMock struct {
 	lightningClient *test.MockLightning
 	fundingShims    map[[32]byte]*lnrpc.ChanPointShim
 
-	peerList   map[route.Vertex]string
-	peerEvents chan *lnrpc.PeerEvent
-	cancelSub  chan struct{}
+	peerList      map[route.Vertex]string
+	peerEvents    chan *lnrpc.PeerEvent
+	channelEvents chan *lnrpc.ChannelEventUpdate
+	cancelSub     chan struct{}
 
 	quit chan struct{}
 }
@@ -157,6 +188,17 @@ func (m *fundingBaseClientMock) OpenChannel(ctx context.Context,
 	return stream, nil
 }
 
+func (m *fundingBaseClientMock) SubscribeChannelEvents(ctx context.Context,
+	_ *lnrpc.ChannelEventSubscription, _ ...grpc.CallOption) (
+	lnrpc.Lightning_SubscribeChannelEventsClient, error) {
+
+	return &channelEventStream{
+		quit:       m.quit,
+		ctx:        ctx,
+		updateChan: m.channelEvents,
+	}, nil
+}
+
 func (m *fundingBaseClientMock) ListPeers(_ context.Context,
 	_ *lnrpc.ListPeersRequest,
 	_ ...grpc.CallOption) (*lnrpc.ListPeersResponse, error) {
@@ -196,7 +238,6 @@ type managerHarness struct {
 	tempDir        string
 	db             *clientdb.DB
 	quit           chan struct{}
-	msgChan        chan *lnrpc.ChannelEventUpdate_PendingOpenChannel
 	lnMock         *test.MockLightning
 	baseClientMock *fundingBaseClientMock
 	mgr            *Manager
@@ -213,7 +254,6 @@ func newManagerHarness(t *testing.T) *managerHarness {
 	}
 
 	quit := make(chan struct{})
-	msgChan := make(chan *lnrpc.ChannelEventUpdate_PendingOpenChannel)
 	lightningClient := test.NewMockLightning()
 	walletKitClient := test.NewMockWalletKit()
 	baseClientMock := &fundingBaseClientMock{
@@ -221,26 +261,30 @@ func newManagerHarness(t *testing.T) *managerHarness {
 		fundingShims:    make(map[[32]byte]*lnrpc.ChanPointShim),
 		peerList:        make(map[route.Vertex]string),
 		peerEvents:      make(chan *lnrpc.PeerEvent),
+		channelEvents:   make(chan *lnrpc.ChannelEventUpdate),
 		cancelSub:       make(chan struct{}),
 		quit:            quit,
 	}
+	mgr := NewManager(&ManagerConfig{
+		DB:               db,
+		WalletKit:        walletKitClient,
+		LightningClient:  lightningClient,
+		BaseClient:       baseClientMock,
+		NewNodesOnly:     true,
+		BatchStepTimeout: 400 * time.Millisecond,
+	})
+
+	err = mgr.Start()
+	require.NoError(t, err)
+
 	return &managerHarness{
 		t:              t,
 		tempDir:        tempDir,
 		db:             db,
 		quit:           quit,
-		msgChan:        msgChan,
 		lnMock:         lightningClient,
 		baseClientMock: baseClientMock,
-		mgr: &Manager{
-			DB:                  db,
-			WalletKit:           walletKitClient,
-			LightningClient:     lightningClient,
-			BaseClient:          baseClientMock,
-			NewNodesOnly:        true,
-			PendingOpenChannels: msgChan,
-			BatchStepTimeout:    400 * time.Millisecond,
-		},
+		mgr:            mgr,
 	}
 }
 
@@ -248,6 +292,7 @@ func (m *managerHarness) stop() {
 	close(m.quit)
 	require.NoError(m.t, m.db.Close())
 	require.NoError(m.t, os.RemoveAll(m.tempDir))
+	require.NoError(m.t, m.mgr.Stop())
 }
 
 // TestFundingManager tests that the two main steps of the funding manager (the
@@ -335,7 +380,7 @@ func TestFundingManager(t *testing.T) {
 	h.baseClientMock.peerList = map[route.Vertex]string{
 		node1Key: "1.1.1.1",
 	}
-	err = h.mgr.PrepChannelFunding(batch, h.quit)
+	err = h.mgr.PrepChannelFunding(batch, h.db.GetOrder)
 	require.NoError(t, err)
 
 	// Verify we have the expected connections and funding shims registered.
@@ -377,11 +422,11 @@ func TestFundingManager(t *testing.T) {
 
 	// Next, make sure we get a partial reject error if we enable the "new
 	// nodes only" flag and already have a channel with the matched node.
-	h.mgr.NewNodesOnly = true
+	h.mgr.cfg.NewNodesOnly = true
 	h.lnMock.Channels = append(h.lnMock.Channels, lndclient.ChannelInfo{
 		PubKeyBytes: node1Key,
 	})
-	err = h.mgr.PrepChannelFunding(batch, h.quit)
+	err = h.mgr.PrepChannelFunding(batch, h.db.GetOrder)
 	require.Error(t, err)
 
 	expectedErr := &MatchRejectErr{
@@ -397,9 +442,9 @@ func TestFundingManager(t *testing.T) {
 
 	// As a last check of the funding preparation, make sure we get a reject
 	// error if the connections to the remote peers couldn't be established.
-	h.mgr.NewNodesOnly = false
+	h.mgr.cfg.NewNodesOnly = false
 	h.baseClientMock.peerList = make(map[route.Vertex]string)
-	err = h.mgr.PrepChannelFunding(batch, h.quit)
+	err = h.mgr.PrepChannelFunding(batch, h.db.GetOrder)
 	require.Error(t, err)
 
 	expectedErr = &MatchRejectErr{
@@ -418,27 +463,31 @@ func TestFundingManager(t *testing.T) {
 	// message for the one where we are the asker so we simulate two msgs.
 	go func() {
 		timeout := time.After(time.Second)
-		msg := &lnrpc.ChannelEventUpdate_PendingOpenChannel{
-			PendingOpenChannel: &lnrpc.PendingUpdate{
-				Txid:        txidHash[:],
-				OutputIndex: 0,
+		msg := &lnrpc.ChannelEventUpdate{
+			Channel: &lnrpc.ChannelEventUpdate_PendingOpenChannel{
+				PendingOpenChannel: &lnrpc.PendingUpdate{
+					Txid:        txidHash[:],
+					OutputIndex: 0,
+				},
 			},
 		}
 		// Send the message for the first channel.
 		select {
-		case h.msgChan <- msg:
+		case h.baseClientMock.channelEvents <- msg:
 		case <-timeout:
 		}
 
 		// And again for the second channel.
-		msg2 := &lnrpc.ChannelEventUpdate_PendingOpenChannel{
-			PendingOpenChannel: &lnrpc.PendingUpdate{
-				Txid:        txidHash[:],
-				OutputIndex: 1,
+		msg2 := &lnrpc.ChannelEventUpdate{
+			Channel: &lnrpc.ChannelEventUpdate_PendingOpenChannel{
+				PendingOpenChannel: &lnrpc.PendingUpdate{
+					Txid:        txidHash[:],
+					OutputIndex: 1,
+				},
 			},
 		}
 		select {
-		case h.msgChan <- msg2:
+		case h.baseClientMock.channelEvents <- msg2:
 		case <-timeout:
 		}
 	}()
@@ -452,13 +501,13 @@ func TestFundingManager(t *testing.T) {
 		ChannelPoint: fmt.Sprintf("%s:1", txidHash.String()),
 	})
 	h.lnMock.ScbKeyRing.EncryptionKey.PubKey = pubKeyAsk
-	chanInfo, err := h.mgr.BatchChannelSetup(batch, h.quit)
+	chanInfo, err := h.mgr.BatchChannelSetup(batch)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(chanInfo))
 
 	// Finally, make sure we get a timeout error if no channel open messages
 	// are received.
-	_, err = h.mgr.BatchChannelSetup(batch, h.quit)
+	_, err = h.mgr.BatchChannelSetup(batch)
 	require.Error(t, err)
 
 	code := &auctioneerrpc.OrderReject{
@@ -493,9 +542,7 @@ func TestWaitForPeerConnections(t *testing.T) {
 		node1Key: {},
 		node2Key: {},
 	}
-	err := h.mgr.waitForPeerConnections(
-		ctxt, expectedConnections, nil, h.quit,
-	)
+	err := h.mgr.waitForPeerConnections(ctxt, expectedConnections, nil)
 	require.NoError(t, err)
 
 	// Next, make sure that connections established while waiting are
@@ -524,9 +571,7 @@ func TestWaitForPeerConnections(t *testing.T) {
 		node1Key: {},
 		node2Key: {},
 	}
-	err = h.mgr.waitForPeerConnections(
-		ctxt, expectedConnections, nil, h.quit,
-	)
+	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, nil)
 	require.NoError(t, err)
 
 	// Final test, make sure we get the correct error message back if we
@@ -561,9 +606,7 @@ func TestWaitForPeerConnections(t *testing.T) {
 		node1Key: {},
 		node2Key: {},
 	}
-	err = h.mgr.waitForPeerConnections(
-		ctxt, expectedConnections, fakeBatch, h.quit,
-	)
+	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, fakeBatch)
 	require.Error(t, err)
 
 	code := &auctioneerrpc.OrderReject{
@@ -588,9 +631,7 @@ func TestWaitForPeerConnections(t *testing.T) {
 		close(h.baseClientMock.cancelSub)
 	}()
 
-	err = h.mgr.waitForPeerConnections(
-		ctxt, expectedConnections, fakeBatch, h.quit,
-	)
+	err = h.mgr.waitForPeerConnections(ctxt, expectedConnections, fakeBatch)
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
 }
