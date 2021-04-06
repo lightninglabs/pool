@@ -1054,6 +1054,17 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 
 	log.Infof("Attempting to recover accounts...")
 
+	// The account recovery process uses a bi-directional streaming RPC on
+	// the server side. Unfortunately, because of the way streaming RPCs
+	// work, the LSAT interceptor isn't able to _purchase_ a token during
+	// a streaming RPC call (the 402/payment required error is only returned
+	// after the interceptor was handed the call, so it cannot act on it
+	// anymore). But since a user that has lost their data most likely als
+	// lost their LSAT, the recovery will fail if this is the first call to
+	// the server ever. That's why we call an RPC that's definitely not on
+	// the white list first to kick off LSAT creation.
+	_, _ = s.auctioneer.OrderState(ctx, order.Nonce{})
+
 	s.recoveryMutex.Lock()
 	if s.recoveryPending {
 		defer s.recoveryMutex.Unlock()
