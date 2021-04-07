@@ -11,7 +11,7 @@ Checkout our [documentation](./) to learn more.
 Lightning Pool is a non-custodial auction for liquidity where bids are kept private and trades clear periodically. Key aspects of Pool include:
 
 * **Periodic clearing** - Market does not clear continuously, instead, it clears every block \(or after multiple blocks, if there are no bids that match with existing asks\).
-* **Non-custodial** - Clients maintain an on-chain account that is a timel-ocked, 2-of-2 multisig with the auctioneer. These funds are fully in the user’s control at all times.
+* **Non-custodial** - Clients maintain an on-chain account that is a time-locked, 2-of-2 multisig with the auctioneer. These funds are fully in the user’s control at all times.
 * **Sealed-bid** - All orders are submitted off-chain to the auctioneer, so bidders don’t have visibility into the bids of other participants
 * **Uniform clearing price** - All participants in a batch clear at the same price. If your ask is for 2% annualized interest, you will receive &gt;=2%. If you bid 5%, you will pay &lt;=5%.
 * **Batched execution** - Due to the account structure, the auctioneer is able to batch all completed orders into a single transaction, greatly reducing individual chain fees.
