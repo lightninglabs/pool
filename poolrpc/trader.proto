@@ -826,6 +826,12 @@ message Lease {
 
     // The tier of the node that this channel was bought/sold from.
     NodeTier channel_node_tier = 13;
+    
+    // The self channel balance that was pushed to the recipient.
+    uint64 self_chan_balance = 14;
+    
+    // Whether the channel was leased as a sidecar channel (bid orders only).
+    bool sidecar_channel = 15;
 }
 
 message LeasesRequest {

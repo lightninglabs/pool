@@ -1484,6 +1484,16 @@
         "channel_node_tier": {
           "$ref": "#/definitions/poolrpcNodeTier",
           "description": "The tier of the node that this channel was bought/sold from."
+        },
+        "self_chan_balance": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The self channel balance that was pushed to the recipient."
+        },
+        "sidecar_channel": {
+          "type": "boolean",
+          "format": "boolean",
+          "description": "Whether the channel was leased as a sidecar channel (bid orders only)."
         }
       }
     },

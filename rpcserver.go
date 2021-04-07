@@ -1798,9 +1798,25 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 				if err != nil {
 					return nil, err
 				}
+				ourMultiSigPubKey := ourMultiSigKey.PubKey
+
+				// For sidecar orders the multisig key used
+				// isn't our own.
+				isSidecarChannel := false
+				ourOrderBid, ourOrderIsBid := ourOrder.(*order.Bid)
+				if ourOrderIsBid && ourOrderBid.SidecarTicket != nil {
+					t := ourOrderBid.SidecarTicket
+					if t.Recipient == nil {
+						continue
+					}
+
+					isSidecarChannel = true
+					ourMultiSigPubKey = t.Recipient.MultiSigPubKey
+				}
+
 				chanAmt := match.UnitsFilled.ToSatoshis()
 				_, chanOutput, err := input.GenFundingPkScript(
-					ourMultiSigKey.PubKey.SerializeCompressed(),
+					ourMultiSigPubKey.SerializeCompressed(),
 					match.MultiSigKey[:], int64(chanAmt),
 				)
 				if err != nil {
@@ -1820,9 +1836,15 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 
 				// The duration of the channel is always that
 				// specified by the bid order.
-				var bidDuration uint32
+				var (
+					bidDuration     uint32
+					selfChanBalance uint64
+				)
 				if ourOrder.Type() == order.TypeBid {
 					bidDuration = ourOrder.(*order.Bid).LeaseDuration
+					selfChanBalance = uint64(
+						ourOrder.(*order.Bid).SelfChanBalance,
+					)
 				} else {
 					bidDuration = match.Order.(*order.Bid).LeaseDuration
 				}
@@ -1881,6 +1903,8 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					Purchased:            purchased,
 					ChannelRemoteNodeKey: match.NodeKey[:],
 					ChannelNodeTier:      nodeTier,
+					SelfChanBalance:      selfChanBalance,
+					SidecarChannel:       isSidecarChannel,
 				})
 
 				numChans++
