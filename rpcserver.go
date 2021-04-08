@@ -27,6 +27,7 @@ import (
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/poolscript"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/chanbackup"
 	lndFunding "github.com/lightningnetwork/lnd/funding"
@@ -178,8 +179,8 @@ func (s *rpcServer) Start() error {
 	if err := s.server.fundingManager.Start(); err != nil {
 		return fmt.Errorf("unable to start funding manager: %v", err)
 	}
-	if err := s.server.channelAcceptor.Start(blockErrChan); err != nil {
-		return fmt.Errorf("unable to start channel acceptor: %v", err)
+	if err := s.server.sidecarAcceptor.Start(blockErrChan); err != nil {
+		return fmt.Errorf("unable to start sidecar acceptor: %v", err)
 	}
 
 	s.wg.Add(1)
@@ -196,15 +197,19 @@ func (s *rpcServer) Stop() error {
 		return nil
 	}
 
+	var returnErr error
 	rpcLog.Info("Trader server stopping")
+	if err := s.server.sidecarAcceptor.Stop(); err != nil {
+		rpcLog.Errorf("Error stopping sidecar acceptor: %v", err)
+		returnErr = err
+	}
 	if err := s.server.fundingManager.Stop(); err != nil {
 		rpcLog.Errorf("Error stopping funding manager: %v", err)
 	}
-	s.server.channelAcceptor.Stop()
 	s.accountManager.Stop()
 	s.orderManager.Stop()
 	if err := s.auctioneer.Stop(); err != nil {
-		rpcLog.Errorf("Error closing server stream: %v")
+		rpcLog.Errorf("Error closing server stream: %v", err)
 	}
 
 	close(s.quit)
@@ -213,7 +218,8 @@ func (s *rpcServer) Stop() error {
 	s.blockNtfnCancel()
 
 	rpcLog.Info("Stopped trader server")
-	return nil
+
+	return returnErr
 }
 
 // serverHandler is the main event loop of the server.
@@ -422,6 +428,18 @@ func (s *rpcServer) handleServerMessage(
 			poolrpc.MatchRejectReason_NONE,
 		); err != nil {
 			rpcLog.Errorf("Unable to store order events: %v", err)
+		}
+
+		// If we were the provider for any sidecar channels, we want to
+		// update our own state of the tickets to complete now.
+		for ourOrderNonce := range batch.MatchedOrders {
+			if err := s.setTicketStateForOrder(
+				sidecar.StateCompleted, ourOrderNonce,
+			); err != nil {
+				rpcLog.Errorf("Unable to update our sidecar "+
+					"ticket after completing batch: %v",
+					err)
+			}
 		}
 
 		// Accounts that were updated in the batch need to start new
@@ -1082,11 +1100,16 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
+		ticket, err := unmarshallSidecar(kit.Version, b.SidecarTicket)
+		if err != nil {
+			return nil, err
+		}
 
 		o = &order.Bid{
 			Kit:             *kit,
 			MinNodeTier:     nodeTier,
 			SelfChanBalance: btcutil.Amount(b.SelfChanBalance),
+			SidecarTicket:   ticket,
 		}
 
 	default:
@@ -1309,6 +1332,25 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 				MinNodeTier:         nodeTier,
 				SelfChanBalance:     uint64(o.SelfChanBalance),
 			}
+
+			// The sidecar ticket was given to the auction server
+			// and stored as the raw tlv stream. We only want the
+			// user to see the more human readable base64 encoded
+			// version of the ticket though. That's why we string
+			// encode it here instead of sending the raw bytes back.
+			// If we did bytes it would be shown hex encoded and not
+			// base64 with the nice prefix.
+			if o.SidecarTicket != nil {
+				rpcBid.SidecarTicket, err = sidecar.EncodeToString(
+					o.SidecarTicket,
+				)
+				if err != nil {
+					return nil, fmt.Errorf("error "+
+						"encoding sidecar ticket: %v",
+						err)
+				}
+			}
+
 			bids = append(bids, rpcBid)
 
 		default:
@@ -1366,6 +1408,14 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	// If this order was for a sidecar ticket, we also want to cancel the
+	// ticket itself since it will never be completed anyway.
+	err = s.setTicketStateForOrder(sidecar.StateCanceled, nonce)
+	if err != nil {
+		return nil, fmt.Errorf("error updating our sidecar ticket "+
+			"after canceling order: %v", err)
 	}
 
 	return &poolrpc.CancelOrderResponse{}, nil
@@ -1759,9 +1809,25 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 				if err != nil {
 					return nil, err
 				}
+				ourMultiSigPubKey := ourMultiSigKey.PubKey
+
+				// For sidecar orders the multisig key used
+				// isn't our own.
+				isSidecarChannel := false
+				ourOrderBid, ourOrderIsBid := ourOrder.(*order.Bid)
+				if ourOrderIsBid && ourOrderBid.SidecarTicket != nil {
+					t := ourOrderBid.SidecarTicket
+					if t.Recipient == nil {
+						continue
+					}
+
+					isSidecarChannel = true
+					ourMultiSigPubKey = t.Recipient.MultiSigPubKey
+				}
+
 				chanAmt := match.UnitsFilled.ToSatoshis()
 				_, chanOutput, err := input.GenFundingPkScript(
-					ourMultiSigKey.PubKey.SerializeCompressed(),
+					ourMultiSigPubKey.SerializeCompressed(),
 					match.MultiSigKey[:], int64(chanAmt),
 				)
 				if err != nil {
@@ -1781,9 +1847,15 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 
 				// The duration of the channel is always that
 				// specified by the bid order.
-				var bidDuration uint32
+				var (
+					bidDuration     uint32
+					selfChanBalance uint64
+				)
 				if ourOrder.Type() == order.TypeBid {
 					bidDuration = ourOrder.(*order.Bid).LeaseDuration
+					selfChanBalance = uint64(
+						ourOrder.(*order.Bid).SelfChanBalance,
+					)
 				} else {
 					bidDuration = match.Order.(*order.Bid).LeaseDuration
 				}
@@ -1842,6 +1914,8 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					Purchased:            purchased,
 					ChannelRemoteNodeKey: match.NodeKey[:],
 					ChannelNodeTier:      nodeTier,
+					SelfChanBalance:      selfChanBalance,
+					SidecarChannel:       isSidecarChannel,
 				})
 
 				numChans++
@@ -2085,6 +2159,142 @@ func (s *rpcServer) StopDaemon(_ context.Context,
 	return &poolrpc.StopDaemonResponse{}, nil
 }
 
+// OfferSidecar is step 1/4 of the sidecar negotiation between the provider
+// (the trader submitting the bid order) and the recipient (the trader
+// receiving the sidecar channel).
+// This step must be run by the provider. The result is a sidecar ticket with
+// an offer to lease a sidecar channel for the recipient. The offer will be
+// signed with the provider's lnd node public key. The ticket returned by this
+// call will have the state "offered".
+func (s *rpcServer) OfferSidecar(ctx context.Context,
+	req *poolrpc.OfferSidecarRequest) (*poolrpc.SidecarTicket, error) {
+
+	// Do some basic sanity checks first.
+	if req.ChannelCapacitySat == 0 {
+		return nil, fmt.Errorf("channel capacity missing")
+	}
+
+	// The funding manager does all the work, including signing and storing
+	// the new ticket.
+	ticket, err := s.server.fundingManager.OfferSidecar(
+		ctx, btcutil.Amount(req.ChannelCapacitySat),
+		btcutil.Amount(req.SelfChanBalance), req.LeaseDurationBlocks,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// We'll return a nice string encoded version of the ticket to the user.
+	ticketStr, err := sidecar.EncodeToString(ticket)
+	if err != nil {
+		return nil, err
+	}
+	return &poolrpc.SidecarTicket{Ticket: ticketStr}, nil
+}
+
+// RegisterSidecar is step 2/4 of the sidecar negotiation between the provider
+// (the trader submitting the bid order) and the recipient (the trader receiving
+// the sidecar channel).
+// This step must be run by the recipient. The result is a sidecar ticket with
+// the recipient's node information and channel funding multisig pubkey filled
+// in. The ticket returned by this call will have the state "registered".
+func (s *rpcServer) RegisterSidecar(ctx context.Context,
+	req *poolrpc.RegisterSidecarRequest) (*poolrpc.SidecarTicket, error) {
+
+	// Parse the ticket from its string encoded representation.
+	ticket, err := sidecar.DecodeString(req.Ticket)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding ticket: %v", err)
+	}
+
+	// The sidecar acceptor will add all required information and add the
+	// ticket to our DB.
+	err = s.server.sidecarAcceptor.RegisterSidecar(ctx, ticket)
+	if err != nil {
+		return nil, err
+	}
+
+	// We'll return a nice string encoded version of the ticket to the user.
+	ticketStr, err := sidecar.EncodeToString(ticket)
+	if err != nil {
+		return nil, err
+	}
+	return &poolrpc.SidecarTicket{Ticket: ticketStr}, nil
+}
+
+// ExpectSidecarChannel is step 4/4 of the sidecar negotiation between the
+// provider (the trader submitting the bid order) and the recipient (the trader
+// receiving the sidecar channel).
+// This step must be run by the recipient once the provider has submitted the
+// bid order for the sidecar channel. From this point onwards the Pool trader
+// daemon of both the provider as well as the recipient need to be online to
+// receive and react to match making events from the server.
+func (s *rpcServer) ExpectSidecarChannel(ctx context.Context,
+	req *poolrpc.ExpectSidecarChannelRequest) (
+	*poolrpc.ExpectSidecarChannelResponse, error) {
+
+	// Parse the ticket from its string encoded representation.
+	t, err := sidecar.DecodeString(req.Ticket)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding ticket: %v", err)
+	}
+
+	// Let's make sure the ticket itself and the offer is valid.
+	if err := sidecar.VerifyOffer(ctx, t, s.lndServices.Signer); err != nil {
+		return nil, fmt.Errorf("error validating order in sidecar "+
+			"ticket: %v", err)
+	}
+
+	// Make sure the order signature is valid and the ticket actually exists
+	// in our database. We need to have it stored already since must've done
+	// the register part before.
+	if err := sidecar.VerifyOrder(ctx, t, s.lndServices.Signer); err != nil {
+		return nil, fmt.Errorf("error validating order in sidecar "+
+			"ticket: %v", err)
+	}
+	if _, err = s.server.db.Sidecar(t.ID, t.Offer.SignPubKey); err != nil {
+		return nil, fmt.Errorf("error looking up sidecar order for "+
+			"ticket with ID %x: %v", t.ID[:], err)
+	}
+
+	// Formally everything looks good so far. We can now pass the sidecar
+	// order with the verified information to the acceptor and let it do its
+	// job.
+	err = s.server.sidecarAcceptor.ExpectChannel(ctx, t)
+	if err != nil {
+		return nil, fmt.Errorf("error managing sidecar channel: %v",
+			err)
+	}
+
+	return &poolrpc.ExpectSidecarChannelResponse{}, nil
+}
+
+// setTicketStateForOrder updates the sidecar ticket state we have for a given
+// order in our local database to the new state.
+func (s *rpcServer) setTicketStateForOrder(newState sidecar.State,
+	nonce order.Nonce) error {
+
+	tickets, err := s.server.db.Sidecars()
+	if err != nil {
+		return fmt.Errorf("error reading sidecar tickets: %v", err)
+	}
+
+	for _, ticket := range tickets {
+		if ticket.Order == nil || ticket.Order.BidNonce != nonce {
+			continue
+		}
+
+		ticket.State = newState
+		if err := s.server.db.UpdateSidecar(ticket); err != nil {
+			return fmt.Errorf("error updating sidecar ticket "+
+				"with ID %x to state %d: %v", ticket.ID[:],
+				newState, err)
+		}
+	}
+
+	return nil
+}
+
 // rpcOrderStateToDBState maps the order state as received over the RPC
 // protocol to the local state that we use in the database.
 func rpcOrderStateToDBState(state auctioneerrpc.OrderState) (order.State,
@@ -2300,4 +2510,23 @@ func marshallChannelInfo(chanInfos map[wire.OutPoint]*chaninfo.ChannelInfo) (
 	}
 
 	return rpcChannelInfos, nil
+}
+
+func unmarshallSidecar(version order.Version,
+	encodedTicket string) (*sidecar.Ticket, error) {
+
+	// An empty ticket means no ticket at all.
+	if len(encodedTicket) == 0 {
+		return nil, nil
+	}
+
+	// Versions previous to the sidecar order version aren't allowed to set
+	// the bool value.
+	if len(encodedTicket) > 0 && version < order.VersionSidecarChannel {
+		return nil, fmt.Errorf("cannot set sidecar for old order " +
+			"version")
+	}
+
+	// Try to deserialize the ticket.
+	return sidecar.DecodeString(encodedTicket)
 }

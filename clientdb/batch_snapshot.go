@@ -265,6 +265,14 @@ func fetchLocalBatchSnapshot(seqBucket *bbolt.Bucket, seqNum []byte,
 			o.Details().MinUnitsMatch = minUnitsMatch
 		}
 
+		tlvBytes := orderBucket.Get(orderTlvKey)
+		if tlvBytes != nil {
+			r := bytes.NewReader(tlvBytes)
+			if err := deserializeOrderTlvData(r, o); err != nil {
+				return nil, err
+			}
+		}
+
 		// We'll only need to populate the values below for bid orders.
 		bidOrder, ok := o.(*order.Bid)
 		if !ok {

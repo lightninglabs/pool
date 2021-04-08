@@ -213,17 +213,31 @@ type Fetcher func(Nonce) (Order, error)
 func ChannelOutput(batchTx *wire.MsgTx, wallet lndclient.WalletKitClient,
 	ourOrder Order, otherOrder *MatchedOrder) (*wire.TxOut, uint32, error) {
 
-	// Re-derive our multisig key first.
-	ctxt, cancel := context.WithTimeout(
-		context.Background(), deriveKeyTimeout,
-	)
-	defer cancel()
-	ourKey, err := wallet.DeriveKey(
-		ctxt, &ourOrder.Details().MultiSigKeyLocator,
-	)
-	if err != nil {
-		return nil, 0, fmt.Errorf("could not derive our multisig key: "+
-			"%v", err)
+	var ourKey []byte
+	ourOrderBid, isBid := ourOrder.(*Bid)
+	if isBid && ourOrderBid.SidecarTicket != nil {
+		r := ourOrderBid.SidecarTicket.Recipient
+		if r == nil || r.MultiSigPubKey == nil {
+			return nil, 0, fmt.Errorf("recipient information in " +
+				"sidecar ticket missing")
+		}
+
+		ourKey = r.MultiSigPubKey.SerializeCompressed()
+	} else {
+		// Re-derive our multisig key first.
+		ctxt, cancel := context.WithTimeout(
+			context.Background(), deriveKeyTimeout,
+		)
+		defer cancel()
+		ourKeyDesc, err := wallet.DeriveKey(
+			ctxt, &ourOrder.Details().MultiSigKeyLocator,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("could not derive our "+
+				"multisig key: %v", err)
+		}
+
+		ourKey = ourKeyDesc.PubKey.SerializeCompressed()
 	}
 
 	// A self channel balance is added on top of the number of units filled.
@@ -237,8 +251,7 @@ func ChannelOutput(batchTx *wire.MsgTx, wallet lndclient.WalletKitClient,
 	// Gather the information we expect to find in the batch TX.
 	expectedOutputSize := selfChanBalance + otherOrder.UnitsFilled.ToSatoshis()
 	_, expectedOut, err := input.GenFundingPkScript(
-		ourKey.PubKey.SerializeCompressed(), otherOrder.MultiSigKey[:],
-		int64(expectedOutputSize),
+		ourKey, otherOrder.MultiSigKey[:], int64(expectedOutputSize),
 	)
 	if err != nil {
 		return nil, 0, fmt.Errorf("could not create multisig script: "+

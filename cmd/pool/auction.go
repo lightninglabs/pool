@@ -25,6 +25,8 @@ type Lease struct {
 	ChainFeeSat           uint64 `json:"chain_fee_sat"`
 	OrderNonce            string `json:"order_nonce"`
 	Purchased             bool   `json:"purchased"`
+	SelfChanBalance       uint64 `json:"self_chan_balance"`
+	SidecarChannel        bool   `json:"sidecar_channel"`
 }
 
 // NewLeaseFromProto creates a display Lease from its proto.
@@ -47,6 +49,8 @@ func NewLeaseFromProto(a *poolrpc.Lease) *Lease {
 		ChainFeeSat:           a.ChainFeeSat,
 		OrderNonce:            hex.EncodeToString(a.OrderNonce),
 		Purchased:             a.Purchased,
+		SelfChanBalance:       a.SelfChanBalance,
+		SidecarChannel:        a.SidecarChannel,
 	}
 }
 

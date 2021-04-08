@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -17,6 +16,7 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool"
 	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/protobuf-hex-display/json"
 	"github.com/lightninglabs/protobuf-hex-display/jsonpb"
 	"github.com/lightninglabs/protobuf-hex-display/proto"
 	"github.com/lightningnetwork/lnd/lncfg"
@@ -133,6 +133,7 @@ func main() {
 	}
 	app.Commands = append(app.Commands, accountsCommands...)
 	app.Commands = append(app.Commands, ordersCommands...)
+	app.Commands = append(app.Commands, sidecarCommands...)
 	app.Commands = append(app.Commands, auctionCommands...)
 	app.Commands = append(app.Commands, listAuthCommand)
 	app.Commands = append(app.Commands, getInfoCommand)

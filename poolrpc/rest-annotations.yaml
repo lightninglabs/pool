@@ -56,6 +56,15 @@ http:
       get: "/v1/pool/leases"
     - selector: poolrpc.Trader.NodeRatings
       get: "/v1/pool/node_ratings"
+    - selector: poolrpc.Trader.OfferSidecar
+      post: "/v1/pool/sidecar/offer"
+      body: "*"
+    - selector: poolrpc.Trader.RegisterSidecar
+      post: "/v1/pool/sidecar/register"
+      body: "*"
+    - selector: poolrpc.Trader.ExpectSidecarChannel
+      post: "/v1/pool/sidecar/expect"
+      body: "*"
 
     # Make the URI convenient to be called in different ways, the shortest of
     # them just returning the most recent batch.

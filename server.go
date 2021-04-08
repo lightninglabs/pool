@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/btcsuite/btcd/btcec"
 	proxy "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/lightninglabs/aperture/lsat"
 	"github.com/lightninglabs/lndclient"
@@ -70,7 +71,7 @@ type Server struct {
 	cfg             *Config
 	db              *clientdb.DB
 	fundingManager  *funding.Manager
-	channelAcceptor *ChannelAcceptor
+	sidecarAcceptor *SidecarAcceptor
 	lsatStore       *lsat.FileStore
 	lndServices     *lndclient.GrpcLndServices
 	lndClient       lnrpc.LightningClient
@@ -400,6 +401,14 @@ func (s *Server) setupClient() error {
 		return err
 	}
 
+	// Parse our lnd node's public key.
+	nodePubKey, err := btcec.ParsePubKey(
+		s.lndServices.NodePubkey[:], btcec.S256(),
+	)
+	if err != nil {
+		return fmt.Errorf("unable to parse node pubkey: %v", err)
+	}
+
 	// Setup the LSAT interceptor for the client.
 	s.lsatStore, err = lsat.NewFileStore(s.cfg.BaseDir)
 	if err != nil {
@@ -460,15 +469,17 @@ func (s *Server) setupClient() error {
 	// Create the funding manager. The RPC server is responsible for
 	// starting/stopping it though as all that logic is currently there for
 	// the other managers as well.
-	s.channelAcceptor = NewChannelAcceptor(s.lndServices.Client)
+	channelAcceptor := NewChannelAcceptor(s.lndServices.Client)
 	s.fundingManager = funding.NewManager(&funding.ManagerConfig{
 		DB:                s.db,
 		WalletKit:         s.lndServices.WalletKit,
 		LightningClient:   s.lndServices.Client,
+		SignerClient:      s.lndServices.Signer,
 		BaseClient:        s.lndClient,
+		NodePubKey:        nodePubKey,
 		BatchStepTimeout:  order.DefaultBatchStepTimeout,
 		NewNodesOnly:      s.cfg.NewNodesOnly,
-		NotifyShimCreated: s.channelAcceptor.ShimRegistered,
+		NotifyShimCreated: channelAcceptor.ShimRegistered,
 	})
 
 	// Create an instance of the auctioneer client library.
@@ -487,6 +498,18 @@ func (s *Server) setupClient() error {
 			return UserAgent(InitiatorFromContext(ctx))
 		},
 	}
+
+	// Create the acceptors for receiving sidecar channels. We need to
+	// create a copy of the auctioneer client configuration because the
+	// acceptor is going to overwrite some of its values.
+	clientCfgCopy := *clientCfg
+	s.sidecarAcceptor = NewSidecarAcceptor(
+		s.db, s.lndServices.Signer, s.lndServices.WalletKit,
+		s.lndClient, channelAcceptor, nodePubKey, clientCfgCopy,
+		s.fundingManager,
+	)
+
+	// Create an instance of the auctioneer client library.
 	s.AuctioneerClient, err = auctioneer.NewClient(clientCfg)
 	if err != nil {
 		return err

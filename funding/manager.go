@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
@@ -19,7 +20,9 @@ import (
 	"github.com/lightninglabs/pool/chaninfo"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/routing/route"
 	"github.com/lightningnetwork/lnd/subscribe"
@@ -31,6 +34,13 @@ import (
 )
 
 var (
+	// nodeIdentityKeyLoc is the key locator from which the identity key of
+	// an lnd node is derived.
+	nodeIdentityKeyLoc = keychain.KeyLocator{
+		Family: keychain.KeyFamilyNodeKey,
+		Index:  0,
+	}
+
 	// rpcCodeFundingFailed is the error code we send if the channel funding
 	// fails because of a timeout or another problem.
 	rpcCodeFundingFailed = auctioneerrpc.OrderReject_CHANNEL_FUNDING_FAILED
@@ -106,9 +116,15 @@ type ManagerConfig struct {
 	// LightningClient is an lndclient wrapped lnrpc client.
 	LightningClient lndclient.LightningClient
 
+	// SignerClient is an lndclient wrapped signrpc client.
+	SignerClient lndclient.SignerClient
+
 	// BaseClient is a raw lnrpc client that implements all methods the
 	// funding manager needs.
 	BaseClient BaseClient
+
+	// NodePubKey is the connected lnd node's identity public key.
+	NodePubKey *btcec.PublicKey
 
 	// NewNodesOnly specifies if the funding manager should only accept
 	// matched orders with channels from new nodes that the connected lnd
@@ -289,12 +305,15 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 		thawHeight      uint32
 		selfChanBalance btcutil.Amount
 	)
-	if ourOrder.Type() == order.TypeBid {
+	ourOrderBid, ourOrderIsBid := ourOrder.(*order.Bid)
+	ourOrderIsSidecar := ourOrderIsBid && ourOrderBid.SidecarTicket != nil
+
+	if ourOrderIsBid {
 		bidNonce = ourOrder.Nonce()
 		askNonce = matchedOrder.Order.Nonce()
 
-		thawHeight = ourOrder.(*order.Bid).LeaseDuration
-		selfChanBalance = ourOrder.(*order.Bid).SelfChanBalance
+		thawHeight = ourOrderBid.LeaseDuration
+		selfChanBalance = ourOrderBid.SelfChanBalance
 	} else {
 		bidNonce = matchedOrder.Order.Nonce()
 		askNonce = ourOrder.Nonce()
@@ -310,15 +329,30 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 
 	// Next, we'll need to find the location of this channel output on the
 	// funding transaction, so we'll re-compute the funding script from
-	// scratch.
-	ctxb := context.Background()
-	ourKeyLocator := ourOrder.Details().MultiSigKeyLocator
-	ourMultiSigKey, err := m.cfg.WalletKit.DeriveKey(
-		ctxb, &ourKeyLocator,
-	)
-	if err != nil {
-		return nil, [32]byte{}, err
+	// scratch. If we're a taker or otherwise uninvolved in a sidecar order
+	// we have to re-derive our key from the locator.
+	var ourMultiSigKey *keychain.KeyDescriptor
+	if ourOrderIsSidecar && ourOrderBid.SidecarTicket.Recipient != nil {
+		recipient := ourOrderBid.SidecarTicket.Recipient
+		ourMultiSigKey = &keychain.KeyDescriptor{
+			KeyLocator: keychain.KeyLocator{
+				Family: keychain.KeyFamilyMultiSig,
+				Index:  recipient.MultiSigKeyIndex,
+			},
+			PubKey: recipient.MultiSigPubKey,
+		}
+	} else {
+		var err error
+		ctxb := context.Background()
+		ourKeyLocator := ourOrder.Details().MultiSigKeyLocator
+		ourMultiSigKey, err = m.cfg.WalletKit.DeriveKey(
+			ctxb, &ourKeyLocator,
+		)
+		if err != nil {
+			return nil, [32]byte{}, err
+		}
 	}
+
 	_, fundingOutput, err := input.GenFundingPkScript(
 		ourMultiSigKey.PubKey.SerializeCompressed(),
 		matchedOrder.MultiSigKey[:], int64(chanSize),
@@ -351,8 +385,8 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 		LocalKey: &lnrpc.KeyDescriptor{
 			RawKeyBytes: ourMultiSigKey.PubKey.SerializeCompressed(),
 			KeyLoc: &lnrpc.KeyLocator{
-				KeyFamily: int32(ourKeyLocator.Family),
-				KeyIndex:  int32(ourKeyLocator.Index),
+				KeyFamily: int32(ourMultiSigKey.Family),
+				KeyIndex:  int32(ourMultiSigKey.Index),
 			},
 		},
 		RemoteKey:     matchedOrder.MultiSigKey[:],
@@ -478,6 +512,18 @@ func (m *Manager) PrepChannelFunding(batch *order.Batch,
 				continue
 			}
 
+			// If we are the provider for a sidecar ticket, we don't
+			// have to do anything either in this step.
+			ourOrderBid, ourOrderIsBid := ourOrder.(*order.Bid)
+			if ourOrderIsBid && ourOrderBid.SidecarTicket != nil {
+				r := ourOrderBid.SidecarTicket.Recipient
+				if r != nil &&
+					!m.cfg.NodePubKey.IsEqual(r.NodePubKey) {
+
+					continue
+				}
+			}
+
 			// As the bidder, we're the one that needs to make the
 			// connection as we're possibly not reachable from the
 			// outside. Let's kick off the connection now. However
@@ -516,8 +562,7 @@ func (m *Manager) PrepChannelFunding(batch *order.Batch,
 			// phase w/o any issues and accept the incoming channel
 			// from the asker.
 			err := m.registerFundingShim(
-				ourOrder.(*order.Bid), matchedOrder,
-				batch.BatchTX,
+				ourOrderBid, matchedOrder, batch.BatchTX,
 			)
 			if err != nil {
 				return fmt.Errorf("unable to register funding "+
@@ -584,6 +629,17 @@ func (m *Manager) BatchChannelSetup(
 			return nil, err
 		}
 
+		bid, orderIsBid := ourOrder.(*order.Bid)
+
+		// If our order is a sidecar channel, we don't need to do
+		// anything at all in this step. The channel will be opened to
+		// another node and we don't need to wait for it here. If we are
+		// the receiver of the sidecar channel, this code won't be hit
+		// as that's separated out into the ChannelAcceptor type.
+		if orderIsBid && bid.SidecarTicket != nil {
+			continue
+		}
+
 		// We'll obtain the expected channel point for each matched
 		// order, and complete the funding flow for each one in which
 		// our order was the ask.
@@ -610,7 +666,6 @@ func (m *Manager) BatchChannelSetup(
 			// anything, as we should've already connected and
 			// registered the funding shim during the prior phase.
 			// The asker is going to open the channel.
-			orderIsBid := ourOrder.Type() == order.TypeBid
 			if orderIsBid {
 				continue
 			}
@@ -713,10 +768,90 @@ func (m *Manager) BatchChannelSetup(
 		}
 	}
 
+	// If the only order that we were involved in is a sidecar channel and
+	// we are the provider, not the ultimate recipient, then there's nothing
+	// to wait for since the channel is going to be opened to another node.
+	if len(chanPoints) == 0 {
+		log.Debugf("Don't need to wait for channel events, only " +
+			"sidecar channels matched")
+
+		return nil, nil
+	}
+
 	// We've kicked off all channel open streams. We'll now need to wait for
 	// either completion of the funding process or a timeout.
 	return m.waitForChannelOpen(
 		setupCtx, chanPoints, m.pendingOpenChanClient, fundingRejects,
+	)
+}
+
+// SidecarBatchChannelSetup will attempt to establish new funding flows with all
+// matched takers (people buying our channels) in the passed batch. This method
+// will block until the channel is considered pending. Once this phase is
+// complete, and the batch execution transaction broadcast, the channel will be
+// finalized and locked in.
+func (m *Manager) SidecarBatchChannelSetup(batch *order.Batch,
+	chanUpdates *subscribe.Client,
+	getOrder order.Fetcher) (map[wire.OutPoint]*chaninfo.ChannelInfo,
+	error) {
+
+	var (
+		chanPoints     = make(map[wire.OutPoint]order.Nonce)
+		fundingRejects = make(map[order.Nonce]*auctioneerrpc.OrderReject)
+	)
+
+	// We need to make sure our whole process doesn't take too long overall
+	// so we create a context that is valid for the whole funding step and
+	// use that everywhere.
+	setupCtx, cancel := context.WithTimeout(
+		context.Background(), m.cfg.BatchStepTimeout,
+	)
+	defer cancel()
+
+	log.Infof("Batch(%x): opening channels for %v matched orders",
+		batch.ID[:], len(batch.MatchedOrders))
+
+	// For each ask order of ours that's matched, we'll make a new funding
+	// flow, blocking until they all progress to the final state.
+	batchTxHash := batch.BatchTX.TxHash()
+	for ourOrderNonce, matchedOrders := range batch.MatchedOrders {
+		ourOrder, err := getOrder(ourOrderNonce)
+		if err != nil {
+			// There can be sidecar and non-sidecar orders in the
+			// same batch. If we get an error here, it means it's
+			// not a sidecar order. The "normal" funding flow will
+			// take care of it.
+			log.Debugf("unexpected channel funding "+
+				"for order %v as it's not a sidecar order: %v",
+				ourOrderNonce.String(), err)
+
+			continue
+		}
+
+		// We'll obtain the expected channel point for each matched
+		// order, and complete the funding flow for each one in which
+		// our order was the ask.
+		for _, matchedOrder := range matchedOrders {
+			fundingShim, _, err := m.deriveFundingShim(
+				ourOrder, matchedOrder, batch.BatchTX,
+			)
+			if err != nil {
+				return nil, err
+			}
+			chanPoint := wire.OutPoint{
+				Hash: batchTxHash,
+				Index: fundingShim.GetChanPointShim().ChanPoint.
+					OutputIndex,
+			}
+
+			chanPoints[chanPoint] = matchedOrder.Order.Nonce()
+		}
+	}
+
+	// We've kicked off all channel open streams. We'll now need to wait for
+	// either completion of the funding process or a timeout.
+	return m.waitForChannelOpen(
+		setupCtx, chanPoints, chanUpdates, fundingRejects,
 	)
 }
 
@@ -862,6 +997,44 @@ func (m *Manager) RemovePendingBatchArtifacts(
 	}
 
 	return nil
+}
+
+// OfferSidecar creates a sidecar channel offer and embeds it in a new sidecar
+// ticket. The offer is signed with the local lnd's node public key.
+func (m *Manager) OfferSidecar(ctx context.Context, capacity,
+	pushAmt btcutil.Amount, duration uint32) (*sidecar.Ticket, error) {
+
+	// Make sure the capacity and push amounts are sane.
+	err := sidecar.CheckOfferParams(capacity, pushAmt, order.BaseSupplyUnit)
+	if err != nil {
+		return nil, err
+	}
+
+	// So far everything looks good. Let's create the ticket with the offer
+	// now.
+	ticket, err := sidecar.NewTicket(
+		sidecar.VersionDefault, capacity, pushAmt, duration,
+		m.cfg.NodePubKey,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error creating sidecar ticket: %v", err)
+	}
+
+	// Let's sign the offer part of the ticket with our node's identity key
+	// now.
+	if err := sidecar.SignOffer(
+		ctx, ticket, nodeIdentityKeyLoc, m.cfg.SignerClient,
+	); err != nil {
+		return nil, fmt.Errorf("error signing offer: %v", err)
+	}
+
+	// Let's now store and return the ticket with the signed offer.
+	err = m.cfg.DB.AddSidecar(ticket)
+	if err != nil {
+		return nil, fmt.Errorf("error storing sidecar ticket: %v", err)
+	}
+
+	return ticket, nil
 }
 
 // connectToMatchedTrader attempts to connect to a trader that we've had an
