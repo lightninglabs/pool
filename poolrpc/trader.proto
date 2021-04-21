@@ -168,7 +168,7 @@ service Trader {
     */
     rpc RegisterSidecar (RegisterSidecarRequest) returns (SidecarTicket);
 
-    /* pool: `sidecar expect-channel`
+    /* pool: `sidecar expectchannel`
     ExpectSidecarChannel is step 4/4 of the sidecar negotiation between the
     provider (the trader submitting the bid order) and the recipient (the trader
     receiving the sidecar channel).
