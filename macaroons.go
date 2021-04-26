@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"time"
 
+	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/macaroons"
+	"go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 	"gopkg.in/macaroon-bakery.v2/bakery"
 )
@@ -17,10 +18,6 @@ const (
 	// poolMacaroonLocation is the value we use for the pool macaroons'
 	// "Location" field when baking them.
 	poolMacaroonLocation = "pool"
-
-	// macDatabaseOpenTimeout is how long we wait for acquiring the lock on
-	// the macaroon database before we give up with an error.
-	macDatabaseOpenTimeout = time.Second * 5
 )
 
 var (
@@ -183,8 +180,16 @@ func (s *Server) startMacaroonService() error {
 	var err error
 	s.macaroonService, err = macaroons.NewService(
 		s.cfg.BaseDir, poolMacaroonLocation, false,
-		macDatabaseOpenTimeout, macaroons.IPLockChecker,
+		clientdb.DefaultPoolDBTimeout, macaroons.IPLockChecker,
 	)
+	if err == bbolt.ErrTimeout {
+		return fmt.Errorf("error while trying to open %s/%s: "+
+			"timed out after %v when trying to obtain exclusive "+
+			"lock - make sure no other pool daemon process "+
+			"(standalone or embedded in lightning-terminal) is "+
+			"running", s.cfg.BaseDir, "macaroons.db",
+			clientdb.DefaultPoolDBTimeout)
+	}
 	if err != nil {
 		return fmt.Errorf("unable to set up macaroon authentication: "+
 			"%v", err)

@@ -2,8 +2,10 @@ package clientdb
 
 import (
 	"encoding/binary"
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"go.etcd.io/bbolt"
 )
@@ -15,6 +17,13 @@ const (
 	// dbFilePermission is the default permission the client database file
 	// is created with.
 	dbFilePermission = 0600
+
+	// DefaultPoolDBTimeout is the default maximum time we wait for the
+	// Pool bbolt database to be opened. If the database is already opened
+	// by another process, the unique lock cannot be obtained. With the
+	// timeout we error out after the given time instead of just blocking
+	// for forever.
+	DefaultPoolDBTimeout = 5 * time.Second
 )
 
 var (
@@ -67,7 +76,16 @@ func fileExists(path string) bool {
 
 // initDB initializes all of the required top-level buckets for the database.
 func initDB(filepath string, firstInit bool) (*bbolt.DB, error) {
-	db, err := bbolt.Open(filepath, dbFilePermission, nil)
+	db, err := bbolt.Open(filepath, dbFilePermission, &bbolt.Options{
+		Timeout: DefaultPoolDBTimeout,
+	})
+	if err == bbolt.ErrTimeout {
+		return nil, fmt.Errorf("error while trying to open %s: timed "+
+			"out after %v when trying to obtain exclusive lock - "+
+			"make sure no other pool daemon process (standalone "+
+			"or embedded in lightning-terminal) is running",
+			filepath, DefaultPoolDBTimeout)
+	}
 	if err != nil {
 		return nil, err
 	}
