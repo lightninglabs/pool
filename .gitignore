@@ -2,3 +2,5 @@
 /poold
 cmd/pool/pool
 cmd/poold/poold
+
+pool.wasm

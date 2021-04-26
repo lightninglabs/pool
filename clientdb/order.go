@@ -7,11 +7,11 @@ import (
 	"io"
 
 	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/tlv"
-	"go.etcd.io/bbolt"
 )
 
 const (
@@ -80,8 +80,8 @@ type orderCallback func(nonce order.Nonce, rawOrder []byte,
 //
 // NOTE: This is part of the Store interface.
 func (db *DB) SubmitOrder(newOrder order.Order) error {
-	return db.Update(func(tx *bbolt.Tx) error {
-		rootBucket, err := getBucket(tx, ordersBucketKey)
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
+		rootBucket, err := getWriteBucket(tx, ordersBucketKey)
 		if err != nil {
 			return err
 		}
@@ -152,8 +152,8 @@ func (db *DB) SubmitOrder(newOrder order.Order) error {
 //
 // NOTE: This is part of the Store interface.
 func (db *DB) UpdateOrder(nonce order.Nonce, modifiers ...order.Modifier) error {
-	return db.Update(func(tx *bbolt.Tx) error {
-		rootBucket, err := getBucket(tx, ordersBucketKey)
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
+		rootBucket, err := getWriteBucket(tx, ordersBucketKey)
 		if err != nil {
 			return err
 		}
@@ -175,8 +175,8 @@ func (db *DB) UpdateOrders(nonces []order.Nonce,
 
 	// Read and update the orders in one single transaction that they are
 	// updated atomically.
-	return db.Update(func(tx *bbolt.Tx) error {
-		rootBucket, err := getBucket(tx, ordersBucketKey)
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
+		rootBucket, err := getWriteBucket(tx, ordersBucketKey)
 		if err != nil {
 			return err
 		}
@@ -225,8 +225,8 @@ func (db *DB) GetOrder(nonce order.Nonce) (order.Order, error) {
 			return nil
 		}
 	)
-	err = db.View(func(tx *bbolt.Tx) error {
-		rootBucket, err := getBucket(tx, ordersBucketKey)
+	err = walletdb.View(db, func(tx walletdb.ReadTx) error {
+		rootBucket, err := getReadBucket(tx, ordersBucketKey)
 		if err != nil {
 			return err
 		}
@@ -265,9 +265,9 @@ func (db *DB) GetOrders() ([]order.Order, error) {
 			return nil
 		}
 	)
-	err := db.View(func(tx *bbolt.Tx) error {
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
 		// First, we'll grab our main order bucket key.
-		rootBucket, err := getBucket(tx, ordersBucketKey)
+		rootBucket, err := getReadBucket(tx, ordersBucketKey)
 		if err != nil {
 			return err
 		}
@@ -295,7 +295,7 @@ func (db *DB) GetOrders() ([]order.Order, error) {
 
 // storeOrderTX saves a byte serialized order in its specific sub bucket within
 // the root orders bucket.
-func storeOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
+func storeOrderTX(rootBucket walletdb.ReadWriteBucket, nonce order.Nonce,
 	orderBytes []byte, evt event.Event) error {
 
 	// From the root bucket, we'll make a new sub order bucket using
@@ -317,7 +317,7 @@ func storeOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 
 // storeOrderMinNoderTierTX saves the current node tier for a given order to
 // the proper bucket.
-func storeOrderMinNoderTierTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
+func storeOrderMinNoderTierTX(rootBucket walletdb.ReadWriteBucket, nonce order.Nonce,
 	minNodeTier order.NodeTier) error {
 
 	orderBucket, err := rootBucket.CreateBucketIfNotExists(nonce[:])
@@ -335,7 +335,7 @@ func storeOrderMinNoderTierTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 
 // storeOrderMinUnitsMatchTX saves the order's minimum units match within the
 // order's root bucket.
-func storeOrderMinUnitsMatchTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
+func storeOrderMinUnitsMatchTX(rootBucket walletdb.ReadWriteBucket, nonce order.Nonce,
 	minUnitsMatch order.SupplyUnit) error {
 
 	// From the root bucket, we'll make a new sub order bucket using
@@ -356,7 +356,7 @@ func storeOrderMinUnitsMatchTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 
 // storeOrderTlvTX saves the order's additional information as a tlv stream
 // within the order's root bucket.
-func storeOrderTlvTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
+func storeOrderTlvTX(rootBucket walletdb.ReadWriteBucket, nonce order.Nonce,
 	o order.Order) error {
 
 	orderBucket, err := rootBucket.CreateBucketIfNotExists(nonce[:])
@@ -374,11 +374,11 @@ func storeOrderTlvTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 
 // fetchOrderTX fetches the binary data of one order specified by its nonce from
 // the root orders bucket.
-func fetchOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
+func fetchOrderTX(rootBucket walletdb.ReadBucket, nonce order.Nonce,
 	callback orderCallback) error {
 
 	// Get the main order bucket next.
-	orderBucket := rootBucket.Bucket(nonce[:])
+	orderBucket := rootBucket.NestedReadBucket(nonce[:])
 	if orderBucket == nil {
 		return ErrNoOrder
 	}
@@ -431,7 +431,7 @@ func fetchOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 // update should be written to a staging area instead of being applied to the
 // original order directly. Do not use this function for applying the staged
 // changes to the final bucket but use copyOrder instead.
-func updateOrder(ordersBucket, dst *bbolt.Bucket, nonce order.Nonce,
+func updateOrder(ordersBucket, dst walletdb.ReadWriteBucket, nonce order.Nonce,
 	modifiers []order.Modifier) (order.Order, error) {
 
 	var (
@@ -484,7 +484,7 @@ func updateOrder(ordersBucket, dst *bbolt.Bucket, nonce order.Nonce,
 	// reference to the order in the main order bucket, even if the
 	// destination bucket is the pending orders bucket.
 	evt := NewUpdatedEvent(prevState, o)
-	orderBucket := ordersBucket.Bucket(nonce[:])
+	orderBucket := ordersBucket.NestedReadWriteBucket(nonce[:])
 	if orderBucket == nil {
 		return nil, ErrNoOrder
 	}
@@ -522,7 +522,7 @@ func updateOrder(ordersBucket, dst *bbolt.Bucket, nonce order.Nonce,
 
 // copyOrder copies a single order from the source to destination bucket. No
 // event references are copied, only the order itself.
-func copyOrder(src, dst *bbolt.Bucket, nonce order.Nonce) error {
+func copyOrder(src, dst walletdb.ReadWriteBucket, nonce order.Nonce) error {
 	var (
 		o             order.Order
 		orderBytes    []byte

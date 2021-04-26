@@ -10,6 +10,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/terms"
@@ -17,7 +18,6 @@ import (
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -272,8 +272,8 @@ func ReadElement(r io.Reader, element interface{}) error { // nolint:gocyclo
 
 // getAdditionalDataBucket returns the bucket for additional data of a database
 // object located at mainKey.
-func getAdditionalDataBucket(parentBucket *bbolt.Bucket,
-	mainKey []byte, createBucket bool) (*bbolt.Bucket, error) {
+func getAdditionalDataBucket(parentBucket walletdb.ReadWriteBucket,
+	mainKey []byte, createBucket bool) (walletdb.ReadWriteBucket, error) {
 
 	keyLen := len(mainKey) + len(additionalDataSuffix)
 	additionalDataKey := make([]byte, keyLen)
@@ -286,10 +286,21 @@ func getAdditionalDataBucket(parentBucket *bbolt.Bucket,
 		return parentBucket.CreateBucketIfNotExists(additionalDataKey)
 	}
 
-	return parentBucket.Bucket(additionalDataKey), nil
+	return parentBucket.NestedReadWriteBucket(additionalDataKey), nil
 }
 
-func writeAdditionalValue(targetBucket *bbolt.Bucket, valueKey []byte,
+func getAdditionalDataReadBucket(parentBucket walletdb.ReadBucket,
+	mainKey []byte) (walletdb.ReadBucket, error) {
+
+	keyLen := len(mainKey) + len(additionalDataSuffix)
+	additionalDataKey := make([]byte, keyLen)
+	copy(additionalDataKey, mainKey)
+	copy(additionalDataKey[len(mainKey):], additionalDataSuffix)
+
+	return parentBucket.NestedReadBucket(additionalDataKey), nil
+}
+
+func writeAdditionalValue(targetBucket walletdb.ReadWriteBucket, valueKey []byte,
 	value interface{}) error {
 
 	var valueBuf bytes.Buffer
@@ -300,7 +311,7 @@ func writeAdditionalValue(targetBucket *bbolt.Bucket, valueKey []byte,
 	return targetBucket.Put(valueKey, valueBuf.Bytes())
 }
 
-func readAdditionalValue(sourceBucket *bbolt.Bucket, valueKey []byte,
+func readAdditionalValue(sourceBucket walletdb.ReadBucket, valueKey []byte,
 	valueTarget interface{}, defaultValue interface{}) error {
 
 	// First of all, check that the valueTarget is a pointer to the same

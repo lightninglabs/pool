@@ -12,7 +12,6 @@ import (
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
-	"github.com/lightningnetwork/lnd/lncfg"
 	"github.com/urfave/cli"
 )
 
@@ -233,7 +232,7 @@ func getPoolDB(ctx *cli.Context) (*clientdb.DB, error) {
 		clientdb.DBFilename,
 	)
 	if ctx.IsSet("db") {
-		fullDbPath = lncfg.CleanAndExpandPath(ctx.String("db"))
+		fullDbPath = pool.CleanAndExpandPath(ctx.String("db"))
 	}
 
 	db, err := clientdb.New(path.Dir(fullDbPath), path.Base(fullDbPath))

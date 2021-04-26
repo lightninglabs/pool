@@ -90,6 +90,9 @@ release:
 	$(VERSION_CHECK)
 	./scripts/release.sh build-release "$(VERSION_TAG)" "$(BUILD_SYSTEM)" "" "$(RELEASE_LDFLAGS)"
 
+build-wasm:
+	GOOS=js GOARCH=wasm go build -trimpath -ldflags="$(LDFLAGS)" -tags=appengine -v -o pool.wasm $(PKG)/cmd/poold
+
 scratch: build
 
 # =======

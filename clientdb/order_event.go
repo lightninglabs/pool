@@ -5,11 +5,11 @@ import (
 	"io"
 	"time"
 
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
-	"go.etcd.io/bbolt"
 )
 
 // OrderEvent is the main interface for order specific events.
@@ -317,18 +317,18 @@ var _ OrderEvent = (*MatchEvent)(nil)
 // reference keys in the order bucket.
 func (db *DB) GetOrderEvents(o order.Nonce) ([]event.Event, error) {
 	var events []event.Event
-	err := db.View(func(tx *bbolt.Tx) error {
-		ordersBucket, err := getBucket(tx, ordersBucketKey)
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
+		ordersBucket, err := getReadBucket(tx, ordersBucketKey)
 		if err != nil {
 			return err
 		}
 
-		orderBucket := ordersBucket.Bucket(o[:])
+		orderBucket := ordersBucket.NestedReadBucket(o[:])
 		if orderBucket == nil {
 			return ErrNoOrder
 		}
 
-		eventSubBucket := orderBucket.Bucket(eventRefSubBucket)
+		eventSubBucket := orderBucket.NestedReadBucket(eventRefSubBucket)
 		if eventSubBucket == nil {
 			return fmt.Errorf("order event sub bucket not found")
 		}
@@ -388,8 +388,8 @@ func (db *DB) StoreOrderEvents(events []OrderEvent) error {
 	}
 	event.MakeUniqueTimestamps(baseEvents)
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		ordersBucket, err := getBucket(tx, ordersBucketKey)
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
+		ordersBucket, err := getWriteBucket(tx, ordersBucketKey)
 		if err != nil {
 			return err
 		}
@@ -398,7 +398,7 @@ func (db *DB) StoreOrderEvents(events []OrderEvent) error {
 		// up the individual order bucket in each iteration.
 		for _, evt := range events {
 			nonce := evt.Nonce()
-			orderBucket := ordersBucket.Bucket(nonce[:])
+			orderBucket := ordersBucket.NestedReadWriteBucket(nonce[:])
 			if orderBucket == nil {
 				return ErrNoOrder
 			}

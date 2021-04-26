@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/account"
 	"github.com/stretchr/testify/require"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -48,9 +48,9 @@ func TestAdditionalData(t *testing.T) {
 	// Now try to read the additional value that does not exist yet. We
 	// should instead get back the default value.
 	myAdditionalValue := uint32(0)
-	require.NoError(t, db.DB.View(func(tx *bbolt.Tx) error {
-		subBucket, err := getAdditionalDataBucket(
-			tx.Bucket(accountBucketKey), accountKey, false,
+	require.NoError(t, walletdb.View(db, func(tx walletdb.ReadTx) error {
+		subBucket, err := getAdditionalDataReadBucket(
+			tx.ReadBucket(accountBucketKey), accountKey,
 		)
 		if err != nil {
 			return err
@@ -63,9 +63,9 @@ func TestAdditionalData(t *testing.T) {
 	require.Equal(t, additionalDataTestDefaultValue, myAdditionalValue)
 
 	// Write the additional into the sub bucket of the account now.
-	require.NoError(t, db.DB.Update(func(tx *bbolt.Tx) error {
+	require.NoError(t, walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
 		subBucket, err := getAdditionalDataBucket(
-			tx.Bucket(accountBucketKey), accountKey, true,
+			tx.ReadWriteBucket(accountBucketKey), accountKey, true,
 		)
 		if err != nil {
 			return err
@@ -78,9 +78,9 @@ func TestAdditionalData(t *testing.T) {
 
 	// Read the additional info again, now we shouldn't get the default
 	// value anymore.
-	require.NoError(t, db.DB.View(func(tx *bbolt.Tx) error {
-		subBucket, err := getAdditionalDataBucket(
-			tx.Bucket(accountBucketKey), accountKey, false,
+	require.NoError(t, walletdb.View(db, func(tx walletdb.ReadTx) error {
+		subBucket, err := getAdditionalDataReadBucket(
+			tx.ReadBucket(accountBucketKey), accountKey,
 		)
 		if err != nil {
 			return err
@@ -96,9 +96,9 @@ func TestAdditionalData(t *testing.T) {
 	// accidentally when using the readAdditionalValue function.
 	// Read the additional info again, now we shouldn't get the default
 	// value anymore.
-	require.Error(t, db.DB.View(func(tx *bbolt.Tx) error {
-		subBucket, err := getAdditionalDataBucket(
-			tx.Bucket(accountBucketKey), accountKey, false,
+	require.Error(t, walletdb.View(db, func(tx walletdb.ReadTx) error {
+		subBucket, err := getAdditionalDataReadBucket(
+			tx.ReadBucket(accountBucketKey), accountKey,
 		)
 		if err != nil {
 			return err

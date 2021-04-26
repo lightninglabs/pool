@@ -8,11 +8,11 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -396,18 +396,18 @@ func TestDeletePendingBatch(t *testing.T) {
 	assertPendingBatch := func(exists bool) {
 		t.Helper()
 
-		err := db.View(func(tx *bbolt.Tx) error {
-			root := tx.Bucket(batchBucketKey)
+		err := walletdb.View(db, func(tx walletdb.ReadTx) error {
+			root := tx.ReadBucket(batchBucketKey)
 
 			if (root.Get(pendingBatchIDKey) != nil) != exists {
 				return fmt.Errorf("found unexpected key %v",
 					string(pendingBatchIDKey))
 			}
-			if (root.Bucket(pendingBatchAccountsBucketKey) != nil) != exists {
+			if (root.NestedReadBucket(pendingBatchAccountsBucketKey) != nil) != exists {
 				return fmt.Errorf("found unexpected bucket %v",
 					string(pendingBatchAccountsBucketKey))
 			}
-			if (root.Bucket(pendingBatchOrdersBucketKey) != nil) != exists {
+			if (root.NestedReadBucket(pendingBatchOrdersBucketKey) != nil) != exists {
 				return fmt.Errorf("found unexpected bucket %v",
 					string(pendingBatchOrdersBucketKey))
 			}

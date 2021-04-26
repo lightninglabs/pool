@@ -5,15 +5,15 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/pool/clientdb/migrations"
-	"go.etcd.io/bbolt"
 )
 
 // migration is a function which takes a prior outdated version of the database
 // instance and mutates the key/bucket structure to arrive at a more up-to-date
 // version of the database.
-type migration func(tx *bbolt.Tx) error
+type migration func(tx walletdb.ReadWriteTx) error
 
 var (
 	// metadataBucketKey stores all the metadata concerning the state of the
@@ -34,6 +34,8 @@ var (
 	// ErrDBReversion is returned when detecting an attempt to revert to a
 	// prior database version.
 	ErrDBReversion = errors.New("cannot revert to prior version")
+	
+	ErrDBVersionNotFound = errors.New("database version not found")
 
 	// dbVersions is storing all versions of database. If current version
 	// of database don't match with latest version this list will be used
@@ -47,24 +49,38 @@ var (
 )
 
 // getDBVersion retrieves the current database version.
-func getDBVersion(bucket *bbolt.Bucket) (uint32, error) {
+func getDBVersion(bucket walletdb.ReadBucket) (uint32, error) {
 	versionBytes := bucket.Get(dbVersionKey)
 	if versionBytes == nil {
-		return 0, errors.New("database version not found")
+		return 0, ErrDBVersionNotFound
 	}
 	return byteOrder.Uint32(versionBytes), nil
 }
 
 // setDBVersion updates the current database version.
-func setDBVersion(bucket *bbolt.Bucket, version uint32) error {
+func setDBVersion(bucket walletdb.ReadWriteBucket, version uint32) error {
 	var b [4]byte
 	byteOrder.PutUint32(b[:], version)
 	return bucket.Put(dbVersionKey, b[:])
 }
 
-// getBucket retrieves the bucket with the given key.
-func getBucket(tx *bbolt.Tx, key []byte) (*bbolt.Bucket, error) {
-	bucket := tx.Bucket(key)
+// getWriteBucket retrieves the bucket with the given key in write mode.
+func getWriteBucket(tx walletdb.ReadWriteTx,
+	key []byte) (walletdb.ReadWriteBucket, error) {
+
+	bucket := tx.ReadWriteBucket(key)
+	if bucket == nil {
+		return nil, fmt.Errorf("bucket \"%v\" does not exist",
+			string(key))
+	}
+	return bucket, nil
+}
+
+// getReadBucket retrieves the bucket with the given key in read mode.
+func getReadBucket(tx walletdb.ReadTx,
+	key []byte) (walletdb.ReadBucket, error) {
+
+	bucket := tx.ReadBucket(key)
 	if bucket == nil {
 		return nil, fmt.Errorf("bucket \"%v\" does not exist",
 			string(key))
@@ -75,10 +91,10 @@ func getBucket(tx *bbolt.Tx, key []byte) (*bbolt.Bucket, error) {
 // getNestedBucket retrieves the nested bucket with the given key found within
 // the given bucket. If the bucket does not exist and `create` is true, then the
 // bucket is created.
-func getNestedBucket(bucket *bbolt.Bucket, key []byte,
-	create bool) (*bbolt.Bucket, error) {
+func getNestedBucket(bucket walletdb.ReadWriteBucket, key []byte,
+	create bool) (walletdb.ReadWriteBucket, error) {
 
-	nestedBucket := bucket.Bucket(key)
+	nestedBucket := bucket.NestedReadWriteBucket(key)
 	if nestedBucket == nil && create {
 		return bucket.CreateBucketIfNotExists(key)
 	}
@@ -89,13 +105,24 @@ func getNestedBucket(bucket *bbolt.Bucket, key []byte,
 	return nestedBucket, nil
 }
 
+func getNestedReadBucket(bucket walletdb.ReadBucket,
+	key []byte) (walletdb.ReadBucket, error) {
+
+	nestedBucket := bucket.NestedReadBucket(key)
+	if nestedBucket == nil {
+		return nil, fmt.Errorf("nested bucket \"%v\" does not exist",
+			string(key))
+	}
+	return nestedBucket, nil
+}
+
 // syncVersions function is used for safe db version synchronization. It
 // applies migration functions to the current database and recovers the
 // previous state of db if at least one error/panic appeared during migration.
-func syncVersions(db *bbolt.DB) error {
+func syncVersions(db walletdb.DB) error {
 	var currentVersion uint32
-	err := db.View(func(tx *bbolt.Tx) error {
-		metadata, err := getBucket(tx, metadataBucketKey)
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
+		metadata, err := getReadBucket(tx, metadataBucketKey)
 		if err != nil {
 			return err
 		}
@@ -131,7 +158,7 @@ func syncVersions(db *bbolt.DB) error {
 
 	// Otherwise we execute the migrations serially within a single database
 	// transaction to ensure the migration is atomic.
-	return db.Update(func(tx *bbolt.Tx) error {
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
 		for v := currentVersion; v < latestDBVersion; v++ {
 			log.Infof("Applying migration #%v", v+1)
 
@@ -142,7 +169,7 @@ func syncVersions(db *bbolt.DB) error {
 			}
 		}
 
-		metadata, err := getBucket(tx, metadataBucketKey)
+		metadata, err := getWriteBucket(tx, metadataBucketKey)
 		if err != nil {
 			return err
 		}
@@ -152,7 +179,7 @@ func syncVersions(db *bbolt.DB) error {
 
 // storeRandomLockID generates a random lock ID backed by the system's CSPRNG
 // and stores it under the metadata bucket.
-func storeRandomLockID(metadata *bbolt.Bucket) error {
+func storeRandomLockID(metadata walletdb.ReadWriteBucket) error {
 	var lockID wtxmgr.LockID
 	if _, err := rand.Read(lockID[:]); err != nil {
 		return err
@@ -164,8 +191,8 @@ func storeRandomLockID(metadata *bbolt.Bucket) error {
 // backing lnd node's wallet.
 func (db *DB) LockID() (wtxmgr.LockID, error) {
 	var lockID wtxmgr.LockID
-	err := db.View(func(tx *bbolt.Tx) error {
-		metadata, err := getBucket(tx, metadataBucketKey)
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
+		metadata, err := getReadBucket(tx, metadataBucketKey)
 		if err != nil {
 			return err
 		}

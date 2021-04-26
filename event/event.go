@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"go.etcd.io/bbolt"
+	"github.com/btcsuite/btcwallet/walletdb"
 )
 
 const (
@@ -96,7 +96,7 @@ type Predicate func(time.Time, Type) bool
 // function should be called first to ensure the timestamps are already unique
 // among themselves. If no "gap" in the timestamps can be found after 1000 tries
 // an error is returned.
-func StoreEvent(bucket *bbolt.Bucket, event Event) error {
+func StoreEvent(bucket walletdb.ReadWriteBucket, event Event) error {
 	// We use a fixed length array as our buffer so we don't allocate new
 	// memory for each try.
 	var tsScratchSpace [TimestampLength]byte

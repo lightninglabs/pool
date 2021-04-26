@@ -8,12 +8,12 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/stretchr/testify/require"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -207,7 +207,7 @@ func TestGetLocalBatchSnapshots(t *testing.T) {
 	// Store the same batch 10 times, only changing the batch ID each time.
 	for i := 0; i < 10; i++ {
 		i := i
-		err := store.Update(func(tx *bbolt.Tx) error {
+		err := walletdb.Update(store, func(tx walletdb.ReadWriteTx) error {
 			testSnapshot.BatchID[0] = byte(i)
 			err := storePendingBatchSnapshot(tx, testSnapshot)
 			if err != nil {
@@ -235,14 +235,14 @@ func TestGetLocalBatchSnapshots(t *testing.T) {
 	// Store and delete a pending snapshot, and make sure all other batches are
 	// still there.
 	testSnapshot.BatchID[0] = byte(99)
-	err = store.Update(func(tx *bbolt.Tx) error {
+	err = walletdb.Update(store, func(tx walletdb.ReadWriteTx) error {
 		return storePendingBatchSnapshot(tx, testSnapshot)
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = store.Update(deletePendingSnapshot)
+	err = walletdb.Update(store, deletePendingSnapshot)
 	if err != nil {
 		t.Fatal(err)
 	}

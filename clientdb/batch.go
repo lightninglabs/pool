@@ -3,9 +3,9 @@ package clientdb
 import (
 	"fmt"
 
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -48,28 +48,28 @@ func (db *DB) StorePendingBatch(batch *order.Batch, orders []order.Nonce,
 	}
 
 	// Wrap the whole batch update in a single update transaction.
-	return db.Update(func(tx *bbolt.Tx) error {
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
 		// Before updating the set of orders and accounts, we'll first
 		// delete the buckets containing any existing staged updates.
 		// This is to done to handle the case where the first version of
 		// a batch updated an order/account, but its second version
 		// didn't. Without this, our state would become desynchronized
 		// with the auction.
-		bucket, err := getBucket(tx, batchBucketKey)
+		bucket, err := getWriteBucket(tx, batchBucketKey)
 		if err != nil {
 			return err
 		}
-		err = bucket.DeleteBucket(pendingBatchAccountsBucketKey)
-		if err != nil && err != bbolt.ErrBucketNotFound {
+		err = bucket.DeleteNestedBucket(pendingBatchAccountsBucketKey)
+		if err != nil && err != walletdb.ErrBucketNotFound {
 			return err
 		}
-		err = bucket.DeleteBucket(pendingBatchOrdersBucketKey)
-		if err != nil && err != bbolt.ErrBucketNotFound {
+		err = bucket.DeleteNestedBucket(pendingBatchOrdersBucketKey)
+		if err != nil && err != walletdb.ErrBucketNotFound {
 			return err
 		}
 
 		// Update orders first.
-		ordersBucket, err := getBucket(tx, ordersBucketKey)
+		ordersBucket, err := getWriteBucket(tx, ordersBucketKey)
 		if err != nil {
 			return err
 		}
@@ -94,7 +94,7 @@ func (db *DB) StorePendingBatch(batch *order.Batch, orders []order.Nonce,
 		}
 
 		// Then update the accounts.
-		accountsBucket, err := getBucket(tx, accountBucketKey)
+		accountsBucket, err := getWriteBucket(tx, accountBucketKey)
 		if err != nil {
 			return err
 		}
@@ -142,7 +142,7 @@ func (db *DB) StorePendingBatch(batch *order.Batch, orders []order.Nonce,
 // If there isn't one, account.ErrNoPendingBatch is returned.
 func (db *DB) PendingBatchSnapshot() (*LocalBatchSnapshot, error) {
 	var batchSnapshot *LocalBatchSnapshot
-	err := db.View(func(tx *bbolt.Tx) error {
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
 		var err error
 		batchSnapshot, err = fetchPendingBatchSnapshot(tx)
 		return err
@@ -152,8 +152,8 @@ func (db *DB) PendingBatchSnapshot() (*LocalBatchSnapshot, error) {
 
 // pendingBatchID retrieves the stored pending batch ID within a database
 // transaction.
-func pendingBatchID(tx *bbolt.Tx) (order.BatchID, error) {
-	bucket, err := getBucket(tx, batchBucketKey)
+func pendingBatchID(tx walletdb.ReadTx) (order.BatchID, error) {
+	bucket, err := getReadBucket(tx, batchBucketKey)
 	if err != nil {
 		return zeroBatchID, err
 	}
@@ -172,8 +172,8 @@ func pendingBatchID(tx *bbolt.Tx) (order.BatchID, error) {
 // without applying its staged updates to accounts and orders. If no pending
 // batch exists, this acts as a no-op.
 func (db *DB) DeletePendingBatch() error {
-	return db.Update(func(tx *bbolt.Tx) error {
-		bucket, err := getBucket(tx, batchBucketKey)
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
+		bucket, err := getWriteBucket(tx, batchBucketKey)
 		if err != nil {
 			return err
 		}
@@ -181,12 +181,12 @@ func (db *DB) DeletePendingBatch() error {
 		if err := bucket.Delete(pendingBatchIDKey); err != nil {
 			return err
 		}
-		err = bucket.DeleteBucket(pendingBatchAccountsBucketKey)
-		if err != nil && err != bbolt.ErrBucketNotFound {
+		err = bucket.DeleteNestedBucket(pendingBatchAccountsBucketKey)
+		if err != nil && err != walletdb.ErrBucketNotFound {
 			return err
 		}
-		err = bucket.DeleteBucket(pendingBatchOrdersBucketKey)
-		if err != nil && err != bbolt.ErrBucketNotFound {
+		err = bucket.DeleteNestedBucket(pendingBatchOrdersBucketKey)
+		if err != nil && err != walletdb.ErrBucketNotFound {
 			return err
 		}
 
@@ -200,7 +200,7 @@ func (db *DB) DeletePendingBatch() error {
 // modifications necessary, and allowing a trader to participate in a new batch.
 // If a pending batch is not found, account.ErrNoPendingBatch is returned.
 func (db *DB) MarkBatchComplete() error {
-	return db.Update(func(tx *bbolt.Tx) error {
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
 		pendingID, err := pendingBatchID(tx)
 		if err != nil {
 			return err
@@ -215,8 +215,8 @@ func (db *DB) MarkBatchComplete() error {
 
 // applyBatchUpdates applies the staged updates for any accounts and orders that
 // participated in the latest pending batch.
-func applyBatchUpdates(tx *bbolt.Tx) error {
-	bucket, err := getBucket(tx, batchBucketKey)
+func applyBatchUpdates(tx walletdb.ReadWriteTx) error {
+	bucket, err := getWriteBucket(tx, batchBucketKey)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func applyBatchUpdates(tx *bbolt.Tx) error {
 	if err != nil {
 		return err
 	}
-	accounts, err := getBucket(tx, accountBucketKey)
+	accounts, err := getWriteBucket(tx, accountBucketKey)
 	if err != nil {
 		return err
 	}
@@ -248,7 +248,7 @@ func applyBatchUpdates(tx *bbolt.Tx) error {
 
 	// Once we've updated all of the accounts, we can remove the pending
 	// updates as they've been committed.
-	if err := bucket.DeleteBucket(pendingBatchAccountsBucketKey); err != nil {
+	if err := bucket.DeleteNestedBucket(pendingBatchAccountsBucketKey); err != nil {
 		return err
 	}
 
@@ -259,7 +259,7 @@ func applyBatchUpdates(tx *bbolt.Tx) error {
 	if err != nil {
 		return err
 	}
-	orders, err := getBucket(tx, ordersBucketKey)
+	orders, err := getWriteBucket(tx, ordersBucketKey)
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func applyBatchUpdates(tx *bbolt.Tx) error {
 
 	// Once again, remove the pending order updates as they've been
 	// committed.
-	if err := bucket.DeleteBucket(pendingBatchOrdersBucketKey); err != nil {
+	if err := bucket.DeleteNestedBucket(pendingBatchOrdersBucketKey); err != nil {
 		return err
 	}
 

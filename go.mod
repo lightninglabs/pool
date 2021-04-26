@@ -5,9 +5,11 @@ go 1.14
 require (
 	github.com/btcsuite/btcd v0.21.0-beta.0.20210429225535-ce697fe7e82b
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f
-	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
-	github.com/btcsuite/btcwallet v0.12.0
+	github.com/btcsuite/btcutil v1.0.3-0.20210514234026-faeebcb9abbe
+	github.com/btcsuite/btcwallet v0.12.1-0.20210518235050-c31e1497759c
 	github.com/btcsuite/btcwallet/wallet/txrules v1.0.0
+	github.com/btcsuite/btcwallet/wallet/txsizes v1.0.1-0.20210518235050-c31e1497759c // indirect
+	github.com/btcsuite/btcwallet/walletdb v1.3.5
 	github.com/btcsuite/btcwallet/wtxmgr v1.3.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/golang/protobuf v1.4.3
@@ -33,3 +35,12 @@ replace github.com/lightninglabs/pool/auctioneerrpc => ./auctioneerrpc
 // Fix incompatibility of etcd go.mod package.
 // See https://github.com/etcd-io/etcd/issues/11154
 replace go.etcd.io/etcd => go.etcd.io/etcd v0.5.0-alpha.5.0.20201125193152-8a03d2e9614b
+
+replace github.com/lightningnetwork/lnd => ../../lightningnetwork/lnd
+
+replace github.com/lightningnetwork/lnd/healthcheck => ../../lightningnetwork/lnd/healthcheck
+
+replace github.com/lightningnetwork/lnd/kvdb => ../../lightningnetwork/lnd/kvdb
+replace github.com/lightningnetwork/lnd/cert => ../../lightningnetwork/lnd/cert
+
+replace github.com/lightninglabs/lndclient => ../lndclient

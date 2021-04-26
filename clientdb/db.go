@@ -2,21 +2,17 @@ package clientdb
 
 import (
 	"encoding/binary"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
-	"go.etcd.io/bbolt"
+	"github.com/btcsuite/btcwallet/walletdb"
+	"github.com/lightningnetwork/lnd/lnrpc"
 )
 
 const (
 	// DBFilename is the default filename of the client database.
 	DBFilename = "pool.db"
-
-	// dbFilePermission is the default permission the client database file
-	// is created with.
-	dbFilePermission = 0600
 
 	// DefaultPoolDBTimeout is the default maximum time we wait for the
 	// Pool bbolt database to be opened. If the database is already opened
@@ -34,23 +30,22 @@ var (
 
 // DB is a bolt-backed persistent store.
 type DB struct {
-	*bbolt.DB
+	walletdb.DB
 }
 
 // New creates a new bolt database that can be found at the given directory.
 func New(dir, fileName string) (*DB, error) {
-	firstInit := false
 	path := filepath.Join(dir, fileName)
 
-	// If the database file does not exist yet, create its directory.
-	if !fileExists(path) {
-		if err := os.MkdirAll(dir, 0700); err != nil {
-			return nil, err
-		}
-		firstInit = true
+	// Detect first init of database for JS.
+	dbExists, err := isExistingDB(dir, path)
+	if err != nil {
+		return nil, err
 	}
 
-	db, err := initDB(path, firstInit)
+	log.Debugf("Database %s exists: %v", path, dbExists)
+
+	db, err := initDB(path, !dbExists)
 	if err != nil {
 		return nil, err
 	}
@@ -75,24 +70,26 @@ func fileExists(path string) bool {
 }
 
 // initDB initializes all of the required top-level buckets for the database.
-func initDB(filepath string, firstInit bool) (*bbolt.DB, error) {
-	db, err := bbolt.Open(filepath, dbFilePermission, &bbolt.Options{
-		Timeout: DefaultPoolDBTimeout,
-	})
-	if err == bbolt.ErrTimeout {
-		return nil, fmt.Errorf("error while trying to open %s: timed "+
-			"out after %v when trying to obtain exclusive lock - "+
-			"make sure no other pool daemon process (standalone "+
-			"or embedded in lightning-terminal) is running",
-			filepath, DefaultPoolDBTimeout)
-	}
-	if err != nil {
-		return nil, err
+func initDB(filepath string, firstInit bool) (walletdb.DB, error) {
+	var (
+		db  walletdb.DB
+		err error
+	)
+	if !lnrpc.FileExists(filepath) {
+		db, err = walletdb.Create(dbDriver, filepath, false, time.Second)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		db, err = walletdb.Open(dbDriver, filepath, false, time.Second)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	err = db.Update(func(tx *bbolt.Tx) error {
+	err = walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
 		if firstInit {
-			metadataBucket, err := tx.CreateBucketIfNotExists(
+			metadataBucket, err := tx.CreateTopLevelBucket(
 				metadataBucketKey,
 			)
 			if err != nil {
@@ -107,27 +104,27 @@ func initDB(filepath string, firstInit bool) (*bbolt.DB, error) {
 			}
 		}
 
-		_, err = tx.CreateBucketIfNotExists(accountBucketKey)
+		_, err = tx.CreateTopLevelBucket(accountBucketKey)
 		if err != nil {
 			return err
 		}
-		_, err = tx.CreateBucketIfNotExists(ordersBucketKey)
+		_, err = tx.CreateTopLevelBucket(ordersBucketKey)
 		if err != nil {
 			return err
 		}
-		_, err = tx.CreateBucketIfNotExists(sidecarsBucketKey)
+		_, err = tx.CreateTopLevelBucket(sidecarsBucketKey)
 		if err != nil {
 			return err
 		}
-		_, err = tx.CreateBucketIfNotExists(batchBucketKey)
+		_, err = tx.CreateTopLevelBucket(batchBucketKey)
 		if err != nil {
 			return err
 		}
-		_, err = tx.CreateBucketIfNotExists(eventBucketKey)
+		_, err = tx.CreateTopLevelBucket(eventBucketKey)
 		if err != nil {
 			return err
 		}
-		snapshotBucket, err := tx.CreateBucketIfNotExists(
+		snapshotBucket, err := tx.CreateTopLevelBucket(
 			batchSnapshotBucketKey,
 		)
 		if err != nil {

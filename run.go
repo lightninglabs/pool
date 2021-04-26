@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/signal"
@@ -28,12 +29,14 @@ func Run(cfg *Config) error {
 	}
 
 	// Initialize logging at the default logging level.
-	err = logWriter.InitLogRotator(
-		filepath.Join(cfg.LogDir, DefaultLogFilename),
-		cfg.MaxLogFileSize, cfg.MaxLogFiles,
-	)
-	if err != nil {
-		return err
+	if runtime.GOOS != "js" {
+		err := logWriter.InitLogRotator(
+			filepath.Join(cfg.LogDir, DefaultLogFilename),
+			cfg.MaxLogFileSize, cfg.MaxLogFiles,
+		)
+		if err != nil {
+			return err
+		}
 	}
 	err = build.ParseAndSetDebugLevels(cfg.DebugLevel, logWriter)
 	if err != nil {
@@ -41,10 +44,21 @@ func Run(cfg *Config) error {
 	}
 
 	trader := NewServer(cfg)
-	err = trader.Start()
+
+	if runtime.GOOS == "js" {
+		services, basicClient, err := getLnd(cfg.Network, cfg.Lnd)
+		if err != nil {
+			return fmt.Errorf("unable to connect to lnd: %v", err)
+		}
+
+		err = trader.StartAsSubserver(basicClient, services)
+	} else {
+		err = trader.Start()
+	}
 	if err != nil {
 		return fmt.Errorf("unable to start server: %v", err)
 	}
+
 	<-shutdownInterceptor.ShutdownChannel()
 	return trader.Stop()
 }

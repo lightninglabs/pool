@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
 	"github.com/stretchr/testify/require"
-	"go.etcd.io/bbolt"
 )
 
 // TestOrderEvents tests that storing and updating orders creates the correct
@@ -117,10 +117,10 @@ func assertOrderCreateEvent(t *testing.T, store *DB, o order.Nonce) {
 func getOrderEventTimestamps(store *DB, o order.Nonce, evtType event.Type) (
 	map[time.Time]struct{}, error) {
 	orderEventTimestamps := make(map[time.Time]struct{})
-	err := store.DB.View(func(tx *bbolt.Tx) error {
-		ordersBucket := tx.Bucket(ordersBucketKey)
-		orderBucket := ordersBucket.Bucket(o[:])
-		eventBucket := orderBucket.Bucket(eventRefSubBucket)
+	err := walletdb.View(store, func(tx walletdb.ReadTx) error {
+		ordersBucket := tx.ReadBucket(ordersBucketKey)
+		orderBucket := ordersBucket.NestedReadBucket(o[:])
+		eventBucket := orderBucket.NestedReadBucket(eventRefSubBucket)
 		return eventBucket.ForEach(func(k, v []byte) error {
 			// Only look at keys with correct length.
 			if len(k) != event.TimestampLength {

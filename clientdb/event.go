@@ -7,8 +7,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/event"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -64,7 +64,7 @@ func (db *DB) AllEvents(evtType event.Type) ([]event.Event, error) {
 // events that match the given predicate.
 func (db *DB) getEvents(predicate event.Predicate) ([]event.Event, error) {
 	var events []event.Event
-	err := db.View(func(tx *bbolt.Tx) error {
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
 		var err error
 		events, err = getEventsTX(tx, predicate)
 		return err
@@ -78,11 +78,11 @@ func (db *DB) getEvents(predicate event.Predicate) ([]event.Event, error) {
 
 // getEventsTX retrieves all events that match the given predicate from the main
 // event bucket within the given database transaction.
-func getEventsTX(tx *bbolt.Tx, predicate event.Predicate) ([]event.Event,
+func getEventsTX(tx walletdb.ReadTx, predicate event.Predicate) ([]event.Event,
 	error) {
 
 	events := make([]event.Event, 0, eventsAllocSize)
-	eventBucket := tx.Bucket(eventBucketKey)
+	eventBucket := tx.ReadBucket(eventBucketKey)
 	err := eventBucket.ForEach(func(k, v []byte) error {
 		// There shouldn't be any other keys below the main
 		// event bucket so we fail hard if a key doesn't match
@@ -133,7 +133,7 @@ func getEventsTX(tx *bbolt.Tx, predicate event.Predicate) ([]event.Event,
 // storeEventTX stores a single event both in the main events bucket (ensuring
 // the uniqueness of its timestamp in the process) and a reference to it in the
 // "owner"'s bucket under an event reference sub bucket.
-func storeEventTX(ownerBucket *bbolt.Bucket, evt event.Event) error {
+func storeEventTX(ownerBucket walletdb.ReadWriteBucket, evt event.Event) error {
 	// For convenience, the event is allowed to be nil, in case no update
 	// really happened.
 	if evt == nil {
@@ -141,7 +141,7 @@ func storeEventTX(ownerBucket *bbolt.Bucket, evt event.Event) error {
 	}
 
 	// First of all, write the event to the global event bucket.
-	evtBucket := ownerBucket.Tx().Bucket(eventBucketKey)
+	evtBucket := ownerBucket.Tx().ReadWriteBucket(eventBucketKey)
 	err := event.StoreEvent(evtBucket, evt)
 	if err != nil {
 		return err

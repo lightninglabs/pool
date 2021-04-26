@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/event"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 // AddInitialOrderTimestamps creates an "order created" timestamp for each of
 // the existing orders. This will only be executed once, when the main event
 // bucket is created for the first time.
-func AddInitialOrderTimestamps(tx *bbolt.Tx) error {
+func AddInitialOrderTimestamps(tx walletdb.ReadWriteTx) error {
 	// We back date all existing orders to the beginning of the year of hell
 	// to signal this isn't the real timestamp it was created at but
 	// something we added later.
@@ -44,7 +44,7 @@ func AddInitialOrderTimestamps(tx *bbolt.Tx) error {
 	).UnixNano()
 
 	// First, we'll grab our main order bucket key.
-	ordersBucket := tx.Bucket(ordersBucketKey)
+	ordersBucket := tx.ReadWriteBucket(ordersBucketKey)
 	if ordersBucket == nil {
 		return fmt.Errorf("bucket \"%v\" does not exist",
 			string(ordersBucketKey))
@@ -69,7 +69,7 @@ func AddInitialOrderTimestamps(tx *bbolt.Tx) error {
 		// creation event for that order.
 		var nonce [32]byte
 		copy(nonce[:], nonceBytes)
-		orderBucket := ordersBucket.Bucket(nonce[:])
+		orderBucket := ordersBucket.NestedReadWriteBucket(nonce[:])
 		if orderBucket == nil {
 			return fmt.Errorf("order bucket not found")
 		}
@@ -83,7 +83,7 @@ func AddInitialOrderTimestamps(tx *bbolt.Tx) error {
 
 		// With the key encoded, we'll then encode the event into our
 		// buffer, then write it out to disk.
-		evtBucket := tx.Bucket(eventBucketKey)
+		evtBucket := tx.ReadWriteBucket(eventBucketKey)
 		var eventBuf bytes.Buffer
 		if err := eventBuf.WriteByte(eventType); err != nil {
 			return err
@@ -107,7 +107,7 @@ func AddInitialOrderTimestamps(tx *bbolt.Tx) error {
 	// Because we can't modify the order bucket in the ForEach above
 	// directly, we need to insert the references outside of the callback.
 	for nonce, ts := range eventRefs {
-		orderBucket := ordersBucket.Bucket(nonce[:])
+		orderBucket := ordersBucket.NestedReadWriteBucket(nonce[:])
 		if orderBucket == nil {
 			return fmt.Errorf("order bucket not found")
 		}

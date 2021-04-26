@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/sidecar"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -60,8 +60,8 @@ func (db *DB) AddSidecar(ticket *sidecar.Ticket) error {
 		return err
 	}
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		sidecarBucket, err := getBucket(tx, sidecarsBucketKey)
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
+		sidecarBucket, err := getWriteBucket(tx, sidecarsBucketKey)
 		if err != nil {
 			return err
 		}
@@ -92,8 +92,8 @@ func (db *DB) AddSidecarWithBid(ticket *sidecar.Ticket, bid *order.Bid) error {
 	bidNonce := bid.Nonce()
 	copy(ticket.Order.BidNonce[:], bidNonce[:])
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		sidecarBucket, err := getBucket(tx, sidecarsBucketKey)
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
+		sidecarBucket, err := getWriteBucket(tx, sidecarsBucketKey)
 		if err != nil {
 			return err
 		}
@@ -126,8 +126,8 @@ func (db *DB) UpdateSidecar(ticket *sidecar.Ticket) error {
 		return err
 	}
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		sidecarBucket, err := getBucket(tx, sidecarsBucketKey)
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
+		sidecarBucket, err := getWriteBucket(tx, sidecarsBucketKey)
 		if err != nil {
 			return err
 		}
@@ -154,8 +154,8 @@ func (db *DB) Sidecar(id [8]byte,
 	}
 
 	var s *sidecar.Ticket
-	err = db.View(func(tx *bbolt.Tx) error {
-		sidecarBucket, err := getBucket(tx, sidecarsBucketKey)
+	err = walletdb.View(db, func(tx walletdb.ReadTx) error {
+		sidecarBucket, err := getReadBucket(tx, sidecarsBucketKey)
 		if err != nil {
 			return err
 		}
@@ -175,13 +175,13 @@ func (db *DB) Sidecar(id [8]byte,
 func (db *DB) SidecarBidTemplate(ticket *sidecar.Ticket) (*order.Bid, error) {
 	var bid *order.Bid
 
-	err := db.View(func(tx *bbolt.Tx) error {
-		sidecarBucket, err := getBucket(tx, sidecarsBucketKey)
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
+		sidecarBucket, err := getReadBucket(tx, sidecarsBucketKey)
 		if err != nil {
 			return err
 		}
 
-		bidBucket := sidecarBucket.Bucket(bidTemplateBucket)
+		bidBucket := sidecarBucket.NestedReadBucket(bidTemplateBucket)
 		if bidBucket == nil {
 			return err
 		}
@@ -199,8 +199,8 @@ func (db *DB) SidecarBidTemplate(ticket *sidecar.Ticket) (*order.Bid, error) {
 // Sidecars retrieves all known sidecars from the database.
 func (db *DB) Sidecars() ([]*sidecar.Ticket, error) {
 	var res []*sidecar.Ticket
-	err := db.View(func(tx *bbolt.Tx) error {
-		sidecarBucket, err := getBucket(tx, sidecarsBucketKey)
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
+		sidecarBucket, err := getReadBucket(tx, sidecarsBucketKey)
 		if err != nil {
 			return err
 		}
@@ -227,7 +227,7 @@ func (db *DB) Sidecars() ([]*sidecar.Ticket, error) {
 	return res, nil
 }
 
-func storeSidecar(targetBucket *bbolt.Bucket, key []byte,
+func storeSidecar(targetBucket walletdb.ReadWriteBucket, key []byte,
 	ticket *sidecar.Ticket) error {
 
 	var sidecarBuf bytes.Buffer
@@ -240,7 +240,7 @@ func storeSidecar(targetBucket *bbolt.Bucket, key []byte,
 	return targetBucket.Put(key, sidecarBuf.Bytes())
 }
 
-func readSidecar(sourceBucket *bbolt.Bucket, id []byte) (*sidecar.Ticket,
+func readSidecar(sourceBucket walletdb.ReadBucket, id []byte) (*sidecar.Ticket,
 	error) {
 
 	sidecarBytes := sourceBucket.Get(id)
@@ -251,7 +251,9 @@ func readSidecar(sourceBucket *bbolt.Bucket, id []byte) (*sidecar.Ticket,
 	return sidecar.DeserializeTicket(bytes.NewReader(sidecarBytes))
 }
 
-func storeBidTemplate(bidBucket *bbolt.Bucket, bid *order.Bid, ticketNonce order.Nonce) error {
+func storeBidTemplate(bidBucket walletdb.ReadWriteBucket, bid *order.Bid,
+	ticketNonce order.Nonce) error {
+
 	var w bytes.Buffer
 	if err := SerializeOrder(bid, &w); err != nil {
 		return err
@@ -273,7 +275,7 @@ func storeBidTemplate(bidBucket *bbolt.Bucket, bid *order.Bid, ticketNonce order
 	return storeOrderMinNoderTierTX(bidBucket, ticketNonce, bid.MinNodeTier)
 }
 
-func readBidTemplate(bidBucket *bbolt.Bucket,
+func readBidTemplate(bidBucket walletdb.ReadBucket,
 	ticketNonce order.Nonce) (*order.Bid, error) {
 
 	var (

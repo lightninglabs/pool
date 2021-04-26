@@ -7,11 +7,11 @@ import (
 	"io"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
-	"go.etcd.io/bbolt"
 )
 
 // batch-snapshot-bucket
@@ -137,7 +137,7 @@ func NewSnapshot(batch *order.Batch, ourOrders []order.Order,
 // participated in.
 func (db *DB) GetLocalBatchSnapshots() ([]*LocalBatchSnapshot, error) {
 	var snapshots []*LocalBatchSnapshot
-	err := db.View(func(tx *bbolt.Tx) error {
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
 		var err error
 		snapshots, err = db.fetchLocalBatchSnapshots(tx)
 		return err
@@ -154,8 +154,8 @@ func (db *DB) GetLocalBatchSnapshot(id order.BatchID) (
 	*LocalBatchSnapshot, error) {
 
 	var snapshot *LocalBatchSnapshot
-	err := db.View(func(tx *bbolt.Tx) error {
-		_, seqBucket, indexBucket, err := getSnapshotBuckets(tx)
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
+		_, seqBucket, indexBucket, err := getSnapshotReadBuckets(tx)
 		if err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func (db *DB) GetLocalBatchSnapshot(id order.BatchID) (
 			return fmt.Errorf("snapshot of batch %x not found",
 				id[:])
 		}
-		rootOrderBucket, err := getBucket(tx, ordersBucketKey)
+		rootOrderBucket, err := getReadBucket(tx, ordersBucketKey)
 		if err != nil {
 			return err
 		}
@@ -182,14 +182,14 @@ func (db *DB) GetLocalBatchSnapshot(id order.BatchID) (
 	return snapshot, nil
 }
 
-func (db *DB) fetchLocalBatchSnapshots(tx *bbolt.Tx) ([]*LocalBatchSnapshot,
-	error) {
+func (db *DB) fetchLocalBatchSnapshots(
+	tx walletdb.ReadTx) ([]*LocalBatchSnapshot, error) {
 
-	_, seqBucket, _, err := getSnapshotBuckets(tx)
+	_, seqBucket, _, err := getSnapshotReadBuckets(tx)
 	if err != nil {
 		return nil, err
 	}
-	rootOrderBucket, err := getBucket(tx, ordersBucketKey)
+	rootOrderBucket, err := getReadBucket(tx, ordersBucketKey)
 	if err != nil {
 		return nil, err
 	}
@@ -216,10 +216,10 @@ func (db *DB) fetchLocalBatchSnapshots(tx *bbolt.Tx) ([]*LocalBatchSnapshot,
 	return snapshots, nil
 }
 
-func fetchLocalBatchSnapshot(seqBucket *bbolt.Bucket, seqNum []byte,
-	rootOrderBucket *bbolt.Bucket) (*LocalBatchSnapshot, error) {
+func fetchLocalBatchSnapshot(seqBucket walletdb.ReadBucket, seqNum []byte,
+	rootOrderBucket walletdb.ReadBucket) (*LocalBatchSnapshot, error) {
 
-	snapshotBucket, err := getNestedBucket(seqBucket, seqNum, false)
+	snapshotBucket, err := getNestedReadBucket(seqBucket, seqNum)
 	if err != nil {
 		return nil, err
 	}
@@ -241,8 +241,8 @@ func fetchLocalBatchSnapshot(seqBucket *bbolt.Bucket, seqNum []byte,
 	// The snapshot doesn't contain all the order information needed, so
 	// we'll retrieve the missing data.
 	for nonce, o := range batchSnapshot.Orders {
-		orderBucket, err := getNestedBucket(
-			rootOrderBucket, nonce[:], false,
+		orderBucket, err := getNestedReadBucket(
+			rootOrderBucket, nonce[:],
 		)
 		if err != nil {
 			return nil, ErrNoOrder
@@ -299,10 +299,10 @@ func fetchLocalBatchSnapshot(seqBucket *bbolt.Bucket, seqNum []byte,
 	return batchSnapshot, nil
 }
 
-func storePendingBatchSnapshot(tx *bbolt.Tx,
+func storePendingBatchSnapshot(tx walletdb.ReadWriteTx,
 	snapshot *LocalBatchSnapshot) error {
 
-	topBucket, err := getBucket(tx, batchSnapshotBucketKey)
+	topBucket, err := getWriteBucket(tx, batchSnapshotBucketKey)
 	if err != nil {
 		return err
 	}
@@ -319,8 +319,8 @@ func storePendingBatchSnapshot(tx *bbolt.Tx,
 
 // fetchPendingBatchSnapshot retrieves the currently pending batch snapshot from
 // the database or returns the account.ErrNoPendingBatch error if none exists.
-func fetchPendingBatchSnapshot(tx *bbolt.Tx) (*LocalBatchSnapshot, error) {
-	topBucket, err := getBucket(tx, batchSnapshotBucketKey)
+func fetchPendingBatchSnapshot(tx walletdb.ReadTx) (*LocalBatchSnapshot, error) {
+	topBucket, err := getReadBucket(tx, batchSnapshotBucketKey)
 	if err != nil {
 		return nil, err
 	}
@@ -335,8 +335,8 @@ func fetchPendingBatchSnapshot(tx *bbolt.Tx) (*LocalBatchSnapshot, error) {
 
 // finalizeBatchSnapshot moves the pending batch snapshot into the sub-bucket
 // indexed by sequence numbers.
-func finalizeBatchSnapshot(tx *bbolt.Tx, batchID order.BatchID) error {
-	topBucket, seqBucket, indexBucket, err := getSnapshotBuckets(tx)
+func finalizeBatchSnapshot(tx walletdb.ReadWriteTx, batchID order.BatchID) error {
+	topBucket, seqBucket, indexBucket, err := getSnapshotWriteBuckets(tx)
 	if err != nil {
 		return err
 	}
@@ -379,10 +379,37 @@ func finalizeBatchSnapshot(tx *bbolt.Tx, batchID order.BatchID) error {
 	return nil
 }
 
-func getSnapshotBuckets(tx *bbolt.Tx) (*bbolt.Bucket, *bbolt.Bucket,
-	*bbolt.Bucket, error) {
+func getSnapshotReadBuckets(tx walletdb.ReadTx) (walletdb.ReadBucket,
+	walletdb.ReadBucket, walletdb.ReadBucket, error) {
 
-	topBucket, err := getBucket(tx, batchSnapshotBucketKey)
+	topBucket, err := getReadBucket(tx, batchSnapshotBucketKey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Get the sub-buckets. We expect them to be created at DB init, so we
+	// don't attempt to create them if non-existent.
+	seqBucket, err := getNestedReadBucket(
+		topBucket, batchSnapshotSeqBucketKey,
+	)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	indexBucket, err := getNestedReadBucket(
+		topBucket, batchSnapshotBatchIDIndexBucketKey,
+	)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return topBucket, seqBucket, indexBucket, nil
+}
+
+func getSnapshotWriteBuckets(tx walletdb.ReadWriteTx) (walletdb.ReadWriteBucket,
+	walletdb.ReadWriteBucket, walletdb.ReadWriteBucket, error) {
+
+	topBucket, err := getWriteBucket(tx, batchSnapshotBucketKey)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -695,8 +722,8 @@ func deserializeMatchedOrder(r io.Reader) (order.Nonce,
 }
 
 // deletePendingSnapshot deletes the pending batch snapshot.
-func deletePendingSnapshot(tx *bbolt.Tx) error {
-	topBucket, err := getBucket(tx, batchSnapshotBucketKey)
+func deletePendingSnapshot(tx walletdb.ReadWriteTx) error {
+	topBucket, err := getWriteBucket(tx, batchSnapshotBucketKey)
 	if err != nil {
 		return err
 	}

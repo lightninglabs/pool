@@ -30,7 +30,6 @@ import (
 	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/chanbackup"
-	lndFunding "github.com/lightningnetwork/lnd/funding"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -41,6 +40,8 @@ const (
 	// getInfoTimeout is the maximum time we allow for the initial getInfo
 	// call to the connected lnd node.
 	getInfoTimeout = 5 * time.Second
+
+	MaxBtcFundingAmount = btcutil.Amount(1<<24) - 1
 )
 
 // rpcServer implements the gRPC server on the client side and answers RPC calls
@@ -1094,7 +1095,7 @@ func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
 	// Now that we now how large the order is, ensure that if it's a
 	// wumbo-sized order, then the backing lnd node is advertising wumbo
 	// support.
-	if order.Details().Amt > lndFunding.MaxBtcFundingAmount && !s.wumboSupported {
+	if order.Details().Amt > MaxBtcFundingAmount && !s.wumboSupported {
 		return fmt.Errorf("%v is wumbo sized, but "+
 			"lnd node isn't signalling wumbo", order.Details().Amt)
 	}

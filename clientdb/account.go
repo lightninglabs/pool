@@ -6,8 +6,8 @@ import (
 	"io"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/lightninglabs/pool/account"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -28,8 +28,8 @@ func getAccountKey(account *account.Account) []byte {
 
 // AddAccount adds a record for the account to the database.
 func (db *DB) AddAccount(account *account.Account) error {
-	return db.Update(func(tx *bbolt.Tx) error {
-		accounts, err := getBucket(tx, accountBucketKey)
+	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
+		accounts, err := getWriteBucket(tx, accountBucketKey)
 		if err != nil {
 			return err
 		}
@@ -43,8 +43,8 @@ func (db *DB) AddAccount(account *account.Account) error {
 func (db *DB) UpdateAccount(acct *account.Account,
 	modifiers ...account.Modifier) error {
 
-	err := db.Update(func(tx *bbolt.Tx) error {
-		accounts, err := getBucket(tx, accountBucketKey)
+	err := walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
+		accounts, err := getWriteBucket(tx, accountBucketKey)
 		if err != nil {
 			return err
 		}
@@ -65,7 +65,7 @@ func (db *DB) UpdateAccount(acct *account.Account,
 
 // updateAccount reads an account from the src bucket, applies the given
 // modifiers to it, and store it back into dst bucket.
-func updateAccount(src, dst *bbolt.Bucket, accountKey []byte,
+func updateAccount(src, dst walletdb.ReadWriteBucket, accountKey []byte,
 	modifiers []account.Modifier) (*account.Account, error) {
 
 	dbAccount, err := readAccount(src, accountKey)
@@ -84,8 +84,8 @@ func updateAccount(src, dst *bbolt.Bucket, accountKey []byte,
 // ErrAccountNotFound if it's not found.
 func (db *DB) Account(traderKey *btcec.PublicKey) (*account.Account, error) {
 	var acct *account.Account
-	err := db.View(func(tx *bbolt.Tx) error {
-		accounts, err := getBucket(tx, accountBucketKey)
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
+		accounts, err := getReadBucket(tx, accountBucketKey)
 		if err != nil {
 			return err
 		}
@@ -105,8 +105,8 @@ func (db *DB) Account(traderKey *btcec.PublicKey) (*account.Account, error) {
 // Accounts retrieves all known accounts from the database.
 func (db *DB) Accounts() ([]*account.Account, error) {
 	var res []*account.Account
-	err := db.View(func(tx *bbolt.Tx) error {
-		accounts, err := getBucket(tx, accountBucketKey)
+	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
+		accounts, err := getReadBucket(tx, accountBucketKey)
 		if err != nil {
 			return err
 		}
@@ -133,7 +133,7 @@ func (db *DB) Accounts() ([]*account.Account, error) {
 	return res, nil
 }
 
-func storeAccount(targetBucket *bbolt.Bucket, a *account.Account) error {
+func storeAccount(targetBucket walletdb.ReadWriteBucket, a *account.Account) error {
 	accountKey := getAccountKey(a)
 
 	var accountBuf bytes.Buffer
@@ -144,7 +144,7 @@ func storeAccount(targetBucket *bbolt.Bucket, a *account.Account) error {
 	return targetBucket.Put(accountKey, accountBuf.Bytes())
 }
 
-func readAccount(sourceBucket *bbolt.Bucket,
+func readAccount(sourceBucket walletdb.ReadBucket,
 	accountKey []byte) (*account.Account, error) {
 
 	accountBytes := sourceBucket.Get(accountKey)

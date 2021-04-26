@@ -19,7 +19,6 @@ import (
 	"github.com/lightninglabs/protobuf-hex-display/json"
 	"github.com/lightninglabs/protobuf-hex-display/jsonpb"
 	"github.com/lightninglabs/protobuf-hex-display/proto"
-	"github.com/lightningnetwork/lnd/lncfg"
 	"github.com/lightningnetwork/lnd/macaroons"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
@@ -208,11 +207,11 @@ func extractPathArgs(ctx *cli.Context) (string, string, error) {
 	// We'll now fetch the basedir so we can make a decision on how to
 	// properly read the cert and macaroon. This will either be the default,
 	// or will have been overwritten by the end user.
-	baseDir := lncfg.CleanAndExpandPath(ctx.GlobalString(baseDirFlag.Name))
-	tlsCertPath := lncfg.CleanAndExpandPath(ctx.GlobalString(
+	baseDir := pool.CleanAndExpandPath(ctx.GlobalString(baseDirFlag.Name))
+	tlsCertPath := pool.CleanAndExpandPath(ctx.GlobalString(
 		tlsCertFlag.Name,
 	))
-	macPath := lncfg.CleanAndExpandPath(ctx.GlobalString(
+	macPath := pool.CleanAndExpandPath(ctx.GlobalString(
 		macaroonPathFlag.Name,
 	))
 
