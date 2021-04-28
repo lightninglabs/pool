@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/sidecar"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli"
 )
 
@@ -31,31 +33,21 @@ var sidecarOfferCommand = cli.Command{
 	Name:      "offer",
 	Aliases:   []string{"o"},
 	Usage:     "offer a sidecar channel",
-	ArgsUsage: "capacity self_chan_balance lease_duration_blocks",
+	ArgsUsage: "[<full bid args> --auto] | capacity self_chan_balance lease_duration_blocks",
 	Description: `
-	Creates an offer for providing a sidecar channel to another node.`,
-	Flags: []cli.Flag{
-		cli.Uint64Flag{
-			Name: "capacity",
-			Usage: "the total channel capacity of the sidecar " +
-				"channel to offer",
+	Creates an offer for providing a sidecar channel to another node.
+	If the auto flag is specified, then all bid information needs to be 
+	specified as normal. If the auto flag isn't specified, then only 
+	capacity, self_chan_balance and lease_duration_blocks needs to set.`,
+	Flags: append(
+		append(baseBidFlags, sharedFlags...),
+		cli.BoolFlag{
+			Name: "auto",
+			Usage: "if true, then the full bid information needs to " +
+				"be specified as automated negotiation will be " +
+				"attempted",
 		},
-		cli.Uint64Flag{
-			Name: "self_chan_balance",
-			Usage: "the number of satoshis that should be pushed " +
-				"to the recipient of the sidecar channel as " +
-				"initial outbound channel balance; amount " +
-				"will be deducted from account that submits " +
-				"bid order, reimbursement must happen out of " +
-				"band, not part of the sidecar protocol",
-		},
-		cli.Uint64Flag{
-			Name: "lease_duration_blocks",
-			Usage: "the number of blocks the resulting leased " +
-				"channel should be open for",
-			Value: uint64(order.LegacyLeaseDurationBucket),
-		},
-	},
+	),
 	Action: sidecarOffer,
 }
 
@@ -67,64 +59,107 @@ func sidecarOffer(ctx *cli.Context) error {
 	}
 
 	var (
-		args              = ctx.Args()
-		capacity, pushAmt uint64
-		duration          uint32
+		bid *poolrpc.Bid
+		err error
 	)
 
-	switch {
-	case ctx.IsSet("capacity"):
-		capacity = ctx.Uint64("capacity")
-	case args.Present():
-		parsed, err := parseAmt(args.First())
-		if err != nil {
-			return fmt.Errorf("unable to decode capacity: %v", err)
-		}
-		capacity = uint64(parsed)
-		args = args.Tail()
-	}
+	// If auto isn't set, then we'll only need to parse out a hand full of
+	// fields to submit a valid ticket.
+	if !ctx.Bool("auto") {
+		var (
+			args              = ctx.Args()
+			capacity, pushAmt uint64
+			duration          uint32
+		)
 
-	switch {
-	case ctx.IsSet("self_chan_balance"):
-		pushAmt = ctx.Uint64("self_chan_balance")
-	case args.Present():
-		parsed, err := parseAmt(args.First())
-		if err != nil {
-			return fmt.Errorf("unable to decode self channel "+
-				"balance: %v", err)
+		switch {
+		case ctx.IsSet("capacity"):
+			capacity = ctx.Uint64("capacity")
+		case args.Present():
+			parsed, err := parseAmt(args.First())
+			if err != nil {
+				return fmt.Errorf("unable to decode capacity: %v", err)
+			}
+			capacity = uint64(parsed)
+			args = args.Tail()
 		}
-		pushAmt = uint64(parsed)
-		args = args.Tail()
-	}
 
-	switch {
-	case ctx.IsSet("lease_duration_blocks"):
-		duration = uint32(ctx.Uint64("lease_duration_blocks"))
-	case args.Present():
-		duration64, err := strconv.ParseInt(args.First(), 10, 32)
-		if err != nil {
-			return fmt.Errorf("unable to parse lease duration "+
-				"blocks: %v", err)
+		switch {
+		case ctx.IsSet("self_chan_balance"):
+			pushAmt = ctx.Uint64("self_chan_balance")
+		case args.Present():
+			parsed, err := parseAmt(args.First())
+			if err != nil {
+				return fmt.Errorf("unable to decode self channel "+
+					"balance: %v", err)
+			}
+			pushAmt = uint64(parsed)
+			args = args.Tail()
 		}
-		duration = uint32(duration64)
-		args = args.Tail()
+
+		switch {
+		case ctx.IsSet("lease_duration_blocks"):
+			duration = uint32(ctx.Uint64("lease_duration_blocks"))
+		case args.Present():
+			duration64, err := strconv.ParseInt(args.First(), 10, 32)
+			if err != nil {
+				return fmt.Errorf("unable to parse lease duration "+
+					"blocks: %v", err)
+			}
+			duration = uint32(duration64)
+			args = args.Tail()
+		}
+
+		bid = &poolrpc.Bid{
+			Details: &poolrpc.Order{
+				Amt: capacity,
+			},
+			SelfChanBalance:     pushAmt,
+			LeaseDurationBlocks: duration,
+		}
+
+	} else {
+		// Otherwise, will parse out the full bid as normal.
+		bid, _, err = parseBaseBid(ctx)
+		if err != nil {
+			return err
+
+		}
 	}
 
 	client, cleanup, err := getClient(ctx)
 	if err != nil {
 		return err
 	}
+
 	defer cleanup()
+
+	// Give the user a chance to confirm the order details as this is
+	// binding once submitted, but only if the entire bid was specified.
+	if !ctx.Bool("force") && ctx.Bool("auto") {
+		if err := printOrderDetails(
+			client, btcutil.Amount(bid.Details.Amt),
+			order.SupplyUnit(bid.Details.MinUnitsMatch),
+			btcutil.Amount(bid.SelfChanBalance),
+			order.FixedRatePremium(bid.Details.RateFixed),
+			bid.LeaseDurationBlocks,
+			chainfee.SatPerKWeight(
+				bid.Details.MaxBatchFeeRateSatPerKw,
+			), false, nil,
+		); err != nil {
+			return fmt.Errorf("unable to print order details: %v", err)
+		}
+
+		if !promptForConfirmation("Confirm order (yes/no): ") {
+			fmt.Println("Cancelling order...")
+			return nil
+		}
+	}
 
 	resp, err := client.OfferSidecar(
 		context.Background(), &poolrpc.OfferSidecarRequest{
-			Bid: &poolrpc.Bid{
-				Details: &poolrpc.Order{
-					Amt: capacity,
-				},
-				SelfChanBalance:     pushAmt,
-				LeaseDurationBlocks: duration,
-			},
+			AutoNegotiate: ctx.Bool("auto"),
+			Bid:           bid,
 		},
 	)
 	if err != nil {
