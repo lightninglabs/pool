@@ -118,11 +118,59 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 		return fmt.Errorf("error reading sidecar tickets: %v", err)
 	}
 	for _, ticket := range tickets {
-		if ticket.State != sidecar.StateExpectingChannel {
-			continue
-		}
+		switch {
+		// If this ticket was intended to be negotiated in an automated
+		// manner, then we'll launch a goroutine to manage the
+		// remaining state transitions depending on if we're the
+		// provider of responder.
+		case ticket.Offer.Auto:
+			// In order to determine our role, we'll first need to see
+			// if the account for the offer exists in our database. If
+			// not, then we're the recipient.
+			acct, err := a.cfg.AcctDB.Account(ticket.Offer.SignPubKey)
+			switch {
+			// If we can't find the account, then we assume that
+			// we're the recipient, so we'll attempt to accept the
+			// sidecar ticket.
+			case err == clientdb.ErrAccountNotFound:
+				err := a.AutoAcceptSidecar(ticket)
+				if err != nil {
+					return fmt.Errorf("unable to resume "+
+						"auto sidecar accept: %w", err)
+				}
 
-		if ticket.Recipient == nil {
+			// Otherwise, we're on the other end of things, so
+			// we'll assume the role of the provider.
+			case err == nil:
+				// As we're the provider of this ticket, we'll
+				// need to fetch the bid that goes along with
+				// it so we can submit it to the auctioneer
+				// once we've gathered all the necessary
+				// materials.
+				ticketBid, err := a.cfg.FetchSidecarBid(ticket)
+				if err != nil {
+					return fmt.Errorf("unable to fetch "+
+						"sidecar bid: %w", err)
+				}
+
+				err = a.CoordinateSidecar(
+					ticket, ticketBid, acct,
+				)
+				if err != nil {
+					return fmt.Errorf("unable to resume "+
+						"auto coordinate sidecar: %w", err)
+				}
+
+			default:
+				return fmt.Errorf("unable to fetch account "+
+					"for sidecar: %w", err)
+			}
+
+		// If the ticket has no recipient or isn't in the expecting
+		// state, then we can safely skip it.
+		case ticket.State != sidecar.StateExpectingChannel:
+			continue
+		case ticket.Recipient == nil:
 			continue
 		}
 
@@ -430,7 +478,6 @@ func (a *SidecarAcceptor) AutoAcceptSidecar(ticket *sidecar.Ticket) error {
 			// us back the ticket that contains their order
 			// information.
 			case ticketSent && ticket.State == sidecar.StateRegistered:
-
 				// We'll wait for them to send us back a valid
 				// ticket over our cipher box.
 				recipientStreamID := a.deriveRecipientStreamID(
