@@ -2210,11 +2210,26 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 		return nil, fmt.Errorf("channel capacity missing")
 	}
 
+	// We'll need to look up the account state in the database to make sure
+	// the account is actually still open (able to submit bids), and also
+	// to grab the KeyDescriptor that we'll need for signing later.
+	acctKey, err := btcec.ParsePubKey(
+		req.Bid.Details.TraderKey, btcec.S256(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	acct, err := s.server.db.Account(acctKey)
+	if err != nil {
+		return nil, err
+	}
+
 	// The funding manager does all the work, including signing and storing
 	// the new ticket.
 	ticket, err := s.server.fundingManager.OfferSidecar(
 		ctx, btcutil.Amount(req.Bid.Details.Amt),
-		btcutil.Amount(req.Bid.SelfChanBalance), req.Bid.LeaseDurationBlocks,
+		btcutil.Amount(req.Bid.SelfChanBalance),
+		req.Bid.LeaseDurationBlocks, acct.TraderKey,
 	)
 	if err != nil {
 		return nil, err

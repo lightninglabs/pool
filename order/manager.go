@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
@@ -36,13 +35,6 @@ var (
 	// implement the same batch verification version as the server.
 	ErrVersionMismatch = fmt.Errorf("version %d mismatches server version",
 		CurrentBatchVersion)
-
-	// nodeIdentityKeyLoc is the key locator from which the identity key of
-	// an lnd node is derived.
-	nodeIdentityKeyLoc = keychain.KeyLocator{
-		Family: keychain.KeyFamilyNodeKey,
-		Index:  0,
-	}
 )
 
 // ManagerConfig contains all of the required dependencies for the Manager to
@@ -168,7 +160,7 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 		// that node's information must be present. If everything checks
 		// out, we add our signature over it since we are now sure that
 		// we have an order nonce set.
-		err := m.validateAndSignTicketForOrder(ctx, ticket, bid)
+		err := m.validateAndSignTicketForOrder(ctx, ticket, bid, acct)
 		if err != nil {
 			return nil, fmt.Errorf("error validating sidecar "+
 				"ticket: %v", err)
@@ -390,7 +382,7 @@ func (m *Manager) OurNodePubkey() ([33]byte, error) {
 // channel by checking the embedded signature. If everything checks out, we add
 // our signature over the order part to the ticket.
 func (m *Manager) validateAndSignTicketForOrder(ctx context.Context,
-	t *sidecar.Ticket, bid *Bid) error {
+	t *sidecar.Ticket, bid *Bid, acct *account.Account) error {
 
 	if t.State != sidecar.StateRegistered {
 		return fmt.Errorf("invalid sidecar ticket state: %d", t.State)
@@ -410,21 +402,13 @@ func (m *Manager) validateAndSignTicketForOrder(ctx context.Context,
 		return fmt.Errorf("error verifying sidecar offer: %v", err)
 	}
 
-	ourNodeKeyRaw, err := m.OurNodePubkey()
-	if err != nil {
-		return fmt.Errorf("error getting own node public key: %v", err)
-	}
-	ourNodeKey, err := btcec.ParsePubKey(ourNodeKeyRaw[:], btcec.S256())
-	if err != nil {
-		return fmt.Errorf("error parsing own node public key: %v", err)
-	}
-	if !ourNodeKey.IsEqual(o.SignPubKey) {
+	if !acct.TraderKey.PubKey.IsEqual(o.SignPubKey) {
 		return fmt.Errorf("invalid sidecar ticket, not offered by us")
 	}
 
 	// The signature is valid! Let's now make sure the offer and the order
 	// parameters actually match.
-	err = sidecar.CheckOfferParamsForOrder(
+	err := sidecar.CheckOfferParamsForOrder(
 		o, bid.Amt, btcutil.Amount(bid.MinUnitsMatch), BaseSupplyUnit,
 	)
 	if err != nil {
@@ -433,7 +417,8 @@ func (m *Manager) validateAndSignTicketForOrder(ctx context.Context,
 
 	// Everything checks out, let's add our signature to the ticket now.
 	return sidecar.SignOrder(
-		ctx, t, bid.nonce, nodeIdentityKeyLoc, m.cfg.Signer,
+		ctx, t, bid.nonce, acct.TraderKey.KeyLocator,
+		m.cfg.Signer,
 	)
 }
 

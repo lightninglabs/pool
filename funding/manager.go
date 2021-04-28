@@ -34,13 +34,6 @@ import (
 )
 
 var (
-	// nodeIdentityKeyLoc is the key locator from which the identity key of
-	// an lnd node is derived.
-	nodeIdentityKeyLoc = keychain.KeyLocator{
-		Family: keychain.KeyFamilyNodeKey,
-		Index:  0,
-	}
-
 	// rpcCodeFundingFailed is the error code we send if the channel funding
 	// fails because of a timeout or another problem.
 	rpcCodeFundingFailed = auctioneerrpc.OrderReject_CHANNEL_FUNDING_FAILED
@@ -1002,7 +995,8 @@ func (m *Manager) RemovePendingBatchArtifacts(
 // OfferSidecar creates a sidecar channel offer and embeds it in a new sidecar
 // ticket. The offer is signed with the local lnd's node public key.
 func (m *Manager) OfferSidecar(ctx context.Context, capacity,
-	pushAmt btcutil.Amount, duration uint32) (*sidecar.Ticket, error) {
+	pushAmt btcutil.Amount, duration uint32,
+	acctPubKey *keychain.KeyDescriptor) (*sidecar.Ticket, error) {
 
 	// Make sure the capacity and push amounts are sane.
 	err := sidecar.CheckOfferParams(capacity, pushAmt, order.BaseSupplyUnit)
@@ -1014,7 +1008,7 @@ func (m *Manager) OfferSidecar(ctx context.Context, capacity,
 	// now.
 	ticket, err := sidecar.NewTicket(
 		sidecar.VersionDefault, capacity, pushAmt, duration,
-		m.cfg.NodePubKey,
+		acctPubKey.PubKey,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating sidecar ticket: %v", err)
@@ -1023,7 +1017,7 @@ func (m *Manager) OfferSidecar(ctx context.Context, capacity,
 	// Let's sign the offer part of the ticket with our node's identity key
 	// now.
 	if err := sidecar.SignOffer(
-		ctx, ticket, nodeIdentityKeyLoc, m.cfg.SignerClient,
+		ctx, ticket, acctPubKey.KeyLocator, m.cfg.SignerClient,
 	); err != nil {
 		return nil, fmt.Errorf("error signing offer: %v", err)
 	}
