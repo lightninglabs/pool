@@ -50,14 +50,18 @@ func TestRegisterSidecar(t *testing.T) {
 	mockWallet := test.NewMockWalletKit()
 	mockSigner.Signature = testOfferSig.Serialize()
 
-	acceptor := NewSidecarAcceptor(
-		nil, mockSigner, mockWallet, nil, nil, ourNodePubKey,
-		auctioneer.Config{}, nil,
-	)
+	acceptor := NewSidecarAcceptor(&SidecarAcceptorConfig{
+		SidecarDB:  nil,
+		AcctDB:     nil,
+		Signer:     mockSigner,
+		Wallet:     mockWallet,
+		NodePubKey: ourNodePubKey,
+		ClientCfg:  auctioneer.Config{},
+	})
 
 	existingTicket, err := sidecar.NewTicket(
 		sidecar.VersionDefault, 1_000_000, 200_000, 2016,
-		providerPubKey,
+		providerPubKey, false,
 	)
 	require.NoError(t, err)
 
@@ -114,7 +118,7 @@ func TestRegisterSidecar(t *testing.T) {
 			)
 
 			id := [8]byte{1, 2, 3, 4}
-			newTicket, err := acceptor.store.Sidecar(
+			newTicket, err := acceptor.cfg.SidecarDB.Sidecar(
 				id, providerPubKey,
 			)
 			require.NoError(t, err)
@@ -135,8 +139,10 @@ func TestRegisterSidecar(t *testing.T) {
 		err = store.AddSidecar(existingTicket)
 		require.NoError(t, err)
 
-		acceptor.store = store
-		err := acceptor.RegisterSidecar(context.Background(), tc.ticket)
+		acceptor.cfg.SidecarDB = store
+		_, err := acceptor.RegisterSidecar(
+			context.Background(), tc.ticket,
+		)
 
 		if tc.expectedErr == "" {
 			require.NoError(t, err)

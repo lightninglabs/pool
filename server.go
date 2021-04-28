@@ -503,11 +503,19 @@ func (s *Server) setupClient() error {
 	// create a copy of the auctioneer client configuration because the
 	// acceptor is going to overwrite some of its values.
 	clientCfgCopy := *clientCfg
-	s.sidecarAcceptor = NewSidecarAcceptor(
-		s.db, s.lndServices.Signer, s.lndServices.WalletKit,
-		s.lndClient, channelAcceptor, nodePubKey, clientCfgCopy,
-		s.fundingManager,
-	)
+	s.sidecarAcceptor = NewSidecarAcceptor(&SidecarAcceptorConfig{
+		SidecarDB:       s.db,
+		AcctDB:          &accountStore{DB: s.db},
+		Signer:          s.lndServices.Signer,
+		Wallet:          s.lndServices.WalletKit,
+		BaseClient:      s.lndClient,
+		Acceptor:        channelAcceptor,
+		NodePubKey:      nodePubKey,
+		ClientCfg:       clientCfgCopy,
+		FundingManager:  s.fundingManager,
+		OrderManager:    s.rpcServer.orderManager,
+		FetchSidecarBid: s.db.SidecarBidTemplate,
+	})
 
 	// Create an instance of the auctioneer client library.
 	s.AuctioneerClient, err = auctioneer.NewClient(clientCfg)
