@@ -1067,6 +1067,83 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 	}, nil
 }
 
+// assertAccountReady enrues that an account is in the "ready" state that
+// allows it to submit orders.We'll only allow orders for accounts that present
+// in an open state, or have a pending update or batch. On the server-side if
+// we have a pending update we won't be matched, but this lets us place our
+// orders early so we can join the earliest available batch.
+func assertAccountReady(acct *account.Account) error {
+	switch acct.State {
+	case account.StateOpen, account.StatePendingUpdate,
+		account.StatePendingBatch:
+
+		return nil
+
+	default:
+		return fmt.Errorf("acct=%x is in state %v, cannot "+
+			"make order",
+			acct.TraderKey.PubKey.SerializeCompressed(), acct.State)
+	}
+}
+
+// validateOrder validates the order to ensure that all fields are consistent,
+// and the order is likely to be accepted by the auctioneer. If this method
+// returns nil, then the order is safe to submit to the auctioneer.
+func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
+	auctionTerms *terms.AuctioneerTerms) error {
+
+	// Now that we now how large the order is, ensure that if it's a
+	// wumbo-sized order, then the backing lnd node is advertising wumbo
+	// support.
+	if order.Details().Amt > lndFunding.MaxBtcFundingAmount && !s.wumboSupported {
+		return fmt.Errorf("%v is wumbo sized, but "+
+			"lnd node isn't signalling wumbo", order.Details().Amt)
+	}
+
+	// Ensure that the account can actually submit orders in its present
+	// state.
+	if err := assertAccountReady(acct); err != nil {
+		return err
+	}
+
+	// If the market isn't currently accepting orders for this particular
+	// lease duration, then we'll exit here as the order will be rejected.
+	leaseDuration := order.Details().LeaseDuration
+	if _, ok := auctionTerms.LeaseDurationBuckets[leaseDuration]; !ok {
+		return fmt.Errorf("invalid channel lease duration %v "+
+			"blocks, active durations are: %v",
+			leaseDuration, auctionTerms.LeaseDurationBuckets)
+	}
+
+	return nil
+}
+
+// prepareAndSubmitOrder performs a series of final checks locally to ensure
+// the order is valid, before submitting it to the auctioneer.
+func prepareAndSubmitOrder(ctx context.Context, o order.Order,
+	auctionTerms *terms.AuctioneerTerms, acct *account.Account,
+	auction *auctioneer.Client, orderBook *order.Manager) error {
+
+	// Collect all the order data and sign it before sending it to the
+	// auction server.
+	serverParams, err := orderBook.PrepareOrder(
+		ctx, o, acct, auctionTerms,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Send the order to the server. If this fails, then the order is
+	// certain to never get into the order book. We don't need to keep it
+	// around in that case.
+	//
+	// TODO(roasbeef): commit initiator to disk so don't lose when
+	// submitting orders for sidecar channels?
+	return auction.SubmitOrder(
+		ctx, o, serverParams,
+	)
+}
+
 // SubmitOrder assembles all the information that is required to submit an order
 // from the trader's lnd node, signs it and then sends the order to the server
 // to be included in the auctioneer's order book.
@@ -1116,12 +1193,11 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		return nil, fmt.Errorf("invalid order request")
 	}
 
-	// Now that we now how large the order is, ensure that if it's a
-	// wumbo-sized order, then the backing lnd node is advertising wumbo
-	// support.
-	if o.Details().Amt > lndFunding.MaxBtcFundingAmount && !s.wumboSupported {
-		return nil, fmt.Errorf("order of %v is wumbo sized, but "+
-			"lnd node isn't signalling wumbo", o.Details().Amt)
+	// We also need to know the current maximum order duration.
+	auctionTerms, err := s.auctioneer.Terms(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not query auctioneer terms: %v",
+			err)
 	}
 
 	// Verify that the account exists.
@@ -1136,49 +1212,17 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		return nil, fmt.Errorf("cannot accept order: %v", err)
 	}
 
-	// We'll only allow orders for accounts that present in an open state,
-	// or have a pending update or batch. On the server-side if we have a
-	// pending update we won't be matched, but this lets us place our orders
-	// early so we can join the earliest available batch.
-	switch acct.State {
-	case account.StateOpen, account.StatePendingUpdate,
-		account.StatePendingBatch:
-
-		break
-
-	default:
-		return nil, fmt.Errorf("acct=%x is in state %v, cannot "+
-			"make order", o.Details().AcctKey[:], acct.State)
+	// Validate the order to ensure the account is in a live state, and the
+	// target lease duration period actually exists.
+	if err := s.validateOrder(o, acct, auctionTerms); err != nil {
+		return nil, fmt.Errorf("order valid validation: %w", err)
 	}
 
-	// We also need to know the current maximum order duration.
-	auctionTerms, err := s.auctioneer.Terms(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("could not query auctioneer terms: %v",
-			err)
-	}
-
-	// If the market isn't currently accepting orders for this particular
-	// lease duration, then we'll exit here as the order will be rejected.
-	leaseDuration := o.Details().LeaseDuration
-	if _, ok := auctionTerms.LeaseDurationBuckets[leaseDuration]; !ok {
-		return nil, fmt.Errorf("invalid channel lease duration %v "+
-			"blocks, active durations are: %v",
-			leaseDuration, auctionTerms.LeaseDurationBuckets)
-	}
-
-	// Collect all the order data and sign it before sending it to the
-	// auction server.
-	serverParams, err := s.orderManager.PrepareOrder(ctx, o, acct, auctionTerms)
-	if err != nil {
-		return nil, err
-	}
-
-	// Send the order to the server. If this fails, then the order is
-	// certain to never get into the order book. We don't need to keep it
-	// around in that case.
-	err = s.auctioneer.SubmitOrder(
-		ContextWithInitiator(ctx, req.Initiator), o, serverParams,
+	// Finally add the order to the local order database, and submit it to
+	// the auctioneer server.
+	err = prepareAndSubmitOrder(
+		ContextWithInitiator(ctx, req.Initiator), o, auctionTerms,
+		acct, s.auctioneer, s.orderManager,
 	)
 	if err != nil {
 		// The server rejected the order. We keep it around for now,
