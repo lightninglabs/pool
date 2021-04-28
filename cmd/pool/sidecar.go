@@ -118,9 +118,13 @@ func sidecarOffer(ctx *cli.Context) error {
 
 	resp, err := client.OfferSidecar(
 		context.Background(), &poolrpc.OfferSidecarRequest{
-			ChannelCapacitySat:  capacity,
-			SelfChanBalance:     pushAmt,
-			LeaseDurationBlocks: duration,
+			Bid: &poolrpc.Bid{
+				Details: &poolrpc.Order{
+					Amt: capacity,
+				},
+				SelfChanBalance:     pushAmt,
+				LeaseDurationBlocks: duration,
+			},
 		},
 	)
 	if err != nil {

@@ -2202,15 +2202,19 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 	req *poolrpc.OfferSidecarRequest) (*poolrpc.SidecarTicket, error) {
 
 	// Do some basic sanity checks first.
-	if req.ChannelCapacitySat == 0 {
+	switch {
+	case req.Bid == nil:
+		return nil, fmt.Errorf("bid must be set")
+
+	case req.Bid.Details.Amt == 0:
 		return nil, fmt.Errorf("channel capacity missing")
 	}
 
 	// The funding manager does all the work, including signing and storing
 	// the new ticket.
 	ticket, err := s.server.fundingManager.OfferSidecar(
-		ctx, btcutil.Amount(req.ChannelCapacitySat),
-		btcutil.Amount(req.SelfChanBalance), req.LeaseDurationBlocks,
+		ctx, btcutil.Amount(req.Bid.Details.Amt),
+		btcutil.Amount(req.Bid.SelfChanBalance), req.Bid.LeaseDurationBlocks,
 	)
 	if err != nil {
 		return nil, err
