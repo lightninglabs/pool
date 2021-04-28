@@ -2305,13 +2305,15 @@ func (s *rpcServer) RegisterSidecar(ctx context.Context,
 
 	// The sidecar acceptor will add all required information and add the
 	// ticket to our DB.
-	err = s.server.sidecarAcceptor.RegisterSidecar(ctx, ticket)
+	registeredTicket, err := s.server.sidecarAcceptor.RegisterSidecar(
+		ctx, *ticket,
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	// We'll return a nice string encoded version of the ticket to the user.
-	ticketStr, err := sidecar.EncodeToString(ticket)
+	ticketStr, err := sidecar.EncodeToString(registeredTicket)
 	if err != nil {
 		return nil, err
 	}

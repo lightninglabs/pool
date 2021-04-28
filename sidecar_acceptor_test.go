@@ -140,14 +140,14 @@ func TestRegisterSidecar(t *testing.T) {
 		require.NoError(t, err)
 
 		acceptor.cfg.SidecarDB = store
-		_, err := acceptor.RegisterSidecar(
-			context.Background(), tc.ticket,
+		ticket, err := acceptor.RegisterSidecar(
+			context.Background(), *tc.ticket,
 		)
 
 		if tc.expectedErr == "" {
 			require.NoError(t, err)
 
-			tc.check(t, tc.ticket)
+			tc.check(t, ticket)
 		} else {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.expectedErr)

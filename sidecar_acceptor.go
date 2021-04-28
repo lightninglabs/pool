@@ -193,17 +193,17 @@ func (a *SidecarAcceptor) Stop() error {
 // bought over a sidecar order and adds that to the offered ticket. If
 // successful, the updated ticket is added to the local database.
 func (a *SidecarAcceptor) RegisterSidecar(ctx context.Context,
-	ticket *sidecar.Ticket) error {
+	ticket sidecar.Ticket) (*sidecar.Ticket, error) {
 
 	// The ticket needs to be in the correct state for us to register it.
-	if err := sidecar.VerifyOffer(ctx, ticket, a.cfg.Signer); err != nil {
-		return fmt.Errorf("error verifying sidecar offer: %v", err)
+	if err := sidecar.VerifyOffer(ctx, &ticket, a.cfg.Signer); err != nil {
+		return nil, fmt.Errorf("error verifying sidecar offer: %v", err)
 	}
 
 	// Do we already have a ticket with that ID?
 	_, err := a.cfg.SidecarDB.Sidecar(ticket.ID, ticket.Offer.SignPubKey)
 	if err != clientdb.ErrNoSidecar {
-		return fmt.Errorf("ticket with ID %x already exists",
+		return nil, fmt.Errorf("ticket with ID %x already exists",
 			ticket.ID[:])
 	}
 
@@ -213,7 +213,7 @@ func (a *SidecarAcceptor) RegisterSidecar(ctx context.Context,
 		ctx, int32(keychain.KeyFamilyMultiSig),
 	)
 	if err != nil {
-		return fmt.Errorf("error deriving multisig key: %v", err)
+		return nil, fmt.Errorf("error deriving multisig key: %v", err)
 	}
 
 	ticket.State = sidecar.StateRegistered
@@ -222,11 +222,11 @@ func (a *SidecarAcceptor) RegisterSidecar(ctx context.Context,
 		MultiSigPubKey:   keyDesc.PubKey,
 		MultiSigKeyIndex: keyDesc.Index,
 	}
-	if err := a.cfg.SidecarDB.AddSidecar(ticket); err != nil {
-		return fmt.Errorf("error storing sidecar: %v", err)
+	if err := a.cfg.SidecarDB.AddSidecar(&ticket); err != nil {
+		return nil, fmt.Errorf("error storing sidecar: %v", err)
 	}
 
-	return nil
+	return &ticket, nil
 }
 
 // ExpectChannel informs the acceptor that a new bid order was submitted for the
