@@ -1415,6 +1415,8 @@ func (c *Client) RecvCipherBoxMsg(ctx context.Context,
 		return nil, fmt.Errorf("unable to create read stream: %w", err)
 	}
 
+	// TODO(roasbeef): need to cancel context?
+
 	msg, err := readStream.Recv()
 	if err != nil {
 		return nil, err

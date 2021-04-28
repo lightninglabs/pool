@@ -993,10 +993,13 @@ func (m *Manager) RemovePendingBatchArtifacts(
 }
 
 // OfferSidecar creates a sidecar channel offer and embeds it in a new sidecar
-// ticket. The offer is signed with the local lnd's node public key.
+// ticket. The offer is signed with the local lnd's node public key. If a bid
+// is passed along, then this indicates that the ticket is intended to be used
+// for autonated sidecar negotiation.
 func (m *Manager) OfferSidecar(ctx context.Context, capacity,
 	pushAmt btcutil.Amount, duration uint32,
-	acctPubKey *keychain.KeyDescriptor, auto bool) (*sidecar.Ticket, error) {
+	acctPubKey *keychain.KeyDescriptor,
+	bid *order.Bid, auto bool) (*sidecar.Ticket, error) {
 
 	// Make sure the capacity and push amounts are sane.
 	err := sidecar.CheckOfferParams(capacity, pushAmt, order.BaseSupplyUnit)
@@ -1022,8 +1025,14 @@ func (m *Manager) OfferSidecar(ctx context.Context, capacity,
 		return nil, fmt.Errorf("error signing offer: %v", err)
 	}
 
-	// Let's now store and return the ticket with the signed offer.
-	err = m.cfg.DB.AddSidecar(ticket)
+	// Let's now store and return the ticket with the signed offer. If a
+	// bid was specified, then we'll commit that as well so we can submit
+	// it to the auctioneer later once we communicate with the recipient.
+	if bid == nil {
+		err = m.cfg.DB.AddSidecar(ticket)
+	} else {
+		err = m.cfg.DB.AddSidecarWithBid(ticket, bid)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("error storing sidecar ticket: %v", err)
 	}

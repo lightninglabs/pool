@@ -3,6 +3,7 @@ package pool
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/subscribe"
 )
 
@@ -272,6 +274,423 @@ func (a *SidecarAcceptor) ExpectChannel(ctx context.Context,
 		},
 		PubKey: t.Recipient.MultiSigPubKey,
 	})
+}
+
+// deriveProviderStreamID derives the stream ID of the provider's cipher box,
+// we'll use this to allow the recipient to send messages to the provider.
+func (a *SidecarAcceptor) deriveProviderStreamID(
+	ticket *sidecar.Ticket) ([64]byte, error) {
+
+	var streamID [64]byte
+
+	// This stream ID will simply be the fixed 64-byte signature of our
+	// sidecar ticket offer.
+	wireSig, err := lnwire.NewSigFromRawSignature(
+		ticket.Offer.SigOfferDigest.Serialize(),
+	)
+	if err != nil {
+		return streamID, err
+	}
+
+	copy(streamID[:], wireSig[:])
+
+	return streamID, nil
+}
+
+// deriveRecipientStreamID derives the stream ID of the cipher box that the
+// provider of the sidecar ticket will use to send messages to the receiver.
+func (a *SidecarAcceptor) deriveRecipientStreamID(ticket *sidecar.Ticket) [64]byte {
+	receiverMultisig := ticket.Recipient.NodePubKey.SerializeCompressed()
+	receiverNode := ticket.Recipient.MultiSigPubKey.SerializeCompressed()
+
+	// The stream ID will be the concentration of the receiver's multi-sig
+	// and node keys, ignoring the first byte of each key that essentially
+	// communicates parity information.
+	var (
+		streamID [64]byte
+		n        int
+	)
+	n += copy(streamID[:], receiverMultisig[1:])
+	copy(streamID[n:], receiverNode[1:])
+
+	return streamID
+}
+
+// validateOrderedTicket validates a ticket in the ordered state to ensure all
+// the details are in place, and signed properly.
+func validateOrderedTicket(ctx context.Context, t *sidecar.Ticket,
+	signer lndclient.SignerClient, db sidecar.Store) error {
+
+	// The ticket should be in the ordered state at this point (has the bid
+	// information).
+	if t.State != sidecar.StateOrdered {
+		return fmt.Errorf("sidecar ticket in state %v, expected %v",
+			t.State, sidecar.StateOrdered)
+	}
+
+	// Let's make sure the ticket itself and the offer is valid.
+	if err := sidecar.VerifyOffer(ctx, t, signer); err != nil {
+		return fmt.Errorf("error validating order in sidecar "+
+			"ticket: %v", err)
+	}
+
+	// Make sure the order signature is valid and the ticket actually exists
+	// in our database. We need to have it stored already since must've done
+	// the register part before.
+	if err := sidecar.VerifyOrder(ctx, t, signer); err != nil {
+		return fmt.Errorf("error validating order in sidecar "+
+			"ticket: %v", err)
+	}
+	if _, err := db.Sidecar(t.ID, t.Offer.SignPubKey); err != nil {
+		return fmt.Errorf("error looking up sidecar order for "+
+			"ticket with ID %x: %v", t.ID[:], err)
+	}
+
+	return nil
+}
+
+// AutoAcceptSidecar signals to the acceptor that the recipient of a potential
+// sidecar channel request automated acceptance of the sidecar channel. We'll
+// use the cipher box of the provider of the ticket (and a new one we'll create
+// for the reply side) to finalize negotiation, resulting in a
+func (a *SidecarAcceptor) AutoAcceptSidecar(ticket *sidecar.Ticket) error {
+
+	log.Infof("Attempting negotiation to receive sidecar ticket: %x",
+		ticket.ID[:])
+
+	ctx := context.Background()
+
+	// We'll launch a new coroutine that'll handle negotiation in the
+	// background all the way to the final state of the ticket.
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+
+		var ticketSent bool
+		for {
+			switch {
+			// In this state, they've just sent us their version of
+			// the ticket w/o our node information (and processed
+			// it adding our information), we'll populate it then
+			// send it to them over the cipherbox they've created
+			// for this purpose.
+			case !ticketSent && ticket.State == sidecar.StateRegistered:
+				// Before we send our message over, we'll need
+				// to create a cipher box stream they can use
+				// to reply to us. Our authentication mechanism
+				// here will be the sidecar ticket itself.
+				//
+				// TODO(roasbeef): pass in pubkey for encryption?
+				//  * ECEIS?
+				recipientStreamID := a.deriveRecipientStreamID(
+					ticket,
+				)
+
+				log.Infof("Creating reply mailbox for ticket=%x, "+
+					"stream_id=%x", ticket.ID[:], recipientStreamID[:])
+
+				err := a.client.InitTicketCipherBox(
+					ctx, recipientStreamID, ticket,
+				)
+				if err != nil {
+					log.Errorf("unable to init cipher box: %v", err)
+					return
+				}
+
+				providerStreamID, err := a.deriveProviderStreamID(ticket)
+				if err != nil {
+					log.Errorf("unable to derive provider stream ID: %v", err)
+					continue
+				}
+
+				log.Infof("Sending registered ticket (id=%x) "+
+					"to provider (trader_key=%x), stream_id=%x",
+					ticket.ID[:],
+					ticket.Offer.SignPubKey.SerializeCompressed(),
+					providerStreamID[:])
+
+				var ticketBuf bytes.Buffer
+				err = sidecar.SerializeTicket(&ticketBuf, ticket)
+				if err != nil {
+					return
+				}
+
+				// TODO(roasbeef): send msg reliability?
+				err = a.client.SendCipherBoxMsg(
+					ctx, providerStreamID, ticketBuf.Bytes(),
+				)
+				if err != nil {
+					log.Errorf("unable to send cipher box msg: %v", err)
+					return
+				}
+
+				ticketSent = true
+
+			// In this state, we'll wait for the provider to send
+			// us back the ticket that contains their order
+			// information.
+			case ticketSent && ticket.State == sidecar.StateRegistered:
+
+				// We'll wait for them to send us back a valid
+				// ticket over our cipher box.
+				recipientStreamID := a.deriveRecipientStreamID(
+					ticket,
+				)
+
+				log.Infof("Waiting for ticket (id=%x) using "+
+					"stream_id=%x", ticket.ID[:],
+					recipientStreamID[:])
+
+				msg, err := a.client.RecvCipherBoxMsg(
+					ctx, recipientStreamID,
+				)
+				if err != nil {
+					log.Errorf("unable to recv cipher box "+
+						"msg: %w", err)
+					return
+				}
+
+				ticket, err = sidecar.DeserializeTicket(
+					bytes.NewReader(msg),
+				)
+				if err != nil {
+					log.Errorf("unable to decode ticket: %v", err)
+					continue
+				}
+
+				// At this point, we'll finish validating the
+				// ticket, then await the ticket on the side lines
+				// if it's valid.
+				err = validateOrderedTicket(
+					ctx, ticket, a.cfg.Signer, a.cfg.SidecarDB,
+				)
+				if err != nil {
+					log.Errorf("unable to verify ticket: %v", err)
+					continue
+				}
+
+				log.Infof("Auto negotiation for ticket=%x "+
+					"complete! Expecting channel...",
+					ticket.ID[:])
+
+				// Now that we know the channel is valid, we'll
+				// wait for the channel to show up at our node, and
+				// allow things to advance to the completion state.
+				err = a.ExpectChannel(ctx, ticket)
+				if err != nil {
+					log.Errorf("failed to expect channel: %v", err)
+					continue
+				}
+
+				return
+			}
+		}
+	}()
+
+	return nil
+}
+
+// submitSidecarOrder attempts to submit a new bid that's bound to a finalized
+// sidecar ticket that's in the registered phase. If this method returns
+// successfully, then the ticket will have transitioned to the
+// sidecar.StateOrdered state.
+func (a *SidecarAcceptor) submitSidecarOrder(ctx context.Context,
+	ticket *sidecar.Ticket, bid *order.Bid,
+	acct *account.Account) (*sidecar.Ticket, error) {
+
+	// We'll bind the ticket to the order now as the ticket has all the
+	// necessary information included.
+	bid.SidecarTicket = ticket
+
+	auctionTerms, err := a.client.Terms(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not query auctioneer terms: %v", err)
+	}
+
+	err = prepareAndSubmitOrder(
+		ctx, bid, auctionTerms, acct, a.client, a.cfg.OrderManager,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return bid.SidecarTicket, nil
+}
+
+// CoordinateSidecar signals to the sidecar acceptor that it should attempt to
+// automatically coordinate the negotiation of the ultimate order to be
+// produced by the side car ticket with the recipient.
+func (a *SidecarAcceptor) CoordinateSidecar(ticket *sidecar.Ticket,
+	bid *order.Bid, acct *account.Account) error {
+
+	log.Infof("Attempting negotiation to offer sidecar ticket: %x",
+		ticket.ID[:])
+
+	ctx := context.Background()
+
+	// First, we'll need to derive the stream ID that we'll use to receive
+	// new messages from the recipient.
+	streamID, err := a.deriveProviderStreamID(ticket)
+	if err != nil {
+		return fmt.Errorf("unable to convert offer sig: %w", err)
+	}
+
+	log.Infof("Creating mailbox for ticket=%x, w/ stream_id=%x",
+		ticket.ID[:], streamID[:])
+
+	err = a.client.InitAccountCipherBox(
+		ctx, streamID, acct.TraderKey,
+	)
+	if err != nil {
+		// TODO(roasbef): catch error already init
+		return fmt.Errorf("unable to init account cipher box: %w", err)
+	}
+
+	// From here, we'll launch a goroutine that will operate the state
+	// machine to complete the negotiation process in the background.
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+
+		for {
+			switch ticket.State {
+			// In this state, we'll wait for the recipient to send
+			// us the ticket will the information we need to
+			// complete the order such as their multi-sig key in
+			// tact.
+			//
+			// Transition: -> StateRegistered
+			case sidecar.StateOffered:
+				log.Infof("Waiting for registered ticket=%x "+
+					"from recipient", ticket.ID[:])
+
+				// We'll simply wait for the recipient to send
+				// us a message over our cipher box stream.
+				msg, err := a.client.RecvCipherBoxMsg(
+					ctx, streamID,
+				)
+				if err != nil {
+					log.Errorf("unable to recv cipher box "+
+						"msg: %w", err)
+					return
+				}
+
+				// The message should be a valid side car ticket,
+				// otherwise it's garbage or the wrong message was
+				// sent, so we'll just wait for another one to be
+				// sent.
+				updatedTicket, err := sidecar.DecodeString(
+					string(msg),
+				)
+				if err != nil {
+					log.Errorf("unable to parse ticket: %v", err)
+					continue
+				}
+
+				// The ticket should have now advanced to the next
+				// state, otherwise the protocol wasn't followed.
+				if updatedTicket.State != sidecar.StateRegistered {
+					log.Errorf("sidecar ticket in state %v, expected %v",
+						updatedTicket.State,
+						sidecar.StateRegistered)
+					continue
+				}
+
+				// Now that we have the ticket, we'll update
+				// the state on disk to checkpoint the new
+				// state.
+				err = a.cfg.SidecarDB.UpdateSidecar(updatedTicket)
+				if err != nil {
+					log.Errorf("unable to update ticket: %v", err)
+					continue
+				}
+
+				ticket = updatedTicket
+
+			// If we're in this state (possibly after a restart),
+			// we have all the information we need to submit the
+			// order, so we'll do that, then send the finalized
+			// ticket back to the recipient.
+			//
+			// Transition: -> StateOffered
+			case sidecar.StateRegistered:
+				log.Infof("Submitting bid order for ticket=%x",
+					ticket.ID[:])
+
+				// Now we have the recipient's information, we
+				// can attach it to our bid, and submit it as
+				// normal.
+				ticket, err = a.submitSidecarOrder(
+					ctx, ticket, bid, acct,
+				)
+				switch {
+				// If the order has already been submitted,
+				// then we'll catch this error and go to the
+				// next state. Submitting the order doesn't
+				// persist the state update to the ticket, so
+				// we don't risk a split brain state.
+				case err == nil:
+					fallthrough
+				case errors.Is(err, clientdb.ErrOrderExists):
+					continue
+
+				case err != nil:
+					log.Errorf("unable to submit sidecar order: %v", err)
+					continue
+				}
+
+			// In this state, we've submitted the order and now
+			// need to send back the completed order to the
+			// recipient so they can expect the ultimate sidecar
+			// channel.
+			//
+			// Transition: -> StateCompleted || StateCanceled
+			case sidecar.StateOrdered:
+				// Encode the latest ticket as we we can only
+				// transmit bytes end to end.
+				orderStringTicket, err := sidecar.EncodeToString(
+					ticket,
+				)
+				if err != nil {
+					log.Errorf("unable to encode ticket: %v", err)
+					continue
+				}
+
+				// Next, we'll send the ticket back over to the
+				// recipient so they can await the channel
+				// (after it's been matched).
+				//
+				// The stream ID in this case will be the
+				// concatenation of their node and multi-sig
+				// keys.
+				recipientStreamID := a.deriveRecipientStreamID(ticket)
+
+				log.Infof("Sending finalized ticket=%x to "+
+					"recipient using stream_id=%x", ticket.ID[:],
+					recipientStreamID[:])
+
+				err = a.client.SendCipherBoxMsg(
+					ctx, recipientStreamID,
+					[]byte(orderStringTicket),
+				)
+				if err != nil {
+					log.Errorf("unable to send msg: %v", err)
+					return
+				}
+
+				ticket.State = sidecar.StateExpectingChannel
+
+			case sidecar.StateCompleted, sidecar.StateCanceled,
+				sidecar.StateExpectingChannel:
+
+				log.Infof("Negotiation for ticket=%x has been "+
+					"completed!", ticket.ID[:])
+				return
+			}
+		}
+	}()
+
+	return nil
 }
 
 // handleServerMessage reacts to a message sent by the server and sends back the

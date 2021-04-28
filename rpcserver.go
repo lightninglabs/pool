@@ -2268,16 +2268,65 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 		return nil, err
 	}
 
+	// If automated negotiation was set, then we'll parse out the rest of
+	// the bid now so we can validate that it'll pass all checks when we
+	// eventually need to submit it.
+	var bid *order.Bid
+	if req.AutoNegotiate {
+		kit, err := order.ParseRPCOrder(
+			req.Bid.Version, req.Bid.LeaseDurationBlocks,
+			req.Bid.Details,
+		)
+		if err != nil {
+			return nil, err
+		}
+		nodeTier, err := unmarshallNodeTier(req.Bid.MinNodeTier)
+		if err != nil {
+			return nil, err
+		}
+
+		// We don't add the ticket here yet as we'll only add it at the
+		// very end once the ticket has advanced to the final stage.
+		bid = &order.Bid{
+			Kit:             *kit,
+			MinNodeTier:     nodeTier,
+			SelfChanBalance: btcutil.Amount(req.Bid.SelfChanBalance),
+		}
+
+		// Perform some initial validation on the order to ensure that
+		// we'll be able to eventually submit it.
+		auctionTerms, err := s.auctioneer.Terms(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to query auctioneer "+
+				"terms: %v", err)
+		}
+		err = s.validateOrder(bid, acct, auctionTerms)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// The funding manager does all the work, including signing and storing
 	// the new ticket.
 	ticket, err := s.server.fundingManager.OfferSidecar(
 		ctx, btcutil.Amount(req.Bid.Details.Amt),
 		btcutil.Amount(req.Bid.SelfChanBalance),
-		req.Bid.LeaseDurationBlocks, acct.TraderKey,
+		req.Bid.LeaseDurationBlocks, acct.TraderKey, bid,
 		req.AutoNegotiate,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	// If the ticket has requested automated negotiation, then we'll hand
+	// it off to the coordinate tor now.
+	if ticket.Offer.Auto {
+		err := s.server.sidecarAcceptor.CoordinateSidecar(
+			ticket, bid, acct,
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// We'll return a nice string encoded version of the ticket to the user.
@@ -2312,12 +2361,38 @@ func (s *rpcServer) RegisterSidecar(ctx context.Context,
 		return nil, err
 	}
 
-	// We'll return a nice string encoded version of the ticket to the user.
+	// At this point, we'll now check if the ticket specifies that
+	// automated negotiation is to be sued, if so then we'll hand things
+	// off to the sidecar acceptor to finish the process.
+	if registeredTicket.Offer.Auto {
+		err := s.server.sidecarAcceptor.AutoAcceptSidecar(registeredTicket)
+		if err != nil {
+			return nil, fmt.Errorf("unable to start ticket auto "+
+				"negotiation: %v", err)
+		}
+	}
+
 	ticketStr, err := sidecar.EncodeToString(registeredTicket)
 	if err != nil {
 		return nil, err
 	}
 	return &poolrpc.SidecarTicket{Ticket: ticketStr}, nil
+}
+
+// expectSidecarChannel is a private version of ExpectSidecarChannel that may
+// be used in earlier steps if automated negotiation is requested.
+func (s *rpcServer) expectSidecarChannel(ctx context.Context,
+	t *sidecar.Ticket) error {
+
+	err := validateOrderedTicket(ctx, t, s.lndServices.Signer, s.server.db)
+	if err != nil {
+		return err
+	}
+
+	// Formally everything looks good so far. We can now pass the sidecar
+	// order with the verified information to the acceptor and let it do its
+	// job.
+	return s.server.sidecarAcceptor.ExpectChannel(ctx, t)
 }
 
 // ExpectSidecarChannel is step 4/4 of the sidecar negotiation between the
@@ -2337,31 +2412,8 @@ func (s *rpcServer) ExpectSidecarChannel(ctx context.Context,
 		return nil, fmt.Errorf("error decoding ticket: %v", err)
 	}
 
-	// Let's make sure the ticket itself and the offer is valid.
-	if err := sidecar.VerifyOffer(ctx, t, s.lndServices.Signer); err != nil {
-		return nil, fmt.Errorf("error validating order in sidecar "+
-			"ticket: %v", err)
-	}
-
-	// Make sure the order signature is valid and the ticket actually exists
-	// in our database. We need to have it stored already since must've done
-	// the register part before.
-	if err := sidecar.VerifyOrder(ctx, t, s.lndServices.Signer); err != nil {
-		return nil, fmt.Errorf("error validating order in sidecar "+
-			"ticket: %v", err)
-	}
-	if _, err = s.server.db.Sidecar(t.ID, t.Offer.SignPubKey); err != nil {
-		return nil, fmt.Errorf("error looking up sidecar order for "+
-			"ticket with ID %x: %v", t.ID[:], err)
-	}
-
-	// Formally everything looks good so far. We can now pass the sidecar
-	// order with the verified information to the acceptor and let it do its
-	// job.
-	err = s.server.sidecarAcceptor.ExpectChannel(ctx, t)
-	if err != nil {
-		return nil, fmt.Errorf("error managing sidecar channel: %v",
-			err)
+	if err := s.expectSidecarChannel(ctx, t); err != nil {
+		return nil, fmt.Errorf("unable to expect sidecar chan: %v", err)
 	}
 
 	return &poolrpc.ExpectSidecarChannelResponse{}, nil
