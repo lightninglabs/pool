@@ -996,7 +996,7 @@ func (m *Manager) RemovePendingBatchArtifacts(
 // ticket. The offer is signed with the local lnd's node public key.
 func (m *Manager) OfferSidecar(ctx context.Context, capacity,
 	pushAmt btcutil.Amount, duration uint32,
-	acctPubKey *keychain.KeyDescriptor) (*sidecar.Ticket, error) {
+	acctPubKey *keychain.KeyDescriptor, auto bool) (*sidecar.Ticket, error) {
 
 	// Make sure the capacity and push amounts are sane.
 	err := sidecar.CheckOfferParams(capacity, pushAmt, order.BaseSupplyUnit)
@@ -1008,7 +1008,7 @@ func (m *Manager) OfferSidecar(ctx context.Context, capacity,
 	// now.
 	ticket, err := sidecar.NewTicket(
 		sidecar.VersionDefault, capacity, pushAmt, duration,
-		acctPubKey.PubKey,
+		acctPubKey.PubKey, auto,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating sidecar ticket: %v", err)

@@ -114,6 +114,10 @@ type Offer struct {
 	// SigOfferDigest is a signature over the offer digest, signed with the
 	// private key that corresponds to the SignPubKey above.
 	SigOfferDigest *btcec.Signature
+
+	// Auto determines if the provider requires that the ticket be
+	// completed using an automated negotiation sequence.
+	Auto bool
 }
 
 // Recipient is a struct holding the information about the recipient of the
@@ -196,7 +200,8 @@ type Ticket struct {
 // NewTicket creates a new sidecar ticket with the given version and offer
 // information.
 func NewTicket(version Version, capacity, pushAmt btcutil.Amount,
-	duration uint32, offerPubKey *btcec.PublicKey) (*Ticket, error) {
+	duration uint32, offerPubKey *btcec.PublicKey,
+	auto bool) (*Ticket, error) {
 
 	t := &Ticket{
 		Version: version,
@@ -206,6 +211,7 @@ func NewTicket(version Version, capacity, pushAmt btcutil.Amount,
 			PushAmt:             pushAmt,
 			LeaseDurationBlocks: duration,
 			SignPubKey:          offerPubKey,
+			Auto:                auto,
 		},
 	}
 
@@ -226,7 +232,7 @@ func (t *Ticket) OfferDigest() ([32]byte, error) {
 	case VersionDefault:
 		err := lnwire.WriteElements(
 			&msg, t.ID[:], uint8(t.Version), t.Offer.Capacity,
-			t.Offer.PushAmt,
+			t.Offer.PushAmt, t.Offer.Auto,
 		)
 		if err != nil {
 			return result, err
