@@ -1118,15 +1118,21 @@ func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
 	return nil
 }
 
+// orderPreparer represents a type of function that inserts the order into the
+// local database, and returns the params needed to submit it to the
+// auctioneer.
+type orderPreparer func(context.Context, order.Order,
+	*account.Account, *terms.AuctioneerTerms) (*order.ServerOrderParams, error)
+
 // prepareAndSubmitOrder performs a series of final checks locally to ensure
 // the order is valid, before submitting it to the auctioneer.
 func prepareAndSubmitOrder(ctx context.Context, o order.Order,
 	auctionTerms *terms.AuctioneerTerms, acct *account.Account,
-	auction *auctioneer.Client, orderBook *order.Manager) error {
+	auction *auctioneer.Client, prepareOrder orderPreparer) error {
 
 	// Collect all the order data and sign it before sending it to the
 	// auction server.
-	serverParams, err := orderBook.PrepareOrder(
+	serverParams, err := prepareOrder(
 		ctx, o, acct, auctionTerms,
 	)
 	if err != nil {
@@ -1222,7 +1228,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	// the auctioneer server.
 	err = prepareAndSubmitOrder(
 		ContextWithInitiator(ctx, req.Initiator), o, auctionTerms,
-		acct, s.auctioneer, s.orderManager,
+		acct, s.auctioneer, s.orderManager.PrepareOrder,
 	)
 	if err != nil {
 		// The server rejected the order. We keep it around for now,

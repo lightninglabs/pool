@@ -70,7 +70,7 @@ type SidecarAcceptorConfig struct {
 
 	ClientCfg auctioneer.Config
 
-	OrderManager *order.Manager
+	PrepareOrder orderPreparer
 
 	FundingManager *funding.Manager
 
@@ -555,7 +555,7 @@ func (a *SidecarAcceptor) submitSidecarOrder(ctx context.Context,
 	}
 
 	err = prepareAndSubmitOrder(
-		ctx, bid, auctionTerms, acct, a.client, a.cfg.OrderManager,
+		ctx, bid, auctionTerms, acct, a.client, a.cfg.PrepareOrder,
 	)
 	if err != nil {
 		return nil, err

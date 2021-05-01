@@ -18,11 +18,13 @@ import (
 	proxy "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/lightninglabs/aperture/lsat"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/funding"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/macaroons"
@@ -504,16 +506,28 @@ func (s *Server) setupClient() error {
 	// acceptor is going to overwrite some of its values.
 	clientCfgCopy := *clientCfg
 	s.sidecarAcceptor = NewSidecarAcceptor(&SidecarAcceptorConfig{
-		SidecarDB:       s.db,
-		AcctDB:          &accountStore{DB: s.db},
-		Signer:          s.lndServices.Signer,
-		Wallet:          s.lndServices.WalletKit,
-		BaseClient:      s.lndClient,
-		Acceptor:        channelAcceptor,
-		NodePubKey:      nodePubKey,
-		ClientCfg:       clientCfgCopy,
-		FundingManager:  s.fundingManager,
-		OrderManager:    s.rpcServer.orderManager,
+		SidecarDB:      s.db,
+		AcctDB:         &accountStore{DB: s.db},
+		Signer:         s.lndServices.Signer,
+		Wallet:         s.lndServices.WalletKit,
+		BaseClient:     s.lndClient,
+		Acceptor:       channelAcceptor,
+		NodePubKey:     nodePubKey,
+		ClientCfg:      clientCfgCopy,
+		FundingManager: s.fundingManager,
+		PrepareOrder: func(ctx context.Context,
+			order order.Order,
+			acct *account.Account,
+			terms *terms.AuctioneerTerms) (*order.ServerOrderParams, error) {
+
+			// Rather than passing in the function directly, we use
+			// an intermediate closure as this pointer won't
+			// existing when we initialize this config, as the rpc
+			// server is created _after_ we set up the client.
+			return s.rpcServer.orderManager.PrepareOrder(
+				ctx, order, acct, terms,
+			)
+		},
 		FetchSidecarBid: s.db.SidecarBidTemplate,
 	})
 
