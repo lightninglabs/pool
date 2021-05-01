@@ -2324,6 +2324,17 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 		return nil, err
 	}
 
+	var nonce order.Nonce
+	if bid != nil {
+		nonce = bid.Nonce()
+	}
+
+	// If the bid has already been specified, then we can go ahead and set
+	// it within the ticket.
+	ticket.Order = &sidecar.Order{
+		BidNonce: nonce,
+	}
+
 	// If the ticket has requested automated negotiation, then we'll hand
 	// it off to the coordinate tor now.
 	if ticket.Offer.Auto {
@@ -2340,7 +2351,9 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return &poolrpc.SidecarTicket{Ticket: ticketStr}, nil
+	return &poolrpc.SidecarTicket{
+		Ticket: ticketStr,
+	}, nil
 }
 
 // RegisterSidecar is step 2/4 of the sidecar negotiation between the provider
