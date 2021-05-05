@@ -896,7 +896,7 @@ message ServerBid {
     a node this tier or higher will be eligible for matching with this bid.
     */
     NodeTier min_node_tier = 5;
-    
+
     /*
     Give the incoming channel that results from this bid being matched an
     initial outbound balance by adding additional funds from the taker's account
