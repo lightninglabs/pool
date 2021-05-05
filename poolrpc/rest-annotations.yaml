@@ -51,7 +51,7 @@ http:
     - selector: poolrpc.Trader.BatchSnapshot
       get: "/v1/pool/batch/snapshot"
     - selector: poolrpc.Trader.GetLsatTokens
-      get: "/v1/lsat/tokens"
+      get: "/v1/pool/lsat/tokens"
     - selector: poolrpc.Trader.Leases
       get: "/v1/pool/leases"
     - selector: poolrpc.Trader.NodeRatings
