@@ -790,7 +790,7 @@
     },
     "/v1/pool/sidecar/expect": {
       "post": {
-        "summary": "pool: `sidecar expect-channel`\nExpectSidecarChannel is step 4/4 of the sidecar negotiation between the\nprovider (the trader submitting the bid order) and the recipient (the trader\nreceiving the sidecar channel).\nThis step must be run by the recipient once the provider has submitted the\nbid order for the sidecar channel. From this point onwards the Pool trader\ndaemon of both the provider as well as the recipient need to be online to\nreceive and react to match making events from the server.",
+        "summary": "pool: `sidecar expectchannel`\nExpectSidecarChannel is step 4/4 of the sidecar negotiation between the\nprovider (the trader submitting the bid order) and the recipient (the trader\nreceiving the sidecar channel).\nThis step must be run by the recipient once the provider has submitted the\nbid order for the sidecar channel. From this point onwards the Pool trader\ndaemon of both the provider as well as the recipient need to be online to\nreceive and react to match making events from the server.",
         "operationId": "ExpectSidecarChannel",
         "responses": {
           "200": {
@@ -1997,6 +1997,36 @@
         "miner_fee_total": {
           "type": "string",
           "format": "uint64"
+        }
+      }
+    },
+    "poolrpcQuoteOrderResponse": {
+      "type": "object",
+      "properties": {
+        "total_premium_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The total order premium in satoshis for filling the entire order. This\nrepresents the interest amount paid to the maker by the taker excluding any\nexecution or chain fees."
+        },
+        "rate_per_block": {
+          "type": "number",
+          "format": "double",
+          "description": "The fixed order rate expressed as a fraction instead of parts per billion."
+        },
+        "rate_percent": {
+          "type": "number",
+          "format": "double",
+          "description": "The fixed order rate expressed as a percentage instead of parts per billion."
+        },
+        "total_execution_fee_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The total execution fee in satoshis that needs to be paid to the auctioneer\nfor executing the entire order."
+        },
+        "worst_case_chain_fee_sat": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The worst case chain fees that need to be paid if fee rates spike up to the\nmax_batch_fee_rate_sat_per_kw value specified in the request. This value is\nhighly dependent on the min_units_match parameter as well since the\ncalculation assumes chain fees for the chain footprint of opening\namt/min_units_match channels (hence worst case calculation)."
         }
       }
     },

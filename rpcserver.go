@@ -1421,6 +1421,39 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 	return &poolrpc.CancelOrderResponse{}, nil
 }
 
+// QuoteOrder calculates the premium, execution fees and max batch fee rate for
+// an order based on the given order parameters.
+func (s *rpcServer) QuoteOrder(ctx context.Context,
+	req *poolrpc.QuoteOrderRequest) (*poolrpc.QuoteOrderResponse, error) {
+
+	auctionTerms, err := s.auctioneer.Terms(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
+			err)
+	}
+
+	feeSchedule := terms.NewLinearFeeSchedule(
+		auctionTerms.OrderExecBaseFee,
+		auctionTerms.OrderExecFeeRate,
+	)
+
+	q := order.NewQuote(
+		btcutil.Amount(req.Amt),
+		order.SupplyUnit(req.MinUnitsMatch).ToSatoshis(),
+		order.FixedRatePremium(req.RateFixed), req.LeaseDurationBlocks,
+		chainfee.SatPerKWeight(req.MaxBatchFeeRateSatPerKw),
+		feeSchedule,
+	)
+
+	return &poolrpc.QuoteOrderResponse{
+		TotalPremiumSat:      uint64(q.TotalPremium),
+		RatePerBlock:         q.RatePerBlock,
+		RatePercent:          q.RatePerBlock * 100,
+		TotalExecutionFeeSat: uint64(q.TotalExecutionFee),
+		WorstCaseChainFeeSat: uint64(q.WorstCaseChainFee),
+	}, nil
+}
+
 // sendRejectBatch sends a reject message to the server with the properly
 // decoded reason code and the full reason message as a string.
 func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
@@ -1617,7 +1650,6 @@ func (s *rpcServer) AuctionFee(ctx context.Context,
 			err)
 	}
 
-	// TODO(roasbeef): accept the amt of order instead?
 	return &poolrpc.AuctionFeeResponse{
 		ExecutionFee: &auctioneerrpc.ExecutionFee{
 			BaseFee: uint64(auctionTerms.OrderExecBaseFee),
