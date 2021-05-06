@@ -89,6 +89,10 @@ var (
 			Entity: "order",
 			Action: "write",
 		}},
+		"/poolrpc.Trader/QuoteOrder": {{
+			Entity: "order",
+			Action: "read",
+		}},
 		"/poolrpc.Trader/AuctionFee": {{
 			Entity: "auction",
 			Action: "read",

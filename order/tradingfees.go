@@ -95,6 +95,45 @@ func EstimateTraderFee(numTraderChans uint32,
 	return feeRate.FeeForWeight(weightEstimate)
 }
 
+// Quote is a struct holding the result of an order quote calculation.
+type Quote struct {
+	// TotalPremium is the total order premium in satoshis for filling the
+	// entire order.
+	TotalPremium btcutil.Amount
+
+	// RatePerBlock is the fixed order rate expressed as a fraction instead
+	// of parts per billion.
+	RatePerBlock float64
+
+	// TotalExecutionFee is the total execution fee in satoshis that needs
+	// to be paid to the auctioneer for executing the entire order.
+	TotalExecutionFee btcutil.Amount
+
+	// WorstCaseChainFee is the chain fees that have to be paid in the worst
+	// case scenario where fees spike up to the given max batch fee rate and
+	// the order is executed in the maximum parts possible (amount divided
+	// by minimum channel amount).
+	WorstCaseChainFee btcutil.Amount
+}
+
+// NewQuote returns a new quote for an order with the given parameters.
+func NewQuote(amt, minChanAmt btcutil.Amount, rate FixedRatePremium,
+	leaseDuration uint32, maxBatchFeeRate chainfee.SatPerKWeight,
+	schedule terms.FeeSchedule) *Quote {
+
+	exeFee := schedule.BaseFee() + schedule.ExecutionFee(amt)
+
+	maxNumMatches := amt / minChanAmt
+	chainFee := maxNumMatches * EstimateTraderFee(1, maxBatchFeeRate)
+
+	return &Quote{
+		TotalPremium:      rate.LumpSumPremium(amt, leaseDuration),
+		RatePerBlock:      float64(rate) / FeeRateTotalParts,
+		TotalExecutionFee: exeFee,
+		WorstCaseChainFee: chainFee,
+	}
+}
+
 // AccountTally keeps track of an account's balance and fees for all orders in
 // a batch that spend from/use that account.
 type AccountTally struct {

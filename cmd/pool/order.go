@@ -14,7 +14,6 @@ import (
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/sidecar"
-	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli"
 )
@@ -279,7 +278,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 	if !ctx.Bool("force") {
 		if err := printOrderDetails(
 			client, btcutil.Amount(ask.Details.Amt),
-			order.SupplyUnit(ask.Details.MinUnitsMatch).ToSatoshis(),
+			order.SupplyUnit(ask.Details.MinUnitsMatch),
 			0, order.FixedRatePremium(ask.Details.RateFixed),
 			ask.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
@@ -311,23 +310,24 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 	return nil
 }
 
-func printOrderDetails(client poolrpc.TraderClient, amt,
-	minChanAmt, selfChanBalance btcutil.Amount, rate order.FixedRatePremium,
-	leaseDuration uint32, maxBatchFeeRate chainfee.SatPerKWeight,
-	isAsk bool, sidecarTicket *sidecar.Ticket) error {
+func printOrderDetails(client poolrpc.TraderClient, amt btcutil.Amount,
+	minUnitsMatch order.SupplyUnit, selfChanBalance btcutil.Amount,
+	rate order.FixedRatePremium, leaseDuration uint32,
+	maxBatchFeeRate chainfee.SatPerKWeight, isAsk bool,
+	sidecarTicket *sidecar.Ticket) error {
 
-	auctionFee, err := client.AuctionFee(
-		context.Background(), &poolrpc.AuctionFeeRequest{},
+	quote, err := client.QuoteOrder(
+		context.Background(), &poolrpc.QuoteOrderRequest{
+			Amt:                     uint64(amt),
+			RateFixed:               uint32(rate),
+			LeaseDurationBlocks:     leaseDuration,
+			MaxBatchFeeRateSatPerKw: uint64(maxBatchFeeRate),
+			MinUnitsMatch:           uint32(minUnitsMatch),
+		},
 	)
 	if err != nil {
 		return err
 	}
-
-	feeSchedule := terms.NewLinearFeeSchedule(
-		btcutil.Amount(auctionFee.ExecutionFee.BaseFee),
-		btcutil.Amount(auctionFee.ExecutionFee.FeeRate),
-	)
-	exeFee := feeSchedule.BaseFee() + feeSchedule.ExecutionFee(amt)
 
 	orderType := "Bid"
 	premiumDescription := "paid to maker"
@@ -335,23 +335,21 @@ func printOrderDetails(client poolrpc.TraderClient, amt,
 		orderType = "Ask"
 		premiumDescription = "yield from taker"
 	}
-	ratePerMil := float64(rate) / order.FeeRateTotalParts
-
-	premium := rate.LumpSumPremium(amt, leaseDuration)
-
-	maxNumMatches := amt / minChanAmt
-	chainFee := maxNumMatches * order.EstimateTraderFee(1, maxBatchFeeRate)
 
 	fmt.Println("-- Order Details --")
 	fmt.Printf("%v Amount: %v\n", orderType, amt)
 	fmt.Printf("%v Duration: %v\n", orderType, leaseDuration)
-	fmt.Printf("Total Premium (%v): %v \n", premiumDescription, premium)
+	fmt.Printf("Total Premium (%v): %v \n", premiumDescription,
+		btcutil.Amount(quote.TotalPremiumSat))
 	fmt.Printf("Rate Fixed: %v\n", rate)
-	fmt.Printf("Rate Per Block: %.9f (%.7f%%)\n", ratePerMil, ratePerMil*100)
-	fmt.Println("Execution Fee: ", exeFee)
+	fmt.Printf("Rate Per Block: %.9f (%.7f%%)\n", quote.RatePerBlock,
+		quote.RatePercent)
+	fmt.Println("Execution Fee: ",
+		btcutil.Amount(quote.TotalExecutionFeeSat))
 	fmt.Printf("Max batch fee rate: %d sat/vByte\n",
 		maxBatchFeeRate.FeePerKVByte()/1000)
-	fmt.Println("Max chain fee:", chainFee)
+	fmt.Println("Max chain fee:",
+		btcutil.Amount(quote.WorstCaseChainFeeSat))
 
 	if selfChanBalance > 0 {
 		fmt.Printf("Self channel balance: %v\n", selfChanBalance)
@@ -551,7 +549,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 	if !ctx.Bool("force") {
 		if err := printOrderDetails(
 			client, btcutil.Amount(bid.Details.Amt),
-			order.SupplyUnit(bid.Details.MinUnitsMatch).ToSatoshis(),
+			order.SupplyUnit(bid.Details.MinUnitsMatch),
 			btcutil.Amount(bid.SelfChanBalance),
 			order.FixedRatePremium(bid.Details.RateFixed),
 			bid.LeaseDurationBlocks,

@@ -42,6 +42,9 @@ http:
       get: "/v1/pool/orders"
     - selector: poolrpc.Trader.CancelOrder
       delete: "/v1/pool/orders/{order_nonce}"
+    - selector: poolrpc.Trader.QuoteOrder
+      post: "/v1/pool/orders/quote"
+      body: "*"
     - selector: poolrpc.Trader.AuctionFee
       get: "/v1/pool/fee"
     - selector: poolrpc.Trader.LeaseDurations

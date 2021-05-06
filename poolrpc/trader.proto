@@ -96,6 +96,12 @@ service Trader {
     */
     rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse);
 
+    /*
+    QuoteOrder calculates the premium, execution fees and max batch fee rate for
+    an order based on the given order parameters.
+    */
+    rpc QuoteOrder (QuoteOrderRequest) returns (QuoteOrderResponse);
+
     /* pool: `auction fee`
     AuctionFee returns the current auction order execution fee specified by the
     auction server.
@@ -630,6 +636,66 @@ message Ask {
     uint32 version = 3;
 }
 
+message QuoteOrderRequest {
+    /*
+    Order amount in satoshis.
+    */
+    uint64 amt = 1;
+
+    /*
+    Fixed order rate in parts per billion.
+    */
+    uint32 rate_fixed = 2;
+
+    /*
+    Required number of blocks that a channel opened as a result of this bid
+    should be kept open.
+    */
+    uint32 lease_duration_blocks = 3;
+
+    /*
+    Maximum fee rate the trader is willing to pay for the batch transaction,
+    expressed in satoshis per 1000 weight units (sat/KW).
+    */
+    uint64 max_batch_fee_rate_sat_per_kw = 4;
+
+    // The minimum number of order units that must be matched per order pair.
+    uint32 min_units_match = 5;
+}
+message QuoteOrderResponse {
+    /*
+    The total order premium in satoshis for filling the entire order. This
+    represents the interest amount paid to the maker by the taker excluding any
+    execution or chain fees.
+    */
+    uint64 total_premium_sat = 1;
+
+    /*
+    The fixed order rate expressed as a fraction instead of parts per billion.
+    */
+    double rate_per_block = 2;
+
+    /*
+    The fixed order rate expressed as a percentage instead of parts per billion.
+    */
+    double rate_percent = 3;
+
+    /*
+    The total execution fee in satoshis that needs to be paid to the auctioneer
+    for executing the entire order.
+    */
+    uint64 total_execution_fee_sat = 4;
+
+    /*
+    The worst case chain fees that need to be paid if fee rates spike up to the
+    max_batch_fee_rate_sat_per_kw value specified in the request. This value is
+    highly dependent on the min_units_match parameter as well since the
+    calculation assumes chain fees for the chain footprint of opening
+    amt/min_units_match channels (hence worst case calculation).
+    */
+    uint64 worst_case_chain_fee_sat = 5;
+}
+
 message OrderEvent {
     /*
     The unix timestamp in nanoseconds the event was emitted at. This is the
@@ -826,10 +892,10 @@ message Lease {
 
     // The tier of the node that this channel was bought/sold from.
     NodeTier channel_node_tier = 13;
-    
+
     // The self channel balance that was pushed to the recipient.
     uint64 self_chan_balance = 14;
-    
+
     // Whether the channel was leased as a sidecar channel (bid orders only).
     bool sidecar_channel = 15;
 }
@@ -1058,7 +1124,7 @@ message OfferSidecarRequest {
     account.
     */
     uint64 self_chan_balance = 2;
-    
+
     /*
     The number of blocks the resulting leased channel should be open for.
     */
