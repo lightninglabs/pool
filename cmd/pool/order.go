@@ -48,6 +48,57 @@ var ordersCommands = []cli.Command{
 	},
 }
 
+// baseBidFlags is the set of flags that are common to any command that may
+// need to accept a bid such as the main bid submission method as when a user
+// attempts to offer a sidecar ticket.
+var baseBidFlags = []cli.Flag{
+	cli.Float64Flag{
+		Name: "interest_rate_percent",
+		Usage: "the total percent one is willing to pay or " +
+			"accept as yield for the specified interval",
+	},
+	cli.Uint64Flag{
+		Name: "amt",
+		Usage: "the amount of inbound liquidity in satoshis " +
+			"to request",
+	},
+	cli.StringFlag{
+		Name: "acct_key",
+		Usage: "the account key to use to pay the order " +
+			"fees with",
+	},
+	cli.Uint64Flag{
+		Name: "lease_duration_blocks",
+		Usage: "the number of blocks that the " +
+			"liquidity should be provided for",
+		Value: defaultBidMinDuration,
+	},
+	cli.Uint64Flag{
+		Name: "min_node_tier",
+		Usage: "the min node tier this bid should be matched " +
+			"with, tier 1 nodes are considered 'good', if " +
+			"set to tier 0, then all nodes will be " +
+			"considered regardless of 'quality'",
+		Value: uint64(order.NodeTierDefault),
+	},
+	cli.Uint64Flag{
+		Name: "min_chan_amt",
+		Usage: "the minimum amount of satoshis that a " +
+			"resulting channel from this order must have",
+	},
+	cli.BoolFlag{
+		Name:  "force",
+		Usage: "skip order placement confirmation",
+	},
+	cli.Uint64Flag{
+		Name: "self_chan_balance",
+		Usage: "give the channel leased by this bid order an " +
+			"initial balance by adding additional funds " +
+			"from our account into the channel; can be " +
+			"used to create up to 50/50 balanced channels",
+	},
+}
+
 var sharedFlags = []cli.Flag{
 	cli.Uint64Flag{
 		Name: "max_batch_fee_rate",
@@ -372,74 +423,26 @@ var ordersSubmitBidCommand = cli.Command{
 	Description: `
 	Place an offer for acquiring inbound liquidity by lending
 	funding capacity from another participant in the order book.`,
-	Flags: append([]cli.Flag{
-		cli.Float64Flag{
-			Name: "interest_rate_percent",
-			Usage: "the total percent one is willing to pay or " +
-				"accept as yield for the specified interval",
-		},
-		cli.Uint64Flag{
-			Name: "amt",
-			Usage: "the amount of inbound liquidity in satoshis " +
-				"to request",
-		},
-		cli.StringFlag{
-			Name: "acct_key",
-			Usage: "the account key to use to pay the order " +
-				"fees with",
-		},
-		cli.Uint64Flag{
-			Name: "lease_duration_blocks",
-			Usage: "the number of blocks that the " +
-				"liquidity should be provided for",
-			Value: defaultBidMinDuration,
-		},
-		cli.Uint64Flag{
-			Name: "min_node_tier",
-			Usage: "the min node tier this bid should be matched " +
-				"with, tier 1 nodes are considered 'good', if " +
-				"set to tier 0, then all nodes will be " +
-				"considered regardless of 'quality'",
-			Value: uint64(order.NodeTierDefault),
-		},
-		cli.Uint64Flag{
-			Name: "min_chan_amt",
-			Usage: "the minimum amount of satoshis that a " +
-				"resulting channel from this order must have",
-		},
-		cli.BoolFlag{
-			Name:  "force",
-			Usage: "skip order placement confirmation",
-		},
-		cli.Uint64Flag{
-			Name: "self_chan_balance",
-			Usage: "give the channel leased by this bid order an " +
-				"initial balance by adding additional funds " +
-				"from our account into the channel; can be " +
-				"used to create up to 50/50 balanced channels",
-		},
-		cli.StringFlag{
-			Name: "sidecar_ticket",
-			Usage: "instead of leasing a channel for the node " +
-				"connected to this pool instance, lease a " +
-				"channel for another node; use the " +
-				"information within the ticket to identify " +
-				"the receiver of the sidecar channel; using " +
-				"a sidecar ticket will also overwrite the " +
-				"amt, min_chan_amt, lease_duration_blocks " +
-				"and self_chan_balance fields",
-		},
-	}, sharedFlags...),
+	Flags: append(
+		append(
+			baseBidFlags,
+			cli.StringFlag{
+				Name: "sidecar_ticket",
+				Usage: "instead of leasing a channel for the node " +
+					"connected to this pool instance, lease a " +
+					"channel for another node; use the " +
+					"information within the ticket to identify " +
+					"the receiver of the sidecar channel; using " +
+					"a sidecar ticket will also overwrite the " +
+					"amt, min_chan_amt, lease_duration_blocks " +
+					"and self_chan_balance fields",
+			},
+		), sharedFlags...,
+	),
 	Action: ordersSubmitBid,
 }
 
-func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
-	// Show help if no arguments or flags are provided.
-	if ctx.NArg() == 0 && ctx.NumFlags() == 0 {
-		_ = cli.ShowCommandHelp(ctx, "bid")
-		return nil
-	}
-
+func parseBaseBid(ctx *cli.Context) (*poolrpc.Bid, *sidecar.Ticket, error) {
 	// The node tier values are a bit un-intuitive. We need to convert
 	// between the human interpretation of "tier 1" (value 1) to the
 	// internal representation of "tier 1" (value order.NodeTier1=2).
@@ -455,7 +458,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 
 	nodeTier, err := auctioneer.MarshallNodeTier(cliNodeTier)
 	if err != nil {
-		return nil
+		return nil, nil, err
 	}
 
 	bid := &poolrpc.Bid{
@@ -475,8 +478,8 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 		// check it in the process.
 		ticket, err = sidecar.DecodeString(ctx.String("sidecar_ticket"))
 		if err != nil {
-			return fmt.Errorf("unable to parse sidecar ticket: %v",
-				err)
+			return nil, nil, fmt.Errorf("unable to parse sidecar "+
+				"ticket: %v", err)
 		}
 
 		// Let's make sure the ticket is in the correct state. This will
@@ -486,9 +489,9 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 		if ticket.State != sidecar.StateRegistered ||
 			ticket.Recipient == nil {
 
-			return fmt.Errorf("unexpected sidecar ticket state "+
-				"%d, possibly not registered with recipient "+
-				"node yet", ticket.State)
+			return nil, nil, fmt.Errorf("unexpected sidecar "+
+				"ticket state %d, possibly not registered "+
+				"with recipient node yet", ticket.State)
 		}
 
 		// With the ticket parsed and formally checked, we can now pre-
@@ -510,7 +513,8 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 
 	params, err := parseCommonParams(ctx, bid.LeaseDurationBlocks)
 	if err != nil {
-		return fmt.Errorf("unable to parse order params: %v", err)
+		return nil, nil, fmt.Errorf("unable to parse order "+
+			"params: %v", err)
 	}
 
 	bid.Details = params
@@ -526,15 +530,30 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 			order.BaseSupplyUnit,
 		)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 
 		bidUnits := order.NewSupplyFromSats(bidAmt)
 		if bid.Details.MinUnitsMatch != uint32(bidUnits) {
-			return fmt.Errorf("when using self_chan_balance the " +
+			return nil, nil, fmt.Errorf("when using self_chan_balance the " +
 				"min_chan_amt must be set to the same value " +
 				"as amt")
 		}
+	}
+
+	return bid, ticket, nil
+}
+
+func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
+	// Show help if no arguments or flags are provided.
+	if ctx.NArg() == 0 && ctx.NumFlags() == 0 {
+		_ = cli.ShowCommandHelp(ctx, "bid")
+		return nil
+	}
+
+	bid, ticket, err := parseBaseBid(ctx)
+	if err != nil {
+		return err
 	}
 
 	client, cleanup, err := getClient(ctx)

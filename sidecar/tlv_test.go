@@ -77,6 +77,7 @@ func TestSerializeTicket(t *testing.T) {
 				R: new(big.Int).SetInt64(22),
 				S: new(big.Int).SetInt64(55),
 			},
+			Auto: true,
 		},
 		Recipient: &Recipient{
 			NodePubKey:     testPubKey,

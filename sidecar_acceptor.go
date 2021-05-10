@@ -9,6 +9,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/clientdb"
@@ -33,16 +34,9 @@ import (
 // later on. It also makes it easier to see what code would need to be re-
 // implemented in another language to integrate just the acceptor part.
 type SidecarAcceptor struct {
-	store      sidecar.Store
-	signer     lndclient.SignerClient
-	wallet     lndclient.WalletKitClient
-	baseClient funding.BaseClient
-	nodePubKey *btcec.PublicKey
-	acceptor   *ChannelAcceptor
+	cfg *SidecarAcceptorConfig
 
-	clientCfg             *auctioneer.Config
 	client                *auctioneer.Client
-	fundingManager        *funding.Manager
 	pendingOpenChanClient *subscribe.Client
 
 	pendingSidecarOrders    map[order.Nonce]*sidecar.Ticket
@@ -55,24 +49,39 @@ type SidecarAcceptor struct {
 	wg   sync.WaitGroup
 }
 
-// NewSidecarAcceptor creates a new sidecar acceptor.
-func NewSidecarAcceptor(store sidecar.Store, signer lndclient.SignerClient,
-	wallet lndclient.WalletKitClient, baseClient funding.BaseClient,
-	acceptor *ChannelAcceptor, nodePubKey *btcec.PublicKey,
-	clientCfg auctioneer.Config,
-	fundingManager *funding.Manager) *SidecarAcceptor {
+// SidecarAcceptorConfig holds all the configuration information that sidecar
+// acceptor needs in order to carry out its dutes.
+type SidecarAcceptorConfig struct {
+	SidecarDB sidecar.Store
 
-	clientCfg.ConnectSidecar = true
+	AcctDB account.Store
+
+	Signer lndclient.SignerClient
+
+	Wallet lndclient.WalletKitClient
+
+	BaseClient funding.BaseClient
+
+	Acceptor *ChannelAcceptor
+
+	NodePubKey *btcec.PublicKey
+
+	ClientCfg auctioneer.Config
+
+	PrepareOrder orderPreparer
+
+	FundingManager *funding.Manager
+
+	FetchSidecarBid func(*sidecar.Ticket) (*order.Bid, error)
+}
+
+// NewSidecarAcceptor creates a new sidecar acceptor.
+func NewSidecarAcceptor(cfg *SidecarAcceptorConfig) *SidecarAcceptor {
+
+	cfg.ClientCfg.ConnectSidecar = true
 
 	return &SidecarAcceptor{
-		store:                store,
-		signer:               signer,
-		wallet:               wallet,
-		baseClient:           baseClient,
-		nodePubKey:           nodePubKey,
-		acceptor:             acceptor,
-		clientCfg:            &clientCfg,
-		fundingManager:       fundingManager,
+		cfg:                  cfg,
 		pendingSidecarOrders: make(map[order.Nonce]*sidecar.Ticket),
 		quit:                 make(chan struct{}),
 	}
@@ -81,20 +90,20 @@ func NewSidecarAcceptor(store sidecar.Store, signer lndclient.SignerClient,
 // Start starts the sidecar acceptor.
 func (a *SidecarAcceptor) Start(errChan chan error) error {
 	var err error
-	a.client, err = auctioneer.NewClient(a.clientCfg)
+	a.client, err = auctioneer.NewClient(&a.cfg.ClientCfg)
 	if err != nil {
 		return fmt.Errorf("error creating auctioneer client: %v", err)
 	}
 	if err := a.client.Start(); err != nil {
 		return fmt.Errorf("error starting auctioneer client: %v", err)
 	}
-	if err := a.acceptor.Start(errChan); err != nil {
+	if err := a.cfg.Acceptor.Start(errChan); err != nil {
 		return fmt.Errorf("error starting channel acceptor: %v", err)
 	}
 
 	// We want to make sure we don't miss any channel updates as long as we
 	// are running.
-	a.pendingOpenChanClient, err = a.fundingManager.SubscribePendingOpenChan()
+	a.pendingOpenChanClient, err = a.cfg.FundingManager.SubscribePendingOpenChan()
 	if err != nil {
 		return fmt.Errorf("error subscribing to pending open channel "+
 			"events: %v", err)
@@ -102,21 +111,79 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 
 	// If we weren't able to complete all expected sidecar channels, we want
 	// to resume them now.
-	tickets, err := a.store.Sidecars()
+	tickets, err := a.cfg.SidecarDB.Sidecars()
 	if err != nil {
 		return fmt.Errorf("error reading sidecar tickets: %v", err)
 	}
 	for _, ticket := range tickets {
-		if ticket.State != sidecar.StateExpectingChannel {
-			continue
-		}
+		switch {
+		// If this ticket was intended to be negotiated in an automated
+		// manner, then we'll launch a goroutine to manage the
+		// remaining state transitions depending on if we're the
+		// provider of responder.
+		case ticket.Offer.Auto:
+			// In order to determine our role, we'll first need to see
+			// if the account for the offer exists in our database. If
+			// not, then we're the recipient.
+			acct, err := a.cfg.AcctDB.Account(ticket.Offer.SignPubKey)
+			switch {
+			// If we can't find the account, then we assume that
+			// we're the recipient, so we'll attempt to accept the
+			// sidecar ticket.
+			case err == clientdb.ErrAccountNotFound:
 
-		if ticket.Recipient == nil {
+				go a.autoSidecarReceiver(&SidecarPacket{
+					CurrentState:   ticket.State,
+					ReceiverTicket: ticket,
+					ProviderTicket: ticket,
+				})
+
+			// Otherwise, we're on the other end of things, so
+			// we'll assume the role of the provider.
+			case err == nil:
+				// As we're the provider of this ticket, we'll
+				// need to fetch the bid that goes along with
+				// it so we can submit it to the auctioneer
+				// once we've gathered all the necessary
+				// materials.
+				ticketBid, err := a.cfg.FetchSidecarBid(ticket)
+				if err != nil {
+					return fmt.Errorf("unable to fetch "+
+						"sidecar bid: %w", err)
+				}
+
+				// If we're resuming the ticket, and it's still
+				// in the offered state, then we'll reset our
+				// state so wer send a message to the other
+				// party to have them re-send their registered
+				// ticket.
+				state := ticket.State
+				if state == sidecar.StateOffered {
+					state = sidecar.StateCreated
+				}
+
+				// TODO(roasbeef): state to cause to re-send?
+				go a.autoSidecarProvider(&SidecarPacket{
+					CurrentState:   state,
+					ReceiverTicket: ticket,
+					ProviderTicket: ticket,
+				}, ticketBid, acct)
+
+			default:
+				return fmt.Errorf("unable to fetch account "+
+					"for sidecar: %w", err)
+			}
+
+		// If the ticket has no recipient or isn't in the expecting
+		// state, then we can safely skip it.
+		case ticket.State != sidecar.StateExpectingChannel:
+			continue
+		case ticket.Recipient == nil:
 			continue
 		}
 
 		r := ticket.Recipient
-		if !r.NodePubKey.IsEqual(a.nodePubKey) {
+		if !r.NodePubKey.IsEqual(a.cfg.NodePubKey) {
 			continue
 		}
 
@@ -172,7 +239,7 @@ func (a *SidecarAcceptor) Stop() error {
 	}
 
 	a.pendingOpenChanClient.Cancel()
-	a.acceptor.Stop()
+	a.cfg.Acceptor.Stop()
 	close(a.quit)
 
 	a.wg.Wait()
@@ -184,40 +251,40 @@ func (a *SidecarAcceptor) Stop() error {
 // bought over a sidecar order and adds that to the offered ticket. If
 // successful, the updated ticket is added to the local database.
 func (a *SidecarAcceptor) RegisterSidecar(ctx context.Context,
-	ticket *sidecar.Ticket) error {
+	ticket sidecar.Ticket) (*sidecar.Ticket, error) {
 
 	// The ticket needs to be in the correct state for us to register it.
-	if err := sidecar.VerifyOffer(ctx, ticket, a.signer); err != nil {
-		return fmt.Errorf("error verifying sidecar offer: %v", err)
+	if err := sidecar.VerifyOffer(ctx, &ticket, a.cfg.Signer); err != nil {
+		return nil, fmt.Errorf("error verifying sidecar offer: %v", err)
 	}
 
 	// Do we already have a ticket with that ID?
-	_, err := a.store.Sidecar(ticket.ID, ticket.Offer.SignPubKey)
+	_, err := a.cfg.SidecarDB.Sidecar(ticket.ID, ticket.Offer.SignPubKey)
 	if err != clientdb.ErrNoSidecar {
-		return fmt.Errorf("ticket with ID %x already exists",
+		return nil, fmt.Errorf("ticket with ID %x already exists",
 			ticket.ID[:])
 	}
 
 	// First we'll need a new multisig key for the channel that will be
 	// opened through this sidecar order.
-	keyDesc, err := a.wallet.DeriveNextKey(
+	keyDesc, err := a.cfg.Wallet.DeriveNextKey(
 		ctx, int32(keychain.KeyFamilyMultiSig),
 	)
 	if err != nil {
-		return fmt.Errorf("error deriving multisig key: %v", err)
+		return nil, fmt.Errorf("error deriving multisig key: %v", err)
 	}
 
 	ticket.State = sidecar.StateRegistered
 	ticket.Recipient = &sidecar.Recipient{
-		NodePubKey:       a.nodePubKey,
+		NodePubKey:       a.cfg.NodePubKey,
 		MultiSigPubKey:   keyDesc.PubKey,
 		MultiSigKeyIndex: keyDesc.Index,
 	}
-	if err := a.store.AddSidecar(ticket); err != nil {
-		return fmt.Errorf("error storing sidecar: %v", err)
+	if err := a.cfg.SidecarDB.AddSidecar(&ticket); err != nil {
+		return nil, fmt.Errorf("error storing sidecar: %v", err)
 	}
 
-	return nil
+	return &ticket, nil
 }
 
 // ExpectChannel informs the acceptor that a new bid order was submitted for the
@@ -246,7 +313,7 @@ func (a *SidecarAcceptor) ExpectChannel(ctx context.Context,
 	// update its state in the database and start expecting a channel for it
 	// now.
 	t.State = sidecar.StateExpectingChannel
-	if err := a.store.UpdateSidecar(t); err != nil {
+	if err := a.cfg.SidecarDB.UpdateSidecar(t); err != nil {
 		return fmt.Errorf("error updating sidecar: %v", err)
 	}
 
@@ -265,6 +332,106 @@ func (a *SidecarAcceptor) ExpectChannel(ctx context.Context,
 	})
 }
 
+// validateOrderedTicket validates a ticket in the ordered state to ensure all
+// the details are in place, and signed properly.
+func validateOrderedTicket(ctx context.Context, t *sidecar.Ticket,
+	signer lndclient.SignerClient, db sidecar.Store) error {
+
+	// The ticket should be in the ordered state at this point (has the bid
+	// information).
+	if t.State != sidecar.StateOrdered {
+		return fmt.Errorf("sidecar ticket in state %v, expected %v",
+			t.State, sidecar.StateOrdered)
+	}
+
+	// Let's make sure the ticket itself and the offer is valid.
+	if err := sidecar.VerifyOffer(ctx, t, signer); err != nil {
+		return fmt.Errorf("error validating order in sidecar "+
+			"ticket: %v", err)
+	}
+
+	// Make sure the order signature is valid and the ticket actually exists
+	// in our database. We need to have it stored already since must've done
+	// the register part before.
+	if err := sidecar.VerifyOrder(ctx, t, signer); err != nil {
+		return fmt.Errorf("error validating order in sidecar "+
+			"ticket: %v", err)
+	}
+	if _, err := db.Sidecar(t.ID, t.Offer.SignPubKey); err != nil {
+		return fmt.Errorf("error looking up sidecar order for "+
+			"ticket with ID %x: %v", t.ID[:], err)
+	}
+
+	return nil
+}
+
+// AutoAcceptSidecar signals to the acceptor that the recipient of a potential
+// sidecar channel request automated acceptance of the sidecar channel. We'll
+// use the cipher box of the provider of the ticket (and a new one we'll create
+// for the reply side) to finalize negotiation, resulting in a
+func (a *SidecarAcceptor) AutoAcceptSidecar(ticket *sidecar.Ticket) error {
+
+	log.Infof("Attempting negotiation to receive sidecar ticket: %x",
+		ticket.ID[:])
+
+	// We'll launch a new coroutine that'll handle negotiation in the
+	// background all the way to the final state of the ticket.
+	a.wg.Add(1)
+	go a.autoSidecarReceiver(&SidecarPacket{
+		CurrentState:   sidecar.StateRegistered,
+		ProviderTicket: ticket,
+		ReceiverTicket: ticket,
+	})
+
+	return nil
+}
+
+// submitSidecarOrder attempts to submit a new bid that's bound to a finalized
+// sidecar ticket that's in the registered phase. If this method returns
+// successfully, then the ticket will have transitioned to the
+// sidecar.StateOrdered state.
+func (a *SidecarAcceptor) submitSidecarOrder(ctx context.Context,
+	ticket *sidecar.Ticket, bid *order.Bid,
+	acct *account.Account) (*sidecar.Ticket, error) {
+
+	// We'll bind the ticket to the order now as the ticket has all the
+	// necessary information included.
+	bid.SidecarTicket = ticket
+
+	auctionTerms, err := a.client.Terms(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not query auctioneer terms: %v", err)
+	}
+
+	err = prepareAndSubmitOrder(
+		ctx, bid, auctionTerms, acct, a.client, a.cfg.PrepareOrder,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return bid.SidecarTicket, nil
+}
+
+// CoordinateSidecar signals to the sidecar acceptor that it should attempt to
+// automatically coordinate the negotiation of the ultimate order to be
+// produced by the side car ticket with the recipient.
+func (a *SidecarAcceptor) CoordinateSidecar(ticket *sidecar.Ticket,
+	bid *order.Bid, acct *account.Account) error {
+
+	log.Infof("Attempting negotiation to offer sidecar ticket: %x",
+		ticket.ID[:])
+
+	a.wg.Add(1)
+	go a.autoSidecarProvider(&SidecarPacket{
+		CurrentState:   sidecar.StateOffered,
+		ProviderTicket: ticket,
+		ReceiverTicket: ticket,
+	}, bid, acct)
+
+	return nil
+}
+
 // handleServerMessage reacts to a message sent by the server and sends back the
 // appropriate response message (if needed). The main lock will be held during
 // the full execution of this method.
@@ -277,6 +444,7 @@ func (a *SidecarAcceptor) handleServerMessage(
 	defer a.Unlock()
 
 	switch msg := serverMsg.Msg.(type) {
+
 	case *auctioneerrpc.ServerAuctionMessage_Prepare:
 		batchID := msg.Prepare.BatchId
 
@@ -368,7 +536,7 @@ func (a *SidecarAcceptor) matchPrepare(pendingBatch *order.Batch,
 	// peers, and registering funding shim. We don't do a full batch
 	// validation since we don't have any information about the account
 	// that's being used to pay for the sidecar channel.
-	err = a.fundingManager.PrepChannelFunding(batch, a.getSidecarAsOrder)
+	err = a.cfg.FundingManager.PrepChannelFunding(batch, a.getSidecarAsOrder)
 	if err != nil {
 		return nil, fmt.Errorf("error preparing channel funding: %v",
 			err)
@@ -398,7 +566,7 @@ func (a *SidecarAcceptor) matchPrepare(pendingBatch *order.Batch,
 //
 // NOTE: The lock must be held when calling this method.
 func (a *SidecarAcceptor) matchSign(batch *order.Batch) error {
-	channelInfos, err := a.fundingManager.SidecarBatchChannelSetup(
+	channelInfos, err := a.cfg.FundingManager.SidecarBatchChannelSetup(
 		a.pendingBatch, a.pendingOpenChanClient, a.getSidecarAsOrder,
 	)
 	if err != nil {
@@ -444,7 +612,7 @@ func (a *SidecarAcceptor) matchFinalize(batch *order.Batch) {
 		a.pendingSidecarOrdersMtx.Lock()
 		ticket := a.pendingSidecarOrders[dummyBid.Nonce()]
 		ticket.State = sidecar.StateCompleted
-		if err := a.store.UpdateSidecar(ticket); err != nil {
+		if err := a.cfg.SidecarDB.UpdateSidecar(ticket); err != nil {
 			sdcrLog.Errorf("Error updating sidecar ticket to "+
 				"state complete: %v", err)
 		}
@@ -452,7 +620,9 @@ func (a *SidecarAcceptor) matchFinalize(batch *order.Batch) {
 		delete(a.pendingSidecarOrders, ourOrder)
 		a.pendingSidecarOrdersMtx.Unlock()
 
-		a.acceptor.ShimRemoved(dummyBid.(*order.Bid))
+		// TODO(roasbeef): send message to the other goroutine here as well
+
+		a.cfg.Acceptor.ShimRemoved(dummyBid.(*order.Bid))
 	}
 }
 
@@ -500,7 +670,7 @@ func (a *SidecarAcceptor) removeShims(batch *order.Batch) error {
 	// that we may have registered since we may be matched with a distinct
 	// set of channels if this batch is repeated.
 	if err := funding.CancelPendingFundingShims(
-		batch.MatchedOrders, a.baseClient, a.getSidecarAsOrder,
+		batch.MatchedOrders, a.cfg.BaseClient, a.getSidecarAsOrder,
 	); err != nil {
 		return err
 	}
@@ -511,7 +681,7 @@ func (a *SidecarAcceptor) removeShims(batch *order.Batch) error {
 			continue
 		}
 
-		a.acceptor.ShimRemoved(dummyBid.(*order.Bid))
+		a.cfg.Acceptor.ShimRemoved(dummyBid.(*order.Bid))
 	}
 
 	return nil

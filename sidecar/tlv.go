@@ -22,6 +22,7 @@ const (
 	leaseDurationType  tlv.Type = 13
 	signPubKeyType     tlv.Type = 14
 	sigOfferDigestType tlv.Type = 15
+	offerAutoType      tlv.Type = 16
 
 	recipientType        tlv.Type = 20
 	nodePubKeyType       tlv.Type = 21
@@ -176,12 +177,18 @@ func serializeOffer(o Offer) ([]byte, error) {
 	capacity := uint64(o.Capacity)
 	pushAmt := uint64(o.PushAmt)
 
+	var autoAsInt uint8
+	if o.Auto {
+		autoAsInt = 1
+	}
+
 	tlvRecords := []tlv.Record{
 		tlv.MakePrimitiveRecord(capacityType, &capacity),
 		tlv.MakePrimitiveRecord(pushAmtType, &pushAmt),
 		tlv.MakePrimitiveRecord(
 			leaseDurationType, &o.LeaseDurationBlocks,
 		),
+		tlv.MakePrimitiveRecord(offerAutoType, &autoAsInt),
 	}
 
 	if o.SignPubKey != nil {
@@ -205,6 +212,7 @@ func deserializeOffer(offerBytes []byte) (Offer, error) {
 	var (
 		o                 = Offer{}
 		capacity, pushAmt uint64
+		autoAsInt         uint8
 	)
 
 	if err := decodeBytes(
@@ -218,10 +226,12 @@ func deserializeOffer(offerBytes []byte) (Offer, error) {
 		tlv.MakeStaticRecord(
 			sigOfferDigestType, &o.SigOfferDigest, 64, ESig, DSig,
 		),
+		tlv.MakePrimitiveRecord(offerAutoType, &autoAsInt),
 	); err != nil {
 		return o, err
 	}
 
+	o.Auto = autoAsInt == 1
 	o.Capacity = btcutil.Amount(capacity)
 	o.PushAmt = btcutil.Amount(pushAmt)
 
@@ -376,6 +386,8 @@ func DBytes8(r io.Reader, val interface{}, _ *[8]byte, l uint64) error {
 
 // encodeBytes encodes the given tlv records into a byte slice.
 func encodeBytes(tlvRecords ...tlv.Record) ([]byte, error) {
+	tlv.SortRecords(tlvRecords)
+
 	tlvStream, err := tlv.NewStream(tlvRecords...)
 	if err != nil {
 		return nil, err
@@ -392,6 +404,8 @@ func encodeBytes(tlvRecords ...tlv.Record) ([]byte, error) {
 // decodeBytes decodes the given byte slice interpreting the data as a tlv
 // stream containing the given records.
 func decodeBytes(tlvBytes []byte, tlvRecords ...tlv.Record) error {
+	tlv.SortRecords(tlvRecords)
+
 	tlvStream, err := tlv.NewStream(tlvRecords...)
 	if err != nil {
 		return err

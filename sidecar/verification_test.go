@@ -146,6 +146,7 @@ func TestVerifyOffer(t *testing.T) {
 			Offer: Offer{
 				SignPubKey:     providerPubKey,
 				SigOfferDigest: testOfferSig,
+				Auto:           true,
 			},
 		},
 		expectedErr: "",

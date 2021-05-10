@@ -2,7 +2,6 @@ package order
 
 import (
 	"context"
-	"encoding/hex"
 	"math/big"
 	"testing"
 
@@ -307,10 +306,6 @@ func TestPrepareOrderSidecarTicket(t *testing.T) {
 		S: new(big.Int).SetInt64(22),
 	}
 	mockSigner.Signature = testSig.Serialize()
-	ourPubKeyRaw, err := hex.DecodeString(mockLightning.NodePubkey)
-	require.NoError(t, err)
-	ourPubKey, err := btcec.ParsePubKey(ourPubKeyRaw, btcec.S256())
-	require.NoError(t, err)
 
 	testCases := []struct {
 		name        string
@@ -345,7 +340,7 @@ func TestPrepareOrderSidecarTicket(t *testing.T) {
 			State: sidecar.StateRegistered,
 			Offer: sidecar.Offer{
 				SigOfferDigest: testSig,
-				SignPubKey:     ourPubKey,
+				SignPubKey:     acctKeySmall,
 			},
 			Recipient: &sidecar.Recipient{
 				NodePubKey:     acctKeySmall,
@@ -359,7 +354,7 @@ func TestPrepareOrderSidecarTicket(t *testing.T) {
 			State: sidecar.StateRegistered,
 			Offer: sidecar.Offer{
 				SigOfferDigest: testSig,
-				SignPubKey:     ourPubKey,
+				SignPubKey:     acctKeySmall,
 				Capacity:       5_000_000,
 			},
 			Recipient: &sidecar.Recipient{

@@ -1067,6 +1067,89 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 	}, nil
 }
 
+// assertAccountReady enrues that an account is in the "ready" state that
+// allows it to submit orders.We'll only allow orders for accounts that present
+// in an open state, or have a pending update or batch. On the server-side if
+// we have a pending update we won't be matched, but this lets us place our
+// orders early so we can join the earliest available batch.
+func assertAccountReady(acct *account.Account) error {
+	switch acct.State {
+	case account.StateOpen, account.StatePendingUpdate,
+		account.StatePendingBatch:
+
+		return nil
+
+	default:
+		return fmt.Errorf("acct=%x is in state %v, cannot "+
+			"make order",
+			acct.TraderKey.PubKey.SerializeCompressed(), acct.State)
+	}
+}
+
+// validateOrder validates the order to ensure that all fields are consistent,
+// and the order is likely to be accepted by the auctioneer. If this method
+// returns nil, then the order is safe to submit to the auctioneer.
+func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
+	auctionTerms *terms.AuctioneerTerms) error {
+
+	// Now that we now how large the order is, ensure that if it's a
+	// wumbo-sized order, then the backing lnd node is advertising wumbo
+	// support.
+	if order.Details().Amt > lndFunding.MaxBtcFundingAmount && !s.wumboSupported {
+		return fmt.Errorf("%v is wumbo sized, but "+
+			"lnd node isn't signalling wumbo", order.Details().Amt)
+	}
+
+	// Ensure that the account can actually submit orders in its present
+	// state.
+	if err := assertAccountReady(acct); err != nil {
+		return err
+	}
+
+	// If the market isn't currently accepting orders for this particular
+	// lease duration, then we'll exit here as the order will be rejected.
+	leaseDuration := order.Details().LeaseDuration
+	if _, ok := auctionTerms.LeaseDurationBuckets[leaseDuration]; !ok {
+		return fmt.Errorf("invalid channel lease duration %v "+
+			"blocks, active durations are: %v",
+			leaseDuration, auctionTerms.LeaseDurationBuckets)
+	}
+
+	return nil
+}
+
+// orderPreparer represents a type of function that inserts the order into the
+// local database, and returns the params needed to submit it to the
+// auctioneer.
+type orderPreparer func(context.Context, order.Order,
+	*account.Account, *terms.AuctioneerTerms) (*order.ServerOrderParams, error)
+
+// prepareAndSubmitOrder performs a series of final checks locally to ensure
+// the order is valid, before submitting it to the auctioneer.
+func prepareAndSubmitOrder(ctx context.Context, o order.Order,
+	auctionTerms *terms.AuctioneerTerms, acct *account.Account,
+	auction *auctioneer.Client, prepareOrder orderPreparer) error {
+
+	// Collect all the order data and sign it before sending it to the
+	// auction server.
+	serverParams, err := prepareOrder(
+		ctx, o, acct, auctionTerms,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Send the order to the server. If this fails, then the order is
+	// certain to never get into the order book. We don't need to keep it
+	// around in that case.
+	//
+	// TODO(roasbeef): commit initiator to disk so don't lose when
+	// submitting orders for sidecar channels?
+	return auction.SubmitOrder(
+		ctx, o, serverParams,
+	)
+}
+
 // SubmitOrder assembles all the information that is required to submit an order
 // from the trader's lnd node, signs it and then sends the order to the server
 // to be included in the auctioneer's order book.
@@ -1116,12 +1199,11 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		return nil, fmt.Errorf("invalid order request")
 	}
 
-	// Now that we now how large the order is, ensure that if it's a
-	// wumbo-sized order, then the backing lnd node is advertising wumbo
-	// support.
-	if o.Details().Amt > lndFunding.MaxBtcFundingAmount && !s.wumboSupported {
-		return nil, fmt.Errorf("order of %v is wumbo sized, but "+
-			"lnd node isn't signalling wumbo", o.Details().Amt)
+	// We also need to know the current maximum order duration.
+	auctionTerms, err := s.auctioneer.Terms(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not query auctioneer terms: %v",
+			err)
 	}
 
 	// Verify that the account exists.
@@ -1136,49 +1218,17 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		return nil, fmt.Errorf("cannot accept order: %v", err)
 	}
 
-	// We'll only allow orders for accounts that present in an open state,
-	// or have a pending update or batch. On the server-side if we have a
-	// pending update we won't be matched, but this lets us place our orders
-	// early so we can join the earliest available batch.
-	switch acct.State {
-	case account.StateOpen, account.StatePendingUpdate,
-		account.StatePendingBatch:
-
-		break
-
-	default:
-		return nil, fmt.Errorf("acct=%x is in state %v, cannot "+
-			"make order", o.Details().AcctKey[:], acct.State)
+	// Validate the order to ensure the account is in a live state, and the
+	// target lease duration period actually exists.
+	if err := s.validateOrder(o, acct, auctionTerms); err != nil {
+		return nil, fmt.Errorf("order valid validation: %w", err)
 	}
 
-	// We also need to know the current maximum order duration.
-	auctionTerms, err := s.auctioneer.Terms(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("could not query auctioneer terms: %v",
-			err)
-	}
-
-	// If the market isn't currently accepting orders for this particular
-	// lease duration, then we'll exit here as the order will be rejected.
-	leaseDuration := o.Details().LeaseDuration
-	if _, ok := auctionTerms.LeaseDurationBuckets[leaseDuration]; !ok {
-		return nil, fmt.Errorf("invalid channel lease duration %v "+
-			"blocks, active durations are: %v",
-			leaseDuration, auctionTerms.LeaseDurationBuckets)
-	}
-
-	// Collect all the order data and sign it before sending it to the
-	// auction server.
-	serverParams, err := s.orderManager.PrepareOrder(ctx, o, acct, auctionTerms)
-	if err != nil {
-		return nil, err
-	}
-
-	// Send the order to the server. If this fails, then the order is
-	// certain to never get into the order book. We don't need to keep it
-	// around in that case.
-	err = s.auctioneer.SubmitOrder(
-		ContextWithInitiator(ctx, req.Initiator), o, serverParams,
+	// Finally add the order to the local order database, and submit it to
+	// the auctioneer server.
+	err = prepareAndSubmitOrder(
+		ContextWithInitiator(ctx, req.Initiator), o, auctionTerms,
+		acct, s.auctioneer, s.orderManager.PrepareOrder,
 	)
 	if err != nil {
 		// The server rejected the order. We keep it around for now,
@@ -2202,18 +2252,98 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 	req *poolrpc.OfferSidecarRequest) (*poolrpc.SidecarTicket, error) {
 
 	// Do some basic sanity checks first.
-	if req.ChannelCapacitySat == 0 {
+	switch {
+	case req.Bid == nil:
+		return nil, fmt.Errorf("bid must be set")
+
+	case req.Bid.Details.Amt == 0:
 		return nil, fmt.Errorf("channel capacity missing")
+	}
+
+	// We'll need to look up the account state in the database to make sure
+	// the account is actually still open (able to submit bids), and also
+	// to grab the KeyDescriptor that we'll need for signing later.
+	acctKey, err := btcec.ParsePubKey(
+		req.Bid.Details.TraderKey, btcec.S256(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	acct, err := s.server.db.Account(acctKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// If automated negotiation was set, then we'll parse out the rest of
+	// the bid now so we can validate that it'll pass all checks when we
+	// eventually need to submit it.
+	var bid *order.Bid
+	if req.AutoNegotiate {
+		kit, err := order.ParseRPCOrder(
+			req.Bid.Version, req.Bid.LeaseDurationBlocks,
+			req.Bid.Details,
+		)
+		if err != nil {
+			return nil, err
+		}
+		nodeTier, err := unmarshallNodeTier(req.Bid.MinNodeTier)
+		if err != nil {
+			return nil, err
+		}
+
+		// We don't add the ticket here yet as we'll only add it at the
+		// very end once the ticket has advanced to the final stage.
+		bid = &order.Bid{
+			Kit:             *kit,
+			MinNodeTier:     nodeTier,
+			SelfChanBalance: btcutil.Amount(req.Bid.SelfChanBalance),
+		}
+
+		// Perform some initial validation on the order to ensure that
+		// we'll be able to eventually submit it.
+		auctionTerms, err := s.auctioneer.Terms(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to query auctioneer "+
+				"terms: %v", err)
+		}
+		err = s.validateOrder(bid, acct, auctionTerms)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// The funding manager does all the work, including signing and storing
 	// the new ticket.
 	ticket, err := s.server.fundingManager.OfferSidecar(
-		ctx, btcutil.Amount(req.ChannelCapacitySat),
-		btcutil.Amount(req.SelfChanBalance), req.LeaseDurationBlocks,
+		ctx, btcutil.Amount(req.Bid.Details.Amt),
+		btcutil.Amount(req.Bid.SelfChanBalance),
+		req.Bid.LeaseDurationBlocks, acct.TraderKey, bid,
+		req.AutoNegotiate,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	var nonce order.Nonce
+	if bid != nil {
+		nonce = bid.Nonce()
+	}
+
+	// If the bid has already been specified, then we can go ahead and set
+	// it within the ticket.
+	ticket.Order = &sidecar.Order{
+		BidNonce: nonce,
+	}
+
+	// If the ticket has requested automated negotiation, then we'll hand
+	// it off to the coordinate tor now.
+	if ticket.Offer.Auto {
+		err := s.server.sidecarAcceptor.CoordinateSidecar(
+			ticket, bid, acct,
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// We'll return a nice string encoded version of the ticket to the user.
@@ -2221,7 +2351,9 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return &poolrpc.SidecarTicket{Ticket: ticketStr}, nil
+	return &poolrpc.SidecarTicket{
+		Ticket: ticketStr,
+	}, nil
 }
 
 // RegisterSidecar is step 2/4 of the sidecar negotiation between the provider
@@ -2241,17 +2373,45 @@ func (s *rpcServer) RegisterSidecar(ctx context.Context,
 
 	// The sidecar acceptor will add all required information and add the
 	// ticket to our DB.
-	err = s.server.sidecarAcceptor.RegisterSidecar(ctx, ticket)
+	registeredTicket, err := s.server.sidecarAcceptor.RegisterSidecar(
+		ctx, *ticket,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	// We'll return a nice string encoded version of the ticket to the user.
-	ticketStr, err := sidecar.EncodeToString(ticket)
+	// At this point, we'll now check if the ticket specifies that
+	// automated negotiation is to be sued, if so then we'll hand things
+	// off to the sidecar acceptor to finish the process.
+	if registeredTicket.Offer.Auto {
+		err := s.server.sidecarAcceptor.AutoAcceptSidecar(registeredTicket)
+		if err != nil {
+			return nil, fmt.Errorf("unable to start ticket auto "+
+				"negotiation: %v", err)
+		}
+	}
+
+	ticketStr, err := sidecar.EncodeToString(registeredTicket)
 	if err != nil {
 		return nil, err
 	}
 	return &poolrpc.SidecarTicket{Ticket: ticketStr}, nil
+}
+
+// expectSidecarChannel is a private version of ExpectSidecarChannel that may
+// be used in earlier steps if automated negotiation is requested.
+func (s *rpcServer) expectSidecarChannel(ctx context.Context,
+	t *sidecar.Ticket) error {
+
+	err := validateOrderedTicket(ctx, t, s.lndServices.Signer, s.server.db)
+	if err != nil {
+		return err
+	}
+
+	// Formally everything looks good so far. We can now pass the sidecar
+	// order with the verified information to the acceptor and let it do its
+	// job.
+	return s.server.sidecarAcceptor.ExpectChannel(ctx, t)
 }
 
 // ExpectSidecarChannel is step 4/4 of the sidecar negotiation between the
@@ -2271,31 +2431,8 @@ func (s *rpcServer) ExpectSidecarChannel(ctx context.Context,
 		return nil, fmt.Errorf("error decoding ticket: %v", err)
 	}
 
-	// Let's make sure the ticket itself and the offer is valid.
-	if err := sidecar.VerifyOffer(ctx, t, s.lndServices.Signer); err != nil {
-		return nil, fmt.Errorf("error validating order in sidecar "+
-			"ticket: %v", err)
-	}
-
-	// Make sure the order signature is valid and the ticket actually exists
-	// in our database. We need to have it stored already since must've done
-	// the register part before.
-	if err := sidecar.VerifyOrder(ctx, t, s.lndServices.Signer); err != nil {
-		return nil, fmt.Errorf("error validating order in sidecar "+
-			"ticket: %v", err)
-	}
-	if _, err = s.server.db.Sidecar(t.ID, t.Offer.SignPubKey); err != nil {
-		return nil, fmt.Errorf("error looking up sidecar order for "+
-			"ticket with ID %x: %v", t.ID[:], err)
-	}
-
-	// Formally everything looks good so far. We can now pass the sidecar
-	// order with the verified information to the acceptor and let it do its
-	// job.
-	err = s.server.sidecarAcceptor.ExpectChannel(ctx, t)
-	if err != nil {
-		return nil, fmt.Errorf("error managing sidecar channel: %v",
-			err)
+	if err := s.expectSidecarChannel(ctx, t); err != nil {
+		return nil, fmt.Errorf("unable to expect sidecar chan: %v", err)
 	}
 
 	return &poolrpc.ExpectSidecarChannelResponse{}, nil

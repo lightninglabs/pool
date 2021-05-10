@@ -619,7 +619,7 @@ func TestDeriveFundingShim(t *testing.T) {
 
 	// And the second test is with a sidecar channel bid.
 	ticket, err := sidecar.NewTicket(
-		sidecar.VersionDefault, 400_000, 0, 12345, pubKeyBid,
+		sidecar.VersionDefault, 400_000, 0, 12345, pubKeyBid, false,
 	)
 	require.NoError(t, err)
 	ticket.Recipient = &sidecar.Recipient{
@@ -823,7 +823,7 @@ func TestOfferSidecarValidation(t *testing.T) {
 	for _, testCase := range negativeCases {
 		_, err := h.mgr.OfferSidecar(
 			context.Background(), testCase.capacity,
-			testCase.pushAmt, 2016,
+			testCase.pushAmt, 2016, nil, nil, false,
 		)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), testCase.expectedErr)
@@ -855,6 +855,9 @@ func TestOfferSidecar(t *testing.T) {
 	capacity, pushAmt := btcutil.Amount(100_000), btcutil.Amount(40_000)
 	ticket, err := h.mgr.OfferSidecar(
 		context.Background(), capacity, pushAmt, 2016,
+		&keychain.KeyDescriptor{
+			PubKey: privKey.PubKey(),
+		}, nil, false,
 	)
 	require.NoError(t, err)
 

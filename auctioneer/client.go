@@ -21,6 +21,7 @@ import (
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
@@ -122,8 +123,9 @@ type Client struct {
 	errChanSwitch  *ErrChanSwitch
 	FromServerChan chan *auctioneerrpc.ServerAuctionMessage
 
-	serverConn *grpc.ClientConn
-	client     auctioneerrpc.ChannelAuctioneerClient
+	serverConn     *grpc.ClientConn
+	client         auctioneerrpc.ChannelAuctioneerClient
+	hashMailClient auctioneerrpc.HashMailClient
 
 	quit         chan struct{}
 	wg           sync.WaitGroup
@@ -171,6 +173,7 @@ func (c *Client) Start() error {
 
 	c.serverConn = serverConn
 	c.client = auctioneerrpc.NewChannelAuctioneerClient(serverConn)
+	c.hashMailClient = auctioneerrpc.NewHashMailClient(serverConn)
 
 	c.errChanSwitch.Start()
 
@@ -1316,6 +1319,110 @@ func (c *Client) MarketInfo(ctx context.Context) (
 	*auctioneerrpc.MarketInfoResponse, error) {
 
 	return c.client.MarketInfo(ctx, &auctioneerrpc.MarketInfoRequest{})
+}
+
+// InitAccountCipherBox attempts to initialize a new CipherBox using the
+// sidecar ticket as the authentication method.
+func (c *Client) InitTicketCipherBox(ctx context.Context, sid [64]byte,
+	ticket *sidecar.Ticket) error {
+
+	// TODO(roasbeef): add error to catch deupliacte stream
+	// existence/creation, also need to allow stream deletion as well
+
+	strTicket, err := sidecar.EncodeToString(ticket)
+	if err != nil {
+		return err
+	}
+
+	streamInit := &auctioneerrpc.CipherBoxAuth{
+		Desc: &auctioneerrpc.CipherBoxDesc{
+			StreamId: sid[:],
+		},
+		Auth: &auctioneerrpc.CipherBoxAuth_SidecarAuth{
+			SidecarAuth: &auctioneerrpc.SidecarAuth{
+				Ticket: strTicket,
+			},
+		},
+	}
+	_, err = c.hashMailClient.NewCipherBox(ctx, streamInit)
+	return err
+}
+
+// InitAccountCipherBox attempts to initialize a new CipherBox using the
+// account key as an authentication mechanism.
+func (c *Client) InitAccountCipherBox(ctx context.Context, sid [64]byte,
+	acctKey *keychain.KeyDescriptor) error {
+
+	streamSig, err := c.cfg.Signer.SignMessage(
+		ctx, sid[:], acctKey.KeyLocator,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to sign cipher box auth: %w", err)
+	}
+
+	acctKeyBytes := acctKey.PubKey.SerializeCompressed()
+	streamInit := &auctioneerrpc.CipherBoxAuth{
+		Desc: &auctioneerrpc.CipherBoxDesc{
+			StreamId: sid[:],
+		},
+		Auth: &auctioneerrpc.CipherBoxAuth_AcctAuth{
+			AcctAuth: &auctioneerrpc.PoolAccountAuth{
+				AcctKey:   acctKeyBytes,
+				StreamSig: streamSig,
+			},
+		},
+	}
+	_, err = c.hashMailClient.NewCipherBox(ctx, streamInit)
+	return err
+}
+
+// SendCipherBoxMsg attempts to the passed message into the cipher box
+// identified by the passed stream ID. This message will be on-blocking as long
+// as the buffer size of the stream is not exceed.
+//
+// TODO(roasbeef): option to expose a streaming interface?
+func (c *Client) SendCipherBoxMsg(ctx context.Context, sid [64]byte,
+	msg []byte) error {
+
+	writeStream, err := c.hashMailClient.SendStream(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to create send stream: %w", err)
+	}
+
+	err = writeStream.Send(&auctioneerrpc.CipherBox{
+		Desc: &auctioneerrpc.CipherBoxDesc{
+			StreamId: sid[:],
+		},
+		Msg: msg,
+	})
+	if err != nil {
+		return err
+	}
+
+	return writeStream.CloseSend()
+}
+
+// RecvCipherBoxMsg attempts to read a message from the cipher box identified
+// by the passed stream ID.
+func (c *Client) RecvCipherBoxMsg(ctx context.Context,
+	sid [64]byte) ([]byte, error) {
+
+	streamDesc := &auctioneerrpc.CipherBoxDesc{
+		StreamId: sid[:],
+	}
+	readStream, err := c.hashMailClient.RecvStream(ctx, streamDesc)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create read stream: %w", err)
+	}
+
+	// TODO(roasbeef): need to cancel context?
+
+	msg, err := readStream.Recv()
+	if err != nil {
+		return nil, err
+	}
+
+	return msg.Msg, nil
 }
 
 // MarshallNodeTier maps the node tier integer into the enum used on the RPC

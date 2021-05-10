@@ -1105,30 +1105,19 @@ message StopDaemonResponse {
 }
 
 message OfferSidecarRequest {
-    /*
-    The total channel capacity in satoshis. This will be used for the bid
-    order's amount and min channel/match size values.
+    /* 
+    If false, then only the trader_key, unit, self_chan_balance, and
+    lease_duration_blocks need to be set in the bid below. Otherwise, the
+    fields as they're set when submitting a bid need to be filled in.
     */
-    uint64 channel_capacity_sat = 1;
+    bool auto_negotiate = 1;
 
     /*
-    The number of satoshis that will be pushed to the recipient in the sidecar
-    channel resulting from the bid order submitted by the offering trader
-    (=provider). The initial outbound channel balance will be transferred from
-    the provider's pool account (=taker account) to the maker's account to
-    reimburse them for the balance they'll effectively be giving away. The
-    reimbursement between the recipient of the sidecar channel and the provider
-    (=taker) is _not_ part of the protocol and must happen out of band. The
-    sidecar protocol simply deducts all fees for the sidecar channel (execution
-    fee, lease premium, chain fees, push amount) from the taker's trading
-    account.
+    The bid template that will be used to populate the initial sidecar ticket
+    as well as auto negotiate the remainig steps of the sidecar channel if
+    needed.
     */
-    uint64 self_chan_balance = 2;
-
-    /*
-    The number of blocks the resulting leased channel should be open for.
-    */
-    uint32 lease_duration_blocks = 3;
+    Bid bid = 2;
 }
 
 message SidecarTicket {
@@ -1148,6 +1137,15 @@ message RegisterSidecarRequest {
     information to. The ticket must be in the state "offered".
     */
     string ticket = 1;
+
+    /*
+    If this value is True, then the daemon will attempt to finish negotiating
+    the details of the sidecar channel automatically in the background. The
+    progress of the ticket can be monitored using the SidecarState RPC. In
+    addition, if this flag is set, then this method will _block_ until the
+    sidecar negotiation either finishes or breaks down.
+    */
+    bool auto_negotiate = 2;
 }
 
 message ExpectSidecarChannelRequest {
