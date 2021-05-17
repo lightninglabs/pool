@@ -15,7 +15,7 @@ require (
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/lightninglabs/aperture v0.1.6-beta
 	github.com/lightninglabs/lndclient v0.12.0-8
-	github.com/lightninglabs/pool/auctioneerrpc v1.0.0
+	github.com/lightninglabs/pool/auctioneerrpc v1.0.2
 	github.com/lightninglabs/protobuf-hex-display v1.4.3-hex-display
 	github.com/lightningnetwork/lnd v0.13.0-beta.rc2
 	github.com/lightningnetwork/lnd/cert v1.0.3
