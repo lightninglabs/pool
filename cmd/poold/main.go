@@ -95,13 +95,6 @@ func start() error {
 			os.Exit(0)
 		}
 
-		// Special show command to list supported subsystems and exit.
-		if config.DebugLevel == "show" {
-			fmt.Printf("Supported subsystems: %v\n",
-				pool.SupportedSubsystems())
-			os.Exit(0)
-		}
-
 		return pool.Run(&config)
 	}
 

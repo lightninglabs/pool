@@ -28,7 +28,6 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/macaroons"
-	"github.com/lightningnetwork/lnd/signal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/macaroon-bakery.v2/bakery"
@@ -165,7 +164,11 @@ func (s *Server) Start() error {
 
 	// Let's create our interceptor chain, starting with the security
 	// interceptors that will check macaroons for their validity.
-	unaryMacIntercept, streamMacIntercept := s.macaroonInterceptor()
+	unaryMacIntercept, streamMacIntercept, err := s.macaroonInterceptor()
+	if err != nil {
+		return fmt.Errorf("error with macaroon interceptor: %v", err)
+	}
+
 	serverOpts := []grpc.ServerOption{
 		grpc.ChainStreamInterceptor(
 			errorLogStreamServerInterceptor(rpcLog),
@@ -601,7 +604,7 @@ func getLnd(network string, cfg *LndConfig) (*lndclient.GrpcLndServices, error) 
 	go func() {
 		select {
 		// Client requests shutdown, cancel the wait.
-		case <-signal.ShutdownChannel():
+		case <-interceptor.ShutdownChannel():
 			cancel()
 
 		// The check was completed and the above defer canceled the
