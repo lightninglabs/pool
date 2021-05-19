@@ -174,6 +174,8 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 					"for sidecar: %w", err)
 			}
 
+			continue
+
 		// If the ticket has no recipient or isn't in the expecting
 		// state, then we can safely skip it.
 		case ticket.State != sidecar.StateExpectingChannel:
