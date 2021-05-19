@@ -206,9 +206,11 @@ func (db *DB) Sidecars() ([]*sidecar.Ticket, error) {
 		}
 
 		return sidecarBucket.ForEach(func(k, v []byte) error {
-			// We don't expect any sub-buckets with sidecars.
+			// The main sidecar bucket has a sub-bucket that's used
+			// to store order bid information, so we'll skip this
+			// bucket when attempting to read out all the tickets.
 			if v == nil {
-				return fmt.Errorf("nil value for key %x", k)
+				return nil
 			}
 
 			s, err := readSidecar(sidecarBucket, k)
