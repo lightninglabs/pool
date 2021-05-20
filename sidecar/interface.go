@@ -215,7 +215,8 @@ func NewTicket(version Version, capacity, pushAmt btcutil.Amount,
 		},
 	}
 
-	if _, err := rand.Read(t.ID[:]); err != nil {
+	// The linter flags this, even though crypto/rand is being used...
+	if _, err := rand.Read(t.ID[:]); err != nil { // nolint:gosec
 		return nil, err
 	}
 
