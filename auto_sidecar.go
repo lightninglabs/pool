@@ -3,6 +3,7 @@ package pool
 import (
 	"bytes"
 	"context"
+	"crypto/sha512"
 	"errors"
 	"fmt"
 
@@ -53,21 +54,24 @@ func deriveProviderStreamID(ticket *sidecar.Ticket) ([64]byte, error) {
 
 // deriveRecipientStreamID derives the stream ID of the cipher box that the
 // provider of the sidecar ticket will use to send messages to the receiver.
-func deriveRecipientStreamID(ticket *sidecar.Ticket) [64]byte {
-	receiverMultisig := ticket.Recipient.NodePubKey.SerializeCompressed()
-	receiverNode := ticket.Recipient.MultiSigPubKey.SerializeCompressed()
-
-	// The stream ID will be the concentration of the receiver's multi-sig
-	// and node keys, ignoring the first byte of each key that essentially
-	// communicates parity information.
-	var (
-		streamID [64]byte
-		n        int
+func deriveRecipientStreamID(ticket *sidecar.Ticket) ([64]byte, error) {
+	// In order to ensure our retransmission case for the provider works
+	// (on start up, it resends the offered ticket in case it got the
+	// registered but didn't commit to disk), the provider needs to be able
+	// to compute the recipient's stream ID using the base offered ticket.
+	//
+	// To enable this, we'll use the sha256 of the offer sig as this is
+	// static for the lifetime of the entire ticket.
+	wireSig, err := lnwire.NewSigFromRawSignature(
+		ticket.Offer.SigOfferDigest.Serialize(),
 	)
-	n += copy(streamID[:], receiverMultisig[1:])
-	copy(streamID[n:], receiverNode[1:])
+	if err != nil {
+		return [64]byte{}, err
+	}
 
-	return streamID
+	streamID := sha512.Sum512(wireSig[:])
+
+	return streamID, nil
 }
 
 // deriveStreamID derives corresponding stream ID for the provider of the
@@ -77,7 +81,7 @@ func deriveStreamID(ticket *sidecar.Ticket, provider bool) ([64]byte, error) {
 		return deriveProviderStreamID(ticket)
 	}
 
-	return deriveRecipientStreamID(ticket), nil
+	return deriveRecipientStreamID(ticket)
 }
 
 // sendSidecarPkt attempts to send a sidecar packet to the opposite party using
@@ -167,15 +171,19 @@ func (a *SidecarAcceptor) autoSidecarReceiver(startingPkt *SidecarPacket) {
 
 	// Before we enter our main read loop below, we'll attempt to re-create
 	// out mailbox as the recipient.
-	recipientStreamID := deriveRecipientStreamID(
+	recipientStreamID, err := deriveRecipientStreamID(
 		localTicket,
 	)
+	if err != nil {
+		log.Errorf("unable to derive recipient ID: %v", err)
+		return
+	}
 
 	log.Infof("Creating receiver reply mailbox for ticket=%x, "+
 		"stream_id=%x", startingPkt.ReceiverTicket.ID[:],
 		recipientStreamID[:])
 
-	err := a.client.InitTicketCipherBox(
+	err = a.client.InitTicketCipherBox(
 		context.Background(), recipientStreamID,
 		startingPkt.ReceiverTicket,
 	)
@@ -200,6 +208,7 @@ func (a *SidecarAcceptor) autoSidecarReceiver(startingPkt *SidecarPacket) {
 				startingPkt.ReceiverTicket, false,
 			)
 			if err != nil {
+				// TODO(roasbeef): back off then retry?
 				log.Error(err)
 				return
 			}
@@ -337,7 +346,7 @@ func (a *SidecarAcceptor) stateStepRecipient(pkt *SidecarPacket,
 	// it.
 	default:
 		return nil, fmt.Errorf("unhandled receiver state transition "+
-			"for ticket=%v, state=%v", pkt.ProviderTicket.ID[:],
+			"for ticket=%x, state=%v", pkt.ProviderTicket.ID[:],
 			pkt.ProviderTicket.State)
 	}
 }
@@ -419,8 +428,6 @@ func (a *SidecarAcceptor) autoSidecarProvider(startingPkt *SidecarPacket,
 			// same state (a noop)
 			for {
 				priorState := currentState
-
-				log.Infof("step=%v", currentState)
 
 				newPktState, err := a.stateStepProvider(&SidecarPacket{
 					CurrentState:   currentState,
