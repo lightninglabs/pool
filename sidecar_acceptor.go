@@ -18,6 +18,8 @@ import (
 	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/subscribe"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // SidecarAcceptor is a type that is exclusively responsible for managing the
@@ -132,11 +134,20 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 			// sidecar ticket.
 			case err == clientdb.ErrAccountNotFound:
 
-				go a.autoSidecarReceiver(&SidecarPacket{
-					CurrentState:   ticket.State,
-					ReceiverTicket: ticket,
-					ProviderTicket: ticket,
+				autoAcceptor := NewSidecarNegotiator(AutoAcceptorConfig{
+					Provider: false,
+					StartingPkt: &SidecarPacket{
+						CurrentState:   ticket.State,
+						ReceiverTicket: ticket,
+						ProviderTicket: ticket,
+					},
+					Driver:  a,
+					MailBox: a,
+					Quit:    a.quit,
 				})
+				if err := autoAcceptor.Start(); err != nil {
+					return err
+				}
 
 			// Otherwise, we're on the other end of things, so
 			// we'll assume the role of the provider.
@@ -162,12 +173,22 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 					state = sidecar.StateCreated
 				}
 
-				// TODO(roasbeef): state to cause to re-send?
-				go a.autoSidecarProvider(&SidecarPacket{
-					CurrentState:   state,
-					ReceiverTicket: ticket,
-					ProviderTicket: ticket,
-				}, ticketBid, acct)
+				autoAcceptor := NewSidecarNegotiator(AutoAcceptorConfig{
+					Provider:    true,
+					ProviderBid: ticketBid,
+					StartingPkt: &SidecarPacket{
+						CurrentState:   state,
+						ReceiverTicket: ticket,
+						ProviderTicket: ticket,
+					},
+					ProviderAccount: acct,
+					Driver:          a,
+					MailBox:         a,
+					Quit:            a.quit,
+				})
+				if err := autoAcceptor.Start(); err != nil {
+					return err
+				}
 
 			default:
 				return fmt.Errorf("unable to fetch account "+
@@ -376,30 +397,32 @@ func (a *SidecarAcceptor) AutoAcceptSidecar(ticket *sidecar.Ticket) error {
 	log.Infof("Attempting negotiation to receive sidecar ticket: %x",
 		ticket.ID[:])
 
-	// We'll launch a new coroutine that'll handle negotiation in the
-	// background all the way to the final state of the ticket.
-	a.wg.Add(1)
-	go a.autoSidecarReceiver(&SidecarPacket{
-		CurrentState:   sidecar.StateRegistered,
-		ProviderTicket: ticket,
-		ReceiverTicket: ticket,
+	autoAcceptor := NewSidecarNegotiator(AutoAcceptorConfig{
+		Provider: false,
+		StartingPkt: &SidecarPacket{
+			CurrentState:   sidecar.StateRegistered,
+			ReceiverTicket: ticket,
+			ProviderTicket: ticket,
+		},
+		Driver:  a,
+		MailBox: a,
+		Quit:    a.quit,
 	})
-
-	return nil
+	return autoAcceptor.Start()
 }
 
-// submitSidecarOrder attempts to submit a new bid that's bound to a finalized
+// SubmitSidecarOrder attempts to submit a new bid that's bound to a finalized
 // sidecar ticket that's in the registered phase. If this method returns
 // successfully, then the ticket will have transitioned to the
 // sidecar.StateOrdered state.
-func (a *SidecarAcceptor) submitSidecarOrder(ctx context.Context,
-	ticket *sidecar.Ticket, bid *order.Bid,
+func (a *SidecarAcceptor) SubmitSidecarOrder(ticket *sidecar.Ticket, bid *order.Bid,
 	acct *account.Account) (*sidecar.Ticket, error) {
 
 	// We'll bind the ticket to the order now as the ticket has all the
 	// necessary information included.
 	bid.SidecarTicket = ticket
 
+	ctx := context.Background()
 	auctionTerms, err := a.client.Terms(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not query auctioneer terms: %v", err)
@@ -424,14 +447,20 @@ func (a *SidecarAcceptor) CoordinateSidecar(ticket *sidecar.Ticket,
 	log.Infof("Attempting negotiation to offer sidecar ticket: %x",
 		ticket.ID[:])
 
-	a.wg.Add(1)
-	go a.autoSidecarProvider(&SidecarPacket{
-		CurrentState:   sidecar.StateOffered,
-		ProviderTicket: ticket,
-		ReceiverTicket: ticket,
-	}, bid, acct)
-
-	return nil
+	autoAcceptor := NewSidecarNegotiator(AutoAcceptorConfig{
+		Provider:    true,
+		ProviderBid: bid,
+		StartingPkt: &SidecarPacket{
+			CurrentState:   sidecar.StateOffered,
+			ProviderTicket: ticket,
+			ReceiverTicket: ticket,
+		},
+		ProviderAccount: acct,
+		Driver:          a,
+		MailBox:         a,
+		Quit:            a.quit,
+	})
+	return autoAcceptor.Start()
 }
 
 // handleServerMessage reacts to a message sent by the server and sends back the
@@ -687,4 +716,115 @@ func (a *SidecarAcceptor) removeShims(batch *order.Batch) error {
 	}
 
 	return nil
+}
+
+// UpdateSidecar writes the passed sidecar ticket to persistent storage.
+func (a *SidecarAcceptor) UpdateSidecar(tkt *sidecar.Ticket) error {
+	return a.cfg.SidecarDB.UpdateSidecar(tkt)
+}
+
+// ValidateOrderedTicketctx attempts to validate that a given ticket has
+// properly transitioned to the ordered state.
+func (a *SidecarAcceptor) ValidateOrderedTicket(tkt *sidecar.Ticket) error {
+	ctx := context.Background()
+	return validateOrderedTicket(ctx, tkt, a.cfg.Signer, a.cfg.SidecarDB)
+}
+
+// InitAcctMailbox attempts to create the mailbox with the given stream ID
+// using account signature authentication mechanism. If the mailbox already
+// exists, then a nil error is to be returned.
+func (a *SidecarAcceptor) InitAcctMailbox(streamID [64]byte,
+	traderKey *keychain.KeyDescriptor) error {
+
+	err := a.client.InitAccountCipherBox(
+		context.Background(), streamID, traderKey,
+	)
+	if err != nil && !isErrAlreadyExists(err) {
+		return fmt.Errorf("unable to init cipher box: %v", err)
+
+	}
+
+	return nil
+}
+
+// InitSidecarMailbox attempts to create the mailbox with the given stream ID
+// using the sidecar ticket authentication mechanism. If the mailbox already
+// exists, then a nil error is to be returned.
+func (a *SidecarAcceptor) InitSidecarMailbox(streamID [64]byte,
+	tkt *sidecar.Ticket) error {
+
+	err := a.client.InitTicketCipherBox(context.Background(), streamID, tkt)
+	if err != nil && !isErrAlreadyExists(err) {
+		return fmt.Errorf("unable to init cipher box: %v", err)
+	}
+
+	return nil
+}
+
+// SendSidecarPkt attempts to send a sidecar packet to the opposite party using
+// their registered cipherbox stream.
+func (a *SidecarAcceptor) SendSidecarPkt(ctx context.Context, pkt *sidecar.Ticket,
+	provider bool) error {
+
+	var ticketBuf bytes.Buffer
+	err := sidecar.SerializeTicket(&ticketBuf, pkt)
+	if err != nil {
+		return err
+	}
+
+	streamID, err := deriveStreamID(pkt, provider)
+	if err != nil {
+		return err
+	}
+
+	target := "receiver"
+	if provider {
+		target = "provider"
+	}
+
+	log.Infof("Sending ticket(state=%v, id=%x) to %v stream_id=%x",
+		pkt.State, pkt.ID[:], target, streamID[:])
+
+	return a.client.SendCipherBoxMsg(ctx, streamID, ticketBuf.Bytes())
+}
+
+// RecvSidecarPkt attempts to receive a new sidecar packet from the opposite
+// party using their registered cipherbox stream.
+func (a *SidecarAcceptor) RecvSidecarPkt(pCtx context.Context,
+	ticket *sidecar.Ticket, provider bool) (*sidecar.Ticket, error) {
+
+	streamID, err := deriveStreamID(ticket, provider)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("Waiting for ticket (id=%x) using stream_id=%x, provider=%v",
+		ticket.ID[:], streamID[:], provider)
+
+	ctx, cancel := context.WithCancel(pCtx)
+	defer cancel()
+
+	msg, err := a.client.RecvCipherBoxMsg(ctx, streamID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to recv cipher box "+
+			"msg: %w", err)
+	}
+
+	log.Infof("Receive new message for ticket (id=%x) "+
+		"via stream_id=%x, provider=%v", ticket.ID[:], streamID,
+		provider)
+
+	return sidecar.DeserializeTicket(bytes.NewReader(msg))
+}
+
+// isErrAlreadyExists returns true if the passed error is the "already exists"
+// error within the error wrapped error which is returned by the hash mail
+// server when a stream we're attempting to create already exists.
+func isErrAlreadyExists(err error) bool {
+	statusCode, ok := status.FromError(err)
+	if !ok {
+		return false
+	}
+
+	return statusCode.Code() == codes.AlreadyExists
 }
