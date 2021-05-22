@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/clientdb"
@@ -34,10 +35,18 @@ type MailBox interface {
 	// mailbox already exists, then a nil error is to be returned.
 	InitSidecarMailbox(streamID [64]byte, ticket *sidecar.Ticket) error
 
+	// DelSidecarMailbox tears down the mailbox the sidecar ticket
+	// recipient used to communicate with the provider.
+	DelSidecarMailbox(streamID [64]byte, ticket *sidecar.Ticket) error
+
 	// InitAcctMailbox attempts to create the mailbox with the given stream
 	// ID using account signature authentication mechanism. If the mailbox
 	// already exists, then a nil error is to be returned.
 	InitAcctMailbox(streamID [64]byte, pubKey *keychain.KeyDescriptor) error
+
+	// DelAcctMailbox tears down the mailbox that the sidecar ticket
+	// provider used to communicate with the recipient.
+	DelAcctMailbox(streamID [64]byte, pubKey *keychain.KeyDescriptor) error
 }
 
 // SidecarPacket encapsulates the current state of an auto sidecar negotiator.
@@ -153,10 +162,6 @@ type AutoAcceptorConfig struct {
 	// MailBox is used to allow negotiators to send messages back and forth
 	// to each other.
 	MailBox MailBox
-
-	// Quit is a global quit channel that all spawned goroutines will
-	// select on select on.
-	Quit chan struct{}
 }
 
 // SidecarNegotiator is a sub-system that uses a mailbox abstraction between a
@@ -168,6 +173,11 @@ type SidecarNegotiator struct {
 	cfg AutoAcceptorConfig
 
 	wg sync.WaitGroup
+
+	ticketFinalized chan struct{}
+	quit            chan struct{}
+
+	stopOnce sync.Once
 }
 
 // NewSidecarNegotiator returns a new instance of the sidecar negotiator given
@@ -176,13 +186,14 @@ func NewSidecarNegotiator(cfg AutoAcceptorConfig) *SidecarNegotiator {
 	return &SidecarNegotiator{
 		cfg:             cfg,
 		currentState:    uint32(cfg.StartingPkt.CurrentState),
+		ticketFinalized: make(chan struct{}),
+		quit:            make(chan struct{}),
 	}
 }
 
 // Start kicks off the set of goroutines needed for the sidecar channel to be
 // negotiated.
 func (a *SidecarNegotiator) Start() error {
-
 	// In order to ensure we can exit properly if signalled, we'll launch a
 	// goroutine that will cancel a global context if we need to exit.
 	a.wg.Add(1)
@@ -190,7 +201,7 @@ func (a *SidecarNegotiator) Start() error {
 	go func() {
 		defer a.wg.Done()
 
-		<-a.cfg.Quit
+		<-a.quit
 
 		cancel()
 	}()
@@ -206,6 +217,26 @@ func (a *SidecarNegotiator) Start() error {
 	}
 
 	return nil
+}
+
+// Stop signals all goroutines to enter a graceful shutdown.
+func (a *SidecarNegotiator) Stop() {
+	a.stopOnce.Do(func() {
+		close(a.quit)
+		a.wg.Wait()
+	})
+}
+
+// TicketExecuted is a clean up function that should be called once the ticket
+// has been executeed, meaning a channel defined by it was confirmed ina batch
+// on chain.
+func (a *SidecarNegotiator) TicketExecuted() {
+	select {
+	case a.ticketFinalized <- struct{}{}:
+	case <-a.quit:
+	}
+
+	a.Stop()
 }
 
 // autoSidecarReceiver is a goroutine that will attempt to advance a new
@@ -273,7 +304,7 @@ func (a *SidecarNegotiator) autoSidecarReceiver(ctx context.Context,
 
 			case <-cancelChan:
 				return
-			case <-a.cfg.Quit:
+			case <-a.quit:
 				return
 			}
 
@@ -302,18 +333,30 @@ func (a *SidecarNegotiator) autoSidecarReceiver(ctx context.Context,
 
 			localTicket = newPktState.ReceiverTicket
 
-			// If our next target state is the completion state,
-			// then our job here is done, and we can safely exit
-			// this main goroutine.
-			if newPktState.CurrentState == sidecar.StateCompleted {
-				log.Infof("Receiver negotiation for " +
-					"SidecarTicket(%x) complete!")
+		case <-a.ticketFinalized:
+			log.Infof("Receiver negotiation for "+
+				"SidecarTicket(%x) complete!", localTicket.ID[:])
 
-				close(cancelChan)
+			// The ticket has been marked as finalized, so we'll
+			// update it as being completed in the database.
+			localTicket.State = sidecar.StateCompleted
+			if err := a.cfg.Driver.UpdateSidecar(localTicket); err != nil {
+				log.Errorf("unable to update ticket to "+
+					"complete state: %v", err)
 				return
 			}
 
-		case <-a.cfg.Quit:
+			// We'll also tear down the mailbox as well as we no
+			// longer need it anymore.
+			err := a.cfg.MailBox.DelSidecarMailbox(
+				recipientStreamID, localTicket,
+			)
+			if err != nil {
+				log.Errorf("unable to reclaim mailbox: %v", err)
+				return
+			}
+
+		case <-a.quit:
 			return
 		}
 	}
@@ -471,7 +514,7 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt
 
 			case <-cancelChan:
 				return
-			case <-a.cfg.Quit:
+			case <-a.quit:
 				return
 			}
 
@@ -509,22 +552,33 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt
 					fallthrough
 				case currentState == sidecar.StateExpectingChannel:
 					break
-
-				// If our next target state is the completion
-				// state, then our job here is done, and we can
-				// safely exit this main goroutine.
-				case newPktState.CurrentState ==
-					sidecar.StateCompleted:
-
-					log.Infof("Receiver negotiation for " +
-						"SidecarTicket(%x) complete!")
-
-					close(cancelChan)
-					return
 				}
 			}
 
-		case <-a.cfg.Quit:
+		case <-a.ticketFinalized:
+			log.Infof("Receiver negotiation for SidecarTicket(%x) "+
+				"complete!", localTicket.ID[:])
+
+			// The ticket has been marked as finalized, so we'll
+			// update it as being completed in the database.
+			localTicket.State = sidecar.StateCompleted
+			if err := a.cfg.Driver.UpdateSidecar(localTicket); err != nil {
+				log.Errorf("unable to update ticket to "+
+					"complete state: %v", err)
+				return
+			}
+
+			// We'll also tear down the mailbox as well as we no
+			// longer need it anymore.
+			err := a.cfg.MailBox.DelAcctMailbox(
+				streamID, acct.TraderKey,
+			)
+			if err != nil {
+				log.Errorf("unable to reclaim mailbox: %v", err)
+				return
+			}
+
+		case <-a.quit:
 			return
 		}
 	}
