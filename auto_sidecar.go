@@ -163,6 +163,8 @@ type AutoAcceptorConfig struct {
 // provider and recipient of a sidecar channel to complete the manual steps in
 // automated manner.
 type SidecarNegotiator struct {
+	currentState uint32
+
 	cfg AutoAcceptorConfig
 
 	wg sync.WaitGroup
@@ -172,7 +174,8 @@ type SidecarNegotiator struct {
 // a valid config.
 func NewSidecarNegotiator(cfg AutoAcceptorConfig) *SidecarNegotiator {
 	return &SidecarNegotiator{
-		cfg: cfg,
+		cfg:             cfg,
+		currentState:    uint32(cfg.StartingPkt.CurrentState),
 	}
 }
 
@@ -291,7 +294,12 @@ func (a *SidecarNegotiator) autoSidecarReceiver(ctx context.Context,
 				continue
 			}
 
-			currentState = newPktState.CurrentState
+			// TODO(roasbeef): make into method for easier
+			// assertions?
+			atomic.StoreUint32(
+				&a.currentState, uint32(newPktState.CurrentState),
+			)
+
 			localTicket = newPktState.ReceiverTicket
 
 			// If our next target state is the completion state,
@@ -489,6 +497,10 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt
 				currentState = newPktState.CurrentState
 				localTicket = newPktState.ProviderTicket
 
+				atomic.StoreUint32(
+					&a.currentState, uint32(newPktState.CurrentState),
+				)
+
 				switch {
 				case priorState == currentState:
 					fallthrough
@@ -513,6 +525,12 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt
 			return
 		}
 	}
+}
+
+// CurrentState returns the current state of the sidecar negotiator.
+func (a *SidecarNegotiator) CurrentState() sidecar.State {
+	state := atomic.LoadUint32(&a.currentState)
+	return sidecar.State(state)
 }
 
 // stateStepProvider is the state transition function for the provider of a
