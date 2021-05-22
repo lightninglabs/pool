@@ -150,7 +150,6 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 					},
 					Driver:  a,
 					MailBox: a,
-					Quit:    a.quit,
 				})
 				if err := autoAcceptor.Start(); err != nil {
 					return err
@@ -201,7 +200,6 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 					ProviderAccount: acct,
 					Driver:          a,
 					MailBox:         a,
-					Quit:            a.quit,
 				})
 				if err := autoAcceptor.Start(); err != nil {
 					return err
@@ -437,7 +435,6 @@ func (a *SidecarAcceptor) AutoAcceptSidecar(ticket *sidecar.Ticket) error {
 		},
 		Driver:  a,
 		MailBox: a,
-		Quit:    a.quit,
 	})
 
 	streamID, err := deriveRecipientStreamID(ticket)
@@ -703,9 +700,25 @@ func (a *SidecarAcceptor) matchFinalize(batch *order.Batch) {
 		delete(a.pendingSidecarOrders, ourOrder)
 		a.pendingSidecarOrdersMtx.Unlock()
 
-		// TODO(roasbeef): send message to the other goroutine here as well
-
 		a.cfg.Acceptor.ShimRemoved(dummyBid.(*order.Bid))
+
+		streamID, err := deriveRecipientStreamID(ticket)
+		if err != nil {
+			log.Errorf("unable to derive stream IDs: %v", err)
+		}
+
+		// We'll also signal to the negotiator (if it exists) that the
+		// ticket has been finalized so it can safely exit. We don't
+		// need to hold the main lock here as handleServerMessage
+		// obtains the lock while these methods are called.
+		negotiator, ok := a.negotiators[streamID]
+		if !ok {
+			return
+		}
+
+		negotiator.TicketExecuted()
+
+		delete(a.negotiators, streamID)
 	}
 }
 
