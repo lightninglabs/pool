@@ -16,6 +16,11 @@ import (
 	"github.com/lightningnetwork/lnd/lnwire"
 )
 
+// TODO(roasbeef): need to ensure have updates for termination, etc
+//  * finalize for the recreiver
+//  * need other hook for the provider
+//  * also delete as well (the mailbox)
+
 // MailBox is an interface that abstracts over the HashMail functionality to
 // represent a generic mailbox that both sides will use to communicate with
 // each other.

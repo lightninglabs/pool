@@ -47,12 +47,18 @@ type SidecarAcceptor struct {
 
 	sync.Mutex
 
+	// negotiators maps a potential stream ID (of the recipient) to the
+	// active sidecar negotiator. We'll maintain this map to be able to
+	// shutdown the negotiators, as well as notify them that the ticket has
+	// been fully executed.
+	negotiators map[[64]byte]*SidecarNegotiator
+
 	quit chan struct{}
 	wg   sync.WaitGroup
 }
 
 // SidecarAcceptorConfig holds all the configuration information that sidecar
-// acceptor needs in order to carry out its dutes.
+// acceptor needs in order to carry out its duties
 type SidecarAcceptorConfig struct {
 	SidecarDB sidecar.Store
 
@@ -86,6 +92,7 @@ func NewSidecarAcceptor(cfg *SidecarAcceptorConfig) *SidecarAcceptor {
 		cfg:                  cfg,
 		pendingSidecarOrders: make(map[order.Nonce]*sidecar.Ticket),
 		quit:                 make(chan struct{}),
+		negotiators:          make(map[[64]byte]*SidecarNegotiator),
 	}
 }
 
@@ -149,6 +156,16 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 					return err
 				}
 
+				streamID, err := deriveRecipientStreamID(ticket)
+				if err != nil {
+					return fmt.Errorf("unable to derive "+
+						"stream IDs: %v", err)
+				}
+
+				a.Lock()
+				a.negotiators[streamID] = autoAcceptor
+				a.Unlock()
+
 			// Otherwise, we're on the other end of things, so
 			// we'll assume the role of the provider.
 			case err == nil:
@@ -189,6 +206,16 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 				if err := autoAcceptor.Start(); err != nil {
 					return err
 				}
+
+				streamID, err := deriveRecipientStreamID(ticket)
+				if err != nil {
+					return fmt.Errorf("unable to derive "+
+						"stream IDs: %v", err)
+				}
+
+				a.Lock()
+				a.negotiators[streamID] = autoAcceptor
+				a.Unlock()
 
 			default:
 				return fmt.Errorf("unable to fetch account "+
@@ -259,6 +286,10 @@ func (a *SidecarAcceptor) Stop() error {
 	if err := a.client.Stop(); err != nil {
 		sdcrLog.Errorf("Error stopping auctioneer client: %v", err)
 		returnErr = err
+	}
+
+	for _, negotiator := range a.negotiators {
+		negotiator.Stop()
 	}
 
 	a.pendingOpenChanClient.Cancel()
@@ -408,6 +439,17 @@ func (a *SidecarAcceptor) AutoAcceptSidecar(ticket *sidecar.Ticket) error {
 		MailBox: a,
 		Quit:    a.quit,
 	})
+
+	streamID, err := deriveRecipientStreamID(ticket)
+	if err != nil {
+		return fmt.Errorf("unable to derive "+
+			"stream IDs: %v", err)
+	}
+
+	a.Lock()
+	a.negotiators[streamID] = autoAcceptor
+	a.Unlock()
+
 	return autoAcceptor.Start()
 }
 
@@ -458,8 +500,18 @@ func (a *SidecarAcceptor) CoordinateSidecar(ticket *sidecar.Ticket,
 		ProviderAccount: acct,
 		Driver:          a,
 		MailBox:         a,
-		Quit:            a.quit,
 	})
+
+	streamID, err := deriveRecipientStreamID(ticket)
+	if err != nil {
+		return fmt.Errorf("unable to derive "+
+			"stream IDs: %v", err)
+	}
+
+	a.Lock()
+	a.negotiators[streamID] = autoAcceptor
+	a.Unlock()
+
 	return autoAcceptor.Start()
 }
 
@@ -815,6 +867,26 @@ func (a *SidecarAcceptor) RecvSidecarPkt(pCtx context.Context,
 		provider)
 
 	return sidecar.DeserializeTicket(bytes.NewReader(msg))
+}
+
+// DelSidecarMailbox tears down the mailbox the sidecar ticket recipient used
+// to communicate with the provider.
+func (a *SidecarAcceptor) DelSidecarMailbox(streamID [64]byte,
+	ticket *sidecar.Ticket) error {
+
+	return a.client.DelSidecarMailbox(
+		context.Background(), streamID, ticket,
+	)
+}
+
+// DelAcctMailbox tears down the mailbox that the sidecar ticket provider used
+// to communicate with the recipient.
+func (a *SidecarAcceptor) DelAcctMailbox(streamID [64]byte,
+	pubKey *keychain.KeyDescriptor) error {
+
+	return a.client.DelAcctMailbox(
+		context.Background(), streamID, pubKey,
+	)
 }
 
 // isErrAlreadyExists returns true if the passed error is the "already exists"
