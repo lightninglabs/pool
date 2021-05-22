@@ -426,8 +426,11 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt
 	localTicket := startingPkt.ProviderTicket
 
 	// We'll start with a simulated starting message from the sidecar
-	// receiver.
-	packetChan <- startingPkt.ReceiverTicket
+	// receiver, but only if we're starting in the created state which
+	// demands an internal retransmission.
+	if startingPkt.CurrentState == sidecar.StateCreated {
+		packetChan <- startingPkt.ReceiverTicket
+	}
 
 	// First, we'll need to derive the stream ID that we'll use to receive
 	// new messages from the recipient.
