@@ -254,7 +254,7 @@ func (a *SidecarNegotiator) autoSidecarReceiver(ctx context.Context,
 	packetChan := make(chan *sidecar.Ticket, 1)
 	cancelChan := make(chan struct{})
 
-	currentState := startingPkt.CurrentState
+	atomic.StoreUint32(&a.currentState, uint32(startingPkt.CurrentState))
 	localTicket := startingPkt.ReceiverTicket
 
 	// We'll start with a simulated starting message from the sidecar
@@ -321,7 +321,7 @@ func (a *SidecarNegotiator) autoSidecarReceiver(ctx context.Context,
 
 		case newTicket := <-packetChan:
 			newPktState, err := a.stateStepRecipient(ctx, &SidecarPacket{
-				CurrentState:   currentState,
+				CurrentState:   sidecar.State(a.currentState),
 				ProviderTicket: newTicket,
 				ReceiverTicket: localTicket,
 			})
@@ -470,7 +470,7 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt
 	packetChan := make(chan *sidecar.Ticket, 1)
 	cancelChan := make(chan struct{})
 
-	currentState := startingPkt.CurrentState
+	atomic.StoreUint32(&a.currentState, uint32(startingPkt.CurrentState))
 	localTicket := startingPkt.ProviderTicket
 
 	// We'll start with a simulated starting message from the sidecar
@@ -533,10 +533,10 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt
 			// through, so we'll continue until we end up at the
 			// same state (a noop)
 			for {
-				priorState := currentState
+				priorState := sidecar.State(atomic.LoadUint32(&a.currentState))
 
 				newPktState, err := a.stateStepProvider(ctx, &SidecarPacket{
-					CurrentState:   currentState,
+					CurrentState:   sidecar.State(a.currentState),
 					ReceiverTicket: newTicket,
 					ProviderTicket: localTicket,
 				}, bid, acct)
@@ -545,7 +545,6 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt
 					break
 				}
 
-				currentState = newPktState.CurrentState
 				localTicket = newPktState.ProviderTicket
 
 				atomic.StoreUint32(
@@ -553,9 +552,9 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt
 				)
 
 				switch {
-				case priorState == currentState:
+				case priorState == newPktState.CurrentState:
 					fallthrough
-				case currentState == sidecar.StateExpectingChannel:
+				case newPktState.CurrentState == sidecar.StateExpectingChannel:
 					break
 				}
 			}

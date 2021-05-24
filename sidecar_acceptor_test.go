@@ -17,6 +17,7 @@ import (
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lntest/wait"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -164,24 +165,28 @@ func TestRegisterSidecar(t *testing.T) {
 }
 
 type mockMailBox struct {
-	providerChan   chan *sidecar.Ticket
-	providerMsgAck chan struct{}
-	providerDel    chan struct{}
+	providerChan     chan *sidecar.Ticket
+	providerMsgAck   chan struct{}
+	providerDel      chan struct{}
+	providerDropChan chan struct{}
 
-	receiverChan   chan *sidecar.Ticket
-	receiverMsgAck chan struct{}
-	receiverDel    chan struct{}
+	receiverChan     chan *sidecar.Ticket
+	receiverMsgAck   chan struct{}
+	receiverDel      chan struct{}
+	receiverDropChan chan struct{}
 }
 
 func newMockMailBox() *mockMailBox {
 	return &mockMailBox{
-		providerChan:   make(chan *sidecar.Ticket),
-		providerMsgAck: make(chan struct{}),
-		providerDel:    make(chan struct{}),
+		providerChan:     make(chan *sidecar.Ticket),
+		providerMsgAck:   make(chan struct{}),
+		providerDel:      make(chan struct{}),
+		providerDropChan: make(chan struct{}, 1),
 
-		receiverChan:   make(chan *sidecar.Ticket),
-		receiverMsgAck: make(chan struct{}),
-		receiverDel:    make(chan struct{}),
+		receiverChan:     make(chan *sidecar.Ticket),
+		receiverMsgAck:   make(chan struct{}),
+		receiverDel:      make(chan struct{}),
+		receiverDropChan: make(chan struct{}, 1),
 	}
 }
 
@@ -190,25 +195,37 @@ func (m *mockMailBox) RecvSidecarPkt(ctx context.Context, pkt *sidecar.Ticket,
 
 	var (
 		recvChan chan *sidecar.Ticket
+		dropChan chan struct{}
 		ackChan  chan struct{}
 	)
 	if provider {
 		recvChan = m.providerChan
 		ackChan = m.providerMsgAck
+		dropChan = m.providerDropChan
 	} else {
 		recvChan = m.receiverChan
 		ackChan = m.receiverMsgAck
+		dropChan = m.receiverDropChan
 	}
 
+recvMsg:
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("mailbox shutting down")
 
 	case tkt := <-recvChan:
+		tktCopy := *tkt
 
-		ackChan <- struct{}{}
+		select {
+		case ackChan <- struct{}{}:
 
-		return tkt, nil
+		// If we get a signal to drop the message, then we'll just go
+		// back to receiving as normal.
+		case <-dropChan:
+			goto recvMsg
+		}
+
+		return &tktCopy, nil
 	}
 }
 
@@ -324,6 +341,9 @@ func (s *sidecarTestCtx) restartAllNegotiators() error {
 	s.provider.quit = make(chan struct{})
 	s.recipient.quit = make(chan struct{})
 
+	s.provider.cfg.StartingPkt.CurrentState = sidecar.State(s.provider.currentState)
+	s.recipient.cfg.StartingPkt.CurrentState = sidecar.State(s.recipient.currentState)
+
 	if err := s.provider.Start(); err != nil {
 		return err
 	}
@@ -331,17 +351,70 @@ func (s *sidecarTestCtx) restartAllNegotiators() error {
 	return s.recipient.Start()
 }
 
+func (s *sidecarTestCtx) restartProvider() error {
+	s.provider.Stop()
+
+	s.provider.quit = make(chan struct{})
+
+	// When we restart the provider in isolation, we'll have their state be
+	// mapped to the _created_ state (as the SidecarAcceptor would),
+	// which'll cause them to retransmit their last message.
+	s.provider.cfg.StartingPkt.CurrentState = sidecar.StateCreated
+
+	return s.provider.Start()
+}
+
+func (s *sidecarTestCtx) restartRecipient() error {
+	s.recipient.Stop()
+
+	s.recipient.quit = make(chan struct{})
+
+	s.recipient.cfg.StartingPkt.CurrentState = sidecar.State(s.recipient.currentState)
+
+	return s.recipient.Start()
+}
+
 func (s *sidecarTestCtx) assertProviderMsgRecv() {
+	s.t.Helper()
+
 	select {
 	case <-s.mailbox.providerMsgAck:
 	case <-time.After(time.Second * 5):
+		s.t.Fatalf("no provider msg received")
 	}
 }
 
 func (s *sidecarTestCtx) assertRecipientMsgRecv() {
+	s.t.Helper()
+
 	select {
 	case <-s.mailbox.receiverMsgAck:
 	case <-time.After(time.Second * 5):
+		s.t.Fatalf("no recipient msg received")
+	}
+}
+
+func (s *sidecarTestCtx) dropReceiverMessage() {
+	s.mailbox.receiverDropChan <- struct{}{}
+}
+
+func (s *sidecarTestCtx) dropProviderMessage() {
+	s.mailbox.providerDropChan <- struct{}{}
+}
+
+func (s *sidecarTestCtx) assertNoProviderMsgsRecvd() {
+	select {
+	case <-s.mailbox.providerMsgAck:
+		s.t.Fatalf("provider should've received no messages")
+	case <-time.After(time.Second * 1):
+	}
+}
+
+func (s *sidecarTestCtx) assertNoReceiverMsgsRecvd() {
+	select {
+	case <-s.mailbox.receiverMsgAck:
+		s.t.Fatalf("receiver should've received no messages")
+	case <-time.After(time.Second * 1):
 	}
 }
 
@@ -417,6 +490,17 @@ func (s *sidecarTestCtx) assertRecipientMailboxDel() {
 	case <-time.After(time.Second * 5):
 		s.t.Fatalf("provider mailbox not deleted")
 	}
+}
+
+func (s *sidecarTestCtx) assertNegotiatorStates(providerState, recepientState sidecar.State) {
+	err := wait.Predicate(func() bool {
+		return s.provider.CurrentState() == providerState
+	}, time.Second*5)
+	assert.NoError(s.t, err)
+	err = wait.Predicate(func() bool {
+		return s.recipient.CurrentState() == recepientState
+	}, time.Second*5)
+	assert.NoError(s.t, err)
 }
 
 func newSidecarTestCtx(t *testing.T) *sidecarTestCtx {
@@ -531,13 +615,8 @@ func TestAutoSidecarNegotiation(t *testing.T) {
 
 	// At this point, both sides should be waiting for the channel in its
 	// expected state.
-	//
-	// TODO(roasbeef): wrap in wait predicate?
-	assert.Equal(
-		t, sidecar.StateExpectingChannel, testCtx.provider.CurrentState(),
-	)
-	assert.Equal(
-		t, sidecar.StateExpectingChannel, testCtx.recipient.CurrentState(),
+	testCtx.assertNegotiatorStates(
+		sidecar.StateExpectingChannel, sidecar.StateExpectingChannel,
 	)
 
 	// We'll now simulate a restart on both sides by signalling their
@@ -555,6 +634,11 @@ func TestAutoSidecarNegotiation(t *testing.T) {
 		t, sidecar.StateExpectingChannel, testCtx.recipient.CurrentState(),
 	)
 
+	// Finally there should be no additional message sent either since both
+	// sides should now be in a terminal state
+	testCtx.assertNoProviderMsgsRecvd()
+	testCtx.assertNoReceiverMsgsRecvd()
+
 	// We'll now signal to both goroutines that the channel has been
 	// finalized, at this point, we expect both ticket to transition to the
 	// terminal state and the goroutines to exit.
@@ -569,8 +653,65 @@ func TestAutoSidecarNegotiation(t *testing.T) {
 	testCtx.assertRecipientTicketUpdated(sidecar.StateCompleted)
 	testCtx.assertRecipientMailboxDel()
 
-	// TODO(roasbeef): send in signals to transition to the final
-	// terminating state, verify that both sides are shutdown proerly.
+	// Once again, no messages should be received by either side.
+	testCtx.assertNoProviderMsgsRecvd()
+	testCtx.assertNoReceiverMsgsRecvd()
+}
 
-	// TODO(roasbeef): on restart starting packet changes
+// TestAutoSidecarNegotiationRetransmission tests that if either side restarts,
+// then the proper message is sent in order to ensure the negotiation state
+// machine continues to be progressed.
+func TestAutoSidecarNegotiationRetransmission(t *testing.T) {
+	t.Parallel()
+
+	testCtx := newSidecarTestCtx(t)
+
+	// We'll start our negotiators as usual, however before we start them
+	// we'll make sure that the message sent by the receiver is never
+	// received by the provider.
+	testCtx.dropProviderMessage()
+
+	err := testCtx.startNegotiators()
+	assert.NoError(t, err, fmt.Errorf("unable to start negotiators: %v", err))
+
+	// At this point, both sides should still be in their starting state as
+	// the initial message was never received.
+	testCtx.assertNegotiatorStates(
+		sidecar.StateOffered, sidecar.StateRegistered,
+	)
+
+	// We'll now restart only the provider. This should cause the provider
+	// to retransmit a message of their offered ticket, which should cause
+	// the recipient to re-send their registered ticket.
+	//
+	// In order to test the other retransmission case, we'll drop the
+	// provider's message which carries the ticket in the ordered state.
+	require.NoError(t, testCtx.restartProvider())
+	testCtx.assertRecipientMsgRecv()
+
+	// The provider receive the ticket, then update their local state as
+	// normal.
+	testCtx.assertProviderMsgRecv()
+	testCtx.dropReceiverMessage()
+	testCtx.assertProviderTicketUpdated(sidecar.StateRegistered)
+	testCtx.assertBidSubmited()
+	testCtx.assertProviderTicketUpdated(sidecar.StateExpectingChannel)
+
+	// The provider should now have transitioned to the final state,
+	// however the recipient should still be in their initial registered
+	// state as they haven't received any messages yet.
+	testCtx.assertNegotiatorStates(
+		sidecar.StateExpectingChannel, sidecar.StateRegistered,
+	)
+
+	// We'll now restart the recipient, which should cause them to re-send
+	// their registered ticket that'll cause the provider to re-send
+	// _their_ ticket which should conclude the process with the ticket
+	// being fully finalized.
+	require.NoError(t, testCtx.restartRecipient())
+	testCtx.assertProviderMsgRecv()
+
+	testCtx.assertRecipientMsgRecv()
+	testCtx.assertRecipientTicketValidated()
+	testCtx.assertRecipientExpectsChannel()
 }
