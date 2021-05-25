@@ -35,7 +35,6 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
-	"github.com/lightningnetwork/lnd/signal"
 )
 
 const (
@@ -243,7 +242,7 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 			if err != nil && !errors.Is(err, order.ErrMismatchErr) {
 				rpcLog.Errorf("Error handling server message: %v",
 					err)
-				signal.RequestShutdown()
+				interceptor.RequestShutdown()
 			}
 
 		case err := <-s.auctioneer.StreamErrChan:
@@ -268,7 +267,7 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 			if err != nil {
 				rpcLog.Errorf("Unable to receive block "+
 					"notification: %v", err)
-				signal.RequestShutdown()
+				interceptor.RequestShutdown()
 			}
 
 		// In case the server is shutting down.
@@ -2236,7 +2235,7 @@ func (s *rpcServer) StopDaemon(_ context.Context,
 	_ *poolrpc.StopDaemonRequest) (*poolrpc.StopDaemonResponse, error) {
 
 	rpcLog.Infof("Stop requested through RPC, gracefully shutting down")
-	signal.RequestShutdown()
+	interceptor.RequestShutdown()
 
 	return &poolrpc.StopDaemonResponse{}, nil
 }

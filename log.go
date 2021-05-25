@@ -13,6 +13,7 @@ import (
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/funding"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightningnetwork/lnd"
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/signal"
 	"google.golang.org/grpc"
@@ -23,45 +24,59 @@ import (
 const Subsystem = "POOL"
 
 var (
-	logWriter = build.NewRotatingLogWriter()
-	log       = build.NewSubLogger(Subsystem, logWriter.GenSubLogger)
-	rpcLog    = build.NewSubLogger("RPCS", logWriter.GenSubLogger)
-	sdcrLog   = build.NewSubLogger("SDCR", logWriter.GenSubLogger)
-
-	// SupportedSubsystems is a function that returns a list of all
-	// supported logging sub systems.
-	SupportedSubsystems = logWriter.SupportedSubsystems
+	logWriter   = build.NewRotatingLogWriter()
+	log         = build.NewSubLogger(Subsystem, nil)
+	rpcLog      = build.NewSubLogger("RPCS", nil)
+	sdcrLog     = build.NewSubLogger("SDCR", nil)
+	interceptor signal.Interceptor
 )
 
-func init() {
-	setSubLogger(Subsystem, log, nil)
-	setSubLogger("RPCS", rpcLog, nil)
-	setSubLogger("SDCR", sdcrLog, nil)
-	addSubLogger(funding.Subsystem, funding.UseLogger)
-	addSubLogger(auctioneer.Subsystem, auctioneer.UseLogger)
-	addSubLogger(order.Subsystem, order.UseLogger)
-	addSubLogger("LNDC", lndclient.UseLogger)
-	addSubLogger("SGNL", signal.UseLogger)
-	addSubLogger(account.Subsystem, account.UseLogger)
-	addSubLogger(lsat.Subsystem, lsat.UseLogger)
-	addSubLogger(clientdb.Subsystem, clientdb.UseLogger)
+// SetupLoggers initializes all package-global logger variables.
+func SetupLoggers(root *build.RotatingLogWriter, intercept signal.Interceptor) {
+	genLogger := genSubLogger(root, intercept)
+
+	logWriter = root
+	log = build.NewSubLogger(Subsystem, genLogger)
+	rpcLog = build.NewSubLogger("RPCS", genLogger)
+	sdcrLog = build.NewSubLogger("SDCR", genLogger)
+	interceptor = intercept
+
+	lnd.SetSubLogger(root, Subsystem, log)
+	lnd.SetSubLogger(root, "RPCS", rpcLog)
+	lnd.SetSubLogger(root, "SDCR", sdcrLog)
+	lnd.AddSubLogger(root, funding.Subsystem, intercept, funding.UseLogger)
+	lnd.AddSubLogger(
+		root, auctioneer.Subsystem, intercept, auctioneer.UseLogger,
+	)
+	lnd.AddSubLogger(root, order.Subsystem, intercept, order.UseLogger)
+	lnd.AddSubLogger(root, "LNDC", intercept, lndclient.UseLogger)
+	lnd.AddSubLogger(root, "SGNL", intercept, signal.UseLogger)
+	lnd.AddSubLogger(root, account.Subsystem, intercept, account.UseLogger)
+	lnd.AddSubLogger(root, lsat.Subsystem, intercept, lsat.UseLogger)
+	lnd.AddSubLogger(
+		root, clientdb.Subsystem, intercept, clientdb.UseLogger,
+	)
 }
 
-// addSubLogger is a helper method to conveniently create and register the
-// logger of a sub system.
-func addSubLogger(subsystem string, useLogger func(btclog.Logger)) {
-	logger := build.NewSubLogger(subsystem, logWriter.GenSubLogger)
-	setSubLogger(subsystem, logger, useLogger)
-}
+// genSubLogger creates a logger for a subsystem. We provide an instance of
+// a signal.Interceptor to be able to shutdown in the case of a critical error.
+func genSubLogger(root *build.RotatingLogWriter,
+	interceptor signal.Interceptor) func(string) btclog.Logger {
 
-// setSubLogger is a helper method to conveniently register the logger of a sub
-// system.
-func setSubLogger(subsystem string, logger btclog.Logger,
-	useLogger func(btclog.Logger)) {
+	// Create a shutdown function which will request shutdown from our
+	// interceptor if it is listening.
+	shutdown := func() {
+		if !interceptor.Listening() {
+			return
+		}
 
-	logWriter.RegisterSubLogger(subsystem, logger)
-	if useLogger != nil {
-		useLogger(logger)
+		interceptor.RequestShutdown()
+	}
+
+	// Return a function which will create a sublogger from our root
+	// logger without shutdown fn.
+	return func(tag string) btclog.Logger {
+		return root.GenSubLogger(tag, shutdown)
 	}
 }
 
