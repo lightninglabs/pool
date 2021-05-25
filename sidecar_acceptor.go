@@ -129,8 +129,8 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 		// If this ticket was intended to be negotiated in an automated
 		// manner, then we'll launch a goroutine to manage the
 		// remaining state transitions depending on if we're the
-		// provider of responder.
-		case ticket.Offer.Auto:
+		// provider or responder.
+		case ticket.Offer.Auto && ticket.State != sidecar.StateCompleted:
 			// In order to determine our role, we'll first need to see
 			// if the account for the offer exists in our database. If
 			// not, then we're the recipient.
