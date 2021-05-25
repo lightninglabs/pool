@@ -1321,20 +1321,17 @@ func (c *Client) MarketInfo(ctx context.Context) (
 	return c.client.MarketInfo(ctx, &auctioneerrpc.MarketInfoRequest{})
 }
 
-// InitAccountCipherBox attempts to initialize a new CipherBox using the
-// sidecar ticket as the authentication method.
-func (c *Client) InitTicketCipherBox(ctx context.Context, sid [64]byte,
-	ticket *sidecar.Ticket) error {
-
-	// TODO(roasbeef): add error to catch deupliacte stream
-	// existence/creation, also need to allow stream deletion as well
+// genSidecarAuth generates a set of valid authentication details to allow
+// creating or deleting a hashmail mailbox.
+func genSidecarAuth(sid [64]byte,
+	ticket *sidecar.Ticket) (*auctioneerrpc.CipherBoxAuth, error) {
 
 	strTicket, err := sidecar.EncodeToString(ticket)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	streamInit := &auctioneerrpc.CipherBoxAuth{
+	return &auctioneerrpc.CipherBoxAuth{
 		Desc: &auctioneerrpc.CipherBoxDesc{
 			StreamId: sid[:],
 		},
@@ -1343,25 +1340,52 @@ func (c *Client) InitTicketCipherBox(ctx context.Context, sid [64]byte,
 				Ticket: strTicket,
 			},
 		},
-	}
-	_, err = c.hashMailClient.NewCipherBox(ctx, streamInit)
-	return err
+	}, nil
 }
 
 // InitAccountCipherBox attempts to initialize a new CipherBox using the
-// account key as an authentication mechanism.
-func (c *Client) InitAccountCipherBox(ctx context.Context, sid [64]byte,
-	acctKey *keychain.KeyDescriptor) error {
+// sidecar ticket as the authentication method.
+func (c *Client) InitTicketCipherBox(ctx context.Context, sid [64]byte,
+	ticket *sidecar.Ticket) error {
 
-	streamSig, err := c.cfg.Signer.SignMessage(
+	streamAuth, err := genSidecarAuth(sid, ticket)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.hashMailClient.NewCipherBox(ctx, streamAuth)
+	return err
+}
+
+// DelSidecarMailbox tears down the mailbox the sidecar ticket recipient used
+// to communicate with the provider.
+func (c *Client) DelSidecarMailbox(ctx context.Context,
+	streamID [64]byte, ticket *sidecar.Ticket) error {
+
+	streamAuth, err := genSidecarAuth(streamID, ticket)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.hashMailClient.DelCipherBox(ctx, streamAuth)
+	return err
+}
+
+// genAcctAuth generates a valid authentication sig to allow a trader to delete
+// or create a new hashmail mailbox.
+func genAcctAuth(ctx context.Context, signer lndclient.SignerClient,
+	sid [64]byte, acctKey *keychain.KeyDescriptor) (*auctioneerrpc.CipherBoxAuth, error) {
+
+	streamSig, err := signer.SignMessage(
 		ctx, sid[:], acctKey.KeyLocator,
 	)
 	if err != nil {
-		return fmt.Errorf("unable to sign cipher box auth: %w", err)
+		return nil, fmt.Errorf("unable to sign cipher box "+
+			"auth: %w", err)
 	}
 
 	acctKeyBytes := acctKey.PubKey.SerializeCompressed()
-	streamInit := &auctioneerrpc.CipherBoxAuth{
+	return &auctioneerrpc.CipherBoxAuth{
 		Desc: &auctioneerrpc.CipherBoxDesc{
 			StreamId: sid[:],
 		},
@@ -1371,8 +1395,34 @@ func (c *Client) InitAccountCipherBox(ctx context.Context, sid [64]byte,
 				StreamSig: streamSig,
 			},
 		},
+	}, nil
+}
+
+// InitAccountCipherBox attempts to initialize a new CipherBox using the
+// account key as an authentication mechanism.
+func (c *Client) InitAccountCipherBox(ctx context.Context, sid [64]byte,
+	acctKey *keychain.KeyDescriptor) error {
+
+	streamAuth, err := genAcctAuth(ctx, c.cfg.Signer, sid, acctKey)
+	if err != nil {
+		return err
 	}
-	_, err = c.hashMailClient.NewCipherBox(ctx, streamInit)
+
+	_, err = c.hashMailClient.NewCipherBox(ctx, streamAuth)
+	return err
+}
+
+// DelAcctMailbox tears down the mailbox that the sidecar ticket provider used
+// to communicate with the recipient.
+func (c *Client) DelAcctMailbox(ctx context.Context, sid [64]byte,
+	acctKey *keychain.KeyDescriptor) error {
+
+	streamAuth, err := genAcctAuth(ctx, c.cfg.Signer, sid, acctKey)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.hashMailClient.DelCipherBox(ctx, streamAuth)
 	return err
 }
 

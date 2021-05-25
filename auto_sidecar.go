@@ -1,19 +1,58 @@
 package pool
 
 import (
-	"bytes"
 	"context"
+	"crypto/sha512"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/sidecar"
+	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwire"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
+
+// TODO(roasbeef): need to ensure have updates for termination, etc
+//  * finalize for the recreiver
+//  * need other hook for the provider
+//  * also delete as well (the mailbox)
+
+// MailBox is an interface that abstracts over the HashMail functionality to
+// represent a generic mailbox that both sides will use to communicate with
+// each other.
+type MailBox interface {
+	// RecvSidecarPkt attempts to receive a new sidecar packet from the
+	// relevant mailbox defined by the ticket and sidecar ticket role.
+	RecvSidecarPkt(ctx context.Context, pkt *sidecar.Ticket,
+		provider bool) (*sidecar.Ticket, error)
+
+	// SendSidecarPkt attempts to send the specified sidecar ticket to the
+	// party designated by the provider bool.
+	SendSidecarPkt(ctx context.Context, pkt *sidecar.Ticket,
+		provider bool) error
+
+	// InitSidecarMailbox attempts to create the mailbox with the given
+	// stream ID using the sidecar ticket authentication mechanism. If the
+	// mailbox already exists, then a nil error is to be returned.
+	InitSidecarMailbox(streamID [64]byte, ticket *sidecar.Ticket) error
+
+	// DelSidecarMailbox tears down the mailbox the sidecar ticket
+	// recipient used to communicate with the provider.
+	DelSidecarMailbox(streamID [64]byte, ticket *sidecar.Ticket) error
+
+	// InitAcctMailbox attempts to create the mailbox with the given stream
+	// ID using account signature authentication mechanism. If the mailbox
+	// already exists, then a nil error is to be returned.
+	InitAcctMailbox(streamID [64]byte, pubKey *keychain.KeyDescriptor) error
+
+	// DelAcctMailbox tears down the mailbox that the sidecar ticket
+	// provider used to communicate with the recipient.
+	DelAcctMailbox(streamID [64]byte, pubKey *keychain.KeyDescriptor) error
+}
 
 // SidecarPacket encapsulates the current state of an auto sidecar negotiator.
 // Note that the state of the negotiator, and the ticket may differ, this is
@@ -34,7 +73,6 @@ type SidecarPacket struct {
 // deriveProviderStreamID derives the stream ID of the provider's cipher box,
 // we'll use this to allow the recipient to send messages to the provider.
 func deriveProviderStreamID(ticket *sidecar.Ticket) ([64]byte, error) {
-
 	var streamID [64]byte
 
 	// This stream ID will simply be the fixed 64-byte signature of our
@@ -53,21 +91,24 @@ func deriveProviderStreamID(ticket *sidecar.Ticket) ([64]byte, error) {
 
 // deriveRecipientStreamID derives the stream ID of the cipher box that the
 // provider of the sidecar ticket will use to send messages to the receiver.
-func deriveRecipientStreamID(ticket *sidecar.Ticket) [64]byte {
-	receiverMultisig := ticket.Recipient.NodePubKey.SerializeCompressed()
-	receiverNode := ticket.Recipient.MultiSigPubKey.SerializeCompressed()
-
-	// The stream ID will be the concentration of the receiver's multi-sig
-	// and node keys, ignoring the first byte of each key that essentially
-	// communicates parity information.
-	var (
-		streamID [64]byte
-		n        int
+func deriveRecipientStreamID(ticket *sidecar.Ticket) ([64]byte, error) {
+	// In order to ensure our retransmission case for the provider works
+	// (on start up, it resends the offered ticket in case it got the
+	// registered but didn't commit to disk), the provider needs to be able
+	// to compute the recipient's stream ID using the base offered ticket.
+	//
+	// To enable this, we'll use the sha256 of the offer sig as this is
+	// static for the lifetime of the entire ticket.
+	wireSig, err := lnwire.NewSigFromRawSignature(
+		ticket.Offer.SigOfferDigest.Serialize(),
 	)
-	n += copy(streamID[:], receiverMultisig[1:])
-	copy(streamID[n:], receiverNode[1:])
+	if err != nil {
+		return [64]byte{}, err
+	}
 
-	return streamID
+	streamID := sha512.Sum512(wireSig[:])
+
+	return streamID, nil
 }
 
 // deriveStreamID derives corresponding stream ID for the provider of the
@@ -77,88 +118,143 @@ func deriveStreamID(ticket *sidecar.Ticket, provider bool) ([64]byte, error) {
 		return deriveProviderStreamID(ticket)
 	}
 
-	return deriveRecipientStreamID(ticket), nil
+	return deriveRecipientStreamID(ticket)
 }
 
-// sendSidecarPkt attempts to send a sidecar packet to the opposite party using
-// their registered cipherbox stream.
-func (a *SidecarAcceptor) sendSidecarPkt(pkt *sidecar.Ticket,
-	provider bool) error {
+// SidecarDriver houses a series of methods needed to drive a given sidecar
+// channel towards completion.
+type SidecarDriver interface {
+	// ValidateOrderedTicketctx attempts to validate that a given ticket
+	// has rpoerly transitioned to the ordered state.
+	ValidateOrderedTicket(tkt *sidecar.Ticket) error
 
-	var ticketBuf bytes.Buffer
-	err := sidecar.SerializeTicket(&ticketBuf, pkt)
-	if err != nil {
-		return err
-	}
+	// ExpectChannel is called by the receiver of a channel once the
+	// negotiation process has been finalized, and they need to await a new
+	// channel funding flow initiated by the auctioneer server.
+	ExpectChannel(ctx context.Context, tkt *sidecar.Ticket) error
 
-	streamID, err := deriveStreamID(pkt, provider)
-	if err != nil {
-		return err
-	}
+	// UpdateSidecar writes the passed sidecar ticket to persistent
+	// storage.
+	UpdateSidecar(tkt *sidecar.Ticket) error
 
-	target := "receiver"
-	if provider {
-		target = "provider"
-	}
-
-	log.Infof("Sending ticket(state=%v, id=%x) to %v stream_id=%x",
-		pkt.State, pkt.ID[:], target, streamID[:])
-
-	return a.client.SendCipherBoxMsg(
-		context.Background(), streamID, ticketBuf.Bytes(),
-	)
+	// SubmitOrder submits a bid derived from the sidecar ticket, account,
+	// and bid template to the auctioneer.
+	SubmitSidecarOrder(*sidecar.Ticket, *order.Bid,
+		*account.Account) (*sidecar.Ticket, error)
 }
 
-// recvSidecarPkt attempts to receive a new sidecar packet from the opposite
-// party using their registered cipherbox stream.
-func (a *SidecarAcceptor) recvSidecarPkt(ticket *sidecar.Ticket,
-	provider bool) (*sidecar.Ticket, error) {
+// AutoAcceptorConfig houses all the functionality the sidecar negotiator needs
+// to carry out its duties.
+type AutoAcceptorConfig struct {
+	// Provider denotes if the negotiator is the provider or not.
+	Provider bool
 
-	streamID, err := deriveStreamID(ticket, provider)
-	if err != nil {
-		return nil, err
+	// ProviderBid is the provider's bid template.
+	ProviderBid *order.Bid
+
+	// ProviderAccount points to the active account of the provider of the
+	// ticket.
+	ProviderAccount *account.Account
+
+	// StartingPkt is the starting packet, or the starting state from the
+	// PoV of the negotiator.
+	StartingPkt *SidecarPacket
+
+	// Drive contains functionality needed to drive a new sidecar ticket
+	// towards completion.
+	Driver SidecarDriver
+
+	// MailBox is used to allow negotiators to send messages back and forth
+	// to each other.
+	MailBox MailBox
+}
+
+// SidecarNegotiator is a sub-system that uses a mailbox abstraction between a
+// provider and recipient of a sidecar channel to complete the manual steps in
+// automated manner.
+type SidecarNegotiator struct {
+	currentState uint32
+
+	cfg AutoAcceptorConfig
+
+	wg sync.WaitGroup
+
+	ticketFinalized chan struct{}
+	quit            chan struct{}
+
+	stopOnce sync.Once
+}
+
+// NewSidecarNegotiator returns a new instance of the sidecar negotiator given
+// a valid config.
+func NewSidecarNegotiator(cfg AutoAcceptorConfig) *SidecarNegotiator {
+	return &SidecarNegotiator{
+		cfg:             cfg,
+		currentState:    uint32(cfg.StartingPkt.CurrentState),
+		ticketFinalized: make(chan struct{}),
+		quit:            make(chan struct{}),
 	}
+}
 
-	log.Infof("Waiting for ticket (id=%x) using stream_id=%x, provider=%v",
-		ticket.ID[:], streamID[:], provider)
-
+// Start kicks off the set of goroutines needed for the sidecar channel to be
+// negotiated.
+func (a *SidecarNegotiator) Start() error {
+	// In order to ensure we can exit properly if signalled, we'll launch a
+	// goroutine that will cancel a global context if we need to exit.
+	a.wg.Add(1)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	go func() {
+		defer a.wg.Done()
 
-	msg, err := a.client.RecvCipherBoxMsg(ctx, streamID)
-	if err != nil {
-		return nil, fmt.Errorf("unable to recv cipher box "+
-			"msg: %w", err)
+		<-a.quit
+
+		cancel()
+	}()
+
+	if a.cfg.Provider {
+		a.wg.Add(1)
+		go a.autoSidecarProvider(
+			ctx, a.cfg.StartingPkt, a.cfg.ProviderBid, a.cfg.ProviderAccount,
+		)
+	} else {
+		a.wg.Add(1)
+		go a.autoSidecarReceiver(ctx, a.cfg.StartingPkt)
 	}
 
-	log.Infof("Receive new message for ticket (id=%x) "+
-		"via stream_id=%x, provider=%v", ticket.ID[:], streamID,
-		provider)
-
-	return sidecar.DeserializeTicket(bytes.NewReader(msg))
+	return nil
 }
 
-// isErrAlreadyExists returns true if the passed error is the "already exists"
-// error within the error wrapped error which is returned by the hash mail
-// server when a stream we're attempting to create already exists.
-func isErrAlreadyExists(err error) bool {
-	statusCode, ok := status.FromError(err)
-	if !ok {
-		return false
+// Stop signals all goroutines to enter a graceful shutdown.
+func (a *SidecarNegotiator) Stop() {
+	a.stopOnce.Do(func() {
+		close(a.quit)
+		a.wg.Wait()
+	})
+}
+
+// TicketExecuted is a clean up function that should be called once the ticket
+// has been executeed, meaning a channel defined by it was confirmed ina batch
+// on chain.
+func (a *SidecarNegotiator) TicketExecuted() {
+	select {
+	case a.ticketFinalized <- struct{}{}:
+	case <-a.quit:
 	}
 
-	return statusCode.Code() == codes.AlreadyExists
+	a.Stop()
 }
 
 // autoSidecarReceiver is a goroutine that will attempt to advance a new
 // sidecar ticket through the process until it reaches its final state.
-func (a *SidecarAcceptor) autoSidecarReceiver(startingPkt *SidecarPacket) {
+func (a *SidecarNegotiator) autoSidecarReceiver(ctx context.Context,
+	startingPkt *SidecarPacket) {
+
 	defer a.wg.Done()
 
 	packetChan := make(chan *sidecar.Ticket, 1)
 	cancelChan := make(chan struct{})
 
-	currentState := startingPkt.CurrentState
+	atomic.StoreUint32(&a.currentState, uint32(startingPkt.CurrentState))
 	localTicket := startingPkt.ReceiverTicket
 
 	// We'll start with a simulated starting message from the sidecar
@@ -167,17 +263,20 @@ func (a *SidecarAcceptor) autoSidecarReceiver(startingPkt *SidecarPacket) {
 
 	// Before we enter our main read loop below, we'll attempt to re-create
 	// out mailbox as the recipient.
-	recipientStreamID := deriveRecipientStreamID(
+	recipientStreamID, err := deriveRecipientStreamID(
 		localTicket,
 	)
+	if err != nil {
+		log.Errorf("unable to derive recipient ID: %v", err)
+		return
+	}
 
 	log.Infof("Creating receiver reply mailbox for ticket=%x, "+
 		"stream_id=%x", startingPkt.ReceiverTicket.ID[:],
 		recipientStreamID[:])
 
-	err := a.client.InitTicketCipherBox(
-		context.Background(), recipientStreamID,
-		startingPkt.ReceiverTicket,
+	err = a.cfg.MailBox.InitSidecarMailbox(
+		recipientStreamID, startingPkt.ReceiverTicket,
 	)
 	if err != nil && !isErrAlreadyExists(err) {
 		log.Errorf("unable to init cipher box: %v", err)
@@ -196,10 +295,11 @@ func (a *SidecarAcceptor) autoSidecarReceiver(startingPkt *SidecarPacket) {
 		// stream and deliver them to the main gorotuine until we
 		// receive a message over the cancel channel.
 		for {
-			newTicket, err := a.recvSidecarPkt(
-				startingPkt.ReceiverTicket, false,
+			newTicket, err := a.cfg.MailBox.RecvSidecarPkt(
+				ctx, startingPkt.ReceiverTicket, false,
 			)
 			if err != nil {
+				// TODO(roasbeef): back off then retry?
 				log.Error(err)
 				return
 			}
@@ -220,8 +320,8 @@ func (a *SidecarAcceptor) autoSidecarReceiver(startingPkt *SidecarPacket) {
 		select {
 
 		case newTicket := <-packetChan:
-			newPktState, err := a.stateStepRecipient(&SidecarPacket{
-				CurrentState:   currentState,
+			newPktState, err := a.stateStepRecipient(ctx, &SidecarPacket{
+				CurrentState:   sidecar.State(a.currentState),
 				ProviderTicket: newTicket,
 				ReceiverTicket: localTicket,
 			})
@@ -230,17 +330,34 @@ func (a *SidecarAcceptor) autoSidecarReceiver(startingPkt *SidecarPacket) {
 				continue
 			}
 
-			currentState = newPktState.CurrentState
+			// TODO(roasbeef): make into method for easier
+			// assertions?
+			atomic.StoreUint32(
+				&a.currentState, uint32(newPktState.CurrentState),
+			)
+
 			localTicket = newPktState.ReceiverTicket
 
-			// If our next target state is the completion state,
-			// then our job here is done, and we can safely exit
-			// this main goroutine.
-			if newPktState.CurrentState == sidecar.StateCompleted {
-				log.Infof("Receiver negotiation for " +
-					"SidecarTicket(%x) complete!")
+		case <-a.ticketFinalized:
+			log.Infof("Receiver negotiation for "+
+				"SidecarTicket(%x) complete!", localTicket.ID[:])
 
-				close(cancelChan)
+			// The ticket has been marked as finalized, so we'll
+			// update it as being completed in the database.
+			localTicket.State = sidecar.StateCompleted
+			if err := a.cfg.Driver.UpdateSidecar(localTicket); err != nil {
+				log.Errorf("unable to update ticket to "+
+					"complete state: %v", err)
+				return
+			}
+
+			// We'll also tear down the mailbox as well as we no
+			// longer need it anymore.
+			err := a.cfg.MailBox.DelSidecarMailbox(
+				recipientStreamID, localTicket,
+			)
+			if err != nil {
+				log.Errorf("unable to reclaim mailbox: %v", err)
 				return
 			}
 
@@ -254,8 +371,8 @@ func (a *SidecarAcceptor) autoSidecarReceiver(startingPkt *SidecarPacket) {
 // receiver through the sidecar negotiation process. It takes the current state
 // (the state of the goroutine, and the incoming ticket) and maps that into a
 // new state, with a possibly modified ticket.
-func (a *SidecarAcceptor) stateStepRecipient(pkt *SidecarPacket,
-) (*SidecarPacket, error) {
+func (a *SidecarNegotiator) stateStepRecipient(ctx context.Context,
+	pkt *SidecarPacket) (*SidecarPacket, error) {
 
 	switch {
 
@@ -280,7 +397,7 @@ func (a *SidecarAcceptor) stateStepRecipient(pkt *SidecarPacket,
 		log.Infof("Transmitting registered ticket=%x to provider",
 			pkt.ProviderTicket.ID[:])
 
-		err := a.sendSidecarPkt(pkt.ReceiverTicket, true)
+		err := a.cfg.MailBox.SendSidecarPkt(ctx, pkt.ReceiverTicket, true)
 		if err != nil {
 			return nil, fmt.Errorf("unable to send pkt: %w", err)
 		}
@@ -303,10 +420,7 @@ func (a *SidecarAcceptor) stateStepRecipient(pkt *SidecarPacket,
 
 		// At this point, we'll finish validating the ticket, then
 		// await the ticket on the side lines if it's valid.
-		ctx := context.Background()
-		err := validateOrderedTicket(
-			ctx, pkt.ProviderTicket, a.cfg.Signer, a.cfg.SidecarDB,
-		)
+		err := a.cfg.Driver.ValidateOrderedTicket(pkt.ProviderTicket)
 		if err != nil {
 			return nil, fmt.Errorf("unable to verify ticket: "+
 				"%w", err)
@@ -318,13 +432,13 @@ func (a *SidecarAcceptor) stateStepRecipient(pkt *SidecarPacket,
 		// Now that we know the channel is valid, we'll wait for the
 		// channel to show up at our node, and allow things to advance
 		// to the completion state.
-		err = a.ExpectChannel(ctx, pkt.ProviderTicket)
+		err = a.cfg.Driver.ExpectChannel(
+			ctx, pkt.ProviderTicket,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to expect "+
 				"channel: %w", err)
 		}
-
-		// TODO(roasbeef): set state to expecting channel?
 
 		return &SidecarPacket{
 			CurrentState:   sidecar.StateExpectingChannel,
@@ -337,7 +451,7 @@ func (a *SidecarAcceptor) stateStepRecipient(pkt *SidecarPacket,
 	// it.
 	default:
 		return nil, fmt.Errorf("unhandled receiver state transition "+
-			"for ticket=%v, state=%v", pkt.ProviderTicket.ID[:],
+			"for ticket=%x, state=%v", pkt.ProviderTicket.ID[:],
 			pkt.ProviderTicket.State)
 	}
 }
@@ -345,7 +459,7 @@ func (a *SidecarAcceptor) stateStepRecipient(pkt *SidecarPacket,
 // autoSidecarProvider is a goroutine that will attempt to advance a new
 // sidecar ticket through the negotiation process until it reaches its final
 // state.
-func (a *SidecarAcceptor) autoSidecarProvider(startingPkt *SidecarPacket,
+func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt *SidecarPacket,
 	bid *order.Bid, acct *account.Account) {
 
 	defer a.wg.Done()
@@ -356,12 +470,15 @@ func (a *SidecarAcceptor) autoSidecarProvider(startingPkt *SidecarPacket,
 	packetChan := make(chan *sidecar.Ticket, 1)
 	cancelChan := make(chan struct{})
 
-	currentState := startingPkt.CurrentState
+	atomic.StoreUint32(&a.currentState, uint32(startingPkt.CurrentState))
 	localTicket := startingPkt.ProviderTicket
 
 	// We'll start with a simulated starting message from the sidecar
-	// receiver.
-	packetChan <- startingPkt.ReceiverTicket
+	// receiver, but only if we're starting in the created state which
+	// demands an internal retransmission.
+	if startingPkt.CurrentState == sidecar.StateCreated {
+		packetChan <- startingPkt.ReceiverTicket
+	}
 
 	// First, we'll need to derive the stream ID that we'll use to receive
 	// new messages from the recipient.
@@ -375,9 +492,7 @@ func (a *SidecarAcceptor) autoSidecarProvider(startingPkt *SidecarPacket,
 	log.Infof("Creating provider mailbox for ticket=%x, w/ stream_id=%x",
 		localTicket.ID[:], streamID[:])
 
-	err = a.client.InitAccountCipherBox(
-		context.Background(), streamID, acct.TraderKey,
-	)
+	err = a.cfg.MailBox.InitAcctMailbox(streamID, acct.TraderKey)
 	if err != nil && !isErrAlreadyExists(err) {
 		log.Errorf("unable to init cipher box: %v", err)
 		return
@@ -391,8 +506,8 @@ func (a *SidecarAcceptor) autoSidecarProvider(startingPkt *SidecarPacket,
 		// stream and deliver them to the main gorotuine until we
 		// receive a message over the cancel channel.
 		for {
-			newTicket, err := a.recvSidecarPkt(
-				startingPkt.ProviderTicket, true,
+			newTicket, err := a.cfg.MailBox.RecvSidecarPkt(
+				ctx, startingPkt.ProviderTicket, true,
 			)
 			if err != nil {
 				log.Error(err)
@@ -418,12 +533,10 @@ func (a *SidecarAcceptor) autoSidecarProvider(startingPkt *SidecarPacket,
 			// through, so we'll continue until we end up at the
 			// same state (a noop)
 			for {
-				priorState := currentState
+				priorState := sidecar.State(atomic.LoadUint32(&a.currentState))
 
-				log.Infof("step=%v", currentState)
-
-				newPktState, err := a.stateStepProvider(&SidecarPacket{
-					CurrentState:   currentState,
+				newPktState, err := a.stateStepProvider(ctx, &SidecarPacket{
+					CurrentState:   sidecar.State(a.currentState),
 					ReceiverTicket: newTicket,
 					ProviderTicket: localTicket,
 				}, bid, acct)
@@ -432,27 +545,41 @@ func (a *SidecarAcceptor) autoSidecarProvider(startingPkt *SidecarPacket,
 					break
 				}
 
-				currentState = newPktState.CurrentState
 				localTicket = newPktState.ProviderTicket
 
+				atomic.StoreUint32(
+					&a.currentState, uint32(newPktState.CurrentState),
+				)
+
 				switch {
-				case priorState == currentState:
+				case priorState == newPktState.CurrentState:
 					fallthrough
-				case currentState == sidecar.StateExpectingChannel:
+				case newPktState.CurrentState == sidecar.StateExpectingChannel:
 					break
-
-				// If our next target state is the completion
-				// state, then our job here is done, and we can
-				// safely exit this main goroutine.
-				case newPktState.CurrentState ==
-					sidecar.StateCompleted:
-
-					log.Infof("Receiver negotiation for " +
-						"SidecarTicket(%x) complete!")
-
-					close(cancelChan)
-					return
 				}
+			}
+
+		case <-a.ticketFinalized:
+			log.Infof("Receiver negotiation for SidecarTicket(%x) "+
+				"complete!", localTicket.ID[:])
+
+			// The ticket has been marked as finalized, so we'll
+			// update it as being completed in the database.
+			localTicket.State = sidecar.StateCompleted
+			if err := a.cfg.Driver.UpdateSidecar(localTicket); err != nil {
+				log.Errorf("unable to update ticket to "+
+					"complete state: %v", err)
+				return
+			}
+
+			// We'll also tear down the mailbox as well as we no
+			// longer need it anymore.
+			err := a.cfg.MailBox.DelAcctMailbox(
+				streamID, acct.TraderKey,
+			)
+			if err != nil {
+				log.Errorf("unable to reclaim mailbox: %v", err)
+				return
 			}
 
 		case <-a.quit:
@@ -461,11 +588,17 @@ func (a *SidecarAcceptor) autoSidecarProvider(startingPkt *SidecarPacket,
 	}
 }
 
+// CurrentState returns the current state of the sidecar negotiator.
+func (a *SidecarNegotiator) CurrentState() sidecar.State {
+	state := atomic.LoadUint32(&a.currentState)
+	return sidecar.State(state)
+}
+
 // stateStepProvider is the state transition function for the provider of a
 // sidecar ticket. It takes the current transcript state, the provider's
 // account, and canned bid and returns a new transition to a new ticket state.
-func (a *SidecarAcceptor) stateStepProvider(pkt *SidecarPacket, bid *order.Bid,
-	acct *account.Account) (*SidecarPacket, error) {
+func (a *SidecarNegotiator) stateStepProvider(ctx context.Context,
+	pkt *SidecarPacket, bid *order.Bid, acct *account.Account) (*SidecarPacket, error) {
 
 	switch {
 	// In this case, we've just restarted, so we'll attempt to start from
@@ -478,7 +611,7 @@ func (a *SidecarAcceptor) stateStepProvider(pkt *SidecarPacket, bid *order.Bid,
 		log.Infof("Resuming negotiation for ticket=%x, requesting "+
 			"registered ticket", pkt.ProviderTicket.ID[:])
 
-		err := a.sendSidecarPkt(pkt.ProviderTicket, false)
+		err := a.cfg.MailBox.SendSidecarPkt(ctx, pkt.ProviderTicket, false)
 		if err != nil {
 			return nil, err
 		}
@@ -502,7 +635,7 @@ func (a *SidecarAcceptor) stateStepProvider(pkt *SidecarPacket, bid *order.Bid,
 
 		// Now that we have the ticket, we'll update the state on disk
 		// to checkpoint the new state.
-		err := a.cfg.SidecarDB.UpdateSidecar(pkt.ReceiverTicket)
+		err := a.cfg.Driver.UpdateSidecar(pkt.ReceiverTicket)
 		if err != nil {
 			return nil, fmt.Errorf("unable to update ticket: %w",
 				err)
@@ -526,8 +659,8 @@ func (a *SidecarAcceptor) stateStepProvider(pkt *SidecarPacket, bid *order.Bid,
 
 		// Now we have the recipient's information, we can attach it to
 		// our bid, and submit it as normal.
-		updatedTicket, err := a.submitSidecarOrder(
-			context.Background(), pkt.ProviderTicket, bid, acct,
+		updatedTicket, err := a.cfg.Driver.SubmitSidecarOrder(
+			pkt.ProviderTicket, bid, acct,
 		)
 		switch {
 		// If the order has already been submitted, then we'll catch
@@ -571,7 +704,7 @@ func (a *SidecarAcceptor) stateStepProvider(pkt *SidecarPacket, bid *order.Bid,
 		// we send over is in the state they expect.
 		pkt.ProviderTicket.State = sidecar.StateOrdered
 
-		err := a.sendSidecarPkt(pkt.ProviderTicket, false)
+		err := a.cfg.MailBox.SendSidecarPkt(ctx, pkt.ProviderTicket, false)
 		if err != nil {
 			return nil, fmt.Errorf("unable to send sidecar "+
 				"pkt: %v", err)
@@ -584,7 +717,7 @@ func (a *SidecarAcceptor) stateStepProvider(pkt *SidecarPacket, bid *order.Bid,
 		// disk to checkpoint the new state. If the remote party ends
 		// us any messages after we persist this state, then we'll
 		// simply re-send the latest ticket.
-		err = a.cfg.SidecarDB.UpdateSidecar(&updatedTicket)
+		err = a.cfg.Driver.UpdateSidecar(&updatedTicket)
 		if err != nil {
 			return nil, fmt.Errorf("unable to update ticket: %w",
 				err)
