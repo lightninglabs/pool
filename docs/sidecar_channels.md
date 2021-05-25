@@ -55,19 +55,29 @@ needs to work, therefore we show the more involved example here.
    amount are all paid from Charlie's Pool account. Whether Alice reimburses
    Charlie for those costs or not is not part of the protocol and irrelevant for
    this example.
-1. ```shell
-   charlie$   pool sidecar offer --capacity 1000000 --self_chan_balance 200000
+2. ```shell
+   charlie$   pool sidecar offer --capacity 1000000 --self_chan_balance 200000 --auto <rest of order details>
    {
-     "sidecar_ticket": "sidecarAAQgHBgUEAwIBAAMBYwUBAgdxAAAAAAAAAwkAAAAAAA...."
+     "sidecar_ticket": "sidecar15o1Y9oXtyKr3hs2UQho9YmJKbSmB...."
    }
    ```
    The sidecar ticket now contains the offer from Charlie to buy a 1m satoshi
    channel with a 200k initial self channel balance (=push amount) for Alice.
-1. Alice now needs to add her node's information:
+   With the `--auto` flag we signal that we want to leverage the existing
+   auctioneer infrastructure to permit both peers to communicate with each
+   other in order to finalize the ticket negotiation. 
+
+   The addition of this "auto" mode means that both sides need to only execute
+   a single and the rest of the negotiation happens in the background. If the
+   `auto` flag is ommitted, then only the capacity and balance need to be
+   specified, otherwise, all the other information one presents when submitting
+   a full order needs to be specified.
+
+3. Alice now needs to add her node's information:
    ```shell
-   alice$   pool sidecar register sidecarAAQgHBgUEAwIBAAMBYwUBAgdxAAAAA....
-   {
-     "sidecar_ticket": "sidecarAAQgHBgUEAwIBAAMBYwUBAgdxAAAAAAAAAwkAAAAAAA...."
+   alice$   pool sidecar register sidecar15o1Y9oXtyKr3hs2UQho9YmJKbSmB
+   { 
+     "sidecar_ticket": "sidecar15o1Y9oXtyKr3hs2UQho9YmJKbSmB...."
    }
    ```
    The sidecar ticket now contains the `Recipient` field which encodes Alice's
@@ -76,6 +86,14 @@ needs to work, therefore we show the more involved example here.
    Rationale: Alice will be counter-signing the commitment transactions for the
    new channel so she needs to have the private key for her 2-of-2 multisig
    channel funding key. We derive that from her keychain.
+
+At this point if the `auto` flag was set in the initial ticket, then we're done
+here! Both sides now just simply wait for the next batch, to be executed
+which'll result in a new sidecar channel being created.
+
+Otherwise, Alice and Charlie will need to carry out another round of
+communication:
+
 1. Charlie can now create the bid order with the updated ticket he got from
    Alice:
    ```shell
@@ -83,12 +101,12 @@ needs to work, therefore we show the more involved example here.
      --interest_rate_percent xxx --sidecar_ticket  sidecarAAQgHBgUEAwIBAAMB...
    {
       "order_nonce": "0011223344...",
-      "sidecar_ticket": "sidecarAAQgHBgUEAwIBAAMBYwUBAgdxAAAAAAAAAwkAAAAAAA..."
+     "sidecar_ticket": "sidecar15o1Y9oXtyKr3hs2UQho9YmJKbSmB...."
    }
    ```
    The sidecar ticket now contains the order's nonce in the `Order` part.
    Charlie can give the final version of the ticket back to Alice.
-1. Alice instructs her node to start expecting a channel.
+2. Alice instructs her node to start expecting a channel.
    ```shell
    alice$  pool sidecar expect-channel sidecarAAQgHBgUEAwIBAAMBYwUBAg...
    ```
