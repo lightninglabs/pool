@@ -16,11 +16,6 @@ import (
 	"github.com/lightningnetwork/lnd/lnwire"
 )
 
-// TODO(roasbeef): need to ensure have updates for termination, etc
-//  * finalize for the recreiver
-//  * need other hook for the provider
-//  * also delete as well (the mailbox)
-
 // MailBox is an interface that abstracts over the HashMail functionality to
 // represent a generic mailbox that both sides will use to communicate with
 // each other.
@@ -59,8 +54,6 @@ type MailBox interface {
 // what will trigger a state transition.
 type SidecarPacket struct {
 	// CurrentState is the current state of the negotiator.
-	//
-	// TODO(roasbeef): remove??
 	CurrentState sidecar.State
 
 	// ReceiverTicket is the current ticket of the receiver.
@@ -432,9 +425,7 @@ func (a *SidecarNegotiator) stateStepRecipient(ctx context.Context,
 		// Now that we know the channel is valid, we'll wait for the
 		// channel to show up at our node, and allow things to advance
 		// to the completion state.
-		err = a.cfg.Driver.ExpectChannel(
-			ctx, pkt.ProviderTicket,
-		)
+		err = a.cfg.Driver.ExpectChannel(ctx, pkt.ProviderTicket)
 		if err != nil {
 			return nil, fmt.Errorf("failed to expect "+
 				"channel: %w", err)
@@ -443,6 +434,22 @@ func (a *SidecarNegotiator) stateStepRecipient(ctx context.Context,
 		return &SidecarPacket{
 			CurrentState:   sidecar.StateExpectingChannel,
 			ReceiverTicket: pkt.ProviderTicket,
+			ProviderTicket: pkt.ProviderTicket,
+		}, nil
+
+	// If we come back up and we're already expecting the channel then we
+	// need to make sure we expect it again to ensure we re-register with
+	// the auctioneer to be able to receive the channel.
+	case pkt.CurrentState == sidecar.StateExpectingChannel:
+		err := a.cfg.Driver.ExpectChannel(ctx, pkt.ProviderTicket)
+		if err != nil {
+			return nil, fmt.Errorf("failed to expect "+
+				"channel: %w", err)
+
+		}
+		return &SidecarPacket{
+			CurrentState:   sidecar.StateExpectingChannel,
+			ReceiverTicket: pkt.ReceiverTicket,
 			ProviderTicket: pkt.ProviderTicket,
 		}, nil
 
@@ -463,9 +470,6 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt
 	bid *order.Bid, acct *account.Account) {
 
 	defer a.wg.Done()
-
-	// TODO(roasbeef): subscribe to order state so know when things are
-	// done, use that to send the extra msg
 
 	packetChan := make(chan *sidecar.Ticket, 1)
 	cancelChan := make(chan struct{})

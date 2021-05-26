@@ -457,6 +457,8 @@ func (s *sidecarTestCtx) assertRecipientExpectsChannel() {
 }
 
 func (s *sidecarTestCtx) assertRecipientTicketUpdated(expectedState sidecar.State) {
+	s.t.Helper()
+
 	select {
 	case stateUpdate := <-s.recipientDriver.stateUpdates:
 
@@ -638,6 +640,11 @@ func TestAutoSidecarNegotiation(t *testing.T) {
 	// sides should now be in a terminal state
 	testCtx.assertNoProviderMsgsRecvd()
 	testCtx.assertNoReceiverMsgsRecvd()
+
+	// The recipient of the ticket should re-expect the channel to
+	// re-register with the auctioneer to ensure the channel can be
+	// executed amidst their restarts.
+	testCtx.assertRecipientExpectsChannel()
 
 	// We'll now signal to both goroutines that the channel has been
 	// finalized, at this point, we expect both ticket to transition to the
