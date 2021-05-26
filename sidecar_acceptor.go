@@ -672,6 +672,30 @@ func (a *SidecarAcceptor) matchSign(batch *order.Batch) error {
 	})
 }
 
+// finalizeTicketIfExists attempts to signal to the auto negotiator for a given
+// sidecar ticket that it's been fully executed.
+//
+// NOTE: This function MUST be called with the main mutex held.
+func (a *SidecarAcceptor) finalizeTicketIfExists(ticket *sidecar.Ticket) {
+	streamID, err := deriveRecipientStreamID(ticket)
+	if err != nil {
+		log.Errorf("unable to derive stream IDs: %v", err)
+	}
+
+	// We'll also signal to the negotiator (if it exists) that the ticket
+	// has been finalized so it can safely exit. We don't need to hold the
+	// main lock here as handleServerMessage obtains the lock while these
+	// methods are called.
+	negotiator, ok := a.negotiators[streamID]
+	if !ok {
+		return
+	}
+
+	negotiator.TicketExecuted()
+
+	delete(a.negotiators, streamID)
+}
+
 // matchFinalize handles an incoming OrderMatchFinalize message from the server.
 // Since we're only on the receiving end of a sidecar channel (which is always
 // a bid order) the tasks are simplified compared to normal bid order execution.
@@ -702,24 +726,18 @@ func (a *SidecarAcceptor) matchFinalize(batch *order.Batch) {
 
 		a.cfg.Acceptor.ShimRemoved(dummyBid.(*order.Bid))
 
-		streamID, err := deriveRecipientStreamID(ticket)
-		if err != nil {
-			log.Errorf("unable to derive stream IDs: %v", err)
-		}
-
-		// We'll also signal to the negotiator (if it exists) that the
-		// ticket has been finalized so it can safely exit. We don't
-		// need to hold the main lock here as handleServerMessage
-		// obtains the lock while these methods are called.
-		negotiator, ok := a.negotiators[streamID]
-		if !ok {
-			return
-		}
-
-		negotiator.TicketExecuted()
-
-		delete(a.negotiators, streamID)
+		a.finalizeTicketIfExists(ticket)
 	}
+}
+
+// FinalizeTicket is called by the main batch processing logic of the provider
+// of a ticket to signal to the underlying auto state machine (if on exists)
+// that the channel has been finalized.
+func (a *SidecarAcceptor) FinalizeTicket(t *sidecar.Ticket) {
+	a.Lock()
+	defer a.Unlock()
+
+	a.finalizeTicketIfExists(t)
 }
 
 // getSidecarAsOrder tries to find a sidecar ticket for the order with the given
