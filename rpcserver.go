@@ -2458,6 +2458,11 @@ func (s *rpcServer) setTicketStateForOrder(newState sidecar.State,
 				"with ID %x to state %d: %v", ticket.ID[:],
 				newState, err)
 		}
+
+		// In addition to updating the ticket, we'll also signal to the
+		// acceptor that the channel that we were a provider of has
+		// been finalized so the state machine can terminate.
+		s.server.sidecarAcceptor.FinalizeTicket(ticket)
 	}
 
 	return nil

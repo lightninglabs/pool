@@ -226,7 +226,7 @@ func (a *SidecarNegotiator) Stop() {
 }
 
 // TicketExecuted is a clean up function that should be called once the ticket
-// has been executeed, meaning a channel defined by it was confirmed ina batch
+// has been executed, meaning a channel defined by it was confirmed in a batch
 // on chain.
 func (a *SidecarNegotiator) TicketExecuted() {
 	select {
