@@ -287,14 +287,22 @@ func (a *SidecarNegotiator) autoSidecarReceiver(ctx context.Context,
 		// We'll continue to read out new messages from the cipherbox
 		// stream and deliver them to the main gorotuine until we
 		// receive a message over the cancel channel.
+		var retryTimer backOffer
+		backoffLabel := fmt.Sprintf("ticket_id=%x",
+			startingPkt.ReceiverTicket.ID[:])
 		for {
 			newTicket, err := a.cfg.MailBox.RecvSidecarPkt(
 				ctx, startingPkt.ReceiverTicket, false,
 			)
 			if err != nil {
-				// TODO(roasbeef): back off then retry?
 				log.Error(err)
-				return
+
+				select {
+				case <-retryTimer.backOff(backoffLabel):
+					continue
+				case <-a.quit:
+					return
+				}
 			}
 
 			select {
@@ -509,13 +517,22 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt
 		// We'll continue to read out new messages from the cipherbox
 		// stream and deliver them to the main gorotuine until we
 		// receive a message over the cancel channel.
+		var retryTimer backOffer
+		backoffLabel := fmt.Sprintf("ticket_id=%x",
+			startingPkt.ReceiverTicket.ID[:])
 		for {
 			newTicket, err := a.cfg.MailBox.RecvSidecarPkt(
 				ctx, startingPkt.ProviderTicket, true,
 			)
 			if err != nil {
 				log.Error(err)
-				return
+
+				select {
+				case <-retryTimer.backOff(backoffLabel):
+					continue
+				case <-a.quit:
+					return
+				}
 			}
 
 			select {
