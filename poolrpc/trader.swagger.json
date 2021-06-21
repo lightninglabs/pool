@@ -1504,6 +1504,11 @@
           "format": "byte",
           "description": "The order executed that resulted in the channel created."
         },
+        "matched_order_nonce": {
+          "type": "string",
+          "format": "byte",
+          "description": "The unique identifier for the order that was matched with that resulted\nin the channel created."
+        },
         "purchased": {
           "type": "boolean",
           "format": "boolean",

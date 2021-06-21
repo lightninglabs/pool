@@ -1977,6 +1977,8 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 
 				purchased := ourOrder.Type() == order.TypeBid
 				nodeTier := nodeRatings[match.NodeKey]
+				matchedNonce := match.Order.Nonce()
+
 				rpcLeases = append(rpcLeases, &poolrpc.Lease{
 					ChannelPoint: &auctioneerrpc.OutPoint{
 						Txid:        batchTxHash[:],
@@ -1992,6 +1994,7 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					),
 					ExecutionFeeSat:      uint64(exeFee),
 					OrderNonce:           nonce[:],
+					MatchedOrderNonce:    matchedNonce[:],
 					Purchased:            purchased,
 					ChannelRemoteNodeKey: match.NodeKey[:],
 					ChannelNodeTier:      nodeTier,
