@@ -33,12 +33,13 @@ var sidecarOfferCommand = cli.Command{
 	Name:      "offer",
 	Aliases:   []string{"o"},
 	Usage:     "offer a sidecar channel",
-	ArgsUsage: "[<full bid args> --auto] | capacity self_chan_balance lease_duration_blocks",
+	ArgsUsage: "[<full bid args> --auto] | capacity self_chan_balance lease_duration_blocks acct_key",
 	Description: `
 	Creates an offer for providing a sidecar channel to another node.
 	If the auto flag is specified, then all bid information needs to be 
 	specified as normal. If the auto flag isn't specified, then only 
-	capacity, self_chan_balance and lease_duration_blocks needs to set.`,
+	capacity, self_chan_balance, lease_duration_blocks, and acct_key
+	need to set.`,
 	Flags: append(
 		append(baseBidFlags, sharedFlags...),
 		cli.BoolFlag{
@@ -70,6 +71,7 @@ func sidecarOffer(ctx *cli.Context) error {
 			args              = ctx.Args()
 			capacity, pushAmt uint64
 			duration          uint32
+			traderKey         []byte
 		)
 
 		switch {
@@ -110,9 +112,15 @@ func sidecarOffer(ctx *cli.Context) error {
 			args = args.Tail()
 		}
 
+		traderKey, err := parseAccountKey(ctx, args)
+		if err != nil {
+			return fmt.Errorf("unable to parse acct_key: %v", err)
+		}
+
 		bid = &poolrpc.Bid{
 			Details: &poolrpc.Order{
-				Amt: capacity,
+				Amt:       capacity,
+				TraderKey: traderKey,
 			},
 			SelfChanBalance:     pushAmt,
 			LeaseDurationBlocks: duration,
