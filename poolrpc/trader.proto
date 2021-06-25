@@ -883,6 +883,12 @@ message Lease {
 
     // The order executed that resulted in the channel created.
     bytes order_nonce = 10;
+    
+    /*
+    The unique identifier for the order that was matched with that resulted
+    in the channel created.
+    */ 
+    bytes matched_order_nonce = 16;
 
     // Whether this channel was purchased from another trader or not.
     bool purchased = 11;
