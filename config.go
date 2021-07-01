@@ -163,7 +163,7 @@ const (
 	// is allowed to take to complete.
 	defaultRPCTimeout  = 30 * time.Second
 	defaultLsatMaxCost = btcutil.Amount(1000)
-	defaultLsatMaxFee  = btcutil.Amount(10)
+	defaultLsatMaxFee  = btcutil.Amount(50)
 )
 
 // DefaultConfig returns the default value for the Config struct.
