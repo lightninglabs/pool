@@ -137,6 +137,8 @@ type Config struct {
 
 	NewNodesOnly bool `long:"newnodesonly" description:"Only accept channels from nodes that the connected lnd node doesn't already have open or pending channels with."`
 
+	LsatMaxRoutingFee btcutil.Amount `long:"lsatmaxroutingfee" description:"The maximum amount in satoshis we are willing to pay in routing fees when paying for the one-time LSAT auth token that is required to use the Pool service."`
+
 	Profile  string `long:"profile" description:"Enable HTTP profiling on given port -- NOTE port must be between 1024 and 65535"`
 	FakeAuth bool   `long:"fakeauth" description:"Disable LSAT authentication and instead use a fake LSAT ID to identify. For testing only, cannot be set on mainnet."`
 
@@ -163,26 +165,27 @@ const (
 	// is allowed to take to complete.
 	defaultRPCTimeout  = 30 * time.Second
 	defaultLsatMaxCost = btcutil.Amount(1000)
-	defaultLsatMaxFee  = btcutil.Amount(10)
+	defaultLsatMaxFee  = btcutil.Amount(50)
 )
 
 // DefaultConfig returns the default value for the Config struct.
 func DefaultConfig() Config {
 	return Config{
-		Network:        DefaultNetwork,
-		RPCListen:      "localhost:12010",
-		RESTListen:     "localhost:8281",
-		Insecure:       false,
-		BaseDir:        DefaultBaseDir,
-		LogDir:         defaultLogDir,
-		MaxLogFiles:    defaultMaxLogFiles,
-		MaxLogFileSize: defaultMaxLogFileSize,
-		MinBackoff:     defaultMinBackoff,
-		MaxBackoff:     defaultMaxBackoff,
-		DebugLevel:     defaultLogLevel,
-		TLSCertPath:    DefaultTLSCertPath,
-		TLSKeyPath:     DefaultTLSKeyPath,
-		MacaroonPath:   DefaultMacaroonPath,
+		Network:           DefaultNetwork,
+		RPCListen:         "localhost:12010",
+		RESTListen:        "localhost:8281",
+		Insecure:          false,
+		BaseDir:           DefaultBaseDir,
+		LogDir:            defaultLogDir,
+		MaxLogFiles:       defaultMaxLogFiles,
+		MaxLogFileSize:    defaultMaxLogFileSize,
+		MinBackoff:        defaultMinBackoff,
+		MaxBackoff:        defaultMaxBackoff,
+		DebugLevel:        defaultLogLevel,
+		TLSCertPath:       DefaultTLSCertPath,
+		TLSKeyPath:        DefaultTLSKeyPath,
+		MacaroonPath:      DefaultMacaroonPath,
+		LsatMaxRoutingFee: defaultLsatMaxFee,
 		Lnd: &LndConfig{
 			Host:         "localhost:10009",
 			MacaroonPath: DefaultLndMacaroonPath,
