@@ -441,7 +441,7 @@ func (s *Server) setupClient() error {
 	// trader instead.
 	var interceptor Interceptor = lsat.NewInterceptor(
 		&s.lndServices.LndServices, s.lsatStore, defaultRPCTimeout,
-		defaultLsatMaxCost, defaultLsatMaxFee, false,
+		defaultLsatMaxCost, s.cfg.LsatMaxRoutingFee, false,
 	)
 	if s.cfg.FakeAuth && s.cfg.Network == "mainnet" {
 		return fmt.Errorf("cannot use fake LSAT auth for mainnet")
