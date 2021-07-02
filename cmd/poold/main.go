@@ -77,7 +77,7 @@ func start() error {
 		}
 
 		go func() {
-			listenAddr := net.JoinHostPort("", config.Profile)
+			listenAddr := net.JoinHostPort("127.0.0.1", config.Profile)
 			profileRedirect := http.RedirectHandler("/debug/pprof",
 				http.StatusSeeOther)
 			http.Handle("/", profileRedirect)
