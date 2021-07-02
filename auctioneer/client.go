@@ -968,9 +968,13 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 				return
 			}
 
-			// Any other error we want to report back.
+			log.Errorf("Server connection error received: %v", err)
+
+			// For any other error type, we'll attempt to trigger
+			// the reconnect logic so we'll always try to connect
+			// to the server in the background.
 			select {
-			case c.errChanSwitch.ErrChan() <- err:
+			case c.errChanSwitch.ErrChan() <- ErrServerShutdown:
 			case <-c.quit:
 			}
 			return

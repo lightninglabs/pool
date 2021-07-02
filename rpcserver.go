@@ -256,7 +256,13 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 					rpcLog.Errorf("Error closing stream: %v",
 						err)
 				}
+
+				// TODO(roasbeef): re-trigger reconnection
+				// attempt? if takes more than max retries to
+				// establish connection?
 			}
+
+			rpcLog.Error("Unknown server error: %v", err)
 
 		case height := <-blockChan:
 			rpcLog.Infof("Received new block notification: height=%v",
