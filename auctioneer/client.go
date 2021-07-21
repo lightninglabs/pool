@@ -50,6 +50,10 @@ var (
 	// signals it's going to shut down.
 	ErrServerShutdown = errors.New("server shutting down")
 
+	// ErrServerErrored is the error that is returned if the auction server
+	// sends back an error instead of a proper message.
+	ErrServerErrored = errors.New("server sent unexpected error")
+
 	// ErrClientShutdown is the error that is returned if the trader client
 	// itself is shutting down.
 	ErrClientShutdown = errors.New("client shutting down")
@@ -577,6 +581,27 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 	c.subscribedAcctsMtx.Unlock()
 	err := sub.authenticate(ctx)
 	if err != nil {
+		log.Errorf("Authentication failed for account %x: %v",
+			acctPubKey[:], err)
+
+		// The error that's returned from authenticate() might just be
+		// an error that occurred when sending on the stream. If the
+		// server is timing us out (or is shutting down) before we can
+		// send the final message, this might not be the _cause_ of the
+		// problem but just a follow-up symptom. So we need to look if
+		// there's anything on the tempErrChan (which we write to when
+		// getting unexpected messages or errors from the server) that's
+		// more conclusive.
+		select {
+		case err := <-tempErrChan:
+			// Ah, so it's the server shutting down, so let's re-
+			// try our connection.
+			if err == ErrServerErrored {
+				return sub, false, c.HandleServerShutdown(nil)
+			}
+
+		default:
+		}
 		return sub, false, err
 	}
 
@@ -968,9 +993,13 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 				return
 			}
 
-			// Any other error we want to report back.
+			log.Errorf("Server connection error received: %v", err)
+
+			// For any other error type, we'll attempt to trigger
+			// the reconnect logic so we'll always try to connect
+			// to the server in the background.
 			select {
-			case c.errChanSwitch.ErrChan() <- err:
+			case c.errChanSwitch.ErrChan() <- ErrServerErrored:
 			case <-c.quit:
 			}
 			return
