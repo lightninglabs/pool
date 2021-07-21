@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -34,8 +35,7 @@ import (
 )
 
 const (
-	initialConnectRetries = 3
-	reconnectRetries      = 10
+	reconnectRetries = math.MaxInt16
 
 	// maxUnusedAccountKeyLookup is the number of successive account keys
 	// that we try and the server does not know of before aborting recovery.
@@ -542,7 +542,7 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 	c.streamMutex.Unlock()
 
 	if needToConnect {
-		err := c.connectServerStream(0, initialConnectRetries)
+		err := c.connectServerStream(0, reconnectRetries)
 		if err != nil {
 			return sub, false, fmt.Errorf("connecting server "+
 				"stream failed: %v", err)
