@@ -578,6 +578,7 @@ func TestDeriveFundingShim(t *testing.T) {
 		batchTx = &wire.MsgTx{
 			TxOut: []*wire.TxOut{{}},
 		}
+		batchHeightHint uint32 = 1337
 	)
 
 	askKit := order.NewKit(askNonce)
@@ -601,7 +602,7 @@ func TestDeriveFundingShim(t *testing.T) {
 		matchedAsk.MultiSigKey[:], int64(4*order.BaseSupplyUnit),
 	)
 	shim, pendingChanID, err := h.mgr.deriveFundingShim(
-		bid, matchedAsk, batchTx,
+		bid, matchedAsk, batchTx, batchHeightHint,
 	)
 	require.NoError(t, err)
 	require.Equal(t, order.PendingChanKey(askNonce, bidNonce), pendingChanID)
@@ -639,7 +640,7 @@ func TestDeriveFundingShim(t *testing.T) {
 		matchedAsk.MultiSigKey[:], int64(4*order.BaseSupplyUnit),
 	)
 	shim, pendingChanID, err = h.mgr.deriveFundingShim(
-		bid, matchedAsk, batchTx,
+		bid, matchedAsk, batchTx, batchHeightHint,
 	)
 	require.NoError(t, err)
 	require.Equal(t, order.PendingChanKey(askNonce, bidNonce), pendingChanID)
