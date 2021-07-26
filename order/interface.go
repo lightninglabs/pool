@@ -59,6 +59,11 @@ const (
 	// accounting or whatever) can opt out by explicitly submitting their
 	// ask orders with a version previous to this one.
 	VersionSidecarChannel Version = 4
+
+	// VersionChannelType is the order version that added use of the channel
+	// type field. Only orders with this version are allowed to use the
+	// channel type field.
+	VersionChannelType Version = 5
 )
 
 // Type is the type of an order. We don't use iota for the constants due to the
@@ -216,6 +221,24 @@ func (s MatchState) String() string {
 	}
 }
 
+// ChannelType is a numerical type that represents all possible channel types
+// that are supported to be opened through the auction process.
+type ChannelType uint8
+
+// NOTE: We avoid the use of iota as this type is stored on disk.
+const (
+	// ChannelTypePeerDependent denotes that the resulting channel type from
+	// an order match will depend on the shared features between its
+	// participants.
+	ChannelTypePeerDependent ChannelType = 0
+
+	// ChannelTypeScriptEnforced represents a new channel type that builds
+	// upon the anchors commitment format to enforce the maturity of a
+	// leased channel in the commitment and HTLC outputs that pay directly
+	// to the channel initiator.
+	ChannelTypeScriptEnforced ChannelType = 1
+)
+
 var (
 	// ErrInsufficientBalance is the error that is returned if an account
 	// has insufficient balance to perform a requested action.
@@ -305,6 +328,10 @@ type Kit struct {
 	// MinUnitsMatch signals the minimum number of units that must be
 	// matched against an order.
 	MinUnitsMatch SupplyUnit
+
+	// ChannelType denotes the channel type that must be used for the
+	// resulting matched channels.
+	ChannelType ChannelType
 }
 
 // Nonce is the unique identifier of each order and MUST be created by hashing a
@@ -386,6 +413,16 @@ func (a *Ask) Digest() ([sha256.Size]byte, error) {
 			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
 			a.Amt, a.LeaseDuration, uint64(a.MaxBatchFeeRate),
 			uint32(a.MinUnitsMatch),
+		)
+		if err != nil {
+			return result, err
+		}
+
+	case VersionChannelType:
+		err := lnwire.WriteElements(
+			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
+			a.Amt, a.LeaseDuration, uint64(a.MaxBatchFeeRate),
+			uint32(a.MinUnitsMatch), uint8(a.ChannelType),
 		)
 		if err != nil {
 			return result, err
@@ -600,6 +637,23 @@ func (b *Bid) Digest() ([sha256.Size]byte, error) {
 			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
 			uint32(b.MinNodeTier), uint32(b.MinUnitsMatch),
 			uint64(b.SelfChanBalance), isSidecar,
+		)
+		if err != nil {
+			return result, err
+		}
+
+	case VersionChannelType:
+		var isSidecar uint8
+		if b.SidecarTicket != nil {
+			isSidecar = 1
+		}
+
+		err := lnwire.WriteElements(
+			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
+			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
+			uint32(b.MinNodeTier), uint32(b.MinUnitsMatch),
+			uint64(b.SelfChanBalance), isSidecar,
+			uint8(b.ChannelType),
 		)
 		if err != nil {
 			return result, err
