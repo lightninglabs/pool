@@ -2,6 +2,7 @@ package order
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -35,6 +36,12 @@ var (
 	// implement the same batch verification version as the server.
 	ErrVersionMismatch = fmt.Errorf("version %d mismatches server version",
 		CurrentBatchVersion)
+
+	// ErrInvalidBatchHeightHint is an error returned by a trader upon
+	// verifying a batch when its proposed height hint is outside of the
+	// trader's acceptable range.
+	ErrInvalidBatchHeightHint = errors.New("proposed batch height hint is " +
+		"outside of acceptable range")
 )
 
 // ManagerConfig contains all of the required dependencies for the Manager to
@@ -299,10 +306,10 @@ func (m *Manager) validateOrder(order Order, acct *account.Account,
 }
 
 // OrderMatchValidate verifies an incoming batch is sane before accepting it.
-func (m *Manager) OrderMatchValidate(batch *Batch) error {
+func (m *Manager) OrderMatchValidate(batch *Batch, bestHeight uint32) error {
 	// Make sure we have no objection to the current batch. Then store
 	// it in case it ends up being the final version.
-	err := m.batchVerifier.Verify(batch)
+	err := m.batchVerifier.Verify(batch, bestHeight)
 	if err != nil {
 		// This error will lead to us sending an OrderMatchReject
 		// message and canceling all funding shims we might already have
@@ -330,13 +337,13 @@ func (m *Manager) PendingBatch() *Batch {
 // belong to the trader. Before sending off the signature to the auctioneer,
 // we'll also persist the batch to disk as pending to ensure we can recover
 // after a crash.
-func (m *Manager) BatchSign(bestHeight uint32) (BatchSignature, error) {
+func (m *Manager) BatchSign() (BatchSignature, error) {
 	sig, err := m.batchSigner.Sign(m.pendingBatch)
 	if err != nil {
 		return nil, err
 	}
 
-	err = m.batchStorer.StorePendingBatch(m.pendingBatch, bestHeight)
+	err = m.batchStorer.StorePendingBatch(m.pendingBatch)
 	if err != nil {
 		return nil, fmt.Errorf("unable to store batch: %v", err)
 	}
