@@ -266,6 +266,7 @@ func ParseRPCBatch(prepareMsg *auctioneerrpc.OrderMatchPrepare) (*Batch,
 		MatchedOrders:  make(map[Nonce][]*MatchedOrder),
 		BatchTX:        &wire.MsgTx{},
 		ClearingPrices: make(map[uint32]FixedRatePremium),
+		HeightHint:     prepareMsg.BatchHeightHint,
 	}
 
 	// Parse matched orders market by market.
