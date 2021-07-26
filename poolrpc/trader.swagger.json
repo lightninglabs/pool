@@ -1067,8 +1067,7 @@
           "description": "The true bid price of the order in parts per billion."
         },
         "chan_type": {
-          "type": "integer",
-          "format": "int64",
+          "$ref": "#/definitions/poolrpcOrderChannelType",
           "description": "The channel type to be created."
         }
       }
@@ -1203,8 +1202,7 @@
           "description": "The true bid price of the order in parts per billion."
         },
         "chan_type": {
-          "type": "integer",
-          "format": "int64",
+          "$ref": "#/definitions/poolrpcOrderChannelType",
           "description": "The channel type to be created."
         }
       }
@@ -1983,8 +1981,22 @@
           "type": "integer",
           "format": "int64",
           "description": "The minimum number of order units that must be matched per order pair."
+        },
+        "channel_type": {
+          "$ref": "#/definitions/poolrpcOrderChannelType",
+          "description": "The channel type to use for the resulting matched channels."
         }
       }
+    },
+    "poolrpcOrderChannelType": {
+      "type": "string",
+      "enum": [
+        "ORDER_CHANNEL_TYPE_UNKNOWN",
+        "ORDER_CHANNEL_TYPE_PEER_DEPENDENT",
+        "ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED"
+      ],
+      "default": "ORDER_CHANNEL_TYPE_UNKNOWN",
+      "description": " - ORDER_CHANNEL_TYPE_UNKNOWN: Used to set defaults when a trader doesn't specify a channel type.\n - ORDER_CHANNEL_TYPE_PEER_DEPENDENT: The channel type will vary per matched channel based on the features shared\nbetween its participants.\n - ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED: A channel type that builds upon the anchors commitment format to enforce\nchannel lease maturities in the commitment and HTLC outputs that pay to the\nchannel initiator/seller."
     },
     "poolrpcOrderEvent": {
       "type": "object",

@@ -783,6 +783,24 @@ message AccountDiff {
     bytes trader_key = 4;
 }
 
+enum OrderChannelType {
+    // Used to set defaults when a trader doesn't specify a channel type.
+    ORDER_CHANNEL_TYPE_UNKNOWN = 0;
+
+    /*
+    The channel type will vary per matched channel based on the features shared
+    between its participants.
+    */
+    ORDER_CHANNEL_TYPE_PEER_DEPENDENT = 1;
+
+    /*
+    A channel type that builds upon the anchors commitment format to enforce
+    channel lease maturities in the commitment and HTLC outputs that pay to the
+    channel initiator/seller.
+    */
+    ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED = 2;
+}
+
 message ServerOrder {
     /*
     The trader's account key of the account to use for the order.
@@ -843,7 +861,7 @@ message ServerOrder {
     /*
     The type of the channel that should be opened.
     */
-    uint32 chan_type = 12;
+    OrderChannelType channel_type = 12;
 
     /*
     Maximum fee rate the trader is willing to pay for the batch transaction,
@@ -1202,7 +1220,7 @@ message AskSnapshot {
     uint32 rate_fixed = 3;
 
     // The channel type to be created.
-    uint32 chan_type = 4;
+    OrderChannelType chan_type = 4;
 }
 message BidSnapshot {
     // The version of the order.
@@ -1215,7 +1233,7 @@ message BidSnapshot {
     uint32 rate_fixed = 3;
 
     // The channel type to be created.
-    uint32 chan_type = 4;
+    OrderChannelType chan_type = 4;
 }
 message MatchedOrderSnapshot {
     // The full ask order that was matched.
