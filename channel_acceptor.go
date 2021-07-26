@@ -7,6 +7,7 @@ import (
 
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwire"
 )
 
@@ -136,6 +137,40 @@ func (s *ChannelAcceptor) acceptChannel(_ context.Context,
 			Accept: false,
 			Error: fmt.Sprintf("invalid push amount %v",
 				req.PushAmt),
+		}, nil
+	}
+
+	switch expectedChanBid.ChannelType {
+	// The bid doesn't have specific requirements for the channel type.
+	case order.ChannelTypePeerDependent:
+		break
+
+	// The bid expects a channel type that enforces the channel lease
+	// maturity in its output scripts.
+	case order.ChannelTypeScriptEnforced:
+		if req.CommitmentType == nil {
+			return &lndclient.AcceptorResponse{
+				Accept: false,
+				Error:  "expected explicit channel negotiation",
+			}, nil
+		}
+
+		switch *req.CommitmentType {
+		case lnwallet.CommitmentTypeScriptEnforcedLease:
+		default:
+			return &lndclient.AcceptorResponse{
+				Accept: false,
+				Error: "expected script enforced channel " +
+					"lease commitment type",
+			}, nil
+		}
+
+	default:
+		log.Warnf("Unhandled channel type %v for bid %v",
+			expectedChanBid.ChannelType, expectedChanBid.Nonce())
+		return &lndclient.AcceptorResponse{
+			Accept: false,
+			Error:  "internal error",
 		}, nil
 	}
 
