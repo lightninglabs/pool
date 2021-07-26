@@ -345,6 +345,13 @@ enum ChannelType {
 
     // The channel uses an anchor-based commitment.
     ANCHORS = 1;
+
+    /*
+    The channel build upon the anchor-based commitment and requires an
+    additional CLTV of the channel lease maturity on any commitment and HTLC
+    outputs that pay directly to the channel initiator (the seller).
+    */
+    SCRIPT_ENFORCED_LEASE = 2;
 }
 
 message ChannelInfo {

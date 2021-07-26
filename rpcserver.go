@@ -2673,8 +2673,11 @@ func marshallChannelInfo(chanInfos map[wire.OutPoint]*chaninfo.ChannelInfo) (
 		// between them for our purpose.
 		case chanbackup.AnchorsCommitVersion,
 			chanbackup.AnchorsZeroFeeHtlcTxCommitVersion:
-
 			channelType = auctioneerrpc.ChannelType_ANCHORS
+
+		case chanbackup.ScriptEnforcedLeaseVersion:
+			channelType = auctioneerrpc.ChannelType_SCRIPT_ENFORCED_LEASE
+
 		default:
 			return nil, fmt.Errorf("unknown channel type: %v",
 				chanInfo.Version)
