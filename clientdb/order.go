@@ -22,6 +22,10 @@ const (
 	// bidSidecarTicketType is the tlv type we use to store the sidecar
 	// ticket on bid orders.
 	bidSidecarTicketType tlv.Type = 2
+
+	// orderChannelType is the tlv type we use to store the desired channel
+	// type resulting from a matched order.
+	orderChannelType tlv.Type = 3
 )
 
 var (
@@ -637,6 +641,7 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 	var (
 		selfChanBalance uint64
 		sidecarTicket   []byte
+		channelType     uint8
 	)
 
 	// We'll add records for all possible additional order data fields here
@@ -647,6 +652,7 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 			bidSelfChanBalanceType, &selfChanBalance,
 		),
 		tlv.MakePrimitiveRecord(bidSidecarTicketType, &sidecarTicket),
+		tlv.MakePrimitiveRecord(orderChannelType, &channelType),
 	)
 	if err != nil {
 		return err
@@ -677,6 +683,10 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 				return err
 			}
 		}
+	}
+
+	if t, ok := parsedTypes[orderChannelType]; ok && t == nil {
+		o.Details().ChannelType = order.ChannelType(channelType)
 	}
 
 	return nil
@@ -712,6 +722,11 @@ func serializeOrderTlvData(w io.Writer, o order.Order) error {
 			))
 		}
 	}
+
+	channelType := uint8(o.Details().ChannelType)
+	tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
+		orderChannelType, &channelType,
+	))
 
 	tlvStream, err := tlv.NewStream(tlvRecords...)
 	if err != nil {
