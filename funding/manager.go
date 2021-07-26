@@ -283,8 +283,8 @@ func (m *Manager) SubscribePendingOpenChan() (*subscribe.Client, error) {
 // the maker or taker to properly make a channel that stems off the main batch
 // funding transaction.
 func (m *Manager) deriveFundingShim(ourOrder order.Order,
-	matchedOrder *order.MatchedOrder,
-	batchTx *wire.MsgTx) (*lnrpc.FundingShim, [32]byte, error) {
+	matchedOrder *order.MatchedOrder, batchTx *wire.MsgTx,
+	batchHeightHint uint32) (*lnrpc.FundingShim, [32]byte, error) {
 
 	log.Infof("Registering funding shim for Order(type=%v, amt=%v, "+
 		"nonce=%v", ourOrder.Type(),
@@ -313,6 +313,15 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 
 		thawHeight = matchedOrder.Order.(*order.Bid).LeaseDuration
 		selfChanBalance = matchedOrder.Order.(*order.Bid).SelfChanBalance
+	}
+
+	// If either order requires script enforcement, our thaw height needs to
+	// be an absolute height instead of a relative one.
+	switch {
+	case ourOrder.Details().ChannelType == order.ChannelTypeScriptEnforced:
+		fallthrough
+	case matchedOrder.Order.Details().ChannelType == order.ChannelTypeScriptEnforced:
+		thawHeight += batchHeightHint
 	}
 
 	pendingChanID := order.PendingChanKey(
@@ -398,12 +407,13 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 // side of a new matched order. To prepare ourselves for their incoming funding
 // request, we'll register a shim with all the expected parameters.
 func (m *Manager) registerFundingShim(ourBid *order.Bid,
-	matchedOrder *order.MatchedOrder, batchTx *wire.MsgTx) error {
+	matchedOrder *order.MatchedOrder, batchTx *wire.MsgTx,
+	batchHeightHint uint32) error {
 
 	ctxb := context.Background()
 
 	fundingShim, pendingChanID, err := m.deriveFundingShim(
-		ourBid, matchedOrder, batchTx,
+		ourBid, matchedOrder, batchTx, batchHeightHint,
 	)
 	if err != nil {
 		return err
@@ -556,6 +566,7 @@ func (m *Manager) PrepChannelFunding(batch *order.Batch,
 			// from the asker.
 			err := m.registerFundingShim(
 				ourOrderBid, matchedOrder, batch.BatchTX,
+				batch.HeightHint,
 			)
 			if err != nil {
 				return fmt.Errorf("unable to register funding "+
@@ -639,6 +650,7 @@ func (m *Manager) BatchChannelSetup(
 		for _, matchedOrder := range matchedOrders {
 			fundingShim, _, err := m.deriveFundingShim(
 				ourOrder, matchedOrder, batch.BatchTX,
+				batch.HeightHint,
 			)
 			if err != nil {
 				return nil, err
@@ -678,6 +690,13 @@ func (m *Manager) BatchChannelSetup(
 			//  * also other params to set as well
 			chanAmt := matchedOrder.UnitsFilled.ToSatoshis()
 			chanAmt += matchedOrderBid.SelfChanBalance
+			var commitmentType lnrpc.CommitmentType
+			switch {
+			case ourOrder.Details().ChannelType == order.ChannelTypeScriptEnforced:
+				fallthrough
+			case matchedOrderBid.Details().ChannelType == order.ChannelTypeScriptEnforced:
+				commitmentType = lnrpc.CommitmentType_SCRIPT_ENFORCED_LEASE
+			}
 			fundingReq := &lnrpc.OpenChannelRequest{
 				NodePubkey:         matchedOrder.NodeKey[:],
 				LocalFundingAmount: int64(chanAmt),
@@ -685,6 +704,7 @@ func (m *Manager) BatchChannelSetup(
 				PushSat: int64(
 					matchedOrderBid.SelfChanBalance,
 				),
+				CommitmentType: commitmentType,
 			}
 			chanStream, err := m.cfg.BaseClient.OpenChannel(
 				setupCtx, fundingReq,
@@ -827,6 +847,7 @@ func (m *Manager) SidecarBatchChannelSetup(batch *order.Batch,
 		for _, matchedOrder := range matchedOrders {
 			fundingShim, _, err := m.deriveFundingShim(
 				ourOrder, matchedOrder, batch.BatchTX,
+				batch.HeightHint,
 			)
 			if err != nil {
 				return nil, err
