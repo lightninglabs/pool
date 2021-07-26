@@ -29,3 +29,7 @@ require (
 )
 
 replace github.com/lightninglabs/pool/auctioneerrpc => ./auctioneerrpc
+
+replace github.com/lightningnetwork/lnd => github.com/wpaulino/lnd v0.2.1-alpha.0.20210728230947-297dc5461e32
+
+replace github.com/lightninglabs/lndclient => github.com/wpaulino/lndclient v1.0.1-0.20210728232320-919d63f1f469
