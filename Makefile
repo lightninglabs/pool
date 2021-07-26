@@ -147,8 +147,7 @@ list:
 
 rpc:
 	@$(call print, "Compiling protos.")
-	cd ./poolrpc; ./gen_protos.sh
-	cd ./auctioneerrpc; ./gen_protos.sh
+	cd ./poolrpc; ./gen_protos_docker.sh
 
 rpc-format:
 	@$(call print, "Formatting protos.")

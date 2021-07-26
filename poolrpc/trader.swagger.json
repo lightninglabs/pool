@@ -14,7 +14,7 @@
     "/v1/pool/accounts": {
       "get": {
         "summary": "pool: `accounts list`\nListAccounts returns a list of all accounts known to the trader daemon and\ntheir current state.",
-        "operationId": "ListAccounts",
+        "operationId": "Trader_ListAccounts",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -45,7 +45,7 @@
       },
       "delete": {
         "summary": "pool: `accounts close`\nCloseAccount closes an account and returns the funds locked in that account\nto the connected lnd node's wallet.",
-        "operationId": "CloseAccount",
+        "operationId": "Trader_CloseAccount",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -99,7 +99,7 @@
       },
       "post": {
         "summary": "pool: `accounts new`\nInitAccount creates a new account with the requested size and expiration,\nfunding it from the wallet of the connected lnd node.",
-        "operationId": "InitAccount",
+        "operationId": "Trader_InitAccount",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -132,7 +132,7 @@
     "/v1/pool/accounts/bump": {
       "post": {
         "summary": "pool: `accounts bumpfee`\nBumpAccountFee attempts to bump the fee of an account's transaction through\nchild-pays-for-parent (CPFP). Since the CPFP is performed through the\nbacking lnd node, the account transaction must contain an output under its\ncontrol for a successful bump. If a CPFP has already been performed for an\naccount, and this RPC is invoked again, then a replacing transaction (RBF)\nof the child will be broadcast.",
-        "operationId": "BumpAccountFee",
+        "operationId": "Trader_BumpAccountFee",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -165,7 +165,7 @@
     "/v1/pool/accounts/deposit": {
       "post": {
         "summary": "pool: `accounts deposit`\nDepositAccount adds more funds from the connected lnd node's wallet to an\naccount.",
-        "operationId": "DepositAccount",
+        "operationId": "Trader_DepositAccount",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -198,7 +198,7 @@
     "/v1/pool/accounts/quote": {
       "post": {
         "summary": "QuoteAccount gets a fee quote to fund an account of the given size with the\ngiven confirmation target. If the connected lnd wallet doesn't have enough\nbalance to fund an account of the requested size, an error is returned.",
-        "operationId": "QuoteAccount",
+        "operationId": "Trader_QuoteAccount",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -231,7 +231,7 @@
     "/v1/pool/accounts/recover": {
       "post": {
         "summary": "pool: `accounts recover`\nRecoverAccounts queries the auction server for this trader daemon's accounts\nin case we lost our local account database.",
-        "operationId": "RecoverAccounts",
+        "operationId": "Trader_RecoverAccounts",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -264,7 +264,7 @@
     "/v1/pool/accounts/renew": {
       "post": {
         "summary": "pool: `accounts renew`\nRenewAccount renews the expiration of an account.",
-        "operationId": "RenewAccount",
+        "operationId": "Trader_RenewAccount",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -297,7 +297,7 @@
     "/v1/pool/accounts/withdraw": {
       "post": {
         "summary": "pool: `accounts withdraw`\nWithdrawAccount splits off parts of the account balance into the specified\noutputs while recreating the account with a reduced balance.",
-        "operationId": "WithdrawAccount",
+        "operationId": "Trader_WithdrawAccount",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -330,7 +330,7 @@
     "/v1/pool/batch/next": {
       "get": {
         "summary": "pool: `auction nextbatchinfo`\nNextBatchInfo returns information about the next batch the auctioneer will\nperform.",
-        "operationId": "NextBatchInfo",
+        "operationId": "Trader_NextBatchInfo",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -353,7 +353,7 @@
     "/v1/pool/batch/snapshot": {
       "get": {
         "summary": "pool: `auction snapshot`\nBatchSnapshot returns the snapshot of a past batch identified by its ID.\nIf no ID is provided, the snapshot of the last finalized batch is returned.\nDeprecated, use BatchSnapshots instead.",
-        "operationId": "BatchSnapshot",
+        "operationId": "Trader_BatchSnapshot",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -386,7 +386,7 @@
     "/v1/pool/batch/snapshots": {
       "get": {
         "summary": "pool: `auction snapshot`\nBatchSnapshots returns a list of batch snapshots starting at the start batch\nID and going back through the history of batches, returning at most the\nnumber of specified batches. A maximum of 100 snapshots can be queried in\none call. If no start batch ID is provided, the most recent finalized batch\nis used as the starting point to go back from.",
-        "operationId": "BatchSnapshots",
+        "operationId": "Trader_BatchSnapshots",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -427,7 +427,7 @@
     "/v1/pool/batch/snapshots/{start_batch_id}": {
       "get": {
         "summary": "pool: `auction snapshot`\nBatchSnapshots returns a list of batch snapshots starting at the start batch\nID and going back through the history of batches, returning at most the\nnumber of specified batches. A maximum of 100 snapshots can be queried in\none call. If no start batch ID is provided, the most recent finalized batch\nis used as the starting point to go back from.",
-        "operationId": "BatchSnapshots2",
+        "operationId": "Trader_BatchSnapshots2",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -468,7 +468,7 @@
     "/v1/pool/batch/snapshots/{start_batch_id}/{num_batches_back}": {
       "get": {
         "summary": "pool: `auction snapshot`\nBatchSnapshots returns a list of batch snapshots starting at the start batch\nID and going back through the history of batches, returning at most the\nnumber of specified batches. A maximum of 100 snapshots can be queried in\none call. If no start batch ID is provided, the most recent finalized batch\nis used as the starting point to go back from.",
-        "operationId": "BatchSnapshots3",
+        "operationId": "Trader_BatchSnapshots3",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -509,7 +509,7 @@
     "/v1/pool/fee": {
       "get": {
         "summary": "pool: `auction fee`\nAuctionFee returns the current auction order execution fee specified by the\nauction server.",
-        "operationId": "AuctionFee",
+        "operationId": "Trader_AuctionFee",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -532,7 +532,7 @@
     "/v1/pool/info": {
       "get": {
         "summary": "pool: `getinfo`\nGetInfo returns general information about the state of the Pool trader\ndaemon.",
-        "operationId": "GetInfo",
+        "operationId": "Trader_GetInfo",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -555,7 +555,7 @@
     "/v1/pool/lease_durations": {
       "get": {
         "summary": "pool: `auction leasedurations`\nLeaseDurations returns the current set of valid lease duration in the\nmarket as is, and also information w.r.t if the market is currently active.",
-        "operationId": "LeaseDurations",
+        "operationId": "Trader_LeaseDurations",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -578,7 +578,7 @@
     "/v1/pool/leases": {
       "get": {
         "summary": "pool: `auction leases`\nLeases returns the list of channels that were either purchased or sold by\nthe trader within the auction.",
-        "operationId": "Leases",
+        "operationId": "Trader_Leases",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -627,7 +627,7 @@
     "/v1/pool/lsat/tokens": {
       "get": {
         "summary": "pool: `listauth`\nGetLsatTokens returns all LSAT tokens the daemon ever paid for.",
-        "operationId": "GetLsatTokens",
+        "operationId": "Trader_GetLsatTokens",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -650,7 +650,7 @@
     "/v1/pool/node_ratings": {
       "get": {
         "summary": "pool: `auction ratings`\nReturns the Node Tier information for this target Lightning node, and other\nrelated ranking information.",
-        "operationId": "NodeRatings",
+        "operationId": "Trader_NodeRatings",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -687,7 +687,7 @@
     "/v1/pool/orders": {
       "get": {
         "summary": "pool: `orders list`\nListOrders returns a list of all active and archived orders that are\ncurrently known to the trader daemon.",
-        "operationId": "ListOrders",
+        "operationId": "Trader_ListOrders",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -726,7 +726,7 @@
       },
       "post": {
         "summary": "pool: `orders submit`\nSubmitOrder creates a new ask or bid order and submits for the given account\nand submits it to the auction server for matching.",
-        "operationId": "SubmitOrder",
+        "operationId": "Trader_SubmitOrder",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -759,7 +759,7 @@
     "/v1/pool/orders/quote": {
       "post": {
         "summary": "QuoteOrder calculates the premium, execution fees and max batch fee rate for\nan order based on the given order parameters.",
-        "operationId": "QuoteOrder",
+        "operationId": "Trader_QuoteOrder",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -792,7 +792,7 @@
     "/v1/pool/orders/{order_nonce}": {
       "delete": {
         "summary": "pool: `orders cancel`\nCancelOrder cancels an active order with the auction server to remove it\nfrom future matching.",
-        "operationId": "CancelOrder",
+        "operationId": "Trader_CancelOrder",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -824,7 +824,7 @@
     "/v1/pool/sidecar/expect": {
       "post": {
         "summary": "pool: `sidecar expectchannel`\nExpectSidecarChannel is step 4/4 of the sidecar negotiation between the\nprovider (the trader submitting the bid order) and the recipient (the trader\nreceiving the sidecar channel).\nThis step must be run by the recipient once the provider has submitted the\nbid order for the sidecar channel. From this point onwards the Pool trader\ndaemon of both the provider as well as the recipient need to be online to\nreceive and react to match making events from the server.",
-        "operationId": "ExpectSidecarChannel",
+        "operationId": "Trader_ExpectSidecarChannel",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -857,7 +857,7 @@
     "/v1/pool/sidecar/offer": {
       "post": {
         "summary": "pool: `sidecar offer`\nOfferSidecar is step 1/4 of the sidecar negotiation between the provider\n(the trader submitting the bid order) and the recipient (the trader\nreceiving the sidecar channel).\nThis step must be run by the provider. The result is a sidecar ticket with\nan offer to lease a sidecar channel for the recipient. The offer will be\nsigned with the provider's lnd node public key. The ticket returned by this\ncall will have the state \"offered\".",
-        "operationId": "OfferSidecar",
+        "operationId": "Trader_OfferSidecar",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -890,7 +890,7 @@
     "/v1/pool/sidecar/register": {
       "post": {
         "summary": "pool: `sidecar register`\nRegisterSidecarRequest is step 2/4 of the sidecar negotiation between the\nprovider (the trader submitting the bid order) and the recipient (the trader\nreceiving the sidecar channel).\nThis step must be run by the recipient. The result is a sidecar ticket with\nthe recipient's node information and channel funding multisig pubkey filled\nin. The ticket returned by this call will have the state \"registered\".",
-        "operationId": "RegisterSidecar",
+        "operationId": "Trader_RegisterSidecar",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -923,7 +923,7 @@
     "/v1/pool/stop": {
       "post": {
         "summary": "pool: `stop`\nStop gracefully shuts down the Pool trader daemon.",
-        "operationId": "StopDaemon",
+        "operationId": "Trader_StopDaemon",
         "responses": {
           "200": {
             "description": "A successful response.",
