@@ -406,6 +406,17 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 			Addr:    addr.String(),
 		})
 	}
+
+	var channelType auctioneerrpc.OrderChannelType
+	switch o.Details().ChannelType {
+	case order.ChannelTypePeerDependent:
+		channelType = auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_PEER_DEPENDENT
+	case order.ChannelTypeScriptEnforced:
+		channelType = auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED
+	default:
+		return fmt.Errorf("unhandled channel type %v", c)
+	}
+
 	details := &auctioneerrpc.ServerOrder{
 		TraderKey:               o.Details().AcctKey[:],
 		RateFixed:               o.Details().FixedRate,
@@ -416,6 +427,7 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		MultiSigKey:             serverParams.MultiSigKey[:],
 		NodePub:                 serverParams.NodePubkey[:],
 		NodeAddr:                nodeAddrs,
+		ChannelType:             channelType,
 		MaxBatchFeeRateSatPerKw: uint64(o.Details().MaxBatchFeeRate),
 	}
 

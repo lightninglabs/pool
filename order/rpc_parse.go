@@ -62,6 +62,25 @@ func ParseRPCOrder(version, leaseDuration uint32,
 	}
 	kit.MinUnitsMatch = SupplyUnit(details.MinUnitsMatch)
 
+	switch details.ChannelType {
+	// Default value, trader didn't specify a channel type.
+	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_UNKNOWN:
+		// TODO: Switch to script enforcement by default once we can
+		// enforce the lnd release supporting script enforced channels
+		// as the minimalCompatibleVersion.
+		kit.ChannelType = ChannelTypePeerDependent
+
+	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_PEER_DEPENDENT:
+		kit.ChannelType = ChannelTypePeerDependent
+
+	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED:
+		kit.ChannelType = ChannelTypeScriptEnforced
+
+	default:
+		return nil, fmt.Errorf("unhandled channel type %v",
+			details.ChannelType)
+	}
+
 	return kit, nil
 }
 
@@ -168,6 +187,22 @@ func ParseRPCServerOrder(version uint32, details *auctioneerrpc.ServerOrder,
 			fmt.Errorf("unable to parse multi sig pub key: %v", err)
 	}
 	copy(multiSigKey[:], multiSigPubkey.SerializeCompressed())
+
+	switch details.ChannelType {
+	// Default value, trader didn't specify a channel type.
+	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_UNKNOWN:
+		kit.ChannelType = ChannelTypePeerDependent
+
+	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_PEER_DEPENDENT:
+		kit.ChannelType = ChannelTypePeerDependent
+
+	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED:
+		kit.ChannelType = ChannelTypeScriptEnforced
+
+	default:
+		return nil, nodeKey, nil, multiSigKey,
+			fmt.Errorf("unhandled channel type %v", details.ChannelType)
+	}
 
 	return kit, nodeKey, nodeAddrs, multiSigKey, nil
 }
