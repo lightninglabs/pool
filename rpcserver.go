@@ -258,6 +258,8 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 				}
 			}
 
+			rpcLog.Error("Unknown server error: %v", err)
+
 		case height := <-blockChan:
 			rpcLog.Infof("Received new block notification: height=%v",
 				height)
