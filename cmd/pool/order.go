@@ -11,6 +11,7 @@ import (
 
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/auctioneer"
+	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/sidecar"
@@ -21,6 +22,9 @@ import (
 const (
 	defaultAskMaxDuration = 2016
 	defaultBidMinDuration = 2016
+
+	channelTypePeerDependent  = "legacy"
+	channelTypeScriptEnforced = "script-enforced"
 )
 
 // Default max batch fee rate to 100 sat/vByte.
@@ -105,6 +109,17 @@ var sharedFlags = []cli.Flag{
 		Usage: "the maximum fee rate (sat/vByte) to use to for " +
 			"the batch transaction",
 		Value: defaultMaxBatchFeeRateSatPerVByte,
+	},
+	cli.StringFlag{
+		Name: "channel_type",
+		Usage: fmt.Sprintf("the type of channel resulting from the "+
+			"order being matched (%q, %q)",
+			channelTypePeerDependent,
+			channelTypeScriptEnforced),
+		// TODO: Switch to script enforcement by default once we can
+		// enforce the lnd release supporting script enforced channels
+		// as the minimalCompatibleVersion.
+		Value: channelTypePeerDependent,
 	},
 }
 
@@ -230,6 +245,20 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 
 	params.RateFixed = rateFixed
 
+	// Determine the appropriate channel type that should be opened upon an
+	// order match.
+	channelType := ctx.String("channel_type")
+	switch channelType {
+	case "":
+		break
+	case channelTypePeerDependent:
+		params.ChannelType = auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_PEER_DEPENDENT
+	case channelTypeScriptEnforced:
+		params.ChannelType = auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED
+	default:
+		return nil, fmt.Errorf("unknown channel type %q", channelType)
+	}
+
 	return params, nil
 }
 
@@ -307,7 +336,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 
 	ask := &poolrpc.Ask{
 		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
-		Version:             uint32(order.VersionSelfChanBalance),
+		Version:             uint32(order.VersionChannelType),
 	}
 
 	params, err := parseCommonParams(ctx, ask.LeaseDurationBlocks)
@@ -463,7 +492,7 @@ func parseBaseBid(ctx *cli.Context) (*poolrpc.Bid, *sidecar.Ticket, error) {
 
 	bid := &poolrpc.Bid{
 		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
-		Version:             uint32(order.VersionSidecarChannel),
+		Version:             uint32(order.VersionChannelType),
 		MinNodeTier:         nodeTier,
 	}
 
