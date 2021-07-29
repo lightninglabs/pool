@@ -8,29 +8,24 @@ require (
 	github.com/btcsuite/btcutil v1.0.3-0.20210527170813-e2ba6805a890
 	github.com/btcsuite/btcwallet v0.12.1-0.20210519225359-6ab9b615576f
 	github.com/btcsuite/btcwallet/wallet/txrules v1.0.0
-	github.com/btcsuite/btcwallet/wtxmgr v1.3.0
+	github.com/btcsuite/btcwallet/wtxmgr v1.3.1-0.20210706234807-aaf03fee735a
 	github.com/davecgh/go-spew v1.1.1
-	github.com/golang/protobuf v1.4.3
-	github.com/grpc-ecosystem/grpc-gateway v1.14.6
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.5.0
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/lightninglabs/aperture v0.1.6-beta
 	github.com/lightninglabs/lndclient v0.12.0-8
 	github.com/lightninglabs/pool/auctioneerrpc v1.0.2
 	github.com/lightninglabs/protobuf-hex-display v1.4.3-hex-display
-	github.com/lightningnetwork/lnd v0.13.0-beta
+	github.com/lightningnetwork/lnd v0.13.0-beta.rc5.0.20210728112744-ebabda671786
 	github.com/lightningnetwork/lnd/cert v1.0.3
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli v1.20.0
-	go.etcd.io/bbolt v1.3.5-0.20200615073812-232d8fc87f50
-	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a
-	google.golang.org/grpc v1.29.1
-	google.golang.org/protobuf v1.23.0
+	go.etcd.io/bbolt v1.3.6
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	google.golang.org/grpc v1.38.0
+	google.golang.org/protobuf v1.26.0
 	gopkg.in/macaroon-bakery.v2 v2.0.1
 	gopkg.in/macaroon.v2 v2.1.0
 )
 
 replace github.com/lightninglabs/pool/auctioneerrpc => ./auctioneerrpc
-
-// Fix incompatibility of etcd go.mod package.
-// See https://github.com/etcd-io/etcd/issues/11154
-replace go.etcd.io/etcd => go.etcd.io/etcd v0.5.0-alpha.5.0.20201125193152-8a03d2e9614b

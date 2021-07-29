@@ -53,6 +53,11 @@ type rpcServer struct {
 	// used atomically.
 	bestHeight uint32
 
+	// Required by the grpc-gateway/v2 library for forward compatibility.
+	// Must be after the atomically used variables to not break struct
+	// alignment.
+	poolrpc.UnimplementedTraderServer
+
 	server         *Server
 	lndServices    *lndclient.LndServices
 	lndClient      lnrpc.LightningClient

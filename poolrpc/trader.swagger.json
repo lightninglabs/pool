@@ -4,6 +4,11 @@
     "title": "trader.proto",
     "version": "version not set"
   },
+  "tags": [
+    {
+      "name": "Trader"
+    }
+  ],
   "consumes": [
     "application/json"
   ],
@@ -23,9 +28,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -35,8 +40,7 @@
             "description": "Only list accounts that are still active.",
             "in": "query",
             "required": false,
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -54,9 +58,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -108,9 +112,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -141,9 +145,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -174,9 +178,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -207,9 +211,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -240,9 +244,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -273,9 +277,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -306,9 +310,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -339,9 +343,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -362,9 +366,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -395,9 +399,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -436,9 +440,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -477,9 +481,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -518,9 +522,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -541,9 +545,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -564,9 +568,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -587,9 +591,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -636,9 +640,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -659,9 +663,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -696,9 +700,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -708,16 +712,14 @@
             "description": "Can be set to true to list the orders including all events, which can be\nvery verbose.",
             "in": "query",
             "required": false,
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           },
           {
             "name": "active_only",
             "description": "Only list orders that are still active.",
             "in": "query",
             "required": false,
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -735,9 +737,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -768,9 +770,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -801,9 +803,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -833,9 +835,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -866,9 +868,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -899,9 +901,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -932,9 +934,9 @@
             }
           },
           "default": {
-            "description": "An unexpected error response",
+            "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/gatewayruntimeError"
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -971,27 +973,6 @@
         "value": {
           "type": "integer",
           "format": "int64"
-        }
-      }
-    },
-    "gatewayruntimeError": {
-      "type": "object",
-      "properties": {
-        "error": {
-          "type": "string"
-        },
-        "code": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "message": {
-          "type": "string"
-        },
-        "details": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/protobufAny"
-          }
         }
       }
     },
@@ -1394,12 +1375,10 @@
         },
         "subscribed_to_auctioneer": {
           "type": "boolean",
-          "format": "boolean",
           "description": "Indicates whether there is an active subscription connection to the\nauctioneer. This will never be true if there is no active account. If there\nare active accounts, this value represents the network connection status to\nthe auctioneer server."
         },
         "new_nodes_only": {
           "type": "boolean",
-          "format": "boolean",
           "description": "Indicates whether the global `--newnodesonly` command line flag or\n`newnodesonly=true` configuration parameter was set on the Pool trader\ndaemon."
         },
         "market_info": {
@@ -1511,7 +1490,6 @@
         },
         "purchased": {
           "type": "boolean",
-          "format": "boolean",
           "description": "Whether this channel was purchased from another trader or not."
         },
         "channel_remote_node_key": {
@@ -1530,7 +1508,6 @@
         },
         "sidecar_channel": {
           "type": "boolean",
-          "format": "boolean",
           "description": "Whether the channel was leased as a sidecar channel (bid orders only)."
         }
       }
@@ -1541,8 +1518,7 @@
         "lease_durations": {
           "type": "object",
           "additionalProperties": {
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           },
           "description": "Deprecated, use lease_duration_buckets."
         },
@@ -1640,7 +1616,6 @@
         },
         "expired": {
           "type": "boolean",
-          "format": "boolean",
           "description": "*\nIndicates whether the token is expired or still valid."
         },
         "storage_name": {
@@ -1836,7 +1811,6 @@
       "properties": {
         "auto_negotiate": {
           "type": "boolean",
-          "format": "boolean",
           "description": "If false, then only the trader_key, unit, self_chan_balance, and\nlease_duration_blocks need to be set in the bid below. Otherwise, the\nfields as they're set when submitting a bid need to be filled in."
         },
         "bid": {
@@ -2114,7 +2088,6 @@
         },
         "auto_negotiate": {
           "type": "boolean",
-          "format": "boolean",
           "description": "If this value is True, then the daemon will attempt to finish negotiating\nthe details of the sidecar channel automatically in the background. The\nprogress of the ticket can be monitored using the SidecarState RPC. In\naddition, if this flag is set, then this method will _block_ until the\nsidecar negotiation either finishes or breaks down."
         }
       }
@@ -2277,6 +2250,24 @@
         "value": {
           "type": "string",
           "format": "byte"
+        }
+      }
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
         }
       }
     }
