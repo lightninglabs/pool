@@ -60,7 +60,7 @@ func (e *AcctResNotCompletedError) Unwrap() error {
 // AcctResNotCompletedErrFromRPC creates a new AcctResNotCompletedError from an
 // RPC account message.
 func AcctResNotCompletedErrFromRPC(
-	rpcAcc auctioneerrpc.AuctionAccount) *AcctResNotCompletedError {
+	rpcAcc *auctioneerrpc.AuctionAccount) *AcctResNotCompletedError {
 
 	result := &AcctResNotCompletedError{
 		Value:      btcutil.Amount(rpcAcc.Value),

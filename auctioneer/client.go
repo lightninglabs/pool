@@ -641,7 +641,7 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 			// handled specifically so we return a typed error now.
 			if errMsg.ErrorCode == auctioneerrpc.SubscribeError_INCOMPLETE_ACCOUNT_RESERVATION {
 				return sub, true, AcctResNotCompletedErrFromRPC(
-					*errMsg.AccountReservation,
+					errMsg.AccountReservation,
 				)
 			}
 
