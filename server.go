@@ -15,7 +15,7 @@ import (
 	"sync/atomic"
 
 	"github.com/btcsuite/btcd/btcec"
-	proxy "github.com/grpc-ecosystem/grpc-gateway/runtime"
+	proxy "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/lightninglabs/aperture/lsat"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
@@ -30,6 +30,7 @@ import (
 	"github.com/lightningnetwork/lnd/macaroons"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/macaroon-bakery.v2/bakery"
 )
 
@@ -211,8 +212,10 @@ func (s *Server) Start() error {
 		// values, even if they are falsey.
 		customMarshalerOption := proxy.WithMarshalerOption(
 			proxy.MIMEWildcard, &proxy.JSONPb{
-				OrigName:     true,
-				EmitDefaults: true,
+				MarshalOptions: protojson.MarshalOptions{
+					UseProtoNames:   true,
+					EmitUnpopulated: true,
+				},
 			},
 		)
 
