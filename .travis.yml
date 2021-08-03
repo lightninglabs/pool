@@ -36,6 +36,7 @@ jobs:
       script:
         - GO111MODULE=on make unit pkg=... case=_NONE_
         - GO111MODULE=on make lint workers=1
+        - GO111MODULE=on make rpc-js-compile
     - stage: Test
       script: GO111MODULE=on make unit-race
       name: Unit Race
