@@ -154,6 +154,10 @@ rpc-format:
 	cd ./poolrpc; find . -name "*.proto" | xargs clang-format --style=file -i
 	cd ./auctioneerrpc; find . -name "*.proto" | xargs clang-format --style=file -i
 
+rpc-js-compile:
+	@$(call print, "Compiling JSON/WASM stubs.")
+	GOOS=js GOARCH=wasm $(GOBUILD) $(PKG)/poolrpc
+
 clean:
 	@$(call print, "Cleaning source.$(NC)")
 	$(RM) ./pool
