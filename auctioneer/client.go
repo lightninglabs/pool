@@ -966,6 +966,14 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		default:
 		}
 
+		// This should never happen as we always close the quit channel
+		// before we set the connection to nil (which _should_ cause us
+		// to return in the first place), but just to be safe and avoid
+		// a panic.
+		if c.serverStream == nil {
+			return
+		}
+
 		// Read next message from server.
 		msg, err := c.serverStream.Recv()
 		log.Tracef("Received msg=%#v, err=%v from server", msg, err)
@@ -1026,9 +1034,12 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 			}
 			c.subscribedAcctsMtx.Unlock()
 			if acctSub == nil {
-				c.errChanSwitch.ErrChan() <- fmt.Errorf("no "+
-					"subscription found for commit hash %x",
-					commitHash)
+				select {
+				case c.errChanSwitch.ErrChan() <- fmt.Errorf(
+					"no subscription found for commit "+
+						"hash %x", commitHash):
+				case <-c.quit:
+				}
 				return
 			}
 
@@ -1036,6 +1047,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 			select {
 			case acctSub.msgChan <- msg:
 			case <-c.quit:
+				return
 			}
 
 		// The server confirms the account subscription. We only really
@@ -1044,7 +1056,10 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		case *auctioneerrpc.ServerAuctionMessage_Success:
 			err := c.sendToSubscription(t.Success.TraderKey, msg)
 			if err != nil {
-				c.errChanSwitch.ErrChan() <- err
+				select {
+				case c.errChanSwitch.ErrChan() <- err:
+				case <-c.quit:
+				}
 				return
 			}
 
@@ -1054,7 +1069,10 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 		case *auctioneerrpc.ServerAuctionMessage_Account:
 			err := c.sendToSubscription(t.Account.TraderKey, msg)
 			if err != nil {
-				c.errChanSwitch.ErrChan() <- err
+				select {
+				case c.errChanSwitch.ErrChan() <- err:
+				case <-c.quit:
+				}
 				return
 			}
 
@@ -1087,7 +1105,10 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 					t.Error.TraderKey, msg,
 				)
 				if err != nil {
-					c.errChanSwitch.ErrChan() <- err
+					select {
+					case c.errChanSwitch.ErrChan() <- err:
+					case <-c.quit:
+					}
 					return
 				}
 
@@ -1100,6 +1121,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 			select {
 			case c.FromServerChan <- msg:
 			case <-c.quit:
+				return
 			}
 
 		// A valid message from the server. Forward it to the handler.
@@ -1107,6 +1129,7 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 			select {
 			case c.FromServerChan <- msg:
 			case <-c.quit:
+				return
 			}
 		}
 	}
