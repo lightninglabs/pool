@@ -305,7 +305,7 @@ func (w *mockWallet) ListUnspent(_ context.Context, _, _ int32) (
 }
 
 func (w *mockWallet) LeaseOutput(_ context.Context, lockID wtxmgr.LockID,
-	op wire.OutPoint) (time.Time, error) {
+	op wire.OutPoint, _ time.Duration) (time.Time, error) {
 
 	return time.Now().Add(10 * time.Minute), nil
 }

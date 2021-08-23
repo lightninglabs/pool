@@ -7,6 +7,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/btcec"
@@ -1765,7 +1766,7 @@ coinSelection:
 		// fail at any point.
 		for i, input := range inputs {
 			_, err := m.cfg.Wallet.LeaseOutput(
-				ctx, lockID, input.OutPoint,
+				ctx, lockID, input.OutPoint, time.Minute*10,
 			)
 			if err != nil {
 				log.Debugf("Unable to lease output %v: %v",

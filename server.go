@@ -39,8 +39,8 @@ var (
 	// required in lnd to run pool.
 	minimalCompatibleVersion = &verrpc.Version{
 		AppMajor: 0,
-		AppMinor: 11,
-		AppPatch: 1,
+		AppMinor: 12,
+		AppPatch: 0,
 
 		// We don't actually require the invoicesrpc calls. But if we
 		// try to use lndclient on an lnd that doesn't have it enabled,
