@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"strconv"
 
 	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
-	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli"
 )
@@ -179,20 +177,6 @@ func sidecarOffer(ctx *cli.Context) error {
 	return nil
 }
 
-type jsonTicket struct {
-	ID                        string
-	Version                   uint8
-	State                     string
-	Capacity                  uint64
-	PushAmount                uint64
-	LeaseDurationBlocks       uint32
-	OfferSigningPubKey        string
-	RecipientNodePubKey       string
-	RecipientMultiSigPubKey   string
-	RecipientMultiSigKeyIndex uint32
-	OrderNonce                string
-}
-
 var sidecarPrintTicketCommand = cli.Command{
 	Name:      "printticket",
 	Aliases:   []string{"p"},
@@ -211,47 +195,22 @@ func sidecarPrintTicket(ctx *cli.Context) error {
 		return nil
 	}
 
-	ticketStr := ctx.Args().First()
-
-	ticket, err := sidecar.DecodeString(ticketStr)
+	client, cleanup, err := getClient(ctx)
 	if err != nil {
-		return fmt.Errorf("error decoding base64 ticket: %v", err)
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.DecodeSidecarTicket(
+		context.Background(), &poolrpc.SidecarTicket{
+			Ticket: ctx.Args().First(),
+		},
+	)
+	if err != nil {
+		return err
 	}
 
-	jsonTicket := &jsonTicket{
-		ID:                  hex.EncodeToString(ticket.ID[:]),
-		Version:             uint8(ticket.Version),
-		State:               ticket.State.String(),
-		Capacity:            uint64(ticket.Offer.Capacity),
-		PushAmount:          uint64(ticket.Offer.PushAmt),
-		LeaseDurationBlocks: ticket.Offer.LeaseDurationBlocks,
-	}
-
-	if ticket.Offer.SignPubKey != nil {
-		jsonTicket.OfferSigningPubKey = hex.EncodeToString(
-			ticket.Offer.SignPubKey.SerializeCompressed(),
-		)
-	}
-	if ticket.Recipient != nil {
-		if ticket.Recipient.NodePubKey != nil {
-			jsonTicket.RecipientNodePubKey = hex.EncodeToString(
-				ticket.Recipient.NodePubKey.SerializeCompressed(),
-			)
-		}
-		if ticket.Recipient.MultiSigPubKey != nil {
-			jsonTicket.RecipientMultiSigPubKey = hex.EncodeToString(
-				ticket.Recipient.MultiSigPubKey.SerializeCompressed(),
-			)
-		}
-		jsonTicket.RecipientMultiSigKeyIndex = ticket.Recipient.MultiSigKeyIndex
-	}
-	if ticket.Order != nil {
-		jsonTicket.OrderNonce = hex.EncodeToString(
-			ticket.Order.BidNonce[:],
-		)
-	}
-
-	printJSON(jsonTicket)
+	printRespJSON(resp)
 
 	return nil
 }
