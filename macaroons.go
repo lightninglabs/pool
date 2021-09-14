@@ -141,11 +141,11 @@ var (
 		}},
 	}
 
-	// allPermissions is the list of all existing permissions that exist
+	// AllPermissions is the list of all existing permissions that exist
 	// for poold's RPC. The default macaroon that is created on startup
 	// contains all these permissions and is therefore equivalent to lnd's
 	// admin.macaroon but for pool.
-	allPermissions = []bakery.Op{{
+	AllPermissions = []bakery.Op{{
 		Entity: "account",
 		Action: "read",
 	}, {
@@ -227,7 +227,7 @@ func (s *Server) startMacaroonService() error {
 		// lnd). Custom macaroons can be created through the bakery
 		// RPC.
 		poolMac, err := s.macaroonService.Oven.NewMacaroon(
-			idCtx, bakery.LatestVersion, nil, allPermissions...,
+			idCtx, bakery.LatestVersion, nil, AllPermissions...,
 		)
 		if err != nil {
 			return err
