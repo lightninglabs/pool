@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/lightninglabs/pool/clientdb"
+	"github.com/lightningnetwork/lnd/kvdb"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/macaroons"
 	"github.com/lightningnetwork/lnd/rpcperms"
@@ -193,12 +194,11 @@ var (
 // exist yet. If macaroons are disabled in general in the configuration, none of
 // these actions are taken.
 func (s *Server) startMacaroonService() error {
-	// Create the macaroon authentication/authorization service.
-	var err error
-	s.macaroonService, err = macaroons.NewService(
-		s.cfg.BaseDir, poolMacaroonLocation, false,
-		clientdb.DefaultPoolDBTimeout, macaroons.IPLockChecker,
-	)
+	backend, err := kvdb.GetBoltBackend(&kvdb.BoltBackendConfig{
+		DBPath:     s.cfg.BaseDir,
+		DBFileName: "macaroons.db",
+		DBTimeout:  clientdb.DefaultPoolDBTimeout,
+	})
 	if err == bbolt.ErrTimeout {
 		return fmt.Errorf("error while trying to open %s/%s: "+
 			"timed out after %v when trying to obtain exclusive "+
@@ -208,8 +208,15 @@ func (s *Server) startMacaroonService() error {
 			clientdb.DefaultPoolDBTimeout)
 	}
 	if err != nil {
-		return fmt.Errorf("unable to set up macaroon authentication: "+
-			"%v", err)
+		return fmt.Errorf("unable to load macaroon db: %v", err)
+	}
+
+	// Create the macaroon authentication/authorization service.
+	s.macaroonService, err = macaroons.NewService(
+		backend, poolMacaroonLocation, false, macaroons.IPLockChecker,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to set up macaroon service: %v", err)
 	}
 
 	// Try to unlock the macaroon store with the private password.
@@ -264,7 +271,7 @@ func (s *Server) stopMacaroonService() error {
 func (s *Server) macaroonInterceptor() (grpc.UnaryServerInterceptor,
 	grpc.StreamServerInterceptor, error) {
 
-	interceptor := rpcperms.NewInterceptorChain(log, false)
+	interceptor := rpcperms.NewInterceptorChain(log, false, nil)
 	err := interceptor.Start()
 	if err != nil {
 		return nil, nil, err

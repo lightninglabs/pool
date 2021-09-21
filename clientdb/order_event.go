@@ -1,6 +1,7 @@
 package clientdb
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"time"
@@ -77,7 +78,7 @@ func (e *CreatedEvent) String() string {
 // filtering.
 //
 // NOTE: This is part of the event.Event interface.
-func (e *CreatedEvent) Serialize(w io.Writer) error {
+func (e *CreatedEvent) Serialize(w *bytes.Buffer) error {
 	return WriteElements(w, e.nonce)
 }
 
@@ -175,7 +176,7 @@ func (e *UpdatedEvent) String() string {
 // filtering.
 //
 // NOTE: This is part of the event.Event interface.
-func (e *UpdatedEvent) Serialize(w io.Writer) error {
+func (e *UpdatedEvent) Serialize(w *bytes.Buffer) error {
 	return WriteElements(w, e.nonce, e.PrevState, e.NewState, e.UnitsFilled)
 }
 
@@ -282,7 +283,7 @@ func (e *MatchEvent) String() string {
 // filtering.
 //
 // NOTE: This is part of the event.Event interface.
-func (e *MatchEvent) Serialize(w io.Writer) error {
+func (e *MatchEvent) Serialize(w *bytes.Buffer) error {
 	return WriteElements(
 		w, e.nonce, e.MatchState, e.UnitsFilled, e.MatchedOrder,
 		e.RejectReason,

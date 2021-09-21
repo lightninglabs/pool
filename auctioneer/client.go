@@ -220,7 +220,7 @@ func getAuctionServerDialOpts(insecure bool, proxyAddress, tlsPath string,
 			proxyAddress)
 		torDialer := func(_ context.Context, addr string) (net.Conn, error) {
 			return tor.Dial(
-				addr, proxyAddress, false,
+				addr, proxyAddress, false, false,
 				tor.DefaultConnTimeout,
 			)
 		}

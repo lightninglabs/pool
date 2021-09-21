@@ -133,8 +133,8 @@ func (s *Server) Start() error {
 	// what we need
 	s.lndClient, err = lndclient.NewBasicClient(
 		s.cfg.Lnd.Host, s.cfg.Lnd.TLSPath,
-		path.Dir(s.cfg.Lnd.MacaroonPath), s.cfg.Network,
-		lndclient.MacFilename(path.Base(s.cfg.Lnd.MacaroonPath)),
+		path.Dir(s.cfg.Lnd.MacaroonPath), "", "", s.cfg.Network, false,
+		false, lndclient.MacFilename(path.Base(s.cfg.Lnd.MacaroonPath)),
 	)
 	if err != nil {
 		return err

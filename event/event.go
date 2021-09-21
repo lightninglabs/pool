@@ -71,7 +71,7 @@ type Event interface {
 	// Serialize writes the event data to a binary storage format. This does
 	// not serialize the event type as that's handled generically to allow
 	// for easy filtering.
-	Serialize(io.Writer) error
+	Serialize(*bytes.Buffer) error
 
 	// Deserialize reads the event data from a binary storage format. This
 	// does not deserialize the event type as that's handled generically to
