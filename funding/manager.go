@@ -1188,7 +1188,7 @@ func (m *Manager) rejectDuplicateChannels(
 	// We gather all peers from the open and pending channels.
 	ctxb := context.Background()
 	peers := make(map[route.Vertex]struct{})
-	openChans, err := m.cfg.LightningClient.ListChannels(ctxb)
+	openChans, err := m.cfg.LightningClient.ListChannels(ctxb, false, false)
 	if err != nil {
 		return nil, fmt.Errorf("error listing open channels: %v", err)
 	}

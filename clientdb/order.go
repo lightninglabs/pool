@@ -582,7 +582,7 @@ func copyOrder(src, dst *bbolt.Bucket, nonce order.Nonce) error {
 
 // SerializeOrder binary serializes an order to a writer using the common LN
 // wire format.
-func SerializeOrder(o order.Order, w io.Writer) error {
+func SerializeOrder(o order.Order, w *bytes.Buffer) error {
 	kit := o.Details()
 
 	// We don't have to deserialize the nonce as it's the sub bucket name.
