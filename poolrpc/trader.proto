@@ -221,8 +221,11 @@ message InitAccountRequest {
         */
         uint32 conf_target = 4;
 
-        // TODO(guggero): Add sat_per_vbyte as soon as lnd has a parameter for
-        // that in rpcServer.EstimateFee.
+        /*
+        The fee rate, in satoshis per kw, to use for the initial funding
+        transaction.
+        */
+        uint64 fee_rate_sat_per_kw = 6;
     }
 
     /*
