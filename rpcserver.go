@@ -510,17 +510,53 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 			"must be specified")
 	}
 
-	// Determine the desired transaction fee.
-	confTarget := req.GetConfTarget()
-	if confTarget < 1 {
-		return nil, fmt.Errorf("confirmation target must be " +
-			"greater than 0")
+	if req.GetFeeRateSatPerKw() > 0 && req.GetConfTarget() > 0 {
+		return nil, fmt.Errorf("you must set only one of the sats/kw " +
+			"and confirmation target parameters")
+	}
+
+	var feeRate chainfee.SatPerKWeight
+
+	switch {
+	case req.GetFeeRateSatPerKw() > 0:
+		feeRate = chainfee.SatPerKWeight(req.GetFeeRateSatPerKw())
+
+	case req.GetConfTarget() > 0:
+		// Determine the desired transaction fee.
+		value := btcutil.Amount(req.AccountValue)
+		confTarget := req.GetConfTarget()
+
+		feeRate, _, err := s.accountManager.QuoteAccount(
+			ctx, value, confTarget,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("unable to estimate on-chain fees: "+
+				"%v", err)
+		}
+
+		// If the fee estimation ever returns a value too small
+		// we set it to a valid minimum
+		if feeRate < chainfee.FeePerKwFloor {
+			feeRate = chainfee.FeePerKwFloor
+		}
+
+		log.Infof("Estimated total chain fee of %v for new account with "+
+			"value=%v, conf_target=%v", feeRate, value, confTarget)
+
+	default:
+		return nil, fmt.Errorf("either sats/kw or confirmation target " +
+			"must be specified")
+	}
+
+	if feeRate < chainfee.FeePerKwFloor {
+		return nil, fmt.Errorf("fee rate of %d sat/kw is too low, "+
+			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
 	}
 
 	acct, err := s.accountManager.InitAccount(
 		ContextWithInitiator(ctx, req.Initiator),
-		btcutil.Amount(req.AccountValue), expiryHeight, bestHeight,
-		confTarget,
+		btcutil.Amount(req.AccountValue), feeRate,
+		expiryHeight, bestHeight,
 	)
 	if err != nil {
 		return nil, err

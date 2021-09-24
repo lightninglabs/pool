@@ -188,16 +188,26 @@ func (m *Manager) start() error {
 	if err != nil {
 		return fmt.Errorf("unable to retrieve accounts: %v", err)
 	}
+
+	// We calculate the default fee rate that will be used
+	// for resuming accounts for which we haven't created and broadcast
+	// a transaction yet
+	feeRate, err := m.cfg.Wallet.EstimateFee(
+		ctx, int32(DefaultFundingConfTarget),
+	)
+	if err != nil {
+		return fmt.Errorf("unable to estimate default fees %w", err)
+	}
+
 	for _, account := range accounts {
 		// Try to resume the account now.
 		//
 		// TODO(guggero): Refactor this to extract the init/funding
 		// part so we properly abandon the account if it fails before
 		// publishing the TX instead of trying to re-fund on startup.
-		err := m.resumeAccount(
-			ctx, account, true, false, DefaultFundingConfTarget,
-		)
-		if err != nil {
+		if err := m.resumeAccount(
+			ctx, account, true, false, feeRate,
+		); err != nil {
 			return fmt.Errorf("unable to resume account %x: %v",
 				account.TraderKey.PubKey.SerializeCompressed(),
 				err)
@@ -258,7 +268,8 @@ func (m *Manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
 // InitAccount handles a request to create a new account with the provided
 // parameters.
 func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
-	expiry, bestHeight, confTarget uint32) (*Account, error) {
+	feeRate chainfee.SatPerKWeight, expiry,
+	bestHeight uint32) (*Account, error) {
 
 	// We'll make sure to acquire the reservation lock throughout the
 	// account funding process to ensure we use the same reservation, as
@@ -280,26 +291,6 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	if err != nil {
 		return nil, err
 	}
-
-	// Let's make sure our wallet contains enough coins to fund the account
-	// before we reserve any resources. We ask lnd to create a transaction
-	// to send the given account value in dry-run mode. This makes sure we
-	// actually have some UTXOs to fund the account as this method returns
-	// an error on insufficient balance. Unfortunately it currently only
-	// supports estimating the total fee for a transaction using a
-	// confirmation target. We'll want to add sats/vByte as well as soon as
-	// the API allows it.
-	totalMinerFee, err := m.cfg.TxFeeEstimator.EstimateFeeToP2WSH(
-		ctx, value, int32(confTarget),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error estimating on-chain fee: %v", err)
-	}
-
-	// A by-product of the balance check is the total fee we'd need to pay
-	// so we might as well log it here.
-	log.Infof("Estimated total chain fee of %v for new account with "+
-		"value=%v, conf_target=%v", totalMinerFee, value, confTarget)
 
 	// We'll start by deriving a key for ourselves that we'll use in our
 	// 2-of-2 multi-sig construction.
@@ -350,7 +341,7 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	log.Infof("Creating new account %x of %v that expires at height %v",
 		keyDesc.PubKey.SerializeCompressed(), value, expiry)
 
-	err = m.resumeAccount(ctx, account, false, false, confTarget)
+	err = m.resumeAccount(ctx, account, false, false, feeRate)
 	if err != nil {
 		return nil, err
 	}
@@ -389,6 +380,8 @@ func (m *Manager) WatchMatchedAccounts(ctx context.Context,
 		// closed because it was used up or pending batch update because
 		// it was recreated. Either way, let's resume it now by creating
 		// the appropriate watchers again.
+		// We set feerate to 0 because we know that we won't need to
+		// create a new transaction for resuming the account.
 		err = m.resumeAccount(ctx, acct, false, false, 0)
 		if err != nil {
 			return fmt.Errorf("error resuming account %x: %v",
@@ -418,7 +411,7 @@ func (m *Manager) maybeBroadcastTx(ctx context.Context, tx *wire.MsgTx,
 // This method serves as a way to consolidate the logic of resuming accounts on
 // startup and during normal operation.
 func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
-	onRestart bool, onRecovery bool, fundingConfTarget uint32) error {
+	onRestart bool, onRecovery bool, feeRate chainfee.SatPerKWeight) error {
 
 	accountOutput, err := account.Output()
 	if err != nil {
@@ -480,26 +473,24 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		}
 
 		if createTx {
-			// We need a static sat/vByte value for the fee in
-			// SendOutputs, so we use the stored targetConf of the
-			// account to estimate it.
-			feeSatPerKw, err := m.cfg.Wallet.EstimateFee(
-				ctx, int32(fundingConfTarget),
-			)
-			if err != nil {
-				return err
+			acctKey := account.TraderKey.PubKey.SerializeCompressed()
+
+			if feeRate == 0 {
+				return fmt.Errorf("unable to create "+
+					" transaction for account with "+
+					"  trader key %x, feeRate should "+
+					"be greater than 0", acctKey)
 			}
 
 			// If we have a label prefix, then we'll apply that now
 			// and also attach some additional meta data.
-			acctKey := account.TraderKey.PubKey.SerializeCompressed()
 			contextLabel := fmt.Sprintf(" poold -- "+
 				"AccountCreation(acct_key=%x)", acctKey)
 			label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
 
 			// TODO(wilmer): Expose manual controls to bump fees.
 			tx, err := m.cfg.Wallet.SendOutputs(
-				ctx, []*wire.TxOut{accountOutput}, feeSatPerKw,
+				ctx, []*wire.TxOut{accountOutput}, feeRate,
 				label,
 			)
 			if err != nil {
@@ -969,7 +960,7 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 		if ok {
 			// Proceed with the rest of the flow. We won't send to
 			// the account output again, so we don't need to set
-			// a valid conf target.
+			// a valid feeRate.
 			return m.resumeAccount(
 				context.Background(), account, false, false, 0,
 			)
@@ -1464,7 +1455,7 @@ func (m *Manager) RecoverAccount(ctx context.Context, account *Account) error {
 	// the `onRestart` flag to false because that would try to re-publish
 	// the opening transaction in some cases which we don't want. Instead we
 	// set the `onRecovery` flag to true. We won't send to the account
-	// output again, so we don't need to set a valid funding conf target.
+	// output again, so we don't need to set a valid funding freeRate.
 	return m.resumeAccount(ctx, account, false, true, 0)
 }
 
