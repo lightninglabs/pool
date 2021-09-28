@@ -16,12 +16,12 @@ var (
 	hardcodedTicket = "sidecar13HtPsD1UiB2EA4ZfUbnVejG1Pu3p1GW2ydq65NZBuQg" +
 		"TaD9LRESHtKasXwNrQPYqkwkMyJNFiNoBig4PBQQKoKeXz5jHWXZ3pMZNX5" +
 		"JW2FXyf6zKTPWthRQczNQuf2pM8ppjTqHK6tYTEReZk7pFynYJoHnAeBtix" +
-		"28k2PiRSz5qVVmHpWHWFgVjxihEmcD1T1V1g5LwzVSRUyCJ11ajaE4nHdnU" +
-		"1ZR3HdduxXnyyefacfXWAts3tytr7RnWzRbnVPFSx7eVgeinknYvQ3njtiS" +
-		"tpQpSacoBH4y1KckVpRAo8N8KuWWmAgYBNpxZfK8RsgViJ26kTpbfuyyHy1" +
-		"uPkAsGtv25iz5pNcopXyaXMnZGyDDWrDf9ZJEgU6wzm4VxwrPfNN4ASR6wL" +
-		"GWAKy1SsCMVFi5Bx6khN4ReSmJVrALWXrbgM52j7evHVRYXa1LZCJTBccCv" +
-		"aRXNYQqxJvnUnLnHW4N4THv4j1y94wmo2SafRfKav7o2D9"
+		"28k2PiRSz5qVVmHpWHWFgVjxihEmcD1T1V1g5LwzbXTj6Ype6a5r18BuMDF" +
+		"8w7qxEim535S7tjU2MtbX1XtKBSq8TP3JY2TCy52yShkTgxSUTQ5mboE42h" +
+		"TDosSJ71QbZNDGEPERJLhXDGn56Gae45WS9AaZ2v71mxYfZGFiRCmsR8ZL9" +
+		"KzYR7nHi96GYZxYjP6pUEeyXyAr31w1uhFeAx64RHMpVXTo4ihppUWgguiV" +
+		"8Abjr3UHQa4eRzhVk2uJQT3XDsAPbCP5wzPpaQdm32VSYmgHJXBYUEgWGw5" +
+		"uavxES39FxvPPFEJKZLFkCJsrBXqKzUjMqdztiSmaz5Rcr"
 )
 
 // TestEncodeDecode tests that a ticket can be encoded and decoded from/to a
@@ -43,10 +43,12 @@ func TestEncodeDecode(t *testing.T) {
 				R: new(big.Int).SetInt64(44),
 				S: new(big.Int).SetInt64(22),
 			},
+			Auto: true,
 		},
 		Recipient: &Recipient{
-			NodePubKey:     testPubKey,
-			MultiSigPubKey: testPubKey2,
+			NodePubKey:       testPubKey,
+			MultiSigPubKey:   testPubKey2,
+			MultiSigKeyIndex: 77,
 		},
 		Order: &Order{
 			BidNonce: [32]byte{11, 22, 33, 44},

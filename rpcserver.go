@@ -2447,6 +2447,20 @@ func (s *rpcServer) ExpectSidecarChannel(ctx context.Context,
 	return &poolrpc.ExpectSidecarChannelResponse{}, nil
 }
 
+// DecodeSidecarTicket decodes the base58 encoded sidecar ticket into its
+// individual data fields for a more human-readable representation.
+func (s *rpcServer) DecodeSidecarTicket(ctx context.Context,
+	req *poolrpc.SidecarTicket) (*poolrpc.DecodedSidecarTicket, error) {
+
+	// Parse the ticket from its string encoded representation.
+	ticket, err := sidecar.DecodeString(req.Ticket)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding ticket: %v", err)
+	}
+
+	return marshallTicket(ticket), nil
+}
+
 // setTicketStateForOrder updates the sidecar ticket state we have for a given
 // order in our local database to the new state.
 func (s *rpcServer) setTicketStateForOrder(newState sidecar.State,
@@ -2712,4 +2726,57 @@ func unmarshallSidecar(version order.Version,
 
 	// Try to deserialize the ticket.
 	return sidecar.DecodeString(encodedTicket)
+}
+
+// marshallTicket converts a sidecar ticket into its decoded RPC counterpart.
+func marshallTicket(t *sidecar.Ticket) *poolrpc.DecodedSidecarTicket {
+	serializePubKey := func(key *btcec.PublicKey) []byte {
+		if key == nil {
+			return nil
+		}
+
+		return key.SerializeCompressed()
+	}
+
+	encoded, _ := sidecar.EncodeToString(t)
+	resp := &poolrpc.DecodedSidecarTicket{
+		Id:                       t.ID[:],
+		Version:                  uint32(t.Version),
+		State:                    t.State.String(),
+		OfferCapacity:            uint64(t.Offer.Capacity),
+		OfferPushAmount:          uint64(t.Offer.PushAmt),
+		OfferLeaseDurationBlocks: t.Offer.LeaseDurationBlocks,
+		OfferSignPubkey:          serializePubKey(t.Offer.SignPubKey),
+		OfferAuto:                t.Offer.Auto,
+		EncodedTicket:            encoded,
+	}
+
+	if t.Offer.SigOfferDigest != nil {
+		resp.OfferSignature = t.Offer.SigOfferDigest.Serialize()
+	}
+
+	if t.Recipient != nil {
+		resp.RecipientMultisigPubkeyIndex = t.Recipient.MultiSigKeyIndex
+
+		resp.RecipientNodePubkey = serializePubKey(
+			t.Recipient.NodePubKey,
+		)
+		resp.RecipientMultisigPubkey = serializePubKey(
+			t.Recipient.MultiSigPubKey,
+		)
+	}
+
+	if t.Order != nil {
+		resp.OrderBidNonce = t.Order.BidNonce[:]
+
+		if t.Order.SigOrderDigest != nil {
+			resp.OrderSignature = t.Order.SigOrderDigest.Serialize()
+		}
+	}
+
+	if t.Execution != nil {
+		resp.ExecutionPendingChannelId = t.Execution.PendingChannelID[:]
+	}
+
+	return resp
 }

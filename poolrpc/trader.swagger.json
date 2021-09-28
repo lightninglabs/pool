@@ -1180,7 +1180,7 @@
         },
         "sidecar_ticket": {
           "type": "string",
-          "description": "If this bid order is meant to lease a channel for another node (which is\ndubbed a \"sidecar channel\") then this ticket contains all information\nrequired for setting up that sidecar channel. The ticket is expected to be\nthe base64 encoded ticket, including the prefix and the checksum."
+          "description": "If this bid order is meant to lease a channel for another node (which is\ndubbed a \"sidecar channel\") then this ticket contains all information\nrequired for setting up that sidecar channel. The ticket is expected to be\nthe base58 encoded ticket, including the prefix and the checksum."
         }
       }
     },
@@ -1237,6 +1237,88 @@
           "type": "string",
           "format": "byte",
           "description": "The hash of the closing transaction."
+        }
+      }
+    },
+    "poolrpcDecodedSidecarTicket": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "byte",
+          "description": "The unique, pseudorandom identifier of the ticket."
+        },
+        "version": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The version of the ticket encoding format."
+        },
+        "state": {
+          "type": "string",
+          "description": "The state of the ticket."
+        },
+        "offer_capacity": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The offered channel capacity in satoshis."
+        },
+        "offer_push_amount": {
+          "type": "string",
+          "format": "uint64",
+          "description": "The offered push amount in satoshis."
+        },
+        "offer_lease_duration_blocks": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The offered lease duration in blocks."
+        },
+        "offer_sign_pubkey": {
+          "type": "string",
+          "format": "byte",
+          "description": "The public key the offer was signed with."
+        },
+        "offer_signature": {
+          "type": "string",
+          "format": "byte",
+          "description": "The signature over the offer's digest."
+        },
+        "offer_auto": {
+          "type": "boolean",
+          "description": "Whether the offer was created with the automatic order creation flag."
+        },
+        "recipient_node_pubkey": {
+          "type": "string",
+          "format": "byte",
+          "description": "The recipient node's public identity key."
+        },
+        "recipient_multisig_pubkey": {
+          "type": "string",
+          "format": "byte",
+          "description": "The recipient node's channel multisig public key to be used for the sidecar\nchannel."
+        },
+        "recipient_multisig_pubkey_index": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The index used when deriving the above multisig pubkey."
+        },
+        "order_bid_nonce": {
+          "type": "string",
+          "format": "byte",
+          "description": "The nonce of the bid order created for this sidecar ticket."
+        },
+        "order_signature": {
+          "type": "string",
+          "format": "byte",
+          "description": "The signature over the order's digest, signed with the private key that\ncorresponds to the offer_sign_pubkey."
+        },
+        "execution_pending_channel_id": {
+          "type": "string",
+          "format": "byte",
+          "description": "The pending channel ID of the sidecar channel during the execution phase."
+        },
+        "encoded_ticket": {
+          "type": "string",
+          "description": "The original, base58 encoded ticket."
         }
       }
     },
@@ -2136,7 +2218,7 @@
       "properties": {
         "ticket": {
           "type": "string",
-          "description": "The complete sidecar ticket in its string encoded form which is base64 URL\nencoded, has a human readable prefix ('sidecar...') and a checksum built in.\nThe string encoded version will only be used on the trader side of the API.\nAll requests to the auctioneer expect the ticket to be in its raw, tlv\nencoded byte form."
+          "description": "The complete sidecar ticket in its string encoded form which is base58\nencoded, has a human readable prefix ('sidecar...') and a checksum built in.\nThe string encoded version will only be used on the trader side of the API.\nAll requests to the auctioneer expect the ticket to be in its raw, tlv\nencoded byte form."
         }
       }
     },

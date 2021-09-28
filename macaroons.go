@@ -138,6 +138,10 @@ var (
 			Entity: "order",
 			Action: "write",
 		}},
+		"/poolrpc.Trader/DecodeSidecarTicket": {{
+			Entity: "order",
+			Action: "read",
+		}},
 	}
 
 	// allPermissions is the list of all existing permissions that exist

@@ -143,6 +143,10 @@ type TraderClient interface {
 	//daemon of both the provider as well as the recipient need to be online to
 	//receive and react to match making events from the server.
 	ExpectSidecarChannel(ctx context.Context, in *ExpectSidecarChannelRequest, opts ...grpc.CallOption) (*ExpectSidecarChannelResponse, error)
+	// pool: `sidecar decodeticket`
+	//Decodes the base58 encoded sidecar ticket into its individual data fields
+	//for a more human-readable representation.
+	DecodeSidecarTicket(ctx context.Context, in *SidecarTicket, opts ...grpc.CallOption) (*DecodedSidecarTicket, error)
 }
 
 type traderClient struct {
@@ -387,6 +391,15 @@ func (c *traderClient) ExpectSidecarChannel(ctx context.Context, in *ExpectSidec
 	return out, nil
 }
 
+func (c *traderClient) DecodeSidecarTicket(ctx context.Context, in *SidecarTicket, opts ...grpc.CallOption) (*DecodedSidecarTicket, error) {
+	out := new(DecodedSidecarTicket)
+	err := c.cc.Invoke(ctx, "/poolrpc.Trader/DecodeSidecarTicket", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TraderServer is the server API for Trader service.
 // All implementations must embed UnimplementedTraderServer
 // for forward compatibility
@@ -515,6 +528,10 @@ type TraderServer interface {
 	//daemon of both the provider as well as the recipient need to be online to
 	//receive and react to match making events from the server.
 	ExpectSidecarChannel(context.Context, *ExpectSidecarChannelRequest) (*ExpectSidecarChannelResponse, error)
+	// pool: `sidecar decodeticket`
+	//Decodes the base58 encoded sidecar ticket into its individual data fields
+	//for a more human-readable representation.
+	DecodeSidecarTicket(context.Context, *SidecarTicket) (*DecodedSidecarTicket, error)
 	mustEmbedUnimplementedTraderServer()
 }
 
@@ -599,6 +616,9 @@ func (UnimplementedTraderServer) RegisterSidecar(context.Context, *RegisterSidec
 }
 func (UnimplementedTraderServer) ExpectSidecarChannel(context.Context, *ExpectSidecarChannelRequest) (*ExpectSidecarChannelResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExpectSidecarChannel not implemented")
+}
+func (UnimplementedTraderServer) DecodeSidecarTicket(context.Context, *SidecarTicket) (*DecodedSidecarTicket, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DecodeSidecarTicket not implemented")
 }
 func (UnimplementedTraderServer) mustEmbedUnimplementedTraderServer() {}
 
@@ -1081,6 +1101,24 @@ func _Trader_ExpectSidecarChannel_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Trader_DecodeSidecarTicket_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SidecarTicket)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TraderServer).DecodeSidecarTicket(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/poolrpc.Trader/DecodeSidecarTicket",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TraderServer).DecodeSidecarTicket(ctx, req.(*SidecarTicket))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Trader_ServiceDesc is the grpc.ServiceDesc for Trader service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1191,6 +1229,10 @@ var Trader_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExpectSidecarChannel",
 			Handler:    _Trader_ExpectSidecarChannel_Handler,
+		},
+		{
+			MethodName: "DecodeSidecarTicket",
+			Handler:    _Trader_DecodeSidecarTicket_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
