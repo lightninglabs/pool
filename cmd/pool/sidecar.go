@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 
@@ -23,6 +24,8 @@ var sidecarCommands = []cli.Command{
 			sidecarPrintTicketCommand,
 			sidecarRegisterCommand,
 			sidecarExpectChannelCommand,
+			sidecarListCommand,
+			sidecarCancelCommand,
 		},
 	},
 }
@@ -283,6 +286,83 @@ func sidecarExpectChannel(ctx *cli.Context) error {
 		context.Background(), &poolrpc.ExpectSidecarChannelRequest{
 			Ticket: ctx.Args().First(),
 		})
+	if err != nil {
+		return err
+	}
+
+	printRespJSON(resp)
+
+	return nil
+}
+
+var sidecarListCommand = cli.Command{
+	Name:    "list",
+	Aliases: []string{"l"},
+	Usage:   "list all sidecar tickets",
+	Action:  sidecarList,
+}
+
+func sidecarList(ctx *cli.Context) error {
+	// Show help if no arguments or flags are provided.
+	if ctx.NArg() != 0 || ctx.NumFlags() != 0 {
+		_ = cli.ShowCommandHelp(ctx, "list")
+		return nil
+	}
+
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.ListSidecars(
+		context.Background(), &poolrpc.ListSidecarsRequest{},
+	)
+	if err != nil {
+		return err
+	}
+
+	printRespJSON(resp)
+
+	return nil
+}
+
+var sidecarCancelCommand = cli.Command{
+	Name:    "cancel",
+	Aliases: []string{"c"},
+	Usage: "cancel the execution of a sidecar ticket identified by " +
+		"its ID",
+	ArgsUsage: "ticket_id",
+	Description: `
+	Tries to cancel the execution of a sidecar ticket identified by its ID.
+	If a bid order was created for the ticket already, that order is
+	cancelled on the server side.`,
+	Action: sidecarCancel,
+}
+
+func sidecarCancel(ctx *cli.Context) error {
+	// Show help if no arguments or flags are provided.
+	if ctx.NArg() != 1 || ctx.NumFlags() != 0 {
+		_ = cli.ShowCommandHelp(ctx, "cancel")
+		return nil
+	}
+
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	idBytes, err := hex.DecodeString(ctx.Args().First())
+	if err != nil {
+		return fmt.Errorf("error decoding ticket ID: %v", err)
+	}
+
+	resp, err := client.CancelSidecar(
+		context.Background(), &poolrpc.CancelSidecarRequest{
+			SidecarId: idBytes,
+		},
+	)
 	if err != nil {
 		return err
 	}
