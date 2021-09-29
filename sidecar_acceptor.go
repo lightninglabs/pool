@@ -130,7 +130,7 @@ func (a *SidecarAcceptor) Start(errChan chan error) error {
 		// manner, then we'll launch a goroutine to manage the
 		// remaining state transitions depending on if we're the
 		// provider or responder.
-		case ticket.Offer.Auto && ticket.State != sidecar.StateCompleted:
+		case ticket.Offer.Auto && !ticket.State.IsTerminal():
 			// In order to determine our role, we'll first need to see
 			// if the account for the offer exists in our database. If
 			// not, then we're the recipient.

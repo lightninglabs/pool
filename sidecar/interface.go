@@ -86,6 +86,18 @@ func (s State) String() string {
 	}
 }
 
+// IsTerminal returns true if the ticket is in a final state and will not be
+// updated ever again.
+func (s State) IsTerminal() bool {
+	switch s {
+	case StateCompleted, StateCanceled:
+		return true
+
+	default:
+		return false
+	}
+}
+
 // Offer is a struct holding the information that a sidecar channel provider is
 // committing to when offering to buy a channel for the recipient. The sidecar
 // channel flow is initiated by the provider creating a ticket and adding its
