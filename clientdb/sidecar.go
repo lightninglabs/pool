@@ -253,7 +253,9 @@ func readSidecar(sourceBucket *bbolt.Bucket, id []byte) (*sidecar.Ticket,
 	return sidecar.DeserializeTicket(bytes.NewReader(sidecarBytes))
 }
 
-func storeBidTemplate(bidBucket *bbolt.Bucket, bid *order.Bid, ticketNonce order.Nonce) error {
+func storeBidTemplate(bidBucket *bbolt.Bucket, bid *order.Bid,
+	ticketNonce order.Nonce) error {
+
 	var w bytes.Buffer
 	if err := SerializeOrder(bid, &w); err != nil {
 		return err
