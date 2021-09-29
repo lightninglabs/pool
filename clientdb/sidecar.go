@@ -179,6 +179,51 @@ func (db *DB) Sidecar(id [8]byte,
 	return s, nil
 }
 
+// SidecarsByID returns all sidecar tickets with the given ID. Normally this is
+// just a single ticket. But because the ID is just 8 bytes and is randomly
+// generated, there could be collisions, especially since tickets can also be
+// crafted by a malicious party and given to any node. That's why the offer's
+// public key is also used as an identifying element since that cannot easily be
+// forged without also producing a valid signature. So an attacker cannot
+// overwrite a ticket a node offered by themselves offering a ticket with the
+// same ID and tricking the victim into registering that.
+func (db *DB) SidecarsByID(id [8]byte) ([]*sidecar.Ticket, error) {
+	var res []*sidecar.Ticket
+	err := db.View(func(tx *bbolt.Tx) error {
+		sidecarBucket, err := getBucket(tx, sidecarsBucketKey)
+		if err != nil {
+			return err
+		}
+
+		// The first 8 bytes of the key is a sidecar ticket's ID. So as
+		// long as the key's prefix is matching, we still have tickets
+		// with the same ID.
+		cursor := sidecarBucket.Cursor()
+		key, val := cursor.Seek(id[:])
+		for ; key != nil && bytes.HasPrefix(key, id[:]); key, val = cursor.Next() {
+			// The main sidecar bucket has a sub-bucket that's used
+			// to store order bid information, so we'll skip this
+			// bucket when attempting to read out all the tickets.
+			if val == nil {
+				return nil
+			}
+
+			s, err := readSidecar(sidecarBucket, key)
+			if err != nil {
+				return err
+			}
+			res = append(res, s)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
 // SidecarBidTemplate attempts to retrieve a bid template associated with the
 // passed sidecar ticket.
 func (db *DB) SidecarBidTemplate(ticket *sidecar.Ticket) (*order.Bid, error) {
