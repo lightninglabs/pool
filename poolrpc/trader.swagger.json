@@ -1230,6 +1230,9 @@
     "poolrpcCancelOrderResponse": {
       "type": "object"
     },
+    "poolrpcCancelSidecarResponse": {
+      "type": "object"
+    },
     "poolrpcCloseAccountResponse": {
       "type": "object",
       "properties": {
@@ -1659,6 +1662,17 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/poolrpcBid"
+          }
+        }
+      }
+    },
+    "poolrpcListSidecarsResponse": {
+      "type": "object",
+      "properties": {
+        "tickets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/poolrpcDecodedSidecarTicket"
           }
         }
       }
