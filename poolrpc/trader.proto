@@ -494,6 +494,12 @@ message SubmitOrderResponse {
         */
         bytes accepted_order_nonce = 2;
     }
+
+    /*
+    In case a bid order was submitted for a sidecar ticket, that ticket is
+    updated with the new state and bid order nonce.
+    */
+    string updated_sidecar_ticket = 3;
 }
 
 message ListOrdersRequest {

@@ -2254,6 +2254,10 @@
           "type": "string",
           "format": "byte",
           "description": "The order nonce of the accepted order."
+        },
+        "updated_sidecar_ticket": {
+          "type": "string",
+          "description": "In case a bid order was submitted for a sidecar ticket, that ticket is\nupdated with the new state and bid order nonce."
         }
       }
     },

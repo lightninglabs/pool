@@ -1268,12 +1268,34 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 
 	rpcLog.Infof("New order submitted: nonce=%v, type=%v", o.Nonce(), o.Type())
 
+	// We should update the sidecar ticket if this was a bid created for it.
+	// The ticket in the order struct was already updated with the order
+	// information and signature, but it was only stored as TLV data with
+	// the order itself. We should also update the ticket in the main
+	// sidecar ticket bucket.
+	var encodedTicket string
+	bid, isBid := o.(*order.Bid)
+	if isBid && bid.SidecarTicket != nil {
+		err := s.server.db.UpdateSidecar(bid.SidecarTicket)
+		if err != nil {
+			return nil, fmt.Errorf("error updating sidecar "+
+				"ticket: %v", err)
+		}
+
+		encodedTicket, err = sidecar.EncodeToString(bid.SidecarTicket)
+		if err != nil {
+			return nil, fmt.Errorf("error encoding sidecar "+
+				"ticket: %v", err)
+		}
+	}
+
 	// ServerOrder is accepted.
 	orderNonce := o.Nonce()
 	return &poolrpc.SubmitOrderResponse{
 		Details: &poolrpc.SubmitOrderResponse_AcceptedOrderNonce{
 			AcceptedOrderNonce: orderNonce[:],
 		},
+		UpdatedSidecarTicket: encodedTicket,
 	}, nil
 }
 

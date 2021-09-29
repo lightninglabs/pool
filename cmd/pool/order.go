@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -598,35 +597,6 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 	}
 
 	printRespJSON(resp)
-
-	// If there was a sidecar ticket, we now also need to display the
-	// updated ticket that contains the order nonce (and a signature over
-	// that). This ticket needs to be given to the recipient for them to
-	// initiate the last step of the sidecar channel protocol.
-	// The signed ticket is available in the output of the ListOrders call.
-	if ticket != nil {
-		newBidNonce := resp.GetAcceptedOrderNonce()
-		allOrders, err := client.ListOrders(
-			context.Background(), &poolrpc.ListOrdersRequest{
-				ActiveOnly: true,
-			},
-		)
-		if err != nil {
-			return fmt.Errorf("error listing orders to print "+
-				"updated sidecar ticket: %v", err)
-		}
-
-		// Find the order we just created.
-		for _, bid := range allOrders.Bids {
-			if bytes.Equal(newBidNonce, bid.Details.OrderNonce) {
-				printJSON(struct {
-					Ticket string `json:"ticket"`
-				}{
-					Ticket: bid.SidecarTicket,
-				})
-			}
-		}
-	}
 
 	return nil
 }
