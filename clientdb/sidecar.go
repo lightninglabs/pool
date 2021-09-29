@@ -137,7 +137,16 @@ func (db *DB) UpdateSidecar(ticket *sidecar.Ticket) error {
 			return ErrNoSidecar
 		}
 
-		// TODO(roasbeef): remove the bid if in the final state now/
+		// If the ticket is in a terminal state, we won't ever need the
+		// bid template again, so we remove it (if it still exists).
+		if ticket.State.IsTerminal() && ticket.Order != nil {
+			err := removeBidTemplate(
+				sidecarBucket, ticket.Order.BidNonce,
+			)
+			if err != nil {
+				return err
+			}
+		}
 
 		return storeSidecar(sidecarBucket, sidecarKey, ticket)
 	})
@@ -314,4 +323,30 @@ func readBidTemplate(bidBucket *bbolt.Bucket,
 	}
 
 	return o.(*order.Bid), nil
+}
+
+func removeBidTemplate(sidecarBucket *bbolt.Bucket,
+	ticketNonce order.Nonce) error {
+
+	bidBucket := sidecarBucket.Bucket(bidTemplateBucket)
+
+	// If there is no bucket for the bid templates yet, we don't have
+	// anything to do.
+	if bidBucket == nil {
+		return nil
+	}
+
+	// If the ticket nonce wasn't set, there won't be a template stored for
+	// it either.
+	if ticketNonce == order.ZeroNonce {
+		return nil
+	}
+
+	// If the template was already removed, we ignore the error.
+	err := bidBucket.DeleteBucket(ticketNonce[:])
+	if err != bbolt.ErrBucketNotFound {
+		return err
+	}
+
+	return nil
 }

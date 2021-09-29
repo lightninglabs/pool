@@ -130,4 +130,13 @@ func TestSidecarsWithOrder(t *testing.T) {
 
 	// This bid should match the one we inserted earlier exactly.
 	require.Equal(t, diskBid, bid)
+
+	// Once we put the ticket into a final state, the bid template for it
+	// should be deleted.
+	ticket.State = sidecar.StateCanceled
+	err = db.UpdateSidecar(ticket)
+	require.NoError(t, err)
+
+	_, err = db.SidecarBidTemplate(ticket)
+	require.Equal(t, ErrNoOrder, err)
 }
