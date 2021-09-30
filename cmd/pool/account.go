@@ -101,6 +101,11 @@ var newAccountCommand = cli.Command{
 				"within",
 			Value: defaultFundingConfTarget,
 		},
+		cli.Uint64Flag{
+			Name: "sat_per_vbyte",
+			Usage: "the fee rate expressed in sat/vbyte that " +
+				"should be used for the account creation transaction",
+		},
 		cli.BoolFlag{
 			Name:  "force",
 			Usage: "skip account fee confirmation",
@@ -119,10 +124,37 @@ func newAccount(ctx *cli.Context) error {
 
 	req := &poolrpc.InitAccountRequest{
 		AccountValue: amt,
-		Fees: &poolrpc.InitAccountRequest_ConfTarget{
+		Initiator:    defaultInitiator,
+	}
+
+	satPerVByte := ctx.Uint64("sat_per_vbyte")
+	confTarget := ctx.Uint64("conf_target")
+
+	switch {
+	case satPerVByte > 0:
+		// Enforce a minimum fee rate of 253 sat/kw by rounding up if 1
+		// sat/byte is used.
+		feeRate := chainfee.SatPerKVByte(satPerVByte * 1000).FeePerKWeight()
+		if feeRate < chainfee.FeePerKwFloor {
+			feeRate = chainfee.FeePerKwFloor
+		}
+		req.Fees = &poolrpc.InitAccountRequest_FeeRateSatPerKw{
+			FeeRateSatPerKw: uint64(feeRate),
+		}
+
+	case ctx.IsSet("conf_target"):
+		if confTarget == 0 {
+			return fmt.Errorf("specified confirmation target must be " +
+				"greater than 0")
+		}
+
+		req.Fees = &poolrpc.InitAccountRequest_ConfTarget{
 			ConfTarget: uint32(ctx.Uint64("conf_target")),
-		},
-		Initiator: defaultInitiator,
+		}
+
+	default:
+		return fmt.Errorf("either sat/vbyte or confirmation target " +
+			"must be specified")
 	}
 
 	// Parse the expiry in either of its forms. We'll always prefer the
@@ -150,8 +182,10 @@ func newAccount(ctx *cli.Context) error {
 	// present it to the user.
 	if !ctx.Bool("force") {
 		if err := printAccountFees(
-			client, btcutil.Amount(amt),
-			uint32(ctx.Uint64("conf_target")),
+			client,
+			btcutil.Amount(amt),
+			satPerVByte,
+			uint32(confTarget),
 		); err != nil {
 			return err
 		}
@@ -173,27 +207,36 @@ func newAccount(ctx *cli.Context) error {
 }
 
 func printAccountFees(client poolrpc.TraderClient, amt btcutil.Amount,
-	confTarget uint32) error {
+	satPerVByte uint64, confTarget uint32) error {
 
-	req := &poolrpc.QuoteAccountRequest{
-		AccountValue: uint64(amt),
-		Fees: &poolrpc.QuoteAccountRequest_ConfTarget{
-			ConfTarget: confTarget,
-		},
+	if confTarget == 0 {
+		fmt.Println("-- Account Funding Details --")
+		fmt.Printf("Amount: %v\n", amt)
+		fmt.Printf("Fee rate (estimated): %d sat/vByte\n", satPerVByte)
+
+		return nil
 	}
-	resp, err := client.QuoteAccount(context.Background(), req)
+
+	resp, err := client.QuoteAccount(
+		context.Background(),
+		&poolrpc.QuoteAccountRequest{
+			AccountValue: uint64(amt),
+			Fees: &poolrpc.QuoteAccountRequest_ConfTarget{
+				ConfTarget: confTarget,
+			},
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("unable to estimate on-chain fees: "+
 			"%v", err)
 	}
 
 	feeRate := chainfee.SatPerKWeight(resp.MinerFeeRateSatPerKw)
-	satPerVByte := float64(feeRate.FeePerKVByte()) / 1000
-
+	feePerVByte := float64(feeRate.FeePerKVByte()) / 1000
 	fmt.Println("-- Account Funding Details --")
 	fmt.Printf("Amount: %v\n", amt)
 	fmt.Printf("Confirmation target: %v blocks\n", confTarget)
-	fmt.Printf("Fee rate (estimated): %.1f sat/vByte\n", satPerVByte)
+	fmt.Printf("Fee rate (estimated): %.1f sat/vByte\n", feePerVByte)
 	fmt.Printf("Total miner fee (estimated): %v\n",
 		btcutil.Amount(resp.MinerFeeTotal))
 
