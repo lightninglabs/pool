@@ -137,7 +137,16 @@ func (db *DB) UpdateSidecar(ticket *sidecar.Ticket) error {
 			return ErrNoSidecar
 		}
 
-		// TODO(roasbeef): remove the bid if in the final state now/
+		// If the ticket is in a terminal state, we won't ever need the
+		// bid template again, so we remove it (if it still exists).
+		if ticket.State.IsTerminal() && ticket.Order != nil {
+			err := removeBidTemplate(
+				sidecarBucket, ticket.Order.BidNonce,
+			)
+			if err != nil {
+				return err
+			}
+		}
 
 		return storeSidecar(sidecarBucket, sidecarKey, ticket)
 	})
@@ -168,6 +177,51 @@ func (db *DB) Sidecar(id [8]byte,
 	}
 
 	return s, nil
+}
+
+// SidecarsByID returns all sidecar tickets with the given ID. Normally this is
+// just a single ticket. But because the ID is just 8 bytes and is randomly
+// generated, there could be collisions, especially since tickets can also be
+// crafted by a malicious party and given to any node. That's why the offer's
+// public key is also used as an identifying element since that cannot easily be
+// forged without also producing a valid signature. So an attacker cannot
+// overwrite a ticket a node offered by themselves offering a ticket with the
+// same ID and tricking the victim into registering that.
+func (db *DB) SidecarsByID(id [8]byte) ([]*sidecar.Ticket, error) {
+	var res []*sidecar.Ticket
+	err := db.View(func(tx *bbolt.Tx) error {
+		sidecarBucket, err := getBucket(tx, sidecarsBucketKey)
+		if err != nil {
+			return err
+		}
+
+		// The first 8 bytes of the key is a sidecar ticket's ID. So as
+		// long as the key's prefix is matching, we still have tickets
+		// with the same ID.
+		cursor := sidecarBucket.Cursor()
+		key, val := cursor.Seek(id[:])
+		for ; key != nil && bytes.HasPrefix(key, id[:]); key, val = cursor.Next() {
+			// The main sidecar bucket has a sub-bucket that's used
+			// to store order bid information, so we'll skip this
+			// bucket when attempting to read out all the tickets.
+			if val == nil {
+				return nil
+			}
+
+			s, err := readSidecar(sidecarBucket, key)
+			if err != nil {
+				return err
+			}
+			res = append(res, s)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 // SidecarBidTemplate attempts to retrieve a bid template associated with the
@@ -253,7 +307,9 @@ func readSidecar(sourceBucket *bbolt.Bucket, id []byte) (*sidecar.Ticket,
 	return sidecar.DeserializeTicket(bytes.NewReader(sidecarBytes))
 }
 
-func storeBidTemplate(bidBucket *bbolt.Bucket, bid *order.Bid, ticketNonce order.Nonce) error {
+func storeBidTemplate(bidBucket *bbolt.Bucket, bid *order.Bid,
+	ticketNonce order.Nonce) error {
+
 	var w bytes.Buffer
 	if err := SerializeOrder(bid, &w); err != nil {
 		return err
@@ -312,4 +368,30 @@ func readBidTemplate(bidBucket *bbolt.Bucket,
 	}
 
 	return o.(*order.Bid), nil
+}
+
+func removeBidTemplate(sidecarBucket *bbolt.Bucket,
+	ticketNonce order.Nonce) error {
+
+	bidBucket := sidecarBucket.Bucket(bidTemplateBucket)
+
+	// If there is no bucket for the bid templates yet, we don't have
+	// anything to do.
+	if bidBucket == nil {
+		return nil
+	}
+
+	// If the ticket nonce wasn't set, there won't be a template stored for
+	// it either.
+	if ticketNonce == order.ZeroNonce {
+		return nil
+	}
+
+	// If the template was already removed, we ignore the error.
+	err := bidBucket.DeleteBucket(ticketNonce[:])
+	if err != bbolt.ErrBucketNotFound {
+		return err
+	}
+
+	return nil
 }

@@ -117,8 +117,8 @@ func deriveStreamID(ticket *sidecar.Ticket, provider bool) ([64]byte, error) {
 // SidecarDriver houses a series of methods needed to drive a given sidecar
 // channel towards completion.
 type SidecarDriver interface {
-	// ValidateOrderedTicketctx attempts to validate that a given ticket
-	// has rpoerly transitioned to the ordered state.
+	// ValidateOrderedTicket attempts to validate that a given ticket
+	// has properly transitioned to the ordered state.
 	ValidateOrderedTicket(tkt *sidecar.Ticket) error
 
 	// ExpectChannel is called by the receiver of a channel once the
@@ -130,8 +130,8 @@ type SidecarDriver interface {
 	// storage.
 	UpdateSidecar(tkt *sidecar.Ticket) error
 
-	// SubmitOrder submits a bid derived from the sidecar ticket, account,
-	// and bid template to the auctioneer.
+	// SubmitSidecarOrder submits a bid derived from the sidecar ticket,
+	// account, and bid template to the auctioneer.
 	SubmitSidecarOrder(*sidecar.Ticket, *order.Bid,
 		*account.Account) (*sidecar.Ticket, error)
 }
@@ -207,7 +207,8 @@ func (a *SidecarNegotiator) Start() error {
 	if a.cfg.Provider {
 		a.wg.Add(1)
 		go a.autoSidecarProvider(
-			ctx, a.cfg.StartingPkt, a.cfg.ProviderBid, a.cfg.ProviderAccount,
+			ctx, a.cfg.StartingPkt, a.cfg.ProviderBid,
+			a.cfg.ProviderAccount,
 		)
 	} else {
 		a.wg.Add(1)
@@ -474,8 +475,8 @@ func (a *SidecarNegotiator) stateStepRecipient(ctx context.Context,
 // autoSidecarProvider is a goroutine that will attempt to advance a new
 // sidecar ticket through the negotiation process until it reaches its final
 // state.
-func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context, startingPkt *SidecarPacket,
-	bid *order.Bid, acct *account.Account) {
+func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context,
+	startingPkt *SidecarPacket, bid *order.Bid, acct *account.Account) {
 
 	defer a.wg.Done()
 
@@ -619,7 +620,8 @@ func (a *SidecarNegotiator) CurrentState() sidecar.State {
 // sidecar ticket. It takes the current transcript state, the provider's
 // account, and canned bid and returns a new transition to a new ticket state.
 func (a *SidecarNegotiator) stateStepProvider(ctx context.Context,
-	pkt *SidecarPacket, bid *order.Bid, acct *account.Account) (*SidecarPacket, error) {
+	pkt *SidecarPacket, bid *order.Bid,
+	acct *account.Account) (*SidecarPacket, error) {
 
 	switch {
 	// In this case, we've just restarted, so we'll attempt to start from

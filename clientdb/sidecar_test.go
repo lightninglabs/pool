@@ -130,4 +130,79 @@ func TestSidecarsWithOrder(t *testing.T) {
 
 	// This bid should match the one we inserted earlier exactly.
 	require.Equal(t, diskBid, bid)
+
+	// Once we put the ticket into a final state, the bid template for it
+	// should be deleted.
+	ticket.State = sidecar.StateCanceled
+	err = db.UpdateSidecar(ticket)
+	require.NoError(t, err)
+
+	_, err = db.SidecarBidTemplate(ticket)
+	require.Equal(t, ErrNoOrder, err)
+}
+
+// TestSidecarsWithSameID makes sure that sidecar tickets with the same ID but
+// different offer public keys can be stored and retrieved separately.
+func TestSidecarsWithSameID(t *testing.T) {
+	t.Parallel()
+
+	db, cleanup := newTestDB(t)
+	defer cleanup()
+
+	// Create a test sidecar we'll use to interact with the database.
+	s := &sidecar.Ticket{
+		ID:    [8]byte{12, 34, 56},
+		State: sidecar.StateRegistered,
+		Offer: sidecar.Offer{
+			Capacity:            1000000,
+			PushAmt:             200000,
+			SignPubKey:          testTraderKey,
+			LeaseDurationBlocks: 2016,
+		},
+		Recipient: &sidecar.Recipient{
+			MultiSigPubKey:   testTraderKey,
+			MultiSigKeyIndex: 7,
+		},
+	}
+
+	// First, we'll add it to the database. We should be able to retrieve
+	// after.
+	require.NoError(t, db.AddSidecar(s))
+	assertSidecarExists(t, db, s)
+
+	// Now we'll just store it again with the same ID but with a different
+	// offer public key. It shouldn't overwrite the original one but add a
+	// second ticket.
+	s.Offer.SignPubKey = testBatchKey
+	require.NoError(t, db.AddSidecar(s))
+	assertSidecarExists(t, db, s)
+
+	// Just to make sure the seek of the cursor works correctly, we also add
+	// two more tickets, both with different IDs.
+	s.ID = [8]byte{99, 88, 77}
+	require.NoError(t, db.AddSidecar(s))
+	assertSidecarExists(t, db, s)
+	s.ID = [8]byte{55, 44, 33}
+	require.NoError(t, db.AddSidecar(s))
+	assertSidecarExists(t, db, s)
+
+	// All four should be retrievable now, but just the first two when
+	// querying by the ID.
+	all, err := db.Sidecars()
+	require.NoError(t, err)
+	require.Len(t, all, 4)
+
+	byID, err := db.SidecarsByID([8]byte{12, 34, 56})
+	require.NoError(t, err)
+	require.Len(t, byID, 2)
+	for _, tkt := range byID {
+		require.Equal(t, [8]byte{12, 34, 56}, tkt.ID)
+	}
+
+	// The first ticket should be the one with the test batch public key
+	// that we added as the second ticket since its public key is lower than
+	// the test public key we used for the first ticket (because of the way
+	// the bbolt cursor works).
+	require.Equal(t, testBatchKey, byID[0].Offer.SignPubKey)
+	require.Equal(t, testTraderKey, byID[1].Offer.SignPubKey)
 }

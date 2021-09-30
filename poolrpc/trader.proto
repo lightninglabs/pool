@@ -186,11 +186,25 @@ service Trader {
     rpc ExpectSidecarChannel (ExpectSidecarChannelRequest)
         returns (ExpectSidecarChannelResponse);
 
-    /* pool: `sidecar decodeticket`
+    /* pool: `sidecar printticket`
     Decodes the base58 encoded sidecar ticket into its individual data fields
     for a more human-readable representation.
     */
     rpc DecodeSidecarTicket (SidecarTicket) returns (DecodedSidecarTicket);
+
+    /* pool: `sidecar list`
+    ListSidecars lists all sidecar tickets currently in the local database. This
+    includes tickets offered by our node as well as tickets that our node is the
+    recipient of. Optionally a ticket ID can be provided to filter the tickets.
+    */
+    rpc ListSidecars (ListSidecarsRequest) returns (ListSidecarsResponse);
+
+    /* pool: `sidecar cancel`
+    CancelSidecar cancels the execution of a specific sidecar ticket. Depending
+    on the state of the sidecar ticket its associated bid order might be
+    canceled as well (if this ticket was offered by our node).
+    */
+    rpc CancelSidecar (CancelSidecarRequest) returns (CancelSidecarResponse);
 }
 
 message InitAccountRequest {
@@ -494,6 +508,12 @@ message SubmitOrderResponse {
         */
         bytes accepted_order_nonce = 2;
     }
+
+    /*
+    In case a bid order was submitted for a sidecar ticket, that ticket is
+    updated with the new state and bid order nonce.
+    */
+    string updated_sidecar_ticket = 3;
 }
 
 message ListOrdersRequest {
@@ -1225,4 +1245,32 @@ message ExpectSidecarChannelRequest {
 }
 
 message ExpectSidecarChannelResponse {
+}
+
+message ListSidecarsRequest {
+    /*
+    The optional sidecar ID to filter for. If set, the result should either be
+    a single ticket or no ticket in most cases. But because the ID is just 8
+    bytes and is randomly generated, there could be collisions, especially since
+    tickets can also be crafted by a malicious party and given to any node.
+    That's why the offer's public key is also used as an identifying element
+    since that cannot easily be forged without also producing a valid signature.
+    So an attacker cannot overwrite a ticket a node offered by themselves
+    offering a ticket with the same ID and tricking the victim into registering
+    that. Long story sort, there could be multiple tickets with the same ID but
+    different offer public keys, which is why those keys should be checked as
+    well.
+    */
+    bytes sidecar_id = 1;
+}
+
+message ListSidecarsResponse {
+    repeated DecodedSidecarTicket tickets = 1;
+}
+
+message CancelSidecarRequest {
+    bytes sidecar_id = 1;
+}
+
+message CancelSidecarResponse {
 }

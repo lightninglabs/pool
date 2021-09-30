@@ -143,10 +143,20 @@ type TraderClient interface {
 	//daemon of both the provider as well as the recipient need to be online to
 	//receive and react to match making events from the server.
 	ExpectSidecarChannel(ctx context.Context, in *ExpectSidecarChannelRequest, opts ...grpc.CallOption) (*ExpectSidecarChannelResponse, error)
-	// pool: `sidecar decodeticket`
+	// pool: `sidecar printticket`
 	//Decodes the base58 encoded sidecar ticket into its individual data fields
 	//for a more human-readable representation.
 	DecodeSidecarTicket(ctx context.Context, in *SidecarTicket, opts ...grpc.CallOption) (*DecodedSidecarTicket, error)
+	// pool: `sidecar list`
+	//ListSidecars lists all sidecar tickets currently in the local database. This
+	//includes tickets offered by our node as well as tickets that our node is the
+	//recipient of. Optionally a ticket ID can be provided to filter the tickets.
+	ListSidecars(ctx context.Context, in *ListSidecarsRequest, opts ...grpc.CallOption) (*ListSidecarsResponse, error)
+	// pool: `sidecar cancel`
+	//CancelSidecar cancels the execution of a specific sidecar ticket. Depending
+	//on the state of the sidecar ticket its associated bid order might be
+	//canceled as well (if this ticket was offered by our node).
+	CancelSidecar(ctx context.Context, in *CancelSidecarRequest, opts ...grpc.CallOption) (*CancelSidecarResponse, error)
 }
 
 type traderClient struct {
@@ -400,6 +410,24 @@ func (c *traderClient) DecodeSidecarTicket(ctx context.Context, in *SidecarTicke
 	return out, nil
 }
 
+func (c *traderClient) ListSidecars(ctx context.Context, in *ListSidecarsRequest, opts ...grpc.CallOption) (*ListSidecarsResponse, error) {
+	out := new(ListSidecarsResponse)
+	err := c.cc.Invoke(ctx, "/poolrpc.Trader/ListSidecars", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *traderClient) CancelSidecar(ctx context.Context, in *CancelSidecarRequest, opts ...grpc.CallOption) (*CancelSidecarResponse, error) {
+	out := new(CancelSidecarResponse)
+	err := c.cc.Invoke(ctx, "/poolrpc.Trader/CancelSidecar", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TraderServer is the server API for Trader service.
 // All implementations must embed UnimplementedTraderServer
 // for forward compatibility
@@ -528,10 +556,20 @@ type TraderServer interface {
 	//daemon of both the provider as well as the recipient need to be online to
 	//receive and react to match making events from the server.
 	ExpectSidecarChannel(context.Context, *ExpectSidecarChannelRequest) (*ExpectSidecarChannelResponse, error)
-	// pool: `sidecar decodeticket`
+	// pool: `sidecar printticket`
 	//Decodes the base58 encoded sidecar ticket into its individual data fields
 	//for a more human-readable representation.
 	DecodeSidecarTicket(context.Context, *SidecarTicket) (*DecodedSidecarTicket, error)
+	// pool: `sidecar list`
+	//ListSidecars lists all sidecar tickets currently in the local database. This
+	//includes tickets offered by our node as well as tickets that our node is the
+	//recipient of. Optionally a ticket ID can be provided to filter the tickets.
+	ListSidecars(context.Context, *ListSidecarsRequest) (*ListSidecarsResponse, error)
+	// pool: `sidecar cancel`
+	//CancelSidecar cancels the execution of a specific sidecar ticket. Depending
+	//on the state of the sidecar ticket its associated bid order might be
+	//canceled as well (if this ticket was offered by our node).
+	CancelSidecar(context.Context, *CancelSidecarRequest) (*CancelSidecarResponse, error)
 	mustEmbedUnimplementedTraderServer()
 }
 
@@ -619,6 +657,12 @@ func (UnimplementedTraderServer) ExpectSidecarChannel(context.Context, *ExpectSi
 }
 func (UnimplementedTraderServer) DecodeSidecarTicket(context.Context, *SidecarTicket) (*DecodedSidecarTicket, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DecodeSidecarTicket not implemented")
+}
+func (UnimplementedTraderServer) ListSidecars(context.Context, *ListSidecarsRequest) (*ListSidecarsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListSidecars not implemented")
+}
+func (UnimplementedTraderServer) CancelSidecar(context.Context, *CancelSidecarRequest) (*CancelSidecarResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelSidecar not implemented")
 }
 func (UnimplementedTraderServer) mustEmbedUnimplementedTraderServer() {}
 
@@ -1119,6 +1163,42 @@ func _Trader_DecodeSidecarTicket_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Trader_ListSidecars_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSidecarsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TraderServer).ListSidecars(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/poolrpc.Trader/ListSidecars",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TraderServer).ListSidecars(ctx, req.(*ListSidecarsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Trader_CancelSidecar_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelSidecarRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TraderServer).CancelSidecar(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/poolrpc.Trader/CancelSidecar",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TraderServer).CancelSidecar(ctx, req.(*CancelSidecarRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Trader_ServiceDesc is the grpc.ServiceDesc for Trader service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1233,6 +1313,14 @@ var Trader_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DecodeSidecarTicket",
 			Handler:    _Trader_DecodeSidecarTicket_Handler,
+		},
+		{
+			MethodName: "ListSidecars",
+			Handler:    _Trader_ListSidecars_Handler,
+		},
+		{
+			MethodName: "CancelSidecar",
+			Handler:    _Trader_CancelSidecar_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
