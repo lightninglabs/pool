@@ -151,7 +151,7 @@ func (h *testHarness) openAccount(value btcutil.Amount, expiry uint32, // nolint
 	// Create a new account. Its initial state should be StatePendingOpen.
 	ctx := context.Background()
 	account, err := h.manager.InitAccount(
-		ctx, value, expiry, bestHeight, DefaultFundingConfTarget,
+		ctx, value, chainfee.FeePerKwFloor, expiry, bestHeight,
 	)
 	if err != nil {
 		h.t.Fatalf("unable to create new account: %v", err)
@@ -531,8 +531,8 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 	// persisted intent to create the account.
 	go func() {
 		_, _ = h.manager.InitAccount(
-			context.Background(), value, expiry, bestHeight,
-			DefaultFundingConfTarget,
+			context.Background(), value, chainfee.FeePerKwFloor, expiry,
+			bestHeight,
 		)
 	}()
 
