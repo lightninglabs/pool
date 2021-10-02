@@ -499,6 +499,11 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 	// Determine the desired expiration value, can be relative or absolute.
 	var expiryHeight uint32
 	switch {
+
+	case req.GetAbsoluteHeight() != 0 && req.GetRelativeHeight() != 0:
+		return nil, fmt.Errorf("you must set only one of the relative " +
+			"and absolute height parameters")
+
 	case req.GetAbsoluteHeight() != 0:
 		expiryHeight = req.GetAbsoluteHeight()
 
@@ -510,14 +515,14 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 			"must be specified")
 	}
 
-	if req.GetFeeRateSatPerKw() > 0 && req.GetConfTarget() > 0 {
-		return nil, fmt.Errorf("you must set only one of the sats/kw " +
-			"and confirmation target parameters")
-	}
-
 	var feeRate chainfee.SatPerKWeight
 
 	switch {
+
+	case req.GetFeeRateSatPerKw() > 0 && req.GetConfTarget() > 0:
+		return nil, fmt.Errorf("you must set only one of the sats/kw " +
+			"and confirmation target parameters")
+
 	case req.GetFeeRateSatPerKw() > 0:
 		feeRate = chainfee.SatPerKWeight(req.GetFeeRateSatPerKw())
 
