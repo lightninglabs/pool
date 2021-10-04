@@ -526,7 +526,8 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 		value := btcutil.Amount(req.AccountValue)
 		confTarget := req.GetConfTarget()
 
-		feeRate, _, err := s.accountManager.QuoteAccount(
+		var err error
+		feeRate, _, err = s.accountManager.QuoteAccount(
 			ctx, value, confTarget,
 		)
 		if err != nil {
