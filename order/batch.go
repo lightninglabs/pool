@@ -102,7 +102,7 @@ func (d *AccountDiff) validateEndingState(tx *wire.MsgTx,
 
 	state := d.EndingState
 	wrongStateErr := fmt.Errorf(
-		"unexpected state %d for ending balance %d", state,
+		"unexpected state %v for ending balance %d", state,
 		d.EndingBalance,
 	)
 

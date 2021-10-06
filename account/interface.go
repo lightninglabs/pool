@@ -470,19 +470,19 @@ func (o *OutputWithFee) CloseOutputs(accountValue btcutil.Amount,
 	case txscript.WitnessV0PubKeyHashTy:
 		weightEstimator.AddP2WKHOutput()
 		dustLimit = lnwallet.DustLimitForSize(
-			input.P2WKHOutputSize,
+			input.P2WPKHSize,
 		)
 
 	case txscript.ScriptHashTy:
 		weightEstimator.AddP2SHOutput()
 		dustLimit = lnwallet.DustLimitForSize(
-			input.P2SHOutputSize,
+			input.P2SHSize,
 		)
 
 	case txscript.WitnessV0ScriptHashTy:
 		weightEstimator.AddP2WSHOutput()
 		dustLimit = lnwallet.DustLimitForSize(
-			input.P2WSHOutputSize,
+			input.P2WSHSize,
 		)
 	}
 
