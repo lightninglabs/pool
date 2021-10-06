@@ -10,13 +10,13 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
-	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
@@ -469,20 +469,20 @@ func (o *OutputWithFee) CloseOutputs(accountValue btcutil.Amount,
 	switch pkScript.Class() {
 	case txscript.WitnessV0PubKeyHashTy:
 		weightEstimator.AddP2WKHOutput()
-		dustLimit = txrules.GetDustThreshold(
-			input.P2WKHOutputSize, txrules.DefaultRelayFeePerKb,
+		dustLimit = lnwallet.DustLimitForSize(
+			input.P2WKHOutputSize,
 		)
 
 	case txscript.ScriptHashTy:
 		weightEstimator.AddP2SHOutput()
-		dustLimit = txrules.GetDustThreshold(
-			input.P2SHOutputSize, txrules.DefaultRelayFeePerKb,
+		dustLimit = lnwallet.DustLimitForSize(
+			input.P2SHOutputSize,
 		)
 
 	case txscript.WitnessV0ScriptHashTy:
 		weightEstimator.AddP2WSHOutput()
-		dustLimit = txrules.GetDustThreshold(
-			input.P2WSHOutputSize, txrules.DefaultRelayFeePerKb,
+		dustLimit = lnwallet.DustLimitForSize(
+			input.P2WSHOutputSize,
 		)
 	}
 
