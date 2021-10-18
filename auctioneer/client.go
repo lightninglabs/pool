@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -35,7 +34,7 @@ import (
 )
 
 const (
-	reconnectRetries = math.MaxInt16
+	reconnectRetries = 90
 
 	// maxUnusedAccountKeyLookup is the number of successive account keys
 	// that we try and the server does not know of before aborting recovery.
