@@ -1,6 +1,7 @@
 package account
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -200,6 +201,15 @@ func (m *Manager) start() error {
 	}
 
 	for _, account := range accounts {
+		acctKey := account.TraderKey.PubKey.SerializeCompressed()
+
+		// Detect if poold is using a different LND Signer
+		// than the one used for creating this account.
+		if err := m.verifyAccountSigner(ctx, account); err != nil {
+			return fmt.Errorf("unable to resume account %x: %v",
+				acctKey, err)
+		}
+
 		// Try to resume the account now.
 		//
 		// TODO(guggero): Refactor this to extract the init/funding
@@ -209,8 +219,7 @@ func (m *Manager) start() error {
 			ctx, account, true, false, feeRate,
 		); err != nil {
 			return fmt.Errorf("unable to resume account %x: %v",
-				account.TraderKey.PubKey.SerializeCompressed(),
-				err)
+				acctKey, err)
 		}
 	}
 
@@ -405,6 +414,30 @@ func (m *Manager) maybeBroadcastTx(ctx context.Context, tx *wire.MsgTx,
 	}
 
 	return m.cfg.Wallet.PublishTransaction(ctx, tx, label)
+}
+
+// verifyAccountSigner ensures that we are able to recreate the account
+// secret for active accounts. That means that the LND signerClient did
+// not change and we are able to generate valid signatures for this account.
+func (m *Manager) verifyAccountSigner(ctx context.Context,
+	account *Account) error {
+
+	// The secret was based on both base keys, the trader and auctioneer's.
+	secret, err := m.cfg.Signer.DeriveSharedKey(
+		ctx, account.AuctioneerKey, &account.TraderKey.KeyLocator,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to regenerate secret: %v", err)
+	}
+
+	// Here we would detect if the backend LND node (signer) changed.
+	if !bytes.Equal(secret[:], account.Secret[:]) {
+		return fmt.Errorf("couldn't derive account secret; make sure " +
+			"you are using the same lnd node/seed that was used " +
+			"for creating the account")
+	}
+
+	return nil
 }
 
 // resumeAccount performs different operations based on the account's state.

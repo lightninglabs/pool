@@ -464,6 +464,7 @@ func (h *testHarness) restartManager() {
 		Store:         h.manager.cfg.Store,
 		Auctioneer:    auctioneer,
 		Wallet:        h.manager.cfg.Wallet,
+		Signer:        h.manager.cfg.Signer,
 		ChainNotifier: h.manager.cfg.ChainNotifier,
 		TxSource:      h.manager.cfg.TxSource,
 	})
