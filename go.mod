@@ -18,6 +18,7 @@ require (
 	github.com/lightninglabs/protobuf-hex-display v1.4.3-hex-display
 	github.com/lightningnetwork/lnd v0.13.0-beta.rc5.0.20211021015325-cac8da819ff9
 	github.com/lightningnetwork/lnd/cert v1.1.0
+	github.com/lightningnetwork/lnd/kvdb v1.2.0
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli v1.20.0
 	go.etcd.io/bbolt v1.3.6
