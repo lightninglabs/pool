@@ -579,13 +579,36 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 		return nil, err
 	}
 
-	rpcAccounts := make([]*poolrpc.Account, 0, len(accounts))
+	validAccounts := make([]*account.Account, 0, len(accounts))
 	for _, acct := range accounts {
 		// Filter out inactive accounts if requested by the user.
 		if req.ActiveOnly && !acct.State.IsActive() {
 			continue
 		}
 
+		validAccounts = append(validAccounts, acct)
+	}
+
+	rpcAccounts, err := s.MarshallAccountsWithAvailableBalance(
+		ctx, validAccounts,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list marshalled accounts: "+
+			"%v", err)
+	}
+
+	return &poolrpc.ListAccountsResponse{
+		Accounts: rpcAccounts,
+	}, nil
+}
+
+// MarshallAccountsWithAvailableBalance returns the RPC representation of an account
+// with the account.AvailableBalance value populated.
+func (s *rpcServer) MarshallAccountsWithAvailableBalance(ctx context.Context,
+	accounts []*account.Account) ([]*poolrpc.Account, error) {
+
+	rpcAccounts := make([]*poolrpc.Account, 0, len(accounts))
+	for _, acct := range accounts {
 		rpcAccount, err := MarshallAccount(acct)
 		if err != nil {
 			return nil, err
@@ -647,10 +670,7 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 
 		rpcAccount.AvailableBalance = availableBalance
 	}
-
-	return &poolrpc.ListAccountsResponse{
-		Accounts: rpcAccounts,
-	}, nil
+	return rpcAccounts, nil
 }
 
 // MarshallAccount returns the RPC representation of an account.
@@ -736,14 +756,16 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 		return nil, err
 	}
 
-	rpcModifiedAccount, err := MarshallAccount(modifiedAccount)
+	rpcModifiedAccounts, err := s.MarshallAccountsWithAvailableBalance(
+		ctx, []*account.Account{modifiedAccount},
+	)
 	if err != nil {
 		return nil, err
 	}
 	txHash := tx.TxHash()
 
 	return &poolrpc.DepositAccountResponse{
-		Account:     rpcModifiedAccount,
+		Account:     rpcModifiedAccounts[0],
 		DepositTxid: txHash[:],
 	}, nil
 }
@@ -788,14 +810,16 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 		return nil, err
 	}
 
-	rpcModifiedAccount, err := MarshallAccount(modifiedAccount)
+	rpcModifiedAccounts, err := s.MarshallAccountsWithAvailableBalance(
+		ctx, []*account.Account{modifiedAccount},
+	)
 	if err != nil {
 		return nil, err
 	}
 	txHash := tx.TxHash()
 
 	return &poolrpc.WithdrawAccountResponse{
-		Account:      rpcModifiedAccount,
+		Account:      rpcModifiedAccounts[0],
 		WithdrawTxid: txHash[:],
 	}, nil
 }
@@ -844,14 +868,16 @@ func (s *rpcServer) RenewAccount(ctx context.Context,
 		return nil, err
 	}
 
-	rpcModifiedAccount, err := MarshallAccount(modifiedAccount)
+	rpcModifiedAccounts, err := s.MarshallAccountsWithAvailableBalance(
+		ctx, []*account.Account{modifiedAccount},
+	)
 	if err != nil {
 		return nil, err
 	}
 	txHash := tx.TxHash()
 
 	return &poolrpc.RenewAccountResponse{
-		Account:     rpcModifiedAccount,
+		Account:     rpcModifiedAccounts[0],
 		RenewalTxid: txHash[:],
 	}, nil
 }
