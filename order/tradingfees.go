@@ -3,10 +3,10 @@ package order
 import (
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcutil"
-	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
@@ -18,8 +18,8 @@ var (
 
 	// dustLimitP2WPKH is the minimum size of a P2WPKH output to not be
 	// considered dust.
-	dustLimitP2WPKH = txrules.GetDustThreshold(
-		input.P2WPKHSize, txrules.DefaultRelayFeePerKb,
+	dustLimitP2WPKH = lnwallet.DustLimitForSize(
+		input.P2WPKHSize,
 	)
 
 	// MinNoDustAccountSize is the minimum number of satoshis an account

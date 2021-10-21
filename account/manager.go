@@ -1809,8 +1809,8 @@ coinSelection:
 	// A change output will only exist as long as the remaining amount is
 	// above the network's dust limit.
 	var changeOutput *wire.TxOut
-	dustLimit := txrules.GetDustThreshold(
-		input.P2WPKHSize, txrules.DefaultRelayFeePerKb,
+	dustLimit := lnwallet.DustLimitForSize(
+		input.P2WPKHSize,
 	)
 	if changeAmt >= dustLimit {
 		addr, err := m.cfg.Wallet.NextAddr(context.Background())

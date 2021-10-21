@@ -406,7 +406,7 @@ func getSnapshotBuckets(tx *bbolt.Tx) (*bbolt.Bucket, *bbolt.Bucket,
 	return topBucket, seqBucket, indexBucket, nil
 }
 
-func serializeLocalBatchSnapshot(w io.Writer, b *LocalBatchSnapshot) error {
+func serializeLocalBatchSnapshot(w *bytes.Buffer, b *LocalBatchSnapshot) error {
 	// The previous batch versions had a single clearing price but because
 	// we now always store the price map afterwards, we signal a new batch
 	// by storing an explicit zero price.
@@ -543,7 +543,7 @@ func deserializeLocalBatchSnapshot(r io.Reader) (*LocalBatchSnapshot, error) {
 	return b, nil
 }
 
-func serializeAccounts(w io.Writer,
+func serializeAccounts(w *bytes.Buffer,
 	accounts map[[33]byte]*account.Account) error {
 
 	err := WriteElements(w, uint32(len(accounts)))
@@ -594,7 +594,7 @@ func deserializeAccounts(r io.Reader) (map[[33]byte]*account.Account, error) {
 	return accs, nil
 }
 
-func serializeOrders(w io.Writer, orders map[order.Nonce]order.Order) error {
+func serializeOrders(w *bytes.Buffer, orders map[order.Nonce]order.Order) error {
 	err := WriteElements(w, uint32(len(orders)))
 	if err != nil {
 		return err
@@ -641,7 +641,7 @@ func deserializeOrders(r io.Reader) (map[order.Nonce]order.Order, error) {
 	return orders, nil
 }
 
-func serializeMatchedOrder(w io.Writer, ourNonce order.Nonce,
+func serializeMatchedOrder(w *bytes.Buffer, ourNonce order.Nonce,
 	m *order.MatchedOrder) error {
 
 	err := WriteElements(w, ourNonce, m.Order.Nonce())

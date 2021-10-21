@@ -355,7 +355,7 @@ func TestBatchVerifier(t *testing.T) {
 			TraderKey: &keychain.KeyDescriptor{
 				PubKey: acctKeySmall,
 			},
-			Value:         401_000,
+			Value:         400_840,
 			Expiry:        144,
 			State:         account.StateOpen,
 			BatchKey:      startBatchKey,
@@ -455,7 +455,7 @@ func TestBatchVerifier(t *testing.T) {
 				AccountKey:    acctKeySmall,
 				EndingState:   stateExtendedOffchain,
 				OutpointIndex: -1,
-				EndingBalance: 594,
+				EndingBalance: 434,
 			},
 		}
 		matchedOrders := map[Nonce][]*MatchedOrder{

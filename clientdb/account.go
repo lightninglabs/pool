@@ -155,7 +155,7 @@ func readAccount(sourceBucket *bbolt.Bucket,
 	return deserializeAccount(bytes.NewReader(accountBytes))
 }
 
-func serializeAccount(w io.Writer, a *account.Account) error {
+func serializeAccount(w *bytes.Buffer, a *account.Account) error {
 	err := WriteElements(
 		w, a.Value, a.Expiry, a.TraderKey, a.AuctioneerKey, a.BatchKey,
 		a.Secret, a.State, a.HeightHint, a.OutPoint,

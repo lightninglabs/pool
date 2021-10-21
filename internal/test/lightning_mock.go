@@ -233,8 +233,8 @@ func (m *MockLightning) ListTransactions(context.Context, int32,
 }
 
 // ListChannels retrieves all channels of the backing lnd node.
-func (m *MockLightning) ListChannels(context.Context) ([]lndclient.ChannelInfo,
-	error) {
+func (m *MockLightning) ListChannels(context.Context, bool,
+	bool) ([]lndclient.ChannelInfo, error) {
 
 	return m.Channels, nil
 }
