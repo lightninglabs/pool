@@ -5,6 +5,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightningnetwork/lnd/chainntnfs"
 )
 
 // ChainNotifierClient exposes the same methods as lndclient.ChainNotifierClient.
@@ -51,4 +52,33 @@ type Controller interface {
 	// Successive calls for the same account will cancel any previous expiration
 	// watch requests and the new expiration will be tracked instead.
 	WatchAccountExpiration(traderKey *btcec.PublicKey, expiry uint32) error
+}
+
+type Executor interface {
+	// NewBlock updates the current bestHeight.
+	NewBlock(bestHeight uint32)
+
+	// ExecuteExpirations
+	ExecuteOverdueExpirations(blockHeight uint32)
+
+	// AddAccountExpiration
+	AddAccountExpiration(traderKey *btcec.PublicKey, expiry uint32)
+
+	// HandleAccountConf abstracts the operations that should be performed
+	// for an account once we detect its confirmation. The account is
+	// identified by its user sub key (i.e., trader key).
+	HandleAccountConf(traderKey *btcec.PublicKey,
+		confDetails *chainntnfs.TxConfirmation) error
+
+	// HandleAccountSpend abstracts the operations that should be performed
+	// for an account once we detect its spend. The account is identified by
+	// its user sub key (i.e., trader key).
+	HandleAccountSpend(traderKey *btcec.PublicKey,
+		spendDetails *chainntnfs.SpendDetail) error
+
+	// HandleAccountExpiry the operations that should be perform for an
+	// account once it's expired. The account is identified by its user sub
+	// key (i.e., trader key).
+	HandleAccountExpiry(traderKey *btcec.PublicKey,
+		height uint32) error
 }

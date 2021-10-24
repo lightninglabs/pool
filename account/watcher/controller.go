@@ -23,27 +23,10 @@ type expiryReq struct {
 	expiry uint32
 }
 
-// Config contains all of the Watcher's dependencies in order to carry out its
-// duties.
-type Config struct {
+type CtrlConfig struct {
 	// ChainNotifier is responsible for requesting confirmation and spend
 	// notifications for accounts.
 	ChainNotifier ChainNotifierClient
-
-	// HandleAccountConf abstracts the operations that should be performed
-	// for an account once we detect its confirmation. The account is
-	// identified by its user sub key (i.e., trader key).
-	HandleAccountConf func(*btcec.PublicKey, *chainntnfs.TxConfirmation) error
-
-	// HandleAccountSpend abstracts the operations that should be performed
-	// for an account once we detect its spend. The account is identified by
-	// its user sub key (i.e., trader key).
-	HandleAccountSpend func(*btcec.PublicKey, *chainntnfs.SpendDetail) error
-
-	// HandleAccountExpiry the operations that should be perform for an
-	// account once it's expired. The account is identified by its user sub
-	// key (i.e., trader key).
-	HandleAccountExpiry func(*btcec.PublicKey, uint32) error
 }
 
 // WatcherController implements the watcher.Controller interface
@@ -51,7 +34,9 @@ type WatcherController struct {
 	started sync.Once
 	stopped sync.Once
 
-	cfg Config
+	cfg CtrlConfig
+
+	executor Executor
 
 	expiryReqs chan *expiryReq
 
@@ -65,9 +50,12 @@ type WatcherController struct {
 }
 
 // New instantiates a new chain watcher backed by the given config.
-func NewWatcherController(cfg *Config) *WatcherController {
+func NewWatcherController(executor Executor,
+	cfg *CtrlConfig) *WatcherController {
+
 	return &WatcherController{
 		cfg:          *cfg,
+		executor:     executor,
 		expiryReqs:   make(chan *expiryReq),
 		quit:         make(chan struct{}),
 		spendCancels: make(map[[33]byte]func()),
@@ -129,24 +117,12 @@ func (wc *WatcherController) Stop() {
 func (wc *WatcherController) expiryHandler(blockChan chan int32, errChan chan error) {
 	defer wc.wg.Done()
 
-	var (
-		// bestHeight is the height we believe the current chain is at.
-		bestHeight uint32
-
-		// expirations keeps track of the current accounts we're
-		// watching expirations for.
-		expirations = make(map[[33]byte]uint32)
-
-		// expirationsPerHeight keeps track of all registered accounts
-		// that expire at a certain height.
-		expirationsPerHeight = make(map[uint32][]*btcec.PublicKey)
-	)
-
 	// Wait for the initial block notification to be received before we
 	// begin handling requests.
 	select {
 	case newBlock := <-blockChan:
-		bestHeight = uint32(newBlock)
+		wc.executor.NewBlock(uint32(newBlock))
+		wc.executor.ExecuteOverdueExpirations(uint32(newBlock))
 	case err := <-errChan:
 		log.Errorf("Unable to receive initial block notification: %v",
 			err)
@@ -159,34 +135,8 @@ func (wc *WatcherController) expiryHandler(blockChan chan int32, errChan chan er
 		// A new block notification has arrived, update our known
 		// height and notify any newly expired accounts.
 		case newBlock := <-blockChan:
-			bestHeight = uint32(newBlock)
-
-			for _, traderKey := range expirationsPerHeight[bestHeight] {
-				var accountKey [33]byte
-				copy(accountKey[:], traderKey.SerializeCompressed())
-
-				// If the account doesn't exist within the
-				// expiration set, then the request was
-				// canceled and there's nothing for us to do.
-				// Similarly, if the request was updated to
-				// track a new height, then we can skip it.
-				curExpiry, ok := expirations[accountKey]
-				if !ok || bestHeight != curExpiry {
-					continue
-				}
-
-				err := wc.cfg.HandleAccountExpiry(
-					traderKey, bestHeight,
-				)
-				if err != nil {
-					log.Errorf("Unable to handle "+
-						"expiration of account %x: %v",
-						traderKey.SerializeCompressed(),
-						err)
-				}
-			}
-
-			delete(expirationsPerHeight, bestHeight)
+			wc.executor.NewBlock(uint32(newBlock))
+			wc.executor.ExecuteOverdueExpirations(uint32(newBlock))
 
 		// An error occurred while being sent a block notification.
 		case err := <-errChan:
@@ -195,28 +145,8 @@ func (wc *WatcherController) expiryHandler(blockChan chan int32, errChan chan er
 
 		// A new watch expiry request has been received for an account.
 		case req := <-wc.expiryReqs:
-			var accountKey [33]byte
-			copy(accountKey[:], req.traderKey.SerializeCompressed())
-
-			// If it's already expired, we don't need to track it.
-			if req.expiry <= bestHeight {
-				err := wc.cfg.HandleAccountExpiry(
-					req.traderKey, bestHeight,
-				)
-				if err != nil {
-					log.Errorf("Unable to handle "+
-						"expiration of account %x: %v",
-						req.traderKey.SerializeCompressed(),
-						err)
-				}
-				delete(expirations, accountKey)
-
-				continue
-			}
-
-			expirations[accountKey] = req.expiry
-			expirationsPerHeight[req.expiry] = append(
-				expirationsPerHeight[req.expiry], req.traderKey,
+			wc.executor.AddAccountExpiration(
+				req.traderKey, req.expiry,
 			)
 
 		case <-wc.quit:
@@ -279,7 +209,8 @@ func (wc *WatcherController) waitForAccountConf(traderKey *btcec.PublicKey,
 
 	select {
 	case conf := <-confChan:
-		if err := wc.cfg.HandleAccountConf(traderKey, conf); err != nil {
+		err := wc.executor.HandleAccountConf(traderKey, conf)
+		if err != nil {
 			log.Errorf("Unable to handle confirmation for account "+
 				"%x: %v", traderKey.SerializeCompressed(), err)
 		}
@@ -372,7 +303,7 @@ func (wc *WatcherController) waitForAccountSpend(traderKey *btcec.PublicKey,
 
 	select {
 	case spend := <-spendChan:
-		err := wc.cfg.HandleAccountSpend(traderKey, spend)
+		err := wc.executor.HandleAccountSpend(traderKey, spend)
 		if err != nil {
 			log.Errorf("Unable to handle spend for account %x: %v",
 				traderKey.SerializeCompressed(), err)
