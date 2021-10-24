@@ -8,7 +8,6 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -29,7 +28,7 @@ type expiryReq struct {
 type Config struct {
 	// ChainNotifier is responsible for requesting confirmation and spend
 	// notifications for accounts.
-	ChainNotifier lndclient.ChainNotifierClient
+	ChainNotifier ChainNotifierClient
 
 	// HandleAccountConf abstracts the operations that should be performed
 	// for an account once we detect its confirmation. The account is
@@ -47,9 +46,8 @@ type Config struct {
 	HandleAccountExpiry func(*btcec.PublicKey, uint32) error
 }
 
-// Watcher is responsible for the on-chain interaction of an account, whether
-// that is confirmation or spend.
-type Watcher struct {
+// WatcherController implements the watcher.Controller interface
+type WatcherController struct {
 	started sync.Once
 	stopped sync.Once
 
@@ -67,8 +65,8 @@ type Watcher struct {
 }
 
 // New instantiates a new chain watcher backed by the given config.
-func New(cfg *Config) *Watcher {
-	return &Watcher{
+func NewWatcherController(cfg *Config) *WatcherController {
+	return &WatcherController{
 		cfg:          *cfg,
 		expiryReqs:   make(chan *expiryReq),
 		quit:         make(chan struct{}),
@@ -78,58 +76,58 @@ func New(cfg *Config) *Watcher {
 }
 
 // Start allows the Watcher to begin accepting watch requests.
-func (w *Watcher) Start() error {
+func (wc *WatcherController) Start() error {
 	var err error
-	w.started.Do(func() {
-		err = w.start()
+	wc.started.Do(func() {
+		err = wc.start()
 	})
 	return err
 }
 
 // start allows the Watcher to begin accepting watch requests.
-func (w *Watcher) start() error {
+func (wc *WatcherController) start() error {
 	ctxc, cancel := context.WithCancel(context.Background())
-	blockChan, errChan, err := w.cfg.ChainNotifier.RegisterBlockEpochNtfn(
+	blockChan, errChan, err := wc.cfg.ChainNotifier.RegisterBlockEpochNtfn(
 		ctxc,
 	)
 	if err != nil {
 		cancel()
 		return err
 	}
-	w.ctxCancels = append(w.ctxCancels, cancel)
+	wc.ctxCancels = append(wc.ctxCancels, cancel)
 
-	w.wg.Add(1)
-	go w.expiryHandler(blockChan, errChan)
+	wc.wg.Add(1)
+	go wc.expiryHandler(blockChan, errChan)
 
 	return nil
 }
 
 // Stop safely stops any ongoing requests within the Watcher.
-func (w *Watcher) Stop() {
-	w.stopped.Do(func() {
-		close(w.quit)
-		w.wg.Wait()
+func (wc *WatcherController) Stop() {
+	wc.stopped.Do(func() {
+		close(wc.quit)
+		wc.wg.Wait()
 
-		for _, cancel := range w.ctxCancels {
+		for _, cancel := range wc.ctxCancels {
 			cancel()
 		}
 
-		w.cancelMtx.Lock()
-		for _, cancel := range w.spendCancels {
+		wc.cancelMtx.Lock()
+		for _, cancel := range wc.spendCancels {
 			cancel()
 		}
-		for _, cancel := range w.confCancels {
+		for _, cancel := range wc.confCancels {
 			cancel()
 		}
-		w.cancelMtx.Unlock()
+		wc.cancelMtx.Unlock()
 	})
 }
 
 // expiryHandler receives block notifications to determine when accounts expire.
 //
 // NOTE: This must be run as a goroutine.
-func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
-	defer w.wg.Done()
+func (wc *WatcherController) expiryHandler(blockChan chan int32, errChan chan error) {
+	defer wc.wg.Done()
 
 	var (
 		// bestHeight is the height we believe the current chain is at.
@@ -152,7 +150,7 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 	case err := <-errChan:
 		log.Errorf("Unable to receive initial block notification: %v",
 			err)
-	case <-w.quit:
+	case <-wc.quit:
 		return
 	}
 
@@ -177,7 +175,7 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 					continue
 				}
 
-				err := w.cfg.HandleAccountExpiry(
+				err := wc.cfg.HandleAccountExpiry(
 					traderKey, bestHeight,
 				)
 				if err != nil {
@@ -196,13 +194,13 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 				err)
 
 		// A new watch expiry request has been received for an account.
-		case req := <-w.expiryReqs:
+		case req := <-wc.expiryReqs:
 			var accountKey [33]byte
 			copy(accountKey[:], req.traderKey.SerializeCompressed())
 
 			// If it's already expired, we don't need to track it.
 			if req.expiry <= bestHeight {
-				err := w.cfg.HandleAccountExpiry(
+				err := wc.cfg.HandleAccountExpiry(
 					req.traderKey, bestHeight,
 				)
 				if err != nil {
@@ -221,7 +219,7 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 				expirationsPerHeight[req.expiry], req.traderKey,
 			)
 
-		case <-w.quit:
+		case <-wc.quit:
 			return
 		}
 	}
@@ -232,33 +230,33 @@ func (w *Watcher) expiryHandler(blockChan chan int32, errChan chan error) {
 //
 // NOTE: If there is a previous conf watcher for the given account that has not
 // finished yet, it will be canceled!
-func (w *Watcher) WatchAccountConf(traderKey *btcec.PublicKey,
+func (wc *WatcherController) WatchAccountConf(traderKey *btcec.PublicKey,
 	txHash chainhash.Hash, script []byte, numConfs, heightHint uint32) error {
 
-	w.cancelMtx.Lock()
-	defer w.cancelMtx.Unlock()
+	wc.cancelMtx.Lock()
+	defer wc.cancelMtx.Unlock()
 
 	var traderKeyRaw [33]byte
 	copy(traderKeyRaw[:], traderKey.SerializeCompressed())
 
 	// Cancel a previous conf watcher if one still exists.
-	cancel, ok := w.confCancels[traderKeyRaw]
+	cancel, ok := wc.confCancels[traderKeyRaw]
 	if ok {
 		cancel()
 	}
 
 	ctxc, cancel := context.WithCancel(context.Background())
-	confChan, errChan, err := w.cfg.ChainNotifier.RegisterConfirmationsNtfn(
+	confChan, errChan, err := wc.cfg.ChainNotifier.RegisterConfirmationsNtfn(
 		ctxc, &txHash, script, int32(numConfs), int32(heightHint),
 	)
 	if err != nil {
 		cancel()
 		return err
 	}
-	w.confCancels[traderKeyRaw] = cancel
+	wc.confCancels[traderKeyRaw] = cancel
 
-	w.wg.Add(1)
-	go w.waitForAccountConf(traderKey, traderKeyRaw, confChan, errChan)
+	wc.wg.Add(1)
+	go wc.waitForAccountConf(traderKey, traderKeyRaw, confChan, errChan)
 
 	return nil
 }
@@ -267,21 +265,21 @@ func (w *Watcher) WatchAccountConf(traderKey *btcec.PublicKey,
 // necessary steps once confirmed.
 //
 // NOTE: This method must be run as a goroutine.
-func (w *Watcher) waitForAccountConf(traderKey *btcec.PublicKey,
+func (wc *WatcherController) waitForAccountConf(traderKey *btcec.PublicKey,
 	traderKeyRaw [33]byte, confChan chan *chainntnfs.TxConfirmation,
 	errChan chan error) {
 
 	defer func() {
-		w.wg.Done()
+		wc.wg.Done()
 
-		w.cancelMtx.Lock()
-		delete(w.confCancels, traderKeyRaw)
-		w.cancelMtx.Unlock()
+		wc.cancelMtx.Lock()
+		delete(wc.confCancels, traderKeyRaw)
+		wc.cancelMtx.Unlock()
 	}()
 
 	select {
 	case conf := <-confChan:
-		if err := w.cfg.HandleAccountConf(traderKey, conf); err != nil {
+		if err := wc.cfg.HandleAccountConf(traderKey, conf); err != nil {
 			log.Errorf("Unable to handle confirmation for account "+
 				"%x: %v", traderKey.SerializeCompressed(), err)
 		}
@@ -300,8 +298,23 @@ func (w *Watcher) waitForAccountConf(traderKey *btcec.PublicKey,
 				traderKey.SerializeCompressed(), err)
 		}
 
-	case <-w.quit:
+	case <-wc.quit:
 		return
+	}
+}
+
+// CancelAccountConf cancels the conf watcher of the given account, if one is
+// active.
+func (wc *WatcherController) CancelAccountConf(traderKey *btcec.PublicKey) {
+	wc.cancelMtx.Lock()
+	defer wc.cancelMtx.Unlock()
+
+	var traderKeyRaw [33]byte
+	copy(traderKeyRaw[:], traderKey.SerializeCompressed())
+
+	cancel, ok := wc.confCancels[traderKeyRaw]
+	if ok {
+		cancel()
 	}
 }
 
@@ -310,33 +323,33 @@ func (w *Watcher) waitForAccountConf(traderKey *btcec.PublicKey,
 //
 // NOTE: If there is a previous spend watcher for the given account that has not
 // finished yet, it will be canceled!
-func (w *Watcher) WatchAccountSpend(traderKey *btcec.PublicKey,
+func (wc *WatcherController) WatchAccountSpend(traderKey *btcec.PublicKey,
 	accountPoint wire.OutPoint, script []byte, heightHint uint32) error {
 
-	w.cancelMtx.Lock()
-	defer w.cancelMtx.Unlock()
+	wc.cancelMtx.Lock()
+	defer wc.cancelMtx.Unlock()
 
 	var traderKeyRaw [33]byte
 	copy(traderKeyRaw[:], traderKey.SerializeCompressed())
 
 	// Cancel a previous spend watcher if one still exists.
-	cancel, ok := w.spendCancels[traderKeyRaw]
+	cancel, ok := wc.spendCancels[traderKeyRaw]
 	if ok {
 		cancel()
 	}
 
 	ctxc, cancel := context.WithCancel(context.Background())
-	spendChan, errChan, err := w.cfg.ChainNotifier.RegisterSpendNtfn(
+	spendChan, errChan, err := wc.cfg.ChainNotifier.RegisterSpendNtfn(
 		ctxc, &accountPoint, script, int32(heightHint),
 	)
 	if err != nil {
 		cancel()
 		return err
 	}
-	w.spendCancels[traderKeyRaw] = cancel
+	wc.spendCancels[traderKeyRaw] = cancel
 
-	w.wg.Add(1)
-	go w.waitForAccountSpend(traderKey, traderKeyRaw, spendChan, errChan)
+	wc.wg.Add(1)
+	go wc.waitForAccountSpend(traderKey, traderKeyRaw, spendChan, errChan)
 
 	return nil
 }
@@ -345,21 +358,21 @@ func (w *Watcher) WatchAccountSpend(traderKey *btcec.PublicKey,
 // steps once spent.
 //
 // NOTE: This method must be run as a goroutine.
-func (w *Watcher) waitForAccountSpend(traderKey *btcec.PublicKey,
+func (wc *WatcherController) waitForAccountSpend(traderKey *btcec.PublicKey,
 	traderKeyRaw [33]byte, spendChan chan *chainntnfs.SpendDetail,
 	errChan chan error) {
 
 	defer func() {
-		w.wg.Done()
+		wc.wg.Done()
 
-		w.cancelMtx.Lock()
-		delete(w.spendCancels, traderKeyRaw)
-		w.cancelMtx.Unlock()
+		wc.cancelMtx.Lock()
+		delete(wc.spendCancels, traderKeyRaw)
+		wc.cancelMtx.Unlock()
 	}()
 
 	select {
 	case spend := <-spendChan:
-		err := w.cfg.HandleAccountSpend(traderKey, spend)
+		err := wc.cfg.HandleAccountSpend(traderKey, spend)
 		if err != nil {
 			log.Errorf("Unable to handle spend for account %x: %v",
 				traderKey.SerializeCompressed(), err)
@@ -378,55 +391,40 @@ func (w *Watcher) waitForAccountSpend(traderKey *btcec.PublicKey,
 				"%v", traderKey.SerializeCompressed(), err)
 		}
 
-	case <-w.quit:
+	case <-wc.quit:
 		return
+	}
+}
+
+// CancelAccountSpend cancels the spend watcher of the given account, if one is
+// active.
+func (wc *WatcherController) CancelAccountSpend(traderKey *btcec.PublicKey) {
+	wc.cancelMtx.Lock()
+	defer wc.cancelMtx.Unlock()
+
+	var traderKeyRaw [33]byte
+	copy(traderKeyRaw[:], traderKey.SerializeCompressed())
+
+	cancel, ok := wc.spendCancels[traderKeyRaw]
+	if ok {
+		cancel()
 	}
 }
 
 // WatchAccountExpiration watches for the expiration of an account on-chain.
 // Successive calls for the same account will cancel any previous expiration
 // watch requests and the new expiration will be tracked instead.
-func (w *Watcher) WatchAccountExpiration(traderKey *btcec.PublicKey,
+func (wc *WatcherController) WatchAccountExpiration(traderKey *btcec.PublicKey,
 	expiry uint32) error {
 
 	select {
-	case w.expiryReqs <- &expiryReq{
+	case wc.expiryReqs <- &expiryReq{
 		traderKey: traderKey,
 		expiry:    expiry,
 	}:
 		return nil
 
-	case <-w.quit:
+	case <-wc.quit:
 		return errors.New("watcher shutting down")
-	}
-}
-
-// CancelAccountSpend cancels the spend watcher of the given account, if one is
-// active.
-func (w *Watcher) CancelAccountSpend(traderKey *btcec.PublicKey) {
-	w.cancelMtx.Lock()
-	defer w.cancelMtx.Unlock()
-
-	var traderKeyRaw [33]byte
-	copy(traderKeyRaw[:], traderKey.SerializeCompressed())
-
-	cancel, ok := w.spendCancels[traderKeyRaw]
-	if ok {
-		cancel()
-	}
-}
-
-// CancelAccountConf cancels the conf watcher of the given account, if one is
-// active.
-func (w *Watcher) CancelAccountConf(traderKey *btcec.PublicKey) {
-	w.cancelMtx.Lock()
-	defer w.cancelMtx.Unlock()
-
-	var traderKeyRaw [33]byte
-	copy(traderKeyRaw[:], traderKey.SerializeCompressed())
-
-	cancel, ok := w.confCancels[traderKeyRaw]
-	if ok {
-		cancel()
 	}
 }

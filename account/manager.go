@@ -128,7 +128,7 @@ type Manager struct {
 	stopped sync.Once
 
 	cfg     ManagerConfig
-	watcher *watcher.Watcher
+	watcher watcher.Controller
 
 	// pendingBatchMtx guards access to any database calls involving pending
 	// batches. This is mostly used to prevent race conditions when handling
@@ -153,7 +153,7 @@ func NewManager(cfg *ManagerConfig) *Manager {
 		quit: make(chan struct{}),
 	}
 
-	m.watcher = watcher.New(&watcher.Config{
+	m.watcher = watcher.NewWatcherController(&watcher.Config{
 		ChainNotifier:       cfg.ChainNotifier,
 		HandleAccountConf:   m.handleAccountConf,
 		HandleAccountSpend:  m.handleAccountSpend,
