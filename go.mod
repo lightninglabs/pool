@@ -10,6 +10,7 @@ require (
 	github.com/btcsuite/btcwallet/wallet/txrules v1.1.0
 	github.com/btcsuite/btcwallet/wtxmgr v1.3.1-0.20210822222949-9b5a201c344c
 	github.com/davecgh/go-spew v1.1.1
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.5.0
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/lightninglabs/aperture v0.1.6-beta
@@ -22,7 +23,10 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli v1.20.0
 	go.etcd.io/bbolt v1.3.6
+	golang.org/x/mod v0.5.1 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/sys v0.0.0-20211023085530-d6a326fbbf70 // indirect
+	golang.org/x/tools v0.1.7 // indirect
 	google.golang.org/grpc v1.38.0
 	google.golang.org/protobuf v1.26.0
 	gopkg.in/macaroon-bakery.v2 v2.0.1
