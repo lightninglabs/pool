@@ -13,6 +13,7 @@ import (
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -159,4 +160,13 @@ func (m *MockWalletKit) BumpFee(context.Context, wire.OutPoint,
 	chainfee.SatPerKWeight) error {
 
 	panic("unimplemented")
+}
+
+// ListAccounts retrieves all accounts belonging to the wallet by default.
+// Optional name and addressType can be provided to filter through all of the
+// wallet accounts and return only those matching.
+func (m *MockWalletKit) ListAccounts(context.Context, string,
+	walletrpc.AddressType) ([]*walletrpc.Account, error) {
+
+	return nil, nil
 }
