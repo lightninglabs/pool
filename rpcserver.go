@@ -2646,6 +2646,7 @@ func (s *rpcServer) CancelSidecar(ctx context.Context,
 	// we were offering it, this will move the ticket to "completed". That's
 	// why we do it before updating the ticket again to reflect the cancel
 	// state below.
+	ticket.State = sidecar.StateCanceled
 	s.server.sidecarAcceptor.FinalizeTicket(ticket)
 
 	// Set the state to canceled and update our local database. This will

@@ -422,7 +422,6 @@ func validateOrderedTicket(ctx context.Context, t *sidecar.Ticket,
 // use the cipher box of the provider of the ticket (and a new one we'll create
 // for the reply side) to finalize negotiation, resulting in a
 func (a *SidecarAcceptor) AutoAcceptSidecar(ticket *sidecar.Ticket) error {
-
 	log.Infof("Attempting negotiation to receive sidecar ticket: %x",
 		ticket.ID[:])
 
@@ -479,7 +478,7 @@ func (a *SidecarAcceptor) SubmitSidecarOrder(ticket *sidecar.Ticket, bid *order.
 
 // CoordinateSidecar signals to the sidecar acceptor that it should attempt to
 // automatically coordinate the negotiation of the ultimate order to be
-// produced by the side car ticket with the recipient.
+// produced by the sidecar ticket with the recipient.
 func (a *SidecarAcceptor) CoordinateSidecar(ticket *sidecar.Ticket,
 	bid *order.Bid, acct *account.Account) error {
 
@@ -691,7 +690,7 @@ func (a *SidecarAcceptor) finalizeTicketIfExists(ticket *sidecar.Ticket) {
 		return
 	}
 
-	negotiator.TicketExecuted()
+	negotiator.TicketExecuted(ticket.State, false)
 
 	delete(a.negotiators, streamID)
 }
@@ -806,7 +805,7 @@ func (a *SidecarAcceptor) UpdateSidecar(tkt *sidecar.Ticket) error {
 	return a.cfg.SidecarDB.UpdateSidecar(tkt)
 }
 
-// ValidateOrderedTicketctx attempts to validate that a given ticket has
+// ValidateOrderedTicket ctx attempts to validate that a given ticket has
 // properly transitioned to the ordered state.
 func (a *SidecarAcceptor) ValidateOrderedTicket(tkt *sidecar.Ticket) error {
 	ctx := context.Background()
