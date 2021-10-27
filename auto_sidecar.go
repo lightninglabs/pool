@@ -553,7 +553,8 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context,
 		case newTicket := <-packetChan:
 			// The provider has more states it needs to transition
 			// through, so we'll continue until we end up at the
-			// same state (a noop)
+			// same state (a noop).
+		stateUpdateLoop:
 			for {
 				priorState := sidecar.State(atomic.LoadUint32(&a.currentState))
 
@@ -575,9 +576,9 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context,
 
 				switch {
 				case priorState == newPktState.CurrentState:
-					fallthrough
+					break stateUpdateLoop
 				case newPktState.CurrentState == sidecar.StateExpectingChannel:
-					break
+					break stateUpdateLoop
 				}
 			}
 

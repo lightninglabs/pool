@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -339,7 +340,9 @@ func (s *sidecarTestCtx) restartAllNegotiators() error {
 	s.recipient.Stop()
 
 	s.provider.quit = make(chan struct{})
+	s.provider.stopOnce = sync.Once{}
 	s.recipient.quit = make(chan struct{})
+	s.recipient.stopOnce = sync.Once{}
 
 	s.provider.cfg.StartingPkt.CurrentState = sidecar.State(s.provider.currentState)
 	s.recipient.cfg.StartingPkt.CurrentState = sidecar.State(s.recipient.currentState)
@@ -505,6 +508,50 @@ func (s *sidecarTestCtx) assertNegotiatorStates(providerState, recepientState si
 	assert.NoError(s.t, err)
 }
 
+func (s *sidecarTestCtx) assertProviderShutdown() {
+	s.t.Helper()
+
+	select {
+	case <-s.provider.quit:
+	case <-time.After(time.Second * 5):
+		s.t.Fatalf("provider not shut down")
+	}
+
+	waitDone := make(chan struct{})
+	go func() {
+		defer close(waitDone)
+
+		s.provider.wg.Wait()
+	}()
+	select {
+	case <-waitDone:
+	case <-time.After(time.Second * 5):
+		s.t.Fatalf("provider not finished")
+	}
+}
+
+func (s *sidecarTestCtx) assertRecipientShutdown() {
+	s.t.Helper()
+
+	select {
+	case <-s.recipient.quit:
+	case <-time.After(time.Second * 5):
+		s.t.Fatalf("recipient not shut down")
+	}
+
+	waitDone := make(chan struct{})
+	go func() {
+		defer close(waitDone)
+
+		s.recipient.wg.Wait()
+	}()
+	select {
+	case <-waitDone:
+	case <-time.After(time.Second * 5):
+		s.t.Fatalf("recipient not finished")
+	}
+}
+
 func newSidecarTestCtx(t *testing.T) *sidecarTestCtx {
 	mailBox := newMockMailBox()
 	providerDriver := newMockDriver()
@@ -600,7 +647,7 @@ func TestAutoSidecarNegotiation(t *testing.T) {
 	testCtx.assertProviderMsgRecv()
 
 	// Upon receiving the new ticket, the provider should write the new
-	// registered state to disk, submit the bid, then then the new ticket
+	// registered state to disk, submit the bid, then send the new ticket
 	// over to the recipient.
 	testCtx.assertProviderTicketUpdated(sidecar.StateRegistered)
 	testCtx.assertBidSubmited()
@@ -663,6 +710,10 @@ func TestAutoSidecarNegotiation(t *testing.T) {
 	// Once again, no messages should be received by either side.
 	testCtx.assertNoProviderMsgsRecvd()
 	testCtx.assertNoReceiverMsgsRecvd()
+
+	// Both negotiators should be properly shut down.
+	testCtx.assertProviderShutdown()
+	testCtx.assertRecipientShutdown()
 }
 
 // TestAutoSidecarNegotiationRetransmission tests that if either side restarts,
