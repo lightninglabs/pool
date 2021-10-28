@@ -25,6 +25,7 @@ import (
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
+	"github.com/lightningnetwork/lnd/kvdb"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/macaroons"
@@ -82,6 +83,7 @@ type Server struct {
 	grpcListener    net.Listener
 	restListener    net.Listener
 	restCancel      func()
+	macaroonDB      kvdb.Backend
 	macaroonService *macaroons.Service
 	wg              sync.WaitGroup
 }
@@ -581,7 +583,7 @@ func (s *Server) Stop() error {
 	if err := s.db.Close(); err != nil {
 		log.Errorf("Error closing DB: %v", err)
 	}
-	if err := s.macaroonService.Close(); err != nil {
+	if err := s.stopMacaroonService(); err != nil {
 		log.Errorf("Error stopping macaroon service: %v", err)
 	}
 	s.lndServices.Close()
