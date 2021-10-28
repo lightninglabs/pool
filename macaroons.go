@@ -194,7 +194,8 @@ var (
 // exist yet. If macaroons are disabled in general in the configuration, none of
 // these actions are taken.
 func (s *Server) startMacaroonService() error {
-	backend, err := kvdb.GetBoltBackend(&kvdb.BoltBackendConfig{
+	var err error
+	s.macaroonDB, err = kvdb.GetBoltBackend(&kvdb.BoltBackendConfig{
 		DBPath:     s.cfg.BaseDir,
 		DBFileName: "macaroons.db",
 		DBTimeout:  clientdb.DefaultPoolDBTimeout,
@@ -213,7 +214,8 @@ func (s *Server) startMacaroonService() error {
 
 	// Create the macaroon authentication/authorization service.
 	s.macaroonService, err = macaroons.NewService(
-		backend, poolMacaroonLocation, false, macaroons.IPLockChecker,
+		s.macaroonDB, poolMacaroonLocation, false,
+		macaroons.IPLockChecker,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to set up macaroon service: %v", err)
@@ -263,7 +265,18 @@ func (s *Server) startMacaroonService() error {
 
 // stopMacaroonService closes the macaroon database.
 func (s *Server) stopMacaroonService() error {
-	return s.macaroonService.Close()
+	var shutdownErr error
+	if err := s.macaroonService.Close(); err != nil {
+		log.Errorf("Error closing macaroon service: %v", err)
+		shutdownErr = err
+	}
+
+	if err := s.macaroonDB.Close(); err != nil {
+		log.Errorf("Error closing macaroon DB: %v", err)
+		shutdownErr = err
+	}
+
+	return shutdownErr
 }
 
 // macaroonInterceptor creates gRPC server options with the macaroon security
