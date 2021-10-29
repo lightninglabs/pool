@@ -2,11 +2,9 @@ PKG := github.com/lightninglabs/pool
 ESCPKG := github.com\/lightninglabs\/pool
 
 LINT_PKG := github.com/golangci/golangci-lint/cmd/golangci-lint
-GOVERALLS_PKG := github.com/mattn/goveralls
 GOACC_PKG := github.com/ory/go-acc
 
 GO_BIN := ${GOPATH}/bin
-GOVERALLS_BIN := $(GO_BIN)/goveralls
 LINT_BIN := $(GO_BIN)/golangci-lint
 GOACC_BIN := $(GO_BIN)/go-acc
 
@@ -59,10 +57,6 @@ all: scratch check install
 # DEPENDENCIES
 # ============
 
-$(GOVERALLS_BIN):
-	@$(call print, "Fetching goveralls.")
-	go get -u $(GOVERALLS_PKG)
-
 $(LINT_BIN):
 	@$(call print, "Fetching linter")
 	$(DEPGET) $(LINT_PKG)@$(LINT_COMMIT)
@@ -109,12 +103,6 @@ unit-cover: $(GOACC_BIN)
 unit-race:
 	@$(call print, "Running unit race tests.")
 	env CGO_ENABLED=1 GORACE="history_size=7 halt_on_errors=1" $(UNIT_RACE)
-
-goveralls: $(GOVERALLS_BIN)
-	@$(call print, "Sending coverage report.")
-	$(GOVERALLS_BIN) -coverprofile=coverage.txt -service=travis-ci
-
-travis-cover: unit-cover goveralls
 
 # =============
 # FLAKE HUNTING
