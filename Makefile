@@ -137,10 +137,9 @@ rpc:
 	@$(call print, "Compiling protos.")
 	cd ./poolrpc; ./gen_protos_docker.sh
 
-rpc-format:
-	@$(call print, "Formatting protos.")
-	cd ./poolrpc; find . -name "*.proto" | xargs clang-format --style=file -i
-	cd ./auctioneerrpc; find . -name "*.proto" | xargs clang-format --style=file -i
+rpc-check: rpc
+	@$(call print, "Verifying protos.")
+	if test -n "$$(git describe --dirty | grep dirty)"; then echo "Protos not properly formatted or not compiled with correct version!"; git status; git diff; exit 1; fi
 
 rpc-js-compile:
 	@$(call print, "Compiling JSON/WASM stubs.")
