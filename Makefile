@@ -2,11 +2,9 @@ PKG := github.com/lightninglabs/pool
 ESCPKG := github.com\/lightninglabs\/pool
 
 LINT_PKG := github.com/golangci/golangci-lint/cmd/golangci-lint
-GOVERALLS_PKG := github.com/mattn/goveralls
 GOACC_PKG := github.com/ory/go-acc
 
 GO_BIN := ${GOPATH}/bin
-GOVERALLS_BIN := $(GO_BIN)/goveralls
 LINT_BIN := $(GO_BIN)/golangci-lint
 GOACC_BIN := $(GO_BIN)/go-acc
 
@@ -59,10 +57,6 @@ all: scratch check install
 # DEPENDENCIES
 # ============
 
-$(GOVERALLS_BIN):
-	@$(call print, "Fetching goveralls.")
-	go get -u $(GOVERALLS_PKG)
-
 $(LINT_BIN):
 	@$(call print, "Fetching linter")
 	$(DEPGET) $(LINT_PKG)@$(LINT_COMMIT)
@@ -110,12 +104,6 @@ unit-race:
 	@$(call print, "Running unit race tests.")
 	env CGO_ENABLED=1 GORACE="history_size=7 halt_on_errors=1" $(UNIT_RACE)
 
-goveralls: $(GOVERALLS_BIN)
-	@$(call print, "Sending coverage report.")
-	$(GOVERALLS_BIN) -coverprofile=coverage.txt -service=travis-ci
-
-travis-cover: unit-cover goveralls
-
 # =============
 # FLAKE HUNTING
 # =============
@@ -149,10 +137,9 @@ rpc:
 	@$(call print, "Compiling protos.")
 	cd ./poolrpc; ./gen_protos_docker.sh
 
-rpc-format:
-	@$(call print, "Formatting protos.")
-	cd ./poolrpc; find . -name "*.proto" | xargs clang-format --style=file -i
-	cd ./auctioneerrpc; find . -name "*.proto" | xargs clang-format --style=file -i
+rpc-check: rpc
+	@$(call print, "Verifying protos.")
+	if test -n "$$(git describe --dirty | grep dirty)"; then echo "Protos not properly formatted or not compiled with correct version!"; git status; git diff; exit 1; fi
 
 rpc-js-compile:
 	@$(call print, "Compiling JSON/WASM stubs.")
