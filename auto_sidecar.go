@@ -162,6 +162,19 @@ type AutoAcceptorConfig struct {
 	MailBox MailBox
 }
 
+// finalization is a struct that contains the reason (state) and initiator of a
+// finalization message we receive.
+type finalization struct {
+	// state is the new state of the ticket after the finalization. This is
+	// mainly meant as an indication whether the finalization was part of
+	// the normal flow or caused by a cancellation.
+	state sidecar.State
+
+	// otherSide indicates that the other side caused the finalization of
+	// the ticket. This should only be set to true for cancellations.
+	otherSide bool
+}
+
 // SidecarNegotiator is a sub-system that uses a mailbox abstraction between a
 // provider and recipient of a sidecar channel to complete the manual steps in
 // automated manner.
@@ -172,7 +185,7 @@ type SidecarNegotiator struct {
 
 	wg sync.WaitGroup
 
-	ticketFinalized chan struct{}
+	ticketFinalized chan *finalization
 	quit            chan struct{}
 
 	stopOnce sync.Once
@@ -184,7 +197,7 @@ func NewSidecarNegotiator(cfg AutoAcceptorConfig) *SidecarNegotiator {
 	return &SidecarNegotiator{
 		cfg:             cfg,
 		currentState:    uint32(cfg.StartingPkt.CurrentState),
-		ticketFinalized: make(chan struct{}),
+		ticketFinalized: make(chan *finalization),
 		quit:            make(chan struct{}),
 	}
 }
@@ -229,9 +242,12 @@ func (a *SidecarNegotiator) Stop() {
 // TicketExecuted is a clean up function that should be called once the ticket
 // has been executed, meaning a channel defined by it was confirmed in a batch
 // on chain.
-func (a *SidecarNegotiator) TicketExecuted() {
+func (a *SidecarNegotiator) TicketExecuted(state sidecar.State, otherSide bool) {
 	select {
-	case a.ticketFinalized <- struct{}{}:
+	case a.ticketFinalized <- &finalization{
+		state:     state,
+		otherSide: otherSide,
+	}:
 	case <-a.quit:
 	}
 
@@ -257,9 +273,7 @@ func (a *SidecarNegotiator) autoSidecarReceiver(ctx context.Context,
 
 	// Before we enter our main read loop below, we'll attempt to re-create
 	// out mailbox as the recipient.
-	recipientStreamID, err := deriveRecipientStreamID(
-		localTicket,
-	)
+	recipientStreamID, err := deriveRecipientStreamID(localTicket)
 	if err != nil {
 		log.Errorf("unable to derive recipient ID: %v", err)
 		return
@@ -340,27 +354,58 @@ func (a *SidecarNegotiator) autoSidecarReceiver(ctx context.Context,
 
 			localTicket = newPktState.ReceiverTicket
 
-		case <-a.ticketFinalized:
-			log.Infof("Receiver negotiation for "+
-				"SidecarTicket(%x) complete!", localTicket.ID[:])
+		case fin := <-a.ticketFinalized:
+			log.Infof("Receiver negotiation for SidecarTicket(%x) "+
+				"complete with state '%v'!", localTicket.ID[:],
+				fin.state)
 
 			// The ticket has been marked as finalized, so we'll
-			// update it as being completed in the database.
-			localTicket.State = sidecar.StateCompleted
+			// update it as being in a final state in the database.
+			localTicket.State = fin.state
 			if err := a.cfg.Driver.UpdateSidecar(localTicket); err != nil {
 				log.Errorf("unable to update ticket to "+
 					"complete state: %v", err)
 				return
 			}
 
-			// We'll also tear down the mailbox as well as we no
-			// longer need it anymore.
-			err := a.cfg.MailBox.DelSidecarMailbox(
-				recipientStreamID, localTicket,
-			)
-			if err != nil {
-				log.Errorf("unable to reclaim mailbox: %v", err)
-				return
+			// Did we receive the cancellation from the provider or
+			// was it us that canceled the ticket?
+			switch {
+			// Our side canceled the ticket and a recipient
+			// registered for it. We need to inform them about the
+			// cancellation. They will then go ahead and remove the
+			// mailbox from their end.
+			case !fin.otherSide &&
+				fin.state == sidecar.StateCanceled:
+
+				// Sending a message doesn't block until it is
+				// received. To make sure we don't cancel the
+				// context right after we've sent the message
+				// (but maybe _before_ it is received), we use
+				// a background context here.
+				ctxb := context.Background()
+				err := a.cfg.MailBox.SendSidecarPkt(
+					ctxb, localTicket, true,
+				)
+				if err != nil {
+					log.Errorf("unable to send cancel "+
+						"msg to provider: %v", err)
+					return
+				}
+
+			// The other side informed us about the new state of the
+			// ticket. Because they don't know when we're done
+			// reading from the mailbox, they want us to remove it
+			// once we've received the update.
+			default:
+				err := a.cfg.MailBox.DelSidecarMailbox(
+					recipientStreamID, localTicket,
+				)
+				if err != nil {
+					log.Errorf("unable to reclaim "+
+						"mailbox: %v", err)
+					return
+				}
 			}
 
 		case <-a.quit:
@@ -443,6 +488,19 @@ func (a *SidecarNegotiator) stateStepRecipient(ctx context.Context,
 		return &SidecarPacket{
 			CurrentState:   sidecar.StateExpectingChannel,
 			ReceiverTicket: pkt.ProviderTicket,
+			ProviderTicket: pkt.ProviderTicket,
+		}, nil
+
+	// In case the provider cancels the ticket, we need to abort as well.
+	case pkt.ProviderTicket.State == sidecar.StateCanceled:
+		// We can now cancel this negotiator. Because stopping will
+		// send another message on a channel that is read by the same
+		// goroutine we are currently in, we need to do it in a new one.
+		go a.TicketExecuted(sidecar.StateCanceled, true)
+
+		return &SidecarPacket{
+			CurrentState:   sidecar.StateCanceled,
+			ReceiverTicket: pkt.ReceiverTicket,
 			ProviderTicket: pkt.ProviderTicket,
 		}, nil
 
@@ -553,7 +611,8 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context,
 		case newTicket := <-packetChan:
 			// The provider has more states it needs to transition
 			// through, so we'll continue until we end up at the
-			// same state (a noop)
+			// same state (a noop).
+		stateUpdateLoop:
 			for {
 				priorState := sidecar.State(atomic.LoadUint32(&a.currentState))
 
@@ -575,33 +634,70 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context,
 
 				switch {
 				case priorState == newPktState.CurrentState:
-					fallthrough
+					break stateUpdateLoop
 				case newPktState.CurrentState == sidecar.StateExpectingChannel:
-					break
+					break stateUpdateLoop
+				case newPktState.CurrentState == sidecar.StateCanceled:
+					break stateUpdateLoop
 				}
 			}
 
-		case <-a.ticketFinalized:
-			log.Infof("Receiver negotiation for SidecarTicket(%x) "+
-				"complete!", localTicket.ID[:])
+		case fin := <-a.ticketFinalized:
+			log.Infof("Provider negotiation for SidecarTicket(%x) "+
+				"complete with state '%v'!", localTicket.ID[:],
+				fin.state)
 
 			// The ticket has been marked as finalized, so we'll
-			// update it as being completed in the database.
-			localTicket.State = sidecar.StateCompleted
+			// update it as being in a final state in the database.
+			localTicket.State = fin.state
 			if err := a.cfg.Driver.UpdateSidecar(localTicket); err != nil {
 				log.Errorf("unable to update ticket to "+
 					"complete state: %v", err)
 				return
 			}
 
-			// We'll also tear down the mailbox as well as we no
-			// longer need it anymore.
-			err := a.cfg.MailBox.DelAcctMailbox(
-				streamID, acct.TraderKey,
-			)
-			if err != nil {
-				log.Errorf("unable to reclaim mailbox: %v", err)
-				return
+			// Did we ever go into the registered state or further?
+			// If no recipient registered, then nobody would listen
+			// for the cancellation message.
+			switch {
+			// Our side canceled the ticket and a recipient
+			// registered for it. We need to inform them about the
+			// cancellation. They will then go ahead and remove the
+			// mailbox from their end.
+			case !fin.otherSide &&
+				fin.state == sidecar.StateCanceled &&
+				a.CurrentState() >= sidecar.StateRegistered:
+
+				// Sending a message doesn't block until it is
+				// received. To make sure we don't cancel the
+				// context right after we've sent the message
+				// (but maybe _before_ it is received), we use
+				// a background context here.
+				ctxb := context.Background()
+				err := a.cfg.MailBox.SendSidecarPkt(
+					ctxb, localTicket, false,
+				)
+				if err != nil {
+					log.Errorf("unable to send cancel "+
+						"msg to recipient: %v", err)
+					return
+				}
+
+			// In every other case we can just remote the mailbox:
+			//  - The other side cancelled the ticket.
+			//  - We completed the ticket going through the normal
+			//    process.
+			//  - We cancelled the ticket, but we know nobody ever
+			//    registered for it on the other side.
+			default:
+				err := a.cfg.MailBox.DelAcctMailbox(
+					streamID, acct.TraderKey,
+				)
+				if err != nil {
+					log.Errorf("unable to reclaim "+
+						"mailbox: %v", err)
+					return
+				}
 			}
 
 		case <-a.quit:
@@ -670,13 +766,25 @@ func (a *SidecarNegotiator) stateStepProvider(ctx context.Context,
 			ProviderTicket: pkt.ReceiverTicket,
 		}, nil
 
+	// In case the recipient cancels the ticket, we need to abort as well.
+	case pkt.ReceiverTicket.State == sidecar.StateCanceled:
+		// We can now cancel this negotiator. Because stopping will
+		// send another message on a channel that is read by the same
+		// goroutine we are currently in, we need to do it in a new one.
+		go a.TicketExecuted(sidecar.StateCanceled, true)
+
+		return &SidecarPacket{
+			CurrentState:   sidecar.StateCanceled,
+			ReceiverTicket: pkt.ReceiverTicket,
+			ProviderTicket: pkt.ProviderTicket,
+		}, nil
+
 	// If we're in this state (possibly after a restart), we have all the
 	// information we need to submit the order, so we'll do that, then send
 	// the finalized ticket back to the recipient.
 	//
 	// Transition: -> StateOrdered
 	case pkt.CurrentState == sidecar.StateRegistered:
-
 		log.Infof("Submitting bid order for ticket=%x",
 			pkt.ProviderTicket.ID[:])
 
@@ -719,7 +827,6 @@ func (a *SidecarNegotiator) stateStepProvider(ctx context.Context,
 	//
 	// Transition: -> StateExpectingChannel
 	case pkt.CurrentState == sidecar.StateOrdered:
-
 		log.Infof("Sending finalize ticket=%x to receiver, entering "+
 			"final stage", pkt.ProviderTicket.ID[:])
 

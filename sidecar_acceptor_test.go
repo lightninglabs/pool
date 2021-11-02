@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -339,7 +340,9 @@ func (s *sidecarTestCtx) restartAllNegotiators() error {
 	s.recipient.Stop()
 
 	s.provider.quit = make(chan struct{})
+	s.provider.stopOnce = sync.Once{}
 	s.recipient.quit = make(chan struct{})
+	s.recipient.stopOnce = sync.Once{}
 
 	s.provider.cfg.StartingPkt.CurrentState = sidecar.State(s.provider.currentState)
 	s.recipient.cfg.StartingPkt.CurrentState = sidecar.State(s.recipient.currentState)
@@ -403,6 +406,8 @@ func (s *sidecarTestCtx) dropProviderMessage() {
 }
 
 func (s *sidecarTestCtx) assertNoProviderMsgsRecvd() {
+	s.t.Helper()
+
 	select {
 	case <-s.mailbox.providerMsgAck:
 		s.t.Fatalf("provider should've received no messages")
@@ -411,6 +416,8 @@ func (s *sidecarTestCtx) assertNoProviderMsgsRecvd() {
 }
 
 func (s *sidecarTestCtx) assertNoReceiverMsgsRecvd() {
+	s.t.Helper()
+
 	select {
 	case <-s.mailbox.receiverMsgAck:
 		s.t.Fatalf("receiver should've received no messages")
@@ -419,6 +426,8 @@ func (s *sidecarTestCtx) assertNoReceiverMsgsRecvd() {
 }
 
 func (s *sidecarTestCtx) assertProviderTicketUpdated(expectedState sidecar.State) {
+	s.t.Helper()
+
 	select {
 	case stateUpdate := <-s.providerDriver.stateUpdates:
 
@@ -433,6 +442,8 @@ func (s *sidecarTestCtx) assertProviderTicketUpdated(expectedState sidecar.State
 }
 
 func (s *sidecarTestCtx) assertBidSubmited() {
+	s.t.Helper()
+
 	select {
 	case <-s.providerDriver.bidSubmitted:
 	case <-time.After(time.Second * 5):
@@ -441,6 +452,8 @@ func (s *sidecarTestCtx) assertBidSubmited() {
 }
 
 func (s *sidecarTestCtx) assertRecipientTicketValidated() {
+	s.t.Helper()
+
 	select {
 	case <-s.recipientDriver.ticketValidated:
 	case <-time.After(time.Second * 5):
@@ -449,6 +462,8 @@ func (s *sidecarTestCtx) assertRecipientTicketValidated() {
 }
 
 func (s *sidecarTestCtx) assertRecipientExpectsChannel() {
+	s.t.Helper()
+
 	select {
 	case <-s.recipientDriver.channelExpected:
 	case <-time.After(time.Second * 5):
@@ -473,12 +488,22 @@ func (s *sidecarTestCtx) assertRecipientTicketUpdated(expectedState sidecar.Stat
 }
 
 func (s *sidecarTestCtx) confirmSidecarBatch() {
-	s.provider.TicketExecuted()
+	s.provider.TicketExecuted(sidecar.StateCompleted, false)
 
-	s.recipient.TicketExecuted()
+	s.recipient.TicketExecuted(sidecar.StateCompleted, false)
+}
+
+func (s *sidecarTestCtx) cancelTicket(fromProvider bool) {
+	if fromProvider {
+		s.provider.TicketExecuted(sidecar.StateCanceled, false)
+	} else {
+		s.recipient.TicketExecuted(sidecar.StateCanceled, false)
+	}
 }
 
 func (s *sidecarTestCtx) assertProviderMailboxDel() {
+	s.t.Helper()
+
 	select {
 	case <-s.mailbox.providerDel:
 	case <-time.After(time.Second * 5):
@@ -487,14 +512,18 @@ func (s *sidecarTestCtx) assertProviderMailboxDel() {
 }
 
 func (s *sidecarTestCtx) assertRecipientMailboxDel() {
+	s.t.Helper()
+
 	select {
 	case <-s.mailbox.receiverDel:
 	case <-time.After(time.Second * 5):
-		s.t.Fatalf("provider mailbox not deleted")
+		s.t.Fatalf("recipient mailbox not deleted")
 	}
 }
 
 func (s *sidecarTestCtx) assertNegotiatorStates(providerState, recepientState sidecar.State) {
+	s.t.Helper()
+
 	err := wait.Predicate(func() bool {
 		return s.provider.CurrentState() == providerState
 	}, time.Second*5)
@@ -503,6 +532,50 @@ func (s *sidecarTestCtx) assertNegotiatorStates(providerState, recepientState si
 		return s.recipient.CurrentState() == recepientState
 	}, time.Second*5)
 	assert.NoError(s.t, err)
+}
+
+func (s *sidecarTestCtx) assertProviderShutdown() {
+	s.t.Helper()
+
+	select {
+	case <-s.provider.quit:
+	case <-time.After(time.Second * 5):
+		s.t.Fatalf("provider not shut down")
+	}
+
+	waitDone := make(chan struct{})
+	go func() {
+		defer close(waitDone)
+
+		s.provider.wg.Wait()
+	}()
+	select {
+	case <-waitDone:
+	case <-time.After(time.Second * 5):
+		s.t.Fatalf("provider not finished")
+	}
+}
+
+func (s *sidecarTestCtx) assertRecipientShutdown() {
+	s.t.Helper()
+
+	select {
+	case <-s.recipient.quit:
+	case <-time.After(time.Second * 5):
+		s.t.Fatalf("recipient not shut down")
+	}
+
+	waitDone := make(chan struct{})
+	go func() {
+		defer close(waitDone)
+
+		s.recipient.wg.Wait()
+	}()
+	select {
+	case <-waitDone:
+	case <-time.After(time.Second * 5):
+		s.t.Fatalf("recipient not finished")
+	}
 }
 
 func newSidecarTestCtx(t *testing.T) *sidecarTestCtx {
@@ -600,7 +673,7 @@ func TestAutoSidecarNegotiation(t *testing.T) {
 	testCtx.assertProviderMsgRecv()
 
 	// Upon receiving the new ticket, the provider should write the new
-	// registered state to disk, submit the bid, then then the new ticket
+	// registered state to disk, submit the bid, then send the new ticket
 	// over to the recipient.
 	testCtx.assertProviderTicketUpdated(sidecar.StateRegistered)
 	testCtx.assertBidSubmited()
@@ -663,6 +736,10 @@ func TestAutoSidecarNegotiation(t *testing.T) {
 	// Once again, no messages should be received by either side.
 	testCtx.assertNoProviderMsgsRecvd()
 	testCtx.assertNoReceiverMsgsRecvd()
+
+	// Both negotiators should be properly shut down.
+	testCtx.assertProviderShutdown()
+	testCtx.assertRecipientShutdown()
 }
 
 // TestAutoSidecarNegotiationRetransmission tests that if either side restarts,
@@ -721,4 +798,76 @@ func TestAutoSidecarNegotiationRetransmission(t *testing.T) {
 	testCtx.assertRecipientMsgRecv()
 	testCtx.assertRecipientTicketValidated()
 	testCtx.assertRecipientExpectsChannel()
+}
+
+// TestAutoSidecarNegotiationCancellation tests that if either side cancels,
+// then the proper message is sent in order to ensure the negotiation state
+// machine properly stops on both ends.
+func TestAutoSidecarNegotiationCancellation(t *testing.T) {
+	t.Run("provider cancels", func(tt *testing.T) {
+		runAutoSidecarNegotiationCancellation(tt, true)
+	})
+	t.Run("recipient cancels", func(tt *testing.T) {
+		runAutoSidecarNegotiationCancellation(tt, false)
+	})
+}
+
+func runAutoSidecarNegotiationCancellation(t *testing.T, providerCancels bool) {
+	t.Parallel()
+
+	testCtx := newSidecarTestCtx(t)
+
+	// First, we'll start both negotiators. The provider should no-op, but
+	// then the receiver should send over the ticket and complete
+	// execution. At the end of the exchange, we expect that both sides are
+	// waiting for the channel in its expectation state.
+	err := testCtx.startNegotiators()
+	assert.NoError(t, err, fmt.Errorf("unable to start negotiators: %v", err))
+
+	// The recipient should send a new message to the provider with their
+	// ticket in the registered state.
+	testCtx.assertProviderMsgRecv()
+
+	// Upon receiving the new ticket, the provider should write the new
+	// registered state to disk, submit the bid, then send the new ticket
+	// over to the recipient.
+	testCtx.assertProviderTicketUpdated(sidecar.StateRegistered)
+	testCtx.assertBidSubmited()
+	testCtx.assertRecipientMsgRecv()
+
+	// After sending the ticket, the provider should update the ticket in
+	// its database as it waits in the expected state.
+	testCtx.assertProviderTicketUpdated(sidecar.StateExpectingChannel)
+
+	// The recipient, should now validate the ticket, then wait and expect
+	// the channel.
+	testCtx.assertRecipientTicketValidated()
+	testCtx.assertRecipientExpectsChannel()
+
+	// At this point, both sides should be waiting for the channel in its
+	// expected state.
+	testCtx.assertNegotiatorStates(
+		sidecar.StateExpectingChannel, sidecar.StateExpectingChannel,
+	)
+
+	// We now cancel the ticket on the requested side. This cancellation
+	// would normally come in as an RPC request, so from its own goroutine.
+	go testCtx.cancelTicket(providerCancels)
+
+	// The other side should now receive a message.
+	if providerCancels {
+		testCtx.assertProviderTicketUpdated(sidecar.StateCanceled)
+		testCtx.assertRecipientMsgRecv()
+		testCtx.assertRecipientTicketUpdated(sidecar.StateCanceled)
+		testCtx.assertRecipientMailboxDel()
+	} else {
+		testCtx.assertRecipientTicketUpdated(sidecar.StateCanceled)
+		testCtx.assertProviderMsgRecv()
+		testCtx.assertProviderTicketUpdated(sidecar.StateCanceled)
+		testCtx.assertProviderMailboxDel()
+	}
+
+	// Once again, no messages should be received by either side.
+	testCtx.assertNoProviderMsgsRecvd()
+	testCtx.assertNoReceiverMsgsRecvd()
 }

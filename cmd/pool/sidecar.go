@@ -128,6 +128,14 @@ func sidecarOffer(ctx *cli.Context) error {
 		}
 
 	} else {
+		// We must make sure that the min chan amount is set to the full
+		// order amount, otherwise we'll get an error during the auto
+		// bid submission.
+		if ctx.Uint64("amt") != ctx.Uint64("min_chan_amt") {
+			return fmt.Errorf("must set --min_chan_amt to same " +
+				"value as --amt")
+		}
+
 		// Otherwise, will parse out the full bid as normal.
 		bid, _, err = parseBaseBid(ctx)
 		if err != nil {
