@@ -746,11 +746,25 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
 	}
 
+	bestHeight := atomic.LoadUint32(&s.bestHeight)
+
+	// If provided, determine new expiration value.
+	var expiryHeight uint32
+	switch {
+	case req.GetAbsoluteExpiry() != 0 && req.GetRelativeExpiry() != 0:
+		return nil, errors.New("relative and absolute height cannot " +
+			"be set in the same request")
+	case req.GetAbsoluteExpiry() != 0:
+		expiryHeight = req.GetAbsoluteExpiry()
+	case req.GetRelativeExpiry() != 0:
+		expiryHeight = req.GetRelativeExpiry() + bestHeight
+	}
+
 	// Proceed to process the deposit and map its response to the RPC's
 	// response.
 	modifiedAccount, tx, err := s.accountManager.DepositAccount(
 		ctx, traderKey, btcutil.Amount(req.AmountSat), feeRate,
-		atomic.LoadUint32(&s.bestHeight),
+		bestHeight, expiryHeight,
 	)
 	if err != nil {
 		return nil, err
@@ -800,11 +814,24 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
 	}
 
+	bestHeight := atomic.LoadUint32(&s.bestHeight)
+
+	// If provided, determine new expiration value.
+	var expiryHeight uint32
+	switch {
+	case req.GetAbsoluteExpiry() != 0 && req.GetRelativeExpiry() != 0:
+		return nil, errors.New("relative and absolute height cannot " +
+			"be set in the same request")
+	case req.GetAbsoluteExpiry() != 0:
+		expiryHeight = req.GetAbsoluteExpiry()
+	case req.GetRelativeExpiry() != 0:
+		expiryHeight = req.GetRelativeExpiry() + bestHeight
+	}
+
 	// Proceed to process the withdrawal and map its response to the RPC's
 	// response.
 	modifiedAccount, tx, err := s.accountManager.WithdrawAccount(
-		ctx, traderKey, outputs, feeRate,
-		atomic.LoadUint32(&s.bestHeight),
+		ctx, traderKey, outputs, feeRate, bestHeight, expiryHeight,
 	)
 	if err != nil {
 		return nil, err
