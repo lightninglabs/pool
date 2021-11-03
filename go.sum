@@ -96,8 +96,8 @@ github.com/btcsuite/btcutil/psbt v1.0.3-0.20210527170813-e2ba6805a890 h1:0xUNvvw
 github.com/btcsuite/btcutil/psbt v1.0.3-0.20210527170813-e2ba6805a890/go.mod h1:LVveMu4VaNSkIRTZu2+ut0HDBRuYjqGocxDMNS1KuGQ=
 github.com/btcsuite/btcwallet v0.11.1-0.20200814001439-1d31f4ea6fc5/go.mod h1:YkEbJaCyN6yncq5gEp2xG0OKDwus2QxGCEXTNF27w5I=
 github.com/btcsuite/btcwallet v0.11.1-0.20200904022754-2c5947a45222/go.mod h1:owv9oZqM0HnUW+ByF7VqOgfs2eb0ooiePW/+Tl/i/Nk=
-github.com/btcsuite/btcwallet v0.12.1-0.20211008000044-541a8512ccfe h1:G7l/t3Y+B7jhRzcKs9z00KdocqdEqaXstwa0KSxH1bQ=
-github.com/btcsuite/btcwallet v0.12.1-0.20211008000044-541a8512ccfe/go.mod h1:iLN1lG1MW0eREm+SikmPO8AZPz5NglBTEK/ErqkjGpo=
+github.com/btcsuite/btcwallet v0.12.1-0.20211022222026-9043c19d8725 h1:YsJ15EzrUG0OHghRriFuJHctw3HP3RRhe8bwR20JuDE=
+github.com/btcsuite/btcwallet v0.12.1-0.20211022222026-9043c19d8725/go.mod h1:iLN1lG1MW0eREm+SikmPO8AZPz5NglBTEK/ErqkjGpo=
 github.com/btcsuite/btcwallet/wallet/txauthor v1.0.0/go.mod h1:VufDts7bd/zs3GV13f/lXc/0lXrPnvxD/NvmpG/FEKU=
 github.com/btcsuite/btcwallet/wallet/txauthor v1.1.0 h1:8pO0pvPX1rFRfRiol4oV6kX7dY5y4chPwhfVwUfvwtk=
 github.com/btcsuite/btcwallet/wallet/txauthor v1.1.0/go.mod h1:ktYuJyumYtwG+QQ832Q+kqvxWJRAei3Nqs5qhSn4nww=
@@ -459,8 +459,8 @@ github.com/lightninglabs/aperture v0.1.6-beta/go.mod h1:9xl4mx778ZAzrB87nLHMqk+X
 github.com/lightninglabs/gozmq v0.0.0-20191113021534-d20a764486bf h1:HZKvJUHlcXI/f/O0Avg7t8sqkPo78HFzjmeYFl6DPnc=
 github.com/lightninglabs/gozmq v0.0.0-20191113021534-d20a764486bf/go.mod h1:vxmQPeIQxPf6Jf9rM8R+B4rKBqLA2AjttNxkFBL2Plk=
 github.com/lightninglabs/lndclient v0.11.0-4/go.mod h1:8/cTKNwgL87NX123gmlv3Xh6p1a7pvzu+40Un3PhHiI=
-github.com/lightninglabs/lndclient v0.14.0-2 h1:zZSHZLcze9rB79F5KLsqP6KApQ2u5Xk3hkHyBVcXUQM=
-github.com/lightninglabs/lndclient v0.14.0-2/go.mod h1:MbVQTxIBNWMjnn8e6kBaEVVQsBjN1EEdpci3xaw2+rU=
+github.com/lightninglabs/lndclient v0.14.0-3 h1:0k0vzHOcWy6gWTy26a7nkh9UtoNisiIJYBldrhy5ZSk=
+github.com/lightninglabs/lndclient v0.14.0-3/go.mod h1:LwAQ+f8oiQ/2+2saBaYA1VYPIV/vSof0kMYQosVn9Mg=
 github.com/lightninglabs/neutrino v0.11.0/go.mod h1:CuhF0iuzg9Sp2HO6ZgXgayviFTn1QHdSTJlMncK80wg=
 github.com/lightninglabs/neutrino v0.11.1-0.20200316235139-bffc52e8f200/go.mod h1:MlZmoKa7CJP3eR1s5yB7Rm5aSyadpKkxqAwLQmog7N0=
 github.com/lightninglabs/neutrino v0.12.1/go.mod h1:GlKninWpRBbL7b8G0oQ36/8downfnFwKsr0hbRA6E/E=
@@ -474,8 +474,8 @@ github.com/lightningnetwork/lightning-onion v1.0.2-0.20210520211913-522b799e65b1
 github.com/lightningnetwork/lightning-onion v1.0.2-0.20210520211913-522b799e65b1/go.mod h1:rigfi6Af/KqsF7Za0hOgcyq2PNH4AN70AaMRxcJkff4=
 github.com/lightningnetwork/lnd v0.11.0-beta/go.mod h1:CzArvT7NFDLhVyW06+NJWSuWFmE6Ea+AjjA3txUBqTM=
 github.com/lightningnetwork/lnd v0.11.1-beta/go.mod h1:PGIgxy8aH70Li33YVYkHSaCM8m8LjEevk5h1Dpldrr4=
-github.com/lightningnetwork/lnd v0.13.0-beta.rc5.0.20211021015325-cac8da819ff9 h1:DDtfnKFiYqRdQ04RFSCg35MX5kYdi2YMT+A1EFoSXGA=
-github.com/lightningnetwork/lnd v0.13.0-beta.rc5.0.20211021015325-cac8da819ff9/go.mod h1:eP/HBTWSsS5lOmVf06HW4tnq8dz4kFI/LZy9lszJ9FU=
+github.com/lightningnetwork/lnd v0.14.0-beta.rc1 h1:SFPz0WwBIdcN232N99ElCDbzLwfVO6i3NWVaFPmE6e4=
+github.com/lightningnetwork/lnd v0.14.0-beta.rc1/go.mod h1:r+KNDYoXIfaDQdrWEPuZeL/AT3+0mdxhK5bZaWoXGTg=
 github.com/lightningnetwork/lnd/cert v1.0.2/go.mod h1:fmtemlSMf5t4hsQmcprSoOykypAPp+9c+0d0iqTScMo=
 github.com/lightningnetwork/lnd/cert v1.1.0 h1:Vgmse23SOB/ODIj+I5Utq1yuKLPbWQ34gUoNKfDs4pk=
 github.com/lightningnetwork/lnd/cert v1.1.0/go.mod h1:3MWXVLLPI0Mg0XETm9fT4N9Vyy/8qQLmaM5589bEggM=
