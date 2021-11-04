@@ -40,7 +40,7 @@ $ litd
 Creating an account has two parameters: the size of the account, and the expiry of an account. The funds for the account will be pulled from your `lnd` wallet. Create an account by running the following command:
 
 ```text
-$ pool accounts new --amt=50000000 --expiry_height=1773394
+$ pool accounts new --amt=50000000 --expiry_height=1773394 --conf_target=6
 ```
 
 Once at least 3 blocks have passed \(in the alpha\), the account will be confirmed and ready for use:

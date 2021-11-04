@@ -26,7 +26,7 @@ Creating an account has two parameters: the size of the account, and the expiry 
 We can create an account using `pool`, like so:
 
 ```text
-🏔 pool accounts new --amt=50000000 --expiry_height=1773394
+🏔 pool accounts new --amt=50000000 --expiry_height=1773394 --conf_target=6
 {
         "trader_key": "0288096be9917f8ebdfc6eb2701635fe658f4eae1e0274dcce41418b3fb5145732",
         "outpoint": "c6f62c80095c98a57f2eef485a7ff06611f97dc856754cad330f4eeb538ff514:0",
