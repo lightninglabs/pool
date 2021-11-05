@@ -2,7 +2,6 @@ package watcher
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/btcsuite/btcd/btcec"
@@ -13,16 +12,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// expiryReq is an internal message we'll sumbit to the Watcher to process for
-// external expiration requests.
-type expiryReq struct {
-	// traderKey is the base trader key of the account.
-	traderKey *btcec.PublicKey
-
-	// expiry is the expiry of the account as a block height.
-	expiry uint32
-}
 
 // Config contains all of the Watcher's dependencies in order to carry out its
 // duties.
@@ -66,7 +55,7 @@ type ControllerInterface interface {
 	// WatchAccountExpiration watches for the expiration of an account on-chain.
 	// Successive calls for the same account will cancel any previous expiration
 	// watch requests and the new expiration will be tracked instead.
-	WatchAccountExpiration(traderKey *btcec.PublicKey, expiry uint32) error
+	WatchAccountExpiration(traderKey *btcec.PublicKey, expiry uint32)
 }
 
 // Controller implements the watcher.Controller interface
@@ -77,8 +66,6 @@ type Controller struct {
 	cfg *CtrlConfig
 
 	watcher WatcherInterface
-
-	expiryReqs chan *expiryReq
 
 	wg         sync.WaitGroup
 	quit       chan struct{}
@@ -94,7 +81,6 @@ func NewController(watcher WatcherInterface, cfg *CtrlConfig) *Controller {
 	return &Controller{
 		cfg:          cfg,
 		watcher:      watcher,
-		expiryReqs:   make(chan *expiryReq),
 		quit:         make(chan struct{}),
 		spendCancels: make(map[[33]byte]func()),
 		confCancels:  make(map[[33]byte]func()),
@@ -181,11 +167,6 @@ func (wc *Controller) expiryHandler(blockChan chan int32, errChan chan error) {
 			log.Errorf("Unable to receive block notification: %v",
 				err)
 
-		// A new watch expiry request has been received for an account.
-		case req := <-wc.expiryReqs:
-			wc.watcher.AddAccountExpiration(
-				req.traderKey, req.expiry,
-			)
 		case <-wc.quit:
 			return
 		}
@@ -352,18 +333,9 @@ func (wc *Controller) waitForAccountSpend(traderKey *btcec.PublicKey,
 // Successive calls for the same account will cancel any previous expiration
 // watch requests and the new expiration will be tracked instead.
 func (wc *Controller) WatchAccountExpiration(traderKey *btcec.PublicKey,
-	expiry uint32) error {
+	expiry uint32) {
 
-	select {
-	case wc.expiryReqs <- &expiryReq{
-		traderKey: traderKey,
-		expiry:    expiry,
-	}:
-		return nil
-
-	case <-wc.quit:
-		return errors.New("watcher shutting down")
-	}
+	wc.watcher.AddAccountExpiration(traderKey, expiry)
 }
 
 // CancelAccountSpend cancels the spend watcher of the given account, if one is

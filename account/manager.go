@@ -852,12 +852,9 @@ func (m *Manager) handleStateOpen(ctx context.Context, account *Account) error {
 		return fmt.Errorf("unable to watch for spend: %v", err)
 	}
 
-	err = m.watcherCtrl.WatchAccountExpiration(
+	m.watcherCtrl.WatchAccountExpiration(
 		account.TraderKey.PubKey, account.Expiry,
 	)
-	if err != nil {
-		return fmt.Errorf("unable to watch for expiration: %v", err)
-	}
 
 	// Now that we have an open account, subscribe for updates to it to the
 	// server. We subscribe for the account instead of the individual orders
@@ -1241,10 +1238,7 @@ func (m *Manager) RenewAccount(ctx context.Context,
 
 	// Begin to track the new account expiration, which will overwrite the
 	// existing expiration request.
-	err = m.watcherCtrl.WatchAccountExpiration(traderKey, modifiedAccount.Expiry)
-	if err != nil {
-		return nil, nil, err
-	}
+	m.watcherCtrl.WatchAccountExpiration(traderKey, modifiedAccount.Expiry)
 
 	return modifiedAccount, spendPkg.tx, nil
 }
