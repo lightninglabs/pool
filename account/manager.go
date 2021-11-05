@@ -153,12 +153,20 @@ func NewManager(cfg *ManagerConfig) *Manager {
 		quit: make(chan struct{}),
 	}
 
-	m.watcherCtrl = watcher.NewController(&watcher.Config{
-		ChainNotifier:       cfg.ChainNotifier,
+	watcherCfg := &watcher.Config{
 		HandleAccountConf:   m.handleAccountConf,
 		HandleAccountSpend:  m.handleAccountSpend,
 		HandleAccountExpiry: m.handleAccountExpiry,
-	})
+	}
+
+	ctrlConf := &watcher.CtrlConfig{
+		ChainNotifier: cfg.ChainNotifier,
+	}
+
+	m.watcherCtrl = watcher.NewController(
+		watcher.NewWatcher(watcherCfg),
+		ctrlConf,
+	)
 
 	return m
 }
