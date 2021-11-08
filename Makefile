@@ -133,6 +133,16 @@ list:
 		grep -v Makefile | \
 		sort
 
+gen: rpc mock
+
+mock:
+	@$(call print, "Generating mock packages.")
+	cd ./gen; ./gen_mock_docker.sh
+
+mock-check: mock
+	@$(call print, "Verifying mocks.")
+	if test -n "$$(git status --porcelain '*.go')"; then echo "Mocks not properly generated!"; git status --porcelain '*.go'; exit 1; fi
+
 rpc:
 	@$(call print, "Compiling protos.")
 	cd ./poolrpc; ./gen_protos_docker.sh
