@@ -3,14 +3,13 @@ package pool
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/big"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
+	gomock "github.com/golang/mock/gomock"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/clientdb"
@@ -32,136 +31,211 @@ var (
 	}
 )
 
-func newTestDB(t *testing.T) (*clientdb.DB, func()) {
-	tempDir, err := ioutil.TempDir("", "client-db")
-	require.NoError(t, err)
-
-	db, err := clientdb.New(tempDir, clientdb.DBFilename)
-	if err != nil {
-		require.NoError(t, os.RemoveAll(tempDir))
-		t.Fatalf("unable to create new db: %v", err)
-	}
-
-	return db, func() {
-		require.NoError(t, db.Close())
-		require.NoError(t, os.RemoveAll(tempDir))
-	}
+func registerSidecarEmptySetter(ticket *sidecar.Ticket,
+	sc *test.MockSignerClient, wc *test.MockWalletKitClient,
+	store *sidecar.MockStore,
+) {
 }
+
+func registerSidecarEmptyCheck(t *testing.T, ticket *sidecar.Ticket) {
+}
+
+func getVerifyParameters(ticket *sidecar.Ticket) ([]byte, []byte, [33]byte) {
+	var offerPubKeyRaw [33]byte
+	copy(offerPubKeyRaw[:], ticket.Offer.SignPubKey.SerializeCompressed())
+
+	// Make sure the provider's signature over the offer is valid.
+	offerDigest, _ := ticket.OfferDigest()
+	sigOfferDigest := ticket.Offer.SigOfferDigest.Serialize()
+
+	return offerDigest[:], sigOfferDigest, offerPubKeyRaw
+}
+
+var registerSidecarTestCases = []struct {
+	name        string
+	ticket      *sidecar.Ticket
+	expectedErr string
+	mockSetter  func(ticket *sidecar.Ticket, sc *test.MockSignerClient,
+		wc *test.MockWalletKitClient, store *sidecar.MockStore,
+	)
+	check func(t *testing.T, ticket *sidecar.Ticket)
+}{{
+	name: "unable to register sidecar if ticket does not have a " +
+		"valid state",
+	ticket:      &sidecar.Ticket{},
+	expectedErr: "ticket is in invalid state",
+	mockSetter:  registerSidecarEmptySetter,
+	check:       registerSidecarEmptyCheck,
+}, {
+	name: "unable to register sidecar if signature is missing",
+	ticket: &sidecar.Ticket{
+		State: sidecar.StateOffered,
+	},
+	expectedErr: "offer in ticket is not signed",
+	mockSetter:  registerSidecarEmptySetter,
+	check:       registerSidecarEmptyCheck,
+}, {
+	name: "unable to register sidecar if signature is invalid",
+	ticket: &sidecar.Ticket{
+		State: sidecar.StateOffered,
+		Offer: sidecar.Offer{
+			SignPubKey: providerPubKey,
+			SigOfferDigest: &btcec.Signature{
+				R: new(big.Int).SetInt64(33),
+				S: new(big.Int).SetInt64(33),
+			},
+		},
+	},
+	expectedErr: "signature not valid for public key",
+	mockSetter: func(ticket *sidecar.Ticket, sc *test.MockSignerClient,
+		wc *test.MockWalletKitClient, store *sidecar.MockStore,
+	) {
+		p1, p2, p3 := getVerifyParameters(ticket)
+		sc.EXPECT().
+			VerifyMessage(
+				gomock.Any(),
+				p1,
+				p2,
+				p3,
+			).
+			Return(false, nil)
+	},
+	check: registerSidecarEmptyCheck,
+}, {
+	name: "unable to register sidecar if ticket already exists",
+	ticket: &sidecar.Ticket{
+		ID:    [8]byte{1, 2, 3, 4},
+		State: sidecar.StateOffered,
+		Offer: sidecar.Offer{
+			SignPubKey:     providerPubKey,
+			SigOfferDigest: testOfferSig,
+		},
+	},
+	expectedErr: "already exists",
+	mockSetter: func(ticket *sidecar.Ticket, sc *test.MockSignerClient,
+		wc *test.MockWalletKitClient, store *sidecar.MockStore,
+	) {
+		p1, p2, p3 := getVerifyParameters(ticket)
+
+		sc.EXPECT().
+			VerifyMessage(
+				gomock.Any(),
+				p1,
+				p2,
+				p3,
+			).
+			Return(true, nil)
+
+		store.EXPECT().
+			Sidecar(
+				[8]byte{1, 2, 3, 4},
+				providerPubKey,
+			).
+			Return(nil, nil)
+	},
+	check: registerSidecarEmptyCheck,
+}, {
+	name: "register sidecar happy path",
+	ticket: &sidecar.Ticket{
+		ID:    [8]byte{1, 2, 3, 4},
+		State: sidecar.StateOffered,
+		Offer: sidecar.Offer{
+			SignPubKey:     providerPubKey,
+			SigOfferDigest: testOfferSig,
+		},
+	},
+	mockSetter: func(ticket *sidecar.Ticket, sc *test.MockSignerClient,
+		wc *test.MockWalletKitClient, store *sidecar.MockStore,
+	) {
+		p1, p2, p3 := getVerifyParameters(ticket)
+
+		sc.EXPECT().
+			VerifyMessage(
+				gomock.Any(),
+				p1,
+				p2,
+				p3,
+			).
+			Return(true, nil)
+
+		store.EXPECT().
+			Sidecar(
+				[8]byte{1, 2, 3, 4},
+				providerPubKey,
+			).
+			Return(nil, clientdb.ErrNoSidecar)
+
+		index := 7
+		_, pubkey := test.CreateKey(int32(index))
+		wc.EXPECT().
+			DeriveNextKey(gomock.Any(), gomock.Any()).
+			Return(&keychain.KeyDescriptor{
+				KeyLocator: keychain.KeyLocator{
+					Index: uint32(index),
+				},
+				PubKey: pubkey,
+			}, nil)
+
+		store.EXPECT().
+			AddSidecar(gomock.Any())
+	},
+	check: func(t *testing.T, ticket *sidecar.Ticket) {
+		index := 7
+		_, pubkey := test.CreateKey(int32(index))
+
+		require.Equal(t, ticket.State, sidecar.StateRegistered)
+
+		require.Equal(t, ticket.Recipient.NodePubKey, ourNodePubKey)
+		require.Equal(t, ticket.Recipient.MultiSigPubKey, pubkey)
+		require.Equal(
+			t, ticket.Recipient.MultiSigKeyIndex, uint32(index),
+		)
+	},
+}}
 
 // TestRegisterSidecar makes sure that registering a sidecar ticket verifies the
 // offer signature contained within, adds the recipient node's information to
 // the ticket and stores it to the local database.
 func TestRegisterSidecar(t *testing.T) {
-	t.Parallel()
 
-	mockSigner := test.NewMockSigner()
-	mockWallet := test.NewMockWalletKit()
-	mockSigner.Signature = testOfferSig.Serialize()
-
-	acceptor := NewSidecarAcceptor(&SidecarAcceptorConfig{
-		SidecarDB:  nil,
-		AcctDB:     nil,
-		Signer:     mockSigner,
-		Wallet:     mockWallet,
-		NodePubKey: ourNodePubKey,
-		ClientCfg:  auctioneer.Config{},
-	})
-
-	existingTicket, err := sidecar.NewTicket(
-		sidecar.VersionDefault, 1_000_000, 200_000, 2016,
-		providerPubKey, false,
-	)
-	require.NoError(t, err)
-
-	testCases := []struct {
-		name        string
-		ticket      *sidecar.Ticket
-		expectedErr string
-		check       func(t *testing.T, ticket *sidecar.Ticket)
-	}{{
-		name: "ticket with ID exists",
-		ticket: &sidecar.Ticket{
-			ID:    existingTicket.ID,
-			State: sidecar.StateOffered,
-			Offer: sidecar.Offer{
-				SignPubKey:     providerPubKey,
-				SigOfferDigest: testOfferSig,
-			},
-		},
-		expectedErr: "ticket with ID",
-	}, {
-		name: "invalid sig",
-		ticket: &sidecar.Ticket{
-			ID:    [8]byte{1, 2, 3, 4},
-			State: sidecar.StateOffered,
-			Offer: sidecar.Offer{
-				SignPubKey: providerPubKey,
-				SigOfferDigest: &btcec.Signature{
-					R: new(big.Int).SetInt64(33),
-					S: new(big.Int).SetInt64(33),
-				},
-			},
-		},
-		expectedErr: "signature not valid for public key",
-	}, {
-		name: "all valid",
-		ticket: &sidecar.Ticket{
-			ID:    [8]byte{1, 2, 3, 4},
-			State: sidecar.StateOffered,
-			Offer: sidecar.Offer{
-				SignPubKey:     providerPubKey,
-				SigOfferDigest: testOfferSig,
-			},
-		},
-		expectedErr: "",
-		check: func(t *testing.T, ticket *sidecar.Ticket) {
-			_, pubKey := test.CreateKey(0)
-
-			require.NotNil(t, ticket.Recipient)
-			require.Equal(
-				t, ticket.Recipient.NodePubKey, ourNodePubKey,
-			)
-			require.Equal(
-				t, ticket.Recipient.MultiSigPubKey, pubKey,
-			)
-
-			id := [8]byte{1, 2, 3, 4}
-			newTicket, err := acceptor.cfg.SidecarDB.Sidecar(
-				id, providerPubKey,
-			)
-			require.NoError(t, err)
-			require.Equal(t, newTicket, ticket)
-		},
-	}}
-
-	for _, tc := range testCases {
+	for _, tc := range registerSidecarTestCases {
 		tc := tc
 
-		if tc.ticket != nil {
-			digest, err := tc.ticket.OfferDigest()
+		t.Run(tc.name, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			signer := test.NewMockSignerClient(mockCtrl)
+			wallet := test.NewMockWalletKitClient(mockCtrl)
+			store := sidecar.NewMockStore(mockCtrl)
+
+			tc.mockSetter(tc.ticket, signer, wallet, store)
+
+			acceptor := NewSidecarAcceptor(&SidecarAcceptorConfig{
+				SidecarDB:  store,
+				AcctDB:     nil,
+				Signer:     signer,
+				Wallet:     wallet,
+				NodePubKey: ourNodePubKey,
+				ClientCfg:  auctioneer.Config{},
+			})
+
+			ticket, err := acceptor.RegisterSidecar(
+				context.Background(), *tc.ticket,
+			)
+
+			if tc.expectedErr != "" {
+				require.Error(t, err)
+				require.Contains(
+					t, err.Error(), tc.expectedErr,
+				)
+
+				return
+			}
+
 			require.NoError(t, err)
-			mockSigner.SignatureMsg = string(digest[:])
-		}
-
-		store, cleanup := newTestDB(t)
-		err = store.AddSidecar(existingTicket)
-		require.NoError(t, err)
-
-		acceptor.cfg.SidecarDB = store
-		ticket, err := acceptor.RegisterSidecar(
-			context.Background(), *tc.ticket,
-		)
-
-		if tc.expectedErr == "" {
-			require.NoError(t, err)
-
 			tc.check(t, ticket)
-		} else {
-			require.Error(t, err)
-			require.Contains(t, err.Error(), tc.expectedErr)
-		}
-
-		cleanup()
+		})
 	}
 }
 
