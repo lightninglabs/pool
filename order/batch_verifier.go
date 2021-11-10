@@ -15,6 +15,11 @@ const (
 	// deriveKeyTimeout is the number of seconds we allow the wallet to take
 	// to derive a key.
 	deriveKeyTimeout = 10 * time.Second
+
+	// heightHintPadding is the padding we subtract/add to our best known
+	// height to avoid any discrepancies in block propagation between us and
+	// the auctioneer.
+	heightHintPadding = 3
 )
 
 var (
@@ -68,13 +73,20 @@ type batchVerifier struct {
 // accepted by the trader.
 //
 // NOTE: This method is part of the BatchVerifier interface.
-func (v *batchVerifier) Verify(batch *Batch) error {
+func (v *batchVerifier) Verify(batch *Batch, bestHeight uint32) error {
 	// First of all, make sure we're using the same batch validation version
 	// as the server. Otherwise we bail out of the batch. This should
 	// already be handled when the client connects/authenticates. But
 	// doesn't hurt to check again.
 	if batch.Version != CurrentBatchVersion {
 		return ErrVersionMismatch
+	}
+
+	// Reject the batch if we're too far in the past or future compared to
+	// the auctioneer.
+	if bestHeight < batch.HeightHint-heightHintPadding ||
+		bestHeight > batch.HeightHint+heightHintPadding {
+		return ErrInvalidBatchHeightHint
 	}
 
 	// First go through all orders that were matched for us. We'll make sure

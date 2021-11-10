@@ -202,6 +202,11 @@ type Batch struct {
 	// FeeRebate is the rebate that was offered to the trader if another
 	// batch participant wanted to pay more fees for a faster confirmation.
 	FeeRebate btcutil.Amount
+
+	// HeightHint represents the earliest absolute height in the chain in
+	// which the batch transaction can be found within. This will be used by
+	// traders to base off their absolute channel lease maturity height.
+	HeightHint uint32
 }
 
 // Fetcher describes a function that's able to fetch the latest version of an
@@ -304,7 +309,7 @@ type BatchSignature map[[33]byte]*btcec.Signature
 type BatchVerifier interface {
 	// Verify makes sure the batch prepared by the server is correct and
 	// can be accepted by the trader.
-	Verify(*Batch) error
+	Verify(_ *Batch, bestHeight uint32) error
 }
 
 // BatchSigner is an interface that can sign for a trader's account inputs in
@@ -320,7 +325,7 @@ type BatchSigner interface {
 type BatchStorer interface {
 	// StorePendingBatch makes sure all changes executed by a pending batch
 	// are correctly and atomically stored to the database.
-	StorePendingBatch(_ *Batch, bestHeight uint32) error
+	StorePendingBatch(_ *Batch) error
 
 	// MarkBatchComplete marks a pending batch as complete, allowing a
 	// trader to participate in a new batch.

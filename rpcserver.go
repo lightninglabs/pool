@@ -350,7 +350,8 @@ func (s *rpcServer) handleServerMessage(
 		}
 
 		// Do an in-depth verification of the batch.
-		err = s.orderManager.OrderMatchValidate(batch)
+		bestHeight := atomic.LoadUint32(&s.bestHeight)
+		err = s.orderManager.OrderMatchValidate(batch, bestHeight)
 		if err != nil {
 			// We can't accept the batch, something went wrong.
 			rpcLog.Errorf("Error validating batch: %v", err)
@@ -393,8 +394,7 @@ func (s *rpcServer) handleServerMessage(
 			"num_orders=%v", batch.ID[:], len(batch.MatchedOrders))
 
 		// Sign for the accounts in the batch.
-		bestHeight := atomic.LoadUint32(&s.bestHeight)
-		sigs, err := s.orderManager.BatchSign(bestHeight)
+		sigs, err := s.orderManager.BatchSign()
 		if err != nil {
 			rpcLog.Errorf("Error signing batch: %v", err)
 			return s.sendRejectBatch(batch, err)
@@ -2886,8 +2886,11 @@ func marshallChannelInfo(chanInfos map[wire.OutPoint]*chaninfo.ChannelInfo) (
 		// between them for our purpose.
 		case chanbackup.AnchorsCommitVersion,
 			chanbackup.AnchorsZeroFeeHtlcTxCommitVersion:
-
 			channelType = auctioneerrpc.ChannelType_ANCHORS
+
+		case chanbackup.ScriptEnforcedLeaseVersion:
+			channelType = auctioneerrpc.ChannelType_SCRIPT_ENFORCED_LEASE
+
 		default:
 			return nil, fmt.Errorf("unknown channel type: %v",
 				chanInfo.Version)

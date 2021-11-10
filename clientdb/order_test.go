@@ -42,6 +42,7 @@ func TestSubmitOrder(t *testing.T) {
 		},
 	}
 	o.Details().MinUnitsMatch = 10
+	o.Details().ChannelType = order.ChannelTypeScriptEnforced
 	err := store.SubmitOrder(o)
 	if err != nil {
 		t.Fatalf("unable to store order: %v", err)
@@ -100,6 +101,7 @@ func TestUpdateOrders(t *testing.T) {
 		MinNodeTier: 3,
 	}
 	o1.Details().MinUnitsMatch = 10
+	o1.Details().ChannelType = order.ChannelTypeScriptEnforced
 	err := store.SubmitOrder(o1)
 	if err != nil {
 		t.Fatalf("unable to store order: %v", err)
@@ -107,6 +109,7 @@ func TestUpdateOrders(t *testing.T) {
 	o2 := &order.Ask{
 		Kit: *dummyOrder(500000, 1337),
 	}
+	o2.Details().ChannelType = order.ChannelTypeScriptEnforced
 	err = store.SubmitOrder(o2)
 	if err != nil {
 		t.Fatalf("unable to store order: %v", err)

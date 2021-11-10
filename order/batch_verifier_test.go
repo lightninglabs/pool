@@ -36,6 +36,7 @@ var (
 func TestBatchVerifier(t *testing.T) {
 	t.Parallel()
 
+	const bestHeight = 1337
 	var (
 		walletKit   = test.NewMockWalletKit()
 		batchID     BatchID
@@ -61,7 +62,7 @@ func TestBatchVerifier(t *testing.T) {
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
-				return v.Verify(&Batch{Version: 999})
+				return v.Verify(&Batch{Version: 999}, bestHeight)
 			},
 		},
 		{
@@ -72,7 +73,7 @@ func TestBatchVerifier(t *testing.T) {
 
 				arr := make([]*MatchedOrder, 0)
 				b.MatchedOrders[Nonce{99, 99}] = arr
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -87,7 +88,7 @@ func TestBatchVerifier(t *testing.T) {
 						Order: a,
 					},
 				)
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -97,7 +98,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				b.MatchedOrders[a.nonce][0].NodeKey = nodePubkey
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -107,7 +108,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				a.LeaseDuration = 100
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -117,7 +118,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				a.FixedRate = 20000
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -128,7 +129,7 @@ func TestBatchVerifier(t *testing.T) {
 
 				delete(b.MatchedOrders, a.nonce)
 				b2.LeaseDuration = 5000
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -139,7 +140,7 @@ func TestBatchVerifier(t *testing.T) {
 
 				delete(b.MatchedOrders, a.nonce)
 				a.FixedRate = b1.FixedRate + 1
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -149,7 +150,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				b.BatchTX.TxOut[0].Value = 123
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -159,7 +160,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				b.BatchTX.TxOut[0].PkScript = []byte{99, 88}
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -171,7 +172,7 @@ func TestBatchVerifier(t *testing.T) {
 				b.BatchTX.TxOut[0].Value = 900_000
 				b.MatchedOrders[a.nonce][0].UnitsFilled = 9
 				b.MatchedOrders[b1.nonce][0].UnitsFilled = 9
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -181,7 +182,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				a.MinUnitsMatch = b1.MinUnitsMatch * 100
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -191,7 +192,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				b.BatchTxFeeRate *= 2
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -202,7 +203,7 @@ func TestBatchVerifier(t *testing.T) {
 
 				delete(b.MatchedOrders, a.nonce)
 				b1.FixedRate = uint32(clearingPrice) - 1
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -257,7 +258,7 @@ func TestBatchVerifier(t *testing.T) {
 				// Verification should fail as the first match
 				// has an ask with a price greater than the
 				// clearing price.
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -267,7 +268,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				b.ExecutionFee = terms.NewLinearFeeSchedule(1, 1)
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -280,7 +281,7 @@ func TestBatchVerifier(t *testing.T) {
 				b.BatchTX.TxOut[2].Value += 2220
 				b.AccountDiffs[0].EndingBalance += 2220
 				b.AccountDiffs[1].EndingBalance += 2220
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -294,7 +295,7 @@ func TestBatchVerifier(t *testing.T) {
 				b.AccountDiffs[0].EndingBalance += 2220
 				b.AccountDiffs[1].EndingBalance += 2220
 				b.AccountDiffs[1].EndingState = stateRecreated
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -306,7 +307,7 @@ func TestBatchVerifier(t *testing.T) {
 				b *Batch) error {
 
 				b1.SelfChanBalance = 100
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -317,7 +318,7 @@ func TestBatchVerifier(t *testing.T) {
 
 				b.BatchTX.TxOut[0].Value += 100
 				b1.SelfChanBalance = 100
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 		{
@@ -326,7 +327,7 @@ func TestBatchVerifier(t *testing.T) {
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
-				return v.Verify(b)
+				return v.Verify(b, bestHeight)
 			},
 		},
 	}
@@ -505,6 +506,7 @@ func TestBatchVerifier(t *testing.T) {
 			},
 			BatchTX:        batchTx,
 			BatchTxFeeRate: chainfee.FeePerKwFloor,
+			HeightHint:     bestHeight,
 		}
 
 		// Create the starting database state now.
