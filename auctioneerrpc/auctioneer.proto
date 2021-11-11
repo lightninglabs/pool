@@ -792,6 +792,13 @@ message AccountDiff {
     The trader's account key this diff is referring to.
     */
     bytes trader_key = 4;
+
+    /*
+    The new account expiry height used to verify the batch. If the batch is
+    successfully executed the account must update its expiry height to this
+    value.
+    */
+    uint32 new_expiry = 5;
 }
 
 enum OrderChannelType {
