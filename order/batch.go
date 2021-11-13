@@ -47,17 +47,24 @@ const (
 	// verification protocol.
 	DefaultBatchVersion BatchVersion = 0
 
-	// CurrentBatchVersion must point to the latest implemented version of the
-	// batch verification protocol. Both server and client should always
-	// refer to this constant. If a client's binary is not updated in time
-	// it will point to a previous version than the server and the mismatch
-	// will be detected during the OrderMatchPrepare call.
+	// ExtendAccountBatchVersion is the first version where accounts expiry
+	// are extended after participating in a batch.
+	ExtendAccountBatchVersion BatchVersion = 1
+
+	// CurrentBatchVersion points to the version used by the client for
+	// verifying a batch.
 	CurrentBatchVersion = DefaultBatchVersion
 
 	// LegacyLeaseDurationBucket is the single static duration bucket that
 	// was used for orders before dynamic duration buckets were added.
 	LegacyLeaseDurationBucket uint32 = 2016
 )
+
+// SupportsAccountExtension is a helper function to easily check if a version
+// supports or not account extension after participating in a batch.
+func (bv BatchVersion) SupportsAccountExtension() bool {
+	return bv >= ExtendAccountBatchVersion
+}
 
 // BatchID is a 33-byte point that uniquely identifies this batch. This ID
 // will be used later for account key derivation when constructing the batch
@@ -93,6 +100,10 @@ type AccountDiff struct {
 	// batch transaction. This is set to -1 if no account output has been
 	// created because the leftover value was considered to be dust.
 	OutpointIndex int32
+
+	// NewExpiry is the new expiry height for this account. This field
+	// can be safely ignored if its value is 0.
+	NewExpiry uint32
 }
 
 // validateEndingState validates that the ending state of an account as
@@ -309,7 +320,7 @@ type BatchSignature map[[33]byte]*btcec.Signature
 type BatchVerifier interface {
 	// Verify makes sure the batch prepared by the server is correct and
 	// can be accepted by the trader.
-	Verify(_ *Batch, bestHeight uint32) error
+	Verify(batch *Batch, bestHeight uint32) error
 }
 
 // BatchSigner is an interface that can sign for a trader's account inputs in

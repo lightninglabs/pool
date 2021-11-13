@@ -37,6 +37,11 @@ var (
 	ErrVersionMismatch = fmt.Errorf("version %d mismatches server version",
 		CurrentBatchVersion)
 
+	// ErrUnsupportedVersion is the error that is returned if the server
+	// doesn't support the our batch verification version.
+	ErrUnsupportedVersion = fmt.Errorf("version %d is not supported by "+
+		"the server", CurrentBatchVersion)
+
 	// ErrInvalidBatchHeightHint is an error returned by a trader upon
 	// verifying a batch when its proposed height hint is outside of the
 	// trader's acceptable range.
@@ -117,6 +122,7 @@ func (m *Manager) Start() error {
 			getAccount:    m.cfg.AcctStore.Account,
 			wallet:        m.cfg.Wallet,
 			ourNodePubkey: m.ourNodeInfo.IdentityPubkey,
+			version:       CurrentBatchVersion,
 		}
 		m.batchSigner = &batchSigner{
 			getAccount: m.cfg.AcctStore.Account,

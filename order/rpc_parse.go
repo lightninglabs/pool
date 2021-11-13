@@ -328,6 +328,7 @@ func ParseRPCBatch(prepareMsg *auctioneerrpc.OrderMatchPrepare) (*Batch,
 				EndingState:   diff.EndingState,
 				EndingBalance: btcutil.Amount(diff.EndingBalance),
 				OutpointIndex: diff.OutpointIndex,
+				NewExpiry:     diff.NewExpiry,
 			},
 		)
 	}
