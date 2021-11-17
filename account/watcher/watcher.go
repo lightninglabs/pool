@@ -7,35 +7,6 @@ import (
 	"github.com/lightningnetwork/lnd/chainntnfs"
 )
 
-type WatcherInterface interface {
-	// NewBlock updates the current bestHeight.
-	NewBlock(bestHeight uint32)
-
-	// OverdueExpirations
-	OverdueExpirations(blockHeight uint32)
-
-	// AddAccountExpiration
-	AddAccountExpiration(traderKey *btcec.PublicKey, expiry uint32)
-
-	// HandleAccountConf abstracts the operations that should be performed
-	// for an account once we detect its confirmation. The account is
-	// identified by its user sub key (i.e., trader key).
-	HandleAccountConf(traderKey *btcec.PublicKey,
-		confDetails *chainntnfs.TxConfirmation) error
-
-	// HandleAccountSpend abstracts the operations that should be performed
-	// for an account once we detect its spend. The account is identified by
-	// its user sub key (i.e., trader key).
-	HandleAccountSpend(traderKey *btcec.PublicKey,
-		spendDetails *chainntnfs.SpendDetail) error
-
-	// HandleAccountExpiry the operations that should be perform for an
-	// account once it's expired. The account is identified by its user sub
-	// key (i.e., trader key).
-	HandleAccountExpiry(traderKey *btcec.PublicKey,
-		height uint32) error
-}
-
 // Config contains all of the Watcher's dependencies in order to carry out its
 // duties.
 type Config struct {
