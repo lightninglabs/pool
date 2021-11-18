@@ -10,12 +10,12 @@ require (
 	github.com/btcsuite/btcwallet/wallet/txrules v1.1.0
 	github.com/btcsuite/btcwallet/wtxmgr v1.3.1-0.20210822222949-9b5a201c344c
 	github.com/davecgh/go-spew v1.1.1
-	github.com/golang/mock v1.6.0 // indirect
+	github.com/golang/mock v1.6.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.5.0
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/lightninglabs/aperture v0.1.6-beta
 	github.com/lightninglabs/lndclient v0.14.0-5
-	github.com/lightninglabs/pool/auctioneerrpc v1.0.3
+	github.com/lightninglabs/pool/auctioneerrpc v1.0.4
 	github.com/lightninglabs/protobuf-hex-display v1.4.3-hex-display
 	github.com/lightningnetwork/lnd v0.14.0-beta
 	github.com/lightningnetwork/lnd/cert v1.1.0
