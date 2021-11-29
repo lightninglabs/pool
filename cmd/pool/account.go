@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -69,6 +70,14 @@ const (
 	defaultFundingConfTarget = 6
 )
 
+var (
+	expiryAbsoluteFlag = cli.Uint64Flag{
+		Name: accountExpiryAbsolute,
+		Usage: "the new block height which this account " +
+			"should expire at",
+	}
+)
+
 var newAccountCommand = cli.Command{
 	Name:      "new",
 	ShortName: "n",
@@ -82,11 +91,7 @@ var newAccountCommand = cli.Command{
 			Name:  "amt",
 			Usage: "the amount in satoshis to create account for",
 		},
-		cli.Uint64Flag{
-			Name: accountExpiryAbsolute,
-			Usage: "the block height at which this account should " +
-				"expire at",
-		},
+		expiryAbsoluteFlag,
 		cli.Uint64Flag{
 			Name: accountExpiryRelative,
 			Usage: "the relative height (from the current chain " +
@@ -314,11 +319,7 @@ var renewAccountCommand = cli.Command{
 			Usage: "the fee rate expressed in sat/vbyte that " +
 				"should be used for the renewal transaction",
 		},
-		cli.Uint64Flag{
-			Name: accountExpiryAbsolute,
-			Usage: "the new block height at which this account " +
-				"should expire at",
-		},
+		expiryAbsoluteFlag,
 		cli.Uint64Flag{
 			Name: accountExpiryRelative,
 			Usage: "the new relative height (from the current " +
@@ -417,6 +418,13 @@ var depositAccountCommand = cli.Command{
 			Usage: "the fee rate expressed in sat/vbyte that " +
 				"should be used for the deposit",
 		},
+		expiryAbsoluteFlag,
+		cli.Uint64Flag{
+			Name: accountExpiryRelative,
+			Usage: "the new relative height (from the current " +
+				"chain height) that the account should expire " +
+				"at",
+		},
 	},
 	Action: depositAccount,
 }
@@ -443,19 +451,37 @@ func depositAccount(ctx *cli.Context) error {
 		feeRate = chainfee.FeePerKwFloor
 	}
 
+	req := &poolrpc.DepositAccountRequest{
+		TraderKey:       traderKey,
+		AmountSat:       amt,
+		FeeRateSatPerKw: uint64(feeRate),
+	}
+
+	absoluteExpiry := ctx.Uint64(accountExpiryAbsolute)
+	relativeExpiry := ctx.Uint64(accountExpiryRelative)
+	switch {
+	case absoluteExpiry != 0 && relativeExpiry != 0:
+		return errors.New("relative and absolute height cannot be " +
+			"set in the same request")
+
+	case absoluteExpiry != 0:
+		req.AccountExpiry = &poolrpc.DepositAccountRequest_AbsoluteExpiry{
+			AbsoluteExpiry: uint32(absoluteExpiry),
+		}
+
+	case relativeExpiry != 0:
+		req.AccountExpiry = &poolrpc.DepositAccountRequest_RelativeExpiry{
+			RelativeExpiry: uint32(relativeExpiry),
+		}
+	}
+
 	client, cleanup, err := getClient(ctx)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	resp, err := client.DepositAccount(
-		context.Background(), &poolrpc.DepositAccountRequest{
-			TraderKey:       traderKey,
-			AmountSat:       amt,
-			FeeRateSatPerKw: uint64(feeRate),
-		},
-	)
+	resp, err := client.DepositAccount(context.Background(), req)
 	if err != nil {
 		return err
 	}
@@ -504,6 +530,13 @@ var withdrawAccountCommand = cli.Command{
 			Usage: "the fee rate expressed in sat/vbyte that " +
 				"should be used for the withdrawal",
 		},
+		expiryAbsoluteFlag,
+		cli.Uint64Flag{
+			Name: accountExpiryRelative,
+			Usage: "the new relative height (from the current " +
+				"chain height) that the account should expire " +
+				"at",
+		},
 	},
 	Action: withdrawAccount,
 }
@@ -534,24 +567,42 @@ func withdrawAccount(ctx *cli.Context) error {
 		feeRate = chainfee.FeePerKwFloor
 	}
 
+	req := &poolrpc.WithdrawAccountRequest{
+		TraderKey: traderKey,
+		Outputs: []*poolrpc.Output{
+			{
+				ValueSat: amt,
+				Address:  addr,
+			},
+		},
+		FeeRateSatPerKw: uint64(feeRate),
+	}
+
+	absoluteExpiry := ctx.Uint64(accountExpiryAbsolute)
+	relativeExpiry := ctx.Uint64(accountExpiryRelative)
+	switch {
+	case absoluteExpiry != 0 && relativeExpiry != 0:
+		return errors.New("relative and absolute height cannot be " +
+			"set in the same request")
+
+	case absoluteExpiry != 0:
+		req.AccountExpiry = &poolrpc.WithdrawAccountRequest_AbsoluteExpiry{
+			AbsoluteExpiry: uint32(absoluteExpiry),
+		}
+
+	case relativeExpiry != 0:
+		req.AccountExpiry = &poolrpc.WithdrawAccountRequest_RelativeExpiry{
+			RelativeExpiry: uint32(relativeExpiry),
+		}
+	}
+
 	client, cleanup, err := getClient(ctx)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	resp, err := client.WithdrawAccount(
-		context.Background(), &poolrpc.WithdrawAccountRequest{
-			TraderKey: traderKey,
-			Outputs: []*poolrpc.Output{
-				{
-					ValueSat: amt,
-					Address:  addr,
-				},
-			},
-			FeeRateSatPerKw: uint64(feeRate),
-		},
-	)
+	resp, err := client.WithdrawAccount(context.Background(), req)
 	if err != nil {
 		return err
 	}

@@ -869,7 +869,7 @@ func TestAccountWithdrawal(t *testing.T) {
 	dustOutput := &wire.TxOut{Value: 0, PkScript: p2wsh}
 	_, _, err := h.manager.WithdrawAccount(
 		context.Background(), account.TraderKey.PubKey,
-		[]*wire.TxOut{dustOutput}, feeRate, bestHeight,
+		[]*wire.TxOut{dustOutput}, feeRate, bestHeight, 0,
 	)
 	if err == nil || !strings.Contains(err.Error(), "dust output") {
 		t.Fatalf("expected dust output error, got: %v", err)
@@ -906,7 +906,7 @@ func TestAccountWithdrawal(t *testing.T) {
 	// was performed correctly.
 	_, _, err = h.manager.WithdrawAccount(
 		context.Background(), account.TraderKey.PubKey, outputs,
-		feeRate, bestHeight,
+		feeRate, bestHeight, 0,
 	)
 	if err != nil {
 		t.Fatalf("unable to process account withdrawal: %v", err)
@@ -981,7 +981,7 @@ func TestAccountDeposit(t *testing.T) {
 	// was performed correctly.
 	_, _, err := h.manager.DepositAccount(
 		context.Background(), account.TraderKey.PubKey, depositAmount,
-		feeRate, bestHeight,
+		feeRate, bestHeight, 0,
 	)
 	if err != nil {
 		t.Fatalf("unable to process account deposit: %v", err)

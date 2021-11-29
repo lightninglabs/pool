@@ -338,6 +338,14 @@ message WithdrawAccountRequest {
     The fee rate, in satoshis per kw, to use for the withdrawal transaction.
     */
     uint64 fee_rate_sat_per_kw = 3;
+
+    oneof account_expiry {
+        // The new absolute expiration height of the account.
+        uint32 absolute_expiry = 4;
+
+        // The new relative expiration height of the account.
+        uint32 relative_expiry = 5;
+    }
 }
 message WithdrawAccountResponse {
     // The state of the account after processing the withdrawal.
@@ -361,6 +369,14 @@ message DepositAccountRequest {
     The fee rate, in satoshis per kw, to use for the deposit transaction.
     */
     uint64 fee_rate_sat_per_kw = 3;
+
+    oneof account_expiry {
+        // The new absolute expiration height of the account.
+        uint32 absolute_expiry = 4;
+
+        // The new relative expiration height of the account.
+        uint32 relative_expiry = 5;
+    }
 }
 message DepositAccountResponse {
     // The state of the account after processing the deposit.

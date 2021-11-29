@@ -1340,6 +1340,16 @@
           "type": "string",
           "format": "uint64",
           "description": "The fee rate, in satoshis per kw, to use for the deposit transaction."
+        },
+        "absolute_expiry": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The new absolute expiration height of the account."
+        },
+        "relative_expiry": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The new relative expiration height of the account."
         }
       }
     },
@@ -2341,6 +2351,16 @@
           "type": "string",
           "format": "uint64",
           "description": "The fee rate, in satoshis per kw, to use for the withdrawal transaction."
+        },
+        "absolute_expiry": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The new absolute expiration height of the account."
+        },
+        "relative_expiry": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The new relative expiration height of the account."
         }
       }
     },

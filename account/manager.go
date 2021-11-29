@@ -1057,8 +1057,8 @@ func (m *Manager) handleAccountExpiry(traderKey *btcec.PublicKey,
 // to lnd may be added to the deposit transaction.
 func (m *Manager) DepositAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, depositAmount btcutil.Amount,
-	feeRate chainfee.SatPerKWeight, bestHeight uint32) (*Account,
-	*wire.MsgTx, error) {
+	feeRate chainfee.SatPerKWeight, bestHeight,
+	expiryHeight uint32) (*Account, *wire.MsgTx, error) {
 
 	// The account can only be modified in `StateOpen` and its new value
 	// should not exceed the maximum allowed.
@@ -1084,6 +1084,16 @@ func (m *Manager) DepositAccount(ctx context.Context,
 			"accepted maximum of %v", terms.MaxAccountValue)
 	}
 
+	var newExpiry *uint32
+	if expiryHeight != 0 {
+		// Validate the new expiry.
+		err := validateAccountExpiry(expiryHeight, bestHeight)
+		if err != nil {
+			return nil, nil, err
+		}
+		newExpiry = &expiryHeight
+	}
+
 	// TODO(wilmer): Reject if account has pending orders.
 
 	// To start, we'll need to perform coin selection in order to meet the
@@ -1097,7 +1107,7 @@ func (m *Manager) DepositAccount(ctx context.Context,
 		return nil, nil, err
 	}
 	newAccountOutput, modifiers, err := createNewAccountOutput(
-		account, newAccountValue, nil,
+		account, newAccountValue, newExpiry,
 	)
 	if err != nil {
 		releaseInputs()
@@ -1130,7 +1140,7 @@ func (m *Manager) DepositAccount(ctx context.Context,
 func (m *Manager) WithdrawAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, outputs []*wire.TxOut,
 	feeRate chainfee.SatPerKWeight,
-	bestHeight uint32) (*Account, *wire.MsgTx, error) {
+	bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error) {
 
 	// The account can only be modified in `StateOpen`.
 	account, err := m.cfg.Store.Account(traderKey)
@@ -1140,6 +1150,16 @@ func (m *Manager) WithdrawAccount(ctx context.Context,
 	if account.State != StateOpen {
 		return nil, nil, fmt.Errorf("account must be in %v to be "+
 			"modified", StateOpen)
+	}
+
+	var newExpiry *uint32
+	if expiryHeight != 0 {
+		// Validate the new expiry.
+		err := validateAccountExpiry(expiryHeight, bestHeight)
+		if err != nil {
+			return nil, nil, err
+		}
+		newExpiry = &expiryHeight
 	}
 
 	// TODO(wilmer): Reject if account has pending orders.
@@ -1154,7 +1174,7 @@ func (m *Manager) WithdrawAccount(ctx context.Context,
 		return nil, nil, err
 	}
 	newAccountOutput, modifiers, err := createNewAccountOutput(
-		account, newAccountValue, nil,
+		account, newAccountValue, newExpiry,
 	)
 	if err != nil {
 		return nil, nil, err
