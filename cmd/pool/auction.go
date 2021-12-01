@@ -73,7 +73,7 @@ type Snapshot struct {
 	MatchedMarkets         Markets `json:"matched_markets"`
 }
 
-// NewSnapshotsFromProtos creates a display Snapshot from its proto.
+// NewSnapshotsFromProto creates a display Snapshot from its proto.
 func NewSnapshotsFromProto(s []*auctioneerrpc.BatchSnapshotResponse) []*Snapshot {
 	result := make([]*Snapshot, len(s))
 	for idx, snapshot := range s {

@@ -767,8 +767,7 @@ func bumpAccountFee(ctx *cli.Context) error {
 }
 
 var recoverAccountsCommand = cli.Command{
-	Name:      "recover",
-	ShortName: "r",
+	Name: "recover",
 	Usage: "recover accounts after data loss with the help of the " +
 		"auctioneer",
 	Description: `
