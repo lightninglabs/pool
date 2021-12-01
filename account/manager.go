@@ -1212,11 +1212,11 @@ func (m *Manager) RenewAccount(ctx context.Context,
 		return nil, nil, err
 	}
 	switch account.State {
-	case StateOpen, StatePendingBatch, StateExpired:
+	case StateOpen, StateExpired:
 	default:
 		return nil, nil, fmt.Errorf("account must be in either of %v "+
 			"to be renewed",
-			[]State{StateOpen, StatePendingBatch, StateExpired})
+			[]State{StateOpen, StateExpired})
 	}
 
 	// Validate the new expiry.
