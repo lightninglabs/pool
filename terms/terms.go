@@ -35,6 +35,10 @@ type AuctioneerTerms struct {
 	// NextBatchClear is the time at which the auctioneer will attempt to
 	// clear the next batch.
 	NextBatchClear time.Time
+
+	// AutoRenewExtensionBlocks is the threshold used to extend the expiry height
+	// of the accounts that are close to expire after participating in a batch.
+	AutoRenewExtensionBlocks uint32
 }
 
 // FeeSchedule returns the execution fee as a FeeSchedule.

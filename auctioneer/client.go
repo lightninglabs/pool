@@ -1312,13 +1312,14 @@ func (c *Client) Terms(ctx context.Context) (*terms.AuctioneerTerms, error) {
 	}
 
 	return &terms.AuctioneerTerms{
-		MaxAccountValue:      btcutil.Amount(resp.MaxAccountValue),
-		OrderExecBaseFee:     btcutil.Amount(resp.ExecutionFee.BaseFee),
-		OrderExecFeeRate:     btcutil.Amount(resp.ExecutionFee.FeeRate),
-		LeaseDurationBuckets: resp.LeaseDurationBuckets,
-		NextBatchConfTarget:  resp.NextBatchConfTarget,
-		NextBatchFeeRate:     chainfee.SatPerKWeight(resp.NextBatchFeeRateSatPerKw),
-		NextBatchClear:       time.Unix(int64(resp.NextBatchClearTimestamp), 0),
+		MaxAccountValue:          btcutil.Amount(resp.MaxAccountValue),
+		OrderExecBaseFee:         btcutil.Amount(resp.ExecutionFee.BaseFee),
+		OrderExecFeeRate:         btcutil.Amount(resp.ExecutionFee.FeeRate),
+		LeaseDurationBuckets:     resp.LeaseDurationBuckets,
+		NextBatchConfTarget:      resp.NextBatchConfTarget,
+		NextBatchFeeRate:         chainfee.SatPerKWeight(resp.NextBatchFeeRateSatPerKw),
+		NextBatchClear:           time.Unix(int64(resp.NextBatchClearTimestamp), 0),
+		AutoRenewExtensionBlocks: resp.AutoRenewExtensionBlocks,
 	}, nil
 }
 
