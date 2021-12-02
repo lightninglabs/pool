@@ -9,3 +9,7 @@ type SignerClient interface {
 type WalletKitClient interface {
 	lndclient.WalletKitClient
 }
+
+type ChainNotifierClient interface {
+	lndclient.ChainNotifierClient
+}
