@@ -67,6 +67,7 @@ func (w *expiryWatcher) overdueExpirations(blockHeight uint32) {
 				traderKey.SerializeCompressed(),
 				err)
 		}
+		delete(w.expirations, accountKey)
 	}
 
 	delete(w.expirationsPerHeight, blockHeight)
