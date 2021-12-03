@@ -1876,6 +1876,11 @@
           "type": "string",
           "format": "uint64",
           "description": "The absolute unix timestamp in seconds at which the auctioneer will attempt\nto clear the next batch."
+        },
+        "auto_renew_extension_blocks": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The value used by the auctioneer to determine if an account expiry height\nneeds to be extended after participating in a batch and for how long."
         }
       }
     },

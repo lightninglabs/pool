@@ -126,6 +126,17 @@ func (s *batchStorer) StorePendingBatch(batch *Batch) error {
 		modifiers = append(
 			modifiers, account.LatestTxModifier(batch.BatchTX),
 		)
+
+		// The account expiry needs to be updated only when the client
+		// supports it.
+		if batch.Version.SupportsAccountExtension() &&
+			diff.NewExpiry != 0 {
+
+			modifiers = append(
+				modifiers, account.ExpiryModifier(diff.NewExpiry),
+			)
+		}
+
 		accountModifiers[idx] = modifiers
 	}
 

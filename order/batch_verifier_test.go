@@ -31,6 +31,7 @@ var (
 	leaseDuration         = uint32(1000)
 	stateRecreated        = auctioneerrpc.AccountDiff_OUTPUT_RECREATED
 	stateExtendedOffchain = auctioneerrpc.AccountDiff_OUTPUT_DUST_EXTENDED_OFFCHAIN
+	extendAccountExpiry   = 1000
 )
 
 func TestBatchVerifier(t *testing.T) {
@@ -52,13 +53,15 @@ func TestBatchVerifier(t *testing.T) {
 	// The test cases can manipulate the "good" batch specifically to
 	// trigger validation edge cases.
 	testCases := []struct {
-		name        string
-		expectedErr string
-		doVerify    func(BatchVerifier, *Ask, *Bid, *Bid, *Batch) error
+		name         string
+		batchVersion BatchVersion
+		expectedErr  string
+		doVerify     func(BatchVerifier, *Ask, *Bid, *Bid, *Batch) error
 	}{
 		{
-			name:        "version mismatch",
-			expectedErr: ErrVersionMismatch.Error(),
+			name:         "version mismatch",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  ErrVersionMismatch.Error(),
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -66,8 +69,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid order",
-			expectedErr: "not found",
+			name:         "invalid order",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "not found",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -77,8 +81,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid order type",
-			expectedErr: "matched same type orders",
+			name:         "invalid order type",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "matched same type orders",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -92,8 +97,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid node pubkey",
-			expectedErr: "other order is an order from our node",
+			name:         "invalid node pubkey",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "other order is an order from our node",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -102,8 +108,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "ask max duration larger than bid",
-			expectedErr: "duration not overlapping",
+			name:         "ask max duration larger than bid",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "duration not overlapping",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -112,8 +119,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "ask fixed rate larger than bid",
-			expectedErr: "ask price greater than bid price",
+			name:         "ask fixed rate larger than bid",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "ask price greater than bid price",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -122,8 +130,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "bid min duration larger than ask",
-			expectedErr: "duration not overlapping",
+			name:         "bid min duration larger than ask",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "duration not overlapping",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -133,8 +142,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "bid fixed rate smaller than ask",
-			expectedErr: "ask price greater than bid price",
+			name:         "bid fixed rate smaller than ask",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "ask price greater than bid price",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -144,8 +154,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "channel output not found, wrong value",
-			expectedErr: "no channel output found in batch tx for",
+			name:         "channel output not found, wrong value",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "no channel output found in batch tx for",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -154,8 +165,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "channel output not found, wrong script",
-			expectedErr: "no channel output found in batch tx for",
+			name:         "channel output not found, wrong script",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "no channel output found in batch tx for",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -164,8 +176,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid units filled",
-			expectedErr: "invalid units to be filled for order",
+			name:         "invalid units filled",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "invalid units to be filled for order",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -176,8 +189,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid min units match",
-			expectedErr: "units, but minimum is",
+			name:         "invalid min units match",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "units, but minimum is",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -186,8 +200,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid funding TX fee rate",
-			expectedErr: "server sent unexpected ending balance",
+			name:         "invalid funding TX fee rate",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "server sent unexpected ending balance",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -196,8 +211,9 @@ func TestBatchVerifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid clearing price bid",
-			expectedErr: "below clearing price",
+			name:         "invalid clearing price bid",
+			batchVersion: DefaultBatchVersion,
+			expectedErr:  "below clearing price",
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 
@@ -330,6 +346,16 @@ func TestBatchVerifier(t *testing.T) {
 				return v.Verify(b, bestHeight)
 			},
 		},
+		{
+			name:         "happy path extend account support",
+			batchVersion: ExtendAccountBatchVersion,
+			expectedErr:  "",
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
+				return v.Verify(b, bestHeight)
+			},
+		},
 	}
 
 	// Run through all the test cases, creating a new, valid batch each
@@ -404,6 +430,14 @@ func TestBatchVerifier(t *testing.T) {
 			}),
 			SelfChanBalance: 50,
 		}
+		pkScript := scriptForAcct(t, bigAcct)
+		// If account extension is supported we create the pkScript with
+		// the expiry updated for one of the accounts (bigAcct).
+		if tc.batchVersion.SupportsAccountExtension() {
+			bigAcct.Expiry += uint32(extendAccountExpiry)
+			pkScript = scriptForAcct(t, bigAcct)
+			bigAcct.Expiry -= uint32(extendAccountExpiry)
+		}
 		batchTx := &wire.MsgTx{
 			Version: 2,
 			TxOut: []*wire.TxOut{
@@ -435,7 +469,7 @@ func TestBatchVerifier(t *testing.T) {
 					// 500_000 - 1000 - 1000 -
 					// 1_110 - 1_110 - 186 - 50
 					Value:    495_544,
-					PkScript: scriptForAcct(t, bigAcct),
+					PkScript: pkScript,
 				},
 			},
 		}
@@ -459,6 +493,14 @@ func TestBatchVerifier(t *testing.T) {
 				EndingBalance: 434,
 			},
 		}
+
+		// If account extension is supported bigAcct needs to reflect
+		// the expiry changes in its AccountDiff.
+		if tc.batchVersion.SupportsAccountExtension() {
+			nExpiry := bigAcct.Expiry + uint32(extendAccountExpiry)
+			accountDiffs[0].NewExpiry = nExpiry
+		}
+
 		matchedOrders := map[Nonce][]*MatchedOrder{
 			ask.nonce: {
 				{
@@ -495,7 +537,7 @@ func TestBatchVerifier(t *testing.T) {
 		}
 		batch := &Batch{
 			ID:            batchID,
-			Version:       DefaultBatchVersion,
+			Version:       tc.batchVersion,
 			MatchedOrders: matchedOrders,
 			AccountDiffs:  accountDiffs,
 			ExecutionFee: terms.NewLinearFeeSchedule(
@@ -516,6 +558,7 @@ func TestBatchVerifier(t *testing.T) {
 			orderStore:    storeMock,
 			ourNodePubkey: nodePubkey,
 			getAccount:    storeMock.getAccount,
+			version:       tc.batchVersion,
 		}
 		storeMock.accounts = map[[33]byte]*account.Account{
 			acctIDBig:   bigAcct,

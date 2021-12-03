@@ -67,6 +67,7 @@ type batchVerifier struct {
 	getAccount    func(*btcec.PublicKey) (*account.Account, error)
 	wallet        lndclient.WalletKitClient
 	ourNodePubkey [33]byte
+	version       BatchVersion
 }
 
 // Verify makes sure the batch prepared by the server is correct and can be
@@ -74,11 +75,12 @@ type batchVerifier struct {
 //
 // NOTE: This method is part of the BatchVerifier interface.
 func (v *batchVerifier) Verify(batch *Batch, bestHeight uint32) error {
-	// First of all, make sure we're using the same batch validation version
-	// as the server. Otherwise we bail out of the batch. This should
-	// already be handled when the client connects/authenticates. But
-	// doesn't hurt to check again.
-	if batch.Version != CurrentBatchVersion {
+
+	// First of all, make sure the server used the same batch version
+	// than we use for creating the batch. Otherwise we bail out of the batch.
+	// This should already be handled when the client connects/authenticates.
+	// But doesn't hurt to check again.
+	if batch.Version != v.version {
 		return ErrVersionMismatch
 	}
 
@@ -238,6 +240,13 @@ func (v *batchVerifier) Verify(batch *Batch, bestHeight uint32) error {
 					"ending balance. got %d expected %d",
 					diff.EndingBalance, tally.EndingBalance),
 			}
+		}
+
+		// Update account expiry if needed.
+		if batch.Version.SupportsAccountExtension() &&
+			diff.NewExpiry != 0 {
+
+			acct.Expiry = diff.NewExpiry
 		}
 
 		// Make sure the ending state of the account is correct.
