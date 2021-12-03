@@ -2229,9 +2229,10 @@ func (s *rpcServer) NextBatchInfo(ctx context.Context,
 	}
 
 	return &poolrpc.NextBatchInfoResponse{
-		ConfTarget:      auctionTerms.NextBatchConfTarget,
-		FeeRateSatPerKw: uint64(auctionTerms.NextBatchFeeRate),
-		ClearTimestamp:  uint64(auctionTerms.NextBatchClear.Unix()),
+		ConfTarget:               auctionTerms.NextBatchConfTarget,
+		FeeRateSatPerKw:          uint64(auctionTerms.NextBatchFeeRate),
+		ClearTimestamp:           uint64(auctionTerms.NextBatchClear.Unix()),
+		AutoRenewExtensionBlocks: auctionTerms.AutoRenewExtensionBlocks,
 	}, nil
 }
 
