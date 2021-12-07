@@ -22,7 +22,7 @@ Download the latest binaries from the [releases](https://github.com/lightninglab
 
 ## LND
 
-Note that Pool requires `lnd` to be built with **all of its subservers** and requires running at least `v0.11.1`. Download the latest [official release binary](https://github.com/lightningnetwork/lnd/releases/latest) or build `lnd` from source by following the [installation instructions](https://github.com/lightningnetwork/lnd/blob/master/docs/INSTALL.md). If you choose to build `lnd` from source, use the following command to enable all the relevant subservers:
+Note that Pool requires `lnd` to be built with **all of its subservers** and requires running at least `v0.12.0-beta` (`v0.13.3-beta` or later is recommended).. Download the latest [official release binary](https://github.com/lightningnetwork/lnd/releases/latest) or build `lnd` from source by following the [installation instructions](https://github.com/lightningnetwork/lnd/blob/master/docs/INSTALL.md). If you choose to build `lnd` from source, use the following command to enable all the relevant subservers:
 
 ```text
 make install tags="signrpc walletrpc chainrpc invoicesrpc"
@@ -52,5 +52,6 @@ This will install the binaries into your `$GOPATH/bin` directory.
 
 ## Compatibility
 
-Lightning Pool requires `lnd` version `0.11.1-beta` or higher
+Lightning Pool requires `lnd` version `0.12.0-beta` or higher (`v0.13.3-beta` or
+later is recommended).
 
