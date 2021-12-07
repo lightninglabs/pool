@@ -153,11 +153,10 @@ func NewManager(cfg *ManagerConfig) *Manager {
 		quit: make(chan struct{}),
 	}
 
-	m.watcherCtrl = watcher.NewController(&watcher.Config{
-		ChainNotifier:       cfg.ChainNotifier,
-		HandleAccountConf:   m.handleAccountConf,
-		HandleAccountSpend:  m.handleAccountSpend,
-		HandleAccountExpiry: m.handleAccountExpiry,
+	m.watcherCtrl = watcher.NewController(&watcher.CtrlConfig{
+		ChainNotifier: cfg.ChainNotifier,
+		// The manager implements the EventHandler interface
+		Handlers: m,
 	})
 
 	return m
@@ -866,9 +865,9 @@ func (m *Manager) handleStateOpen(ctx context.Context, account *Account) error {
 	return nil
 }
 
-// handleAccountConf takes the necessary steps after detecting the confirmation
+// HandleAccountConf takes the necessary steps after detecting the confirmation
 // of an account on-chain.
-func (m *Manager) handleAccountConf(traderKey *btcec.PublicKey,
+func (m *Manager) HandleAccountConf(traderKey *btcec.PublicKey,
 	confDetails *chainntnfs.TxConfirmation) error {
 
 	account, err := m.cfg.Store.Account(traderKey)
@@ -919,7 +918,7 @@ func (m *Manager) handleAccountConf(traderKey *btcec.PublicKey,
 // only track the spend of the latest batch, after it confirmed. So the account
 // output in the spend transaction should always match our database state if
 // it was a cooperative spend.
-func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
+func (m *Manager) HandleAccountSpend(traderKey *btcec.PublicKey,
 	spendDetails *chainntnfs.SpendDetail) error {
 
 	account, err := m.cfg.Store.Account(traderKey)
@@ -1016,7 +1015,7 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 }
 
 // handleAccountExpiry marks an account as expired within the database.
-func (m *Manager) handleAccountExpiry(traderKey *btcec.PublicKey,
+func (m *Manager) HandleAccountExpiry(traderKey *btcec.PublicKey,
 	height uint32) error {
 
 	account, err := m.cfg.Store.Account(traderKey)
