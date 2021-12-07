@@ -43,7 +43,7 @@ type Controller interface {
 	// WatchAccountExpiration watches for the expiration of an account on-chain.
 	// Successive calls for the same account will cancel any previous expiration
 	// watch requests and the new expiration will be tracked instead.
-	WatchAccountExpiration(traderKey *btcec.PublicKey, expiry uint32) error
+	WatchAccountExpiration(traderKey *btcec.PublicKey, expiry uint32)
 }
 
 // EventHandler is the interface used by other components to handle the different

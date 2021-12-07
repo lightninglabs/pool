@@ -2,7 +2,6 @@ package watcher
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/btcsuite/btcd/btcec"
@@ -14,17 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// expiryReq is an internal message we'll sumbit to the Watcher to process for
-// external expiration requests.
-type expiryReq struct {
-	// traderKey is the base trader key of the account.
-	traderKey *btcec.PublicKey
-
-	// expiry is the expiry of the account as a block height.
-	expiry uint32
-}
-
-// Config contains all of the Controller's dependencies in order to carry out its
+// CtrlConfig contains all of the Controller's dependencies in order to carry out its
 // duties.
 type CtrlConfig struct {
 	// ChainNotifier is responsible for requesting confirmation and spend
@@ -43,8 +32,6 @@ type controller struct {
 	cfg *CtrlConfig
 
 	watcher ExpiryWatcher
-
-	expiryReqs chan *expiryReq
 
 	wg         sync.WaitGroup
 	quit       chan struct{}
@@ -65,7 +52,6 @@ func NewController(cfg *CtrlConfig) *controller { // nolint:golint
 	return &controller{
 		cfg:          cfg,
 		watcher:      watcher,
-		expiryReqs:   make(chan *expiryReq),
 		quit:         make(chan struct{}),
 		spendCancels: make(map[[33]byte]func()),
 		confCancels:  make(map[[33]byte]func()),
@@ -150,11 +136,6 @@ func (c *controller) expiryHandler(blockChan chan int32, errChan chan error) {
 			log.Errorf("Unable to receive block notification: %v",
 				err)
 
-		// A new watch expiry request has been received for an account.
-		case req := <-c.expiryReqs:
-			c.watcher.AddAccountExpiration(
-				req.traderKey, req.expiry,
-			)
 		case <-c.quit:
 			return
 		}
@@ -322,18 +303,9 @@ func (c *controller) waitForAccountSpend(traderKey *btcec.PublicKey,
 // Successive calls for the same account will cancel any previous expiration
 // watch requests and the new expiration will be tracked instead.
 func (c *controller) WatchAccountExpiration(traderKey *btcec.PublicKey,
-	expiry uint32) error {
+	expiry uint32) {
 
-	select {
-	case c.expiryReqs <- &expiryReq{
-		traderKey: traderKey,
-		expiry:    expiry,
-	}:
-		return nil
-
-	case <-c.quit:
-		return errors.New("watcher shutting down")
-	}
+	c.watcher.AddAccountExpiration(traderKey, expiry)
 }
 
 // CancelAccountSpend cancels the spend watcher of the given account, if one is
