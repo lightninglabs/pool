@@ -30,7 +30,7 @@ This will install the binaries into your `$GOPATH/bin` directory.
 
 ### Installing `lnd`
 
-Lightning Pool needs to be connected to an `lnd` node version `v0.11.1-beta` or later to work. It is recommended to run an [official release binary of `lnd`](https://github.com/lightningnetwork/lnd/releases).
+Lightning Pool needs to be connected to an `lnd` node version `v0.12.0-beta` (`v0.13.3-beta` recommended!) or later to work. It is recommended to run an [official release binary of `lnd`](https://github.com/lightningnetwork/lnd/releases).
 
 [Installing `lnd` from source](https://github.com/lightningnetwork/lnd/blob/master/docs/INSTALL.md#installing-lnd) is also possible but needs to be done **with all sub-server build flags enabled**:
 
