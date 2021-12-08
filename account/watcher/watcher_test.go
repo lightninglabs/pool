@@ -1,269 +1,248 @@
 package watcher
 
 import (
-	"encoding/hex"
+	"crypto/ecdsa"
+	"errors"
+	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/lightningnetwork/lnd/chainntnfs"
+	gomock "github.com/golang/mock/gomock"
 )
 
-const (
-	timeout = 500 * time.Millisecond
-)
-
-var (
-	zeroOutPoint        wire.OutPoint
-	rawTestTraderKey, _ = hex.DecodeString("02d0de0999f50eaacaae5b6e178eec7c8bd99dd797bc9f7cfb497e2188884d59f3")
-	testTraderKey, _    = btcec.ParsePubKey(rawTestTraderKey, btcec.S256())
-	testScript, _       = hex.DecodeString("00149589c15e7a8a8065f75aad5f3337cfccf909174a")
-)
-
-// TestWatcherConf ensures that the watcher performs its expected operations
-// once an account confirmation has been detected.
-func TestWatcherConf(t *testing.T) {
-	t.Parallel()
-
-	// Set up the required dependencies of the Watcher.
-	notifier := newMockChainNotifier()
-
-	// The HandleAccountConf closure will use a signal to indicate that it's
-	// been invoked once a confirmation notification is received.
-	confSignal := make(chan struct{})
-	handleConf := func(*btcec.PublicKey, *chainntnfs.TxConfirmation) error {
-		close(confSignal)
+func randomPrivateKey(seed int64) *btcec.PrivateKey {
+	r := rand.New(rand.NewSource(seed))
+	key, err := ecdsa.GenerateKey(btcec.S256(), r)
+	if err != nil {
 		return nil
 	}
+	return (*btcec.PrivateKey)(key)
+}
 
-	watcher := New(&Config{
-		ChainNotifier:     notifier,
-		HandleAccountConf: handleConf,
-	})
-	if err := watcher.Start(); err != nil {
-		t.Fatalf("unable to start watcher: %v", err)
-	}
-	defer watcher.Stop()
+func randomPublicKey(seed int64) *btcec.PublicKey {
+	key := randomPrivateKey(seed)
+	return key.PubKey()
+}
 
-	// Watch for an account's confirmation.
-	err := watcher.WatchAccountConf(
-		testTraderKey, zeroOutPoint.Hash, testScript, 1, 1,
-	)
-	if err != nil {
-		t.Fatalf("unable to watch account conf: %v", err)
-	}
+func randomAccountKey(seed int64) [33]byte {
+	var accountKey [33]byte
 
-	// HandleAccountConf should not be invoked until after the confirmation.
-	select {
-	case <-confSignal:
-		t.Fatal("unexpected conf signal")
-	case <-time.After(timeout):
-	}
+	key := randomPublicKey(seed)
+	copy(accountKey[:], key.SerializeCompressed())
+	return accountKey
+}
 
-	select {
-	case notifier.confChan <- &chainntnfs.TxConfirmation{}:
-	case <-time.After(timeout):
-		t.Fatal("unable to notify conf")
-	}
+var overdueExpirationsTestCases = []struct {
+	name                 string
+	blockHeight          uint32
+	expirations          map[[33]byte]uint32
+	expirationsPerHeight map[uint32][]*btcec.PublicKey
+	handledExpirations   []*btcec.PublicKey
+	checks               []func(watcher *expiryWatcher) error
+}{{
+	name:        "overdue expirations are handled properly",
+	blockHeight: 24,
+	expirations: map[[33]byte]uint32{
+		randomAccountKey(0): 24,
+		randomAccountKey(1): 24,
+		randomAccountKey(2): 24,
+		randomAccountKey(3): 27,
+	},
+	handledExpirations: []*btcec.PublicKey{
+		randomPublicKey(0),
+		randomPublicKey(1),
+		randomPublicKey(2),
+	},
+	expirationsPerHeight: map[uint32][]*btcec.PublicKey{
+		24: {
+			randomPublicKey(0),
+			randomPublicKey(1),
+			randomPublicKey(2),
+		},
+		27: {
+			randomPublicKey(27),
+		},
+	},
+	checks: []func(watcher *expiryWatcher) error{
+		func(watcher *expiryWatcher) error {
+			left := watcher.expirationsPerHeight[24]
+			if len(left) != 0 {
+				return errors.New(
+					"expirations were not " +
+						"handled properly",
+				)
+			}
+			return nil
+		},
+		func(watcher *expiryWatcher) error {
+			if len(watcher.expirations) != 1 {
+				return errors.New(
+					"handled expirations were " +
+						" not deleted",
+				)
+			}
+			return nil
+		},
+	},
+}, {
+	name:        "if account wasn't track we ignore it",
+	blockHeight: 24,
+	expirationsPerHeight: map[uint32][]*btcec.PublicKey{
+		24: {
+			randomPublicKey(3),
+		},
+	},
+	checks: []func(watcher *expiryWatcher) error{},
+}}
 
-	select {
-	case <-confSignal:
-	case <-time.After(timeout):
-		t.Fatal("expected conf signal")
+func TestOverdueExpirations(t *testing.T) {
+	for _, tc := range overdueExpirationsTestCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			handlers := NewMockEventHandler(mockCtrl)
+			watcher := NewExpiryWatcher(handlers)
+			watcher.expirations = tc.expirations
+			watcher.expirationsPerHeight = tc.expirationsPerHeight
+
+			for _, trader := range tc.handledExpirations {
+				handlers.EXPECT().
+					HandleAccountExpiry(
+						trader,
+						tc.blockHeight,
+					).
+					Return(nil)
+			}
+
+			watcher.NewBlock(tc.blockHeight)
+
+			for _, check := range tc.checks {
+				if err := check(watcher); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
 	}
 }
 
-// TestWatcherSpend ensures that the watcher performs its expected operations
-// once an account spend has been detected.
-func TestWatcherSpend(t *testing.T) {
-	t.Parallel()
-
-	// Set up the required dependencies of the Watcher.
-	notifier := newMockChainNotifier()
-
-	// The HandleAccountSpend closure will use a signal to indicate that
-	// it's been invoked once a spend notification is received.
-	spendSignal := make(chan struct{})
-	handleSpend := func(*btcec.PublicKey, *chainntnfs.SpendDetail) error {
-		close(spendSignal)
+var addAccountExpirationTestCases = []struct {
+	name               string
+	bestHeight         uint32
+	initialExpirations map[[33]byte]uint32
+	expirations        map[*btcec.PublicKey]uint32
+	handler            func(*btcec.PublicKey, uint32) error
+	checks             []func(watcher *expiryWatcher) error
+}{{
+	name:       "account is tracked happy path",
+	bestHeight: 20,
+	expirations: map[*btcec.PublicKey]uint32{
+		randomPublicKey(1): 25,
+		randomPublicKey(2): 25,
+		randomPublicKey(3): 25,
+	},
+	checks: []func(watcher *expiryWatcher) error{
+		func(watcher *expiryWatcher) error {
+			if len(watcher.expirations) != 3 {
+				return errors.New(
+					"account expiry not added",
+				)
+			}
+			return nil
+		},
+	},
+}, {
+	name:       "account with earlier expiry are directly handled",
+	bestHeight: 20,
+	expirations: map[*btcec.PublicKey]uint32{
+		randomPublicKey(1): 19,
+	},
+	handler: func(*btcec.PublicKey, uint32) error {
 		return nil
-	}
-
-	watcher := New(&Config{
-		ChainNotifier:      notifier,
-		HandleAccountSpend: handleSpend,
-	})
-	if err := watcher.Start(); err != nil {
-		t.Fatalf("unable to start watcher: %v", err)
-	}
-	defer watcher.Stop()
-
-	// Watch for an account's spend.
-	err := watcher.WatchAccountSpend(
-		testTraderKey, zeroOutPoint, testScript, 1,
-	)
-	if err != nil {
-		t.Fatalf("unable to watch account spend: %v", err)
-	}
-
-	// HandleAccountSpend should not be invoked until after the spend.
-	select {
-	case <-spendSignal:
-		t.Fatal("unexpected spend signal")
-	case <-time.After(timeout):
-	}
-
-	select {
-	case notifier.spendChan <- &chainntnfs.SpendDetail{}:
-	case <-time.After(timeout):
-		t.Fatal("unable to notify spend")
-	}
-
-	select {
-	case <-spendSignal:
-	case <-time.After(timeout):
-		t.Fatal("expected spend signal")
-	}
-}
-
-// TestWatcherExpiry ensures that the watcher performs its expected operations
-// once an account expiration has been detected.
-func TestWatcherExpiry(t *testing.T) {
-	t.Parallel()
-
-	const (
-		startHeight  = 100
-		expiryHeight = startHeight * 2
-	)
-
-	// Set up the required dependencies of the Watcher.
-	notifier := newMockChainNotifier()
-
-	// The HandleAccountExpiry closure will use a signal to indicate that
-	// it's been invoked once an expiry notification is received.
-	expirySignal := make(chan struct{})
-	handleExpiry := func(*btcec.PublicKey, uint32) error {
-		close(expirySignal)
+	},
+	checks: []func(watcher *expiryWatcher) error{
+		func(watcher *expiryWatcher) error {
+			if len(watcher.expirations) != 0 {
+				return errors.New("an account with " +
+					"older expiry hight was added")
+			}
+			return nil
+		},
+	},
+}, {
+	name:       "adding an account that we are already watching",
+	bestHeight: 20,
+	initialExpirations: map[[33]byte]uint32{
+		randomAccountKey(1): 25,
+	},
+	expirations: map[*btcec.PublicKey]uint32{
+		randomPublicKey(1): 35,
+	},
+	handler: func(*btcec.PublicKey, uint32) error {
 		return nil
-	}
+	},
+	checks: []func(watcher *expiryWatcher) error{
+		func(watcher *expiryWatcher) error {
+			msg := "account expiry was not updated"
+			if len(watcher.expirationsPerHeight[35]) != 1 {
+				return errors.New(msg)
+			}
 
-	watcher := New(&Config{
-		ChainNotifier:       notifier,
-		HandleAccountExpiry: handleExpiry,
-	})
-	if err := watcher.Start(); err != nil {
-		t.Fatalf("unable to start watcher: %v", err)
-	}
-	defer watcher.Stop()
+			if watcher.expirations[randomAccountKey(1)] != 35 {
+				return errors.New(msg)
+			}
+			return nil
+		},
+	},
+}}
 
-	select {
-	case notifier.blockChan <- startHeight:
-	case <-time.After(timeout):
-		t.Fatal("unable to notify block")
-	}
+func TestAddAccountExpiration(t *testing.T) {
+	for _, tc := range addAccountExpirationTestCases {
+		tc := tc
 
-	// Watch for an account's expiration that has yet to expire.
-	err := watcher.WatchAccountExpiration(testTraderKey, expiryHeight)
-	if err != nil {
-		t.Fatalf("unable to watch account expiry: %v", err)
-	}
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	// HandleAccountExpiry should not be invoked until after the expiration.
-	select {
-	case <-expirySignal:
-		t.Fatal("unexpected expiry signal")
-	case <-time.After(timeout):
-	}
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
 
-	// Override the existing watch request with a new one that expires at
-	// double the height.
-	err = watcher.WatchAccountExpiration(testTraderKey, expiryHeight*2)
-	if err != nil {
-		t.Fatalf("unable to watch account expiry: %v", err)
-	}
+			handlers := NewMockEventHandler(mockCtrl)
+			watcher := NewExpiryWatcher(handlers)
 
-	// HandleAccountExpiry should still not be invoked yet.
-	select {
-	case <-expirySignal:
-		t.Fatal("unexpected expiry signal")
-	case <-time.After(timeout):
-	}
+			if len(tc.initialExpirations) > 0 {
+				watcher.expirations = tc.initialExpirations
+			}
+			watcher.bestHeight = tc.bestHeight
 
-	// Notify the first expiration height. This should not cause
-	// HandleAccountExpiry to be invoked as the second request overwrote it.
-	select {
-	case notifier.blockChan <- expiryHeight:
-	case <-time.After(timeout):
-		t.Fatal("unable to notify expiry")
-	}
+			for trader, height := range tc.expirations {
+				if height < tc.bestHeight {
+					handlers.EXPECT().
+						HandleAccountExpiry(
+							trader,
+							tc.bestHeight,
+						).
+						Return(nil)
+				}
 
-	select {
-	case <-expirySignal:
-		t.Fatal("unexpected expiry signal")
-	case <-time.After(timeout):
-	}
+				watcher.AddAccountExpiration(trader, height)
+			}
 
-	// Notify the new expiration height. This should cause
-	// HandleAccountExpiry to be invoked.
-	select {
-	case notifier.blockChan <- expiryHeight * 2:
-	case <-time.After(timeout):
-		t.Fatal("unable to notify expiry")
-	}
+			// The HandleAccountExpiry is executed in the background
+			// give it some time to ensure that the goroutine has time
+			// to get executed. This could potentially trigger
+			// false test failures.
+			time.Sleep(500 * time.Millisecond)
 
-	select {
-	case <-expirySignal:
-	case <-time.After(timeout):
-		t.Fatal("expected expiry signal")
-	}
-}
-
-// TestWatcherAccountAlreadyExpired ensures that the watcher performs its
-// expected operations once an account expiration has already happened at the
-// time of registration.
-func TestWatcherAccountAlreadyExpired(t *testing.T) {
-	t.Parallel()
-
-	const startHeight = 100
-
-	// Set up the required dependencies of the Watcher.
-	notifier := newMockChainNotifier()
-
-	// The HandleAccountExpiry closure will use a signal to indicate that
-	// it's been invoked once an expiry notification is received.
-	expirySignal := make(chan struct{})
-	handleExpiry := func(*btcec.PublicKey, uint32) error {
-		close(expirySignal)
-		return nil
-	}
-
-	watcher := New(&Config{
-		ChainNotifier:       notifier,
-		HandleAccountExpiry: handleExpiry,
-	})
-	if err := watcher.Start(); err != nil {
-		t.Fatalf("unable to start watcher: %v", err)
-	}
-	defer watcher.Stop()
-
-	select {
-	case notifier.blockChan <- startHeight:
-	case <-time.After(timeout):
-		t.Fatal("unable to notify block")
-	}
-
-	// Watch for an account's expiration that has already expired.
-	err := watcher.WatchAccountExpiration(testTraderKey, startHeight)
-	if err != nil {
-		t.Fatalf("unable to watch account expiry: %v", err)
-	}
-
-	// HandleAccountExpiry should have been invoked since the expiration was
-	// already reached at the time of registration.
-	select {
-	case <-expirySignal:
-	case <-time.After(timeout):
-		t.Fatal("expected expiry signal")
+			for _, check := range tc.checks {
+				if err := check(watcher); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
 	}
 }

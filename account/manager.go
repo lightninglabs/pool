@@ -127,8 +127,8 @@ type Manager struct {
 	started sync.Once
 	stopped sync.Once
 
-	cfg     ManagerConfig
-	watcher *watcher.Watcher
+	cfg         ManagerConfig
+	watcherCtrl watcher.Controller
 
 	// pendingBatchMtx guards access to any database calls involving pending
 	// batches. This is mostly used to prevent race conditions when handling
@@ -153,11 +153,10 @@ func NewManager(cfg *ManagerConfig) *Manager {
 		quit: make(chan struct{}),
 	}
 
-	m.watcher = watcher.New(&watcher.Config{
-		ChainNotifier:       cfg.ChainNotifier,
-		HandleAccountConf:   m.handleAccountConf,
-		HandleAccountSpend:  m.handleAccountSpend,
-		HandleAccountExpiry: m.handleAccountExpiry,
+	m.watcherCtrl = watcher.NewController(&watcher.CtrlConfig{
+		ChainNotifier: cfg.ChainNotifier,
+		// The manager implements the EventHandler interface
+		Handlers: m,
 	})
 
 	return m
@@ -178,7 +177,7 @@ func (m *Manager) start() error {
 
 	// We'll start by resuming all of our accounts. This requires the
 	// watcher to be started first.
-	if err := m.watcher.Start(); err != nil {
+	if err := m.watcherCtrl.Start(); err != nil {
 		return err
 	}
 
@@ -229,7 +228,7 @@ func (m *Manager) start() error {
 // Stop safely stops any ongoing operations within the Manager.
 func (m *Manager) Stop() {
 	m.stopped.Do(func() {
-		m.watcher.Stop()
+		m.watcherCtrl.Stop()
 
 		close(m.quit)
 		m.wg.Wait()
@@ -382,8 +381,8 @@ func (m *Manager) WatchMatchedAccounts(ctx context.Context,
 		// canceling all previous spend and confirmation watchers. We
 		// then only watch the latest batch and once it confirms, create
 		// a new spend watcher on that.
-		m.watcher.CancelAccountSpend(matchedAccount)
-		m.watcher.CancelAccountConf(matchedAccount)
+		m.watcherCtrl.CancelAccountSpend(matchedAccount)
+		m.watcherCtrl.CancelAccountConf(matchedAccount)
 
 		// After taking part in a batch, the account is either pending
 		// closed because it was used up or pending batch update because
@@ -620,7 +619,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		)
 		log.Infof("Waiting for %v confirmation(s) of account %x",
 			numConfs, account.TraderKey.PubKey.SerializeCompressed())
-		err = m.watcher.WatchAccountConf(
+		err = m.watcherCtrl.WatchAccountConf(
 			account.TraderKey.PubKey, account.OutPoint.Hash,
 			accountOutput.PkScript, numConfs, account.HeightHint,
 		)
@@ -657,7 +656,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		)
 		log.Infof("Waiting for %v confirmation(s) of account %x",
 			numConfs, account.TraderKey.PubKey.SerializeCompressed())
-		err = m.watcher.WatchAccountConf(
+		err = m.watcherCtrl.WatchAccountConf(
 			account.TraderKey.PubKey, account.OutPoint.Hash,
 			accountOutput.PkScript, numConfs, account.HeightHint,
 		)
@@ -706,7 +705,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		log.Infof("Waiting for %v confirmation(s) of expired account %x",
 			numConfs, account.TraderKey.PubKey.SerializeCompressed())
 
-		err = m.watcher.WatchAccountConf(
+		err = m.watcherCtrl.WatchAccountConf(
 			account.TraderKey.PubKey, account.OutPoint.Hash,
 			accountOutput.PkScript, numConfs, account.HeightHint,
 		)
@@ -721,7 +720,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 		log.Infof("Watching expired account %x for spend",
 			account.TraderKey.PubKey.SerializeCompressed())
 
-		err = m.watcher.WatchAccountSpend(
+		err = m.watcherCtrl.WatchAccountSpend(
 			account.TraderKey.PubKey, account.OutPoint,
 			accountOutput.PkScript, account.HeightHint,
 		)
@@ -745,7 +744,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 
 		log.Infof("Watching account %x for spend",
 			account.TraderKey.PubKey.SerializeCompressed())
-		err = m.watcher.WatchAccountSpend(
+		err = m.watcherCtrl.WatchAccountSpend(
 			account.TraderKey.PubKey, account.OutPoint,
 			accountOutput.PkScript, account.HeightHint,
 		)
@@ -836,7 +835,7 @@ func (m *Manager) handleStateOpen(ctx context.Context, account *Account) error {
 		return err
 	}
 
-	err = m.watcher.WatchAccountSpend(
+	err = m.watcherCtrl.WatchAccountSpend(
 		account.TraderKey.PubKey, account.OutPoint,
 		accountOutput.PkScript, account.HeightHint,
 	)
@@ -844,12 +843,9 @@ func (m *Manager) handleStateOpen(ctx context.Context, account *Account) error {
 		return fmt.Errorf("unable to watch for spend: %v", err)
 	}
 
-	err = m.watcher.WatchAccountExpiration(
+	m.watcherCtrl.WatchAccountExpiration(
 		account.TraderKey.PubKey, account.Expiry,
 	)
-	if err != nil {
-		return fmt.Errorf("unable to watch for expiration: %v", err)
-	}
 
 	// Now that we have an open account, subscribe for updates to it to the
 	// server. We subscribe for the account instead of the individual orders
@@ -866,9 +862,9 @@ func (m *Manager) handleStateOpen(ctx context.Context, account *Account) error {
 	return nil
 }
 
-// handleAccountConf takes the necessary steps after detecting the confirmation
+// HandleAccountConf takes the necessary steps after detecting the confirmation
 // of an account on-chain.
-func (m *Manager) handleAccountConf(traderKey *btcec.PublicKey,
+func (m *Manager) HandleAccountConf(traderKey *btcec.PublicKey,
 	confDetails *chainntnfs.TxConfirmation) error {
 
 	account, err := m.cfg.Store.Account(traderKey)
@@ -919,7 +915,7 @@ func (m *Manager) handleAccountConf(traderKey *btcec.PublicKey,
 // only track the spend of the latest batch, after it confirmed. So the account
 // output in the spend transaction should always match our database state if
 // it was a cooperative spend.
-func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
+func (m *Manager) HandleAccountSpend(traderKey *btcec.PublicKey,
 	spendDetails *chainntnfs.SpendDetail) error {
 
 	account, err := m.cfg.Store.Account(traderKey)
@@ -1016,7 +1012,7 @@ func (m *Manager) handleAccountSpend(traderKey *btcec.PublicKey,
 }
 
 // handleAccountExpiry marks an account as expired within the database.
-func (m *Manager) handleAccountExpiry(traderKey *btcec.PublicKey,
+func (m *Manager) HandleAccountExpiry(traderKey *btcec.PublicKey,
 	height uint32) error {
 
 	account, err := m.cfg.Store.Account(traderKey)
@@ -1253,10 +1249,7 @@ func (m *Manager) RenewAccount(ctx context.Context,
 
 	// Begin to track the new account expiration, which will overwrite the
 	// existing expiration request.
-	err = m.watcher.WatchAccountExpiration(traderKey, modifiedAccount.Expiry)
-	if err != nil {
-		return nil, nil, err
-	}
+	m.watcherCtrl.WatchAccountExpiration(traderKey, modifiedAccount.Expiry)
 
 	return modifiedAccount, spendPkg.tx, nil
 }
