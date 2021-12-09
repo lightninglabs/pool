@@ -878,6 +878,21 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 	}, nil
 }
 
+// hasPendingExtension returns if the accountKey is waiting for a batch to be
+// confirmed to extend the expiry height.
+func (s *rpcServer) hasPendingExtension(accountKey *btcec.PublicKey) bool {
+	if s.orderManager.HasPendingBatch() {
+		batch := s.orderManager.PendingBatch()
+		for _, diff := range batch.AccountDiffs {
+			if diff.AccountKey.IsEqual(accountKey) {
+				return diff.NewExpiry != 0
+			}
+		}
+	}
+
+	return false
+}
+
 // RenewAccount updates the expiration of an open/expired account. This
 // will always require a signature from the auctioneer, even after the account
 // has expired, to ensure the auctioneer is aware the account is being renewed.
@@ -913,10 +928,13 @@ func (s *rpcServer) RenewAccount(ctx context.Context,
 			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
 	}
 
+	pendingExtension := s.hasPendingExtension(accountKey)
+
 	// Proceed to process the expiration update and map its response to the
 	// RPC's response.
 	modifiedAccount, tx, err := s.accountManager.RenewAccount(
 		ctx, accountKey, expiryHeight, feeRate, bestHeight,
+		pendingExtension,
 	)
 	if err != nil {
 		return nil, err

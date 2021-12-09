@@ -1198,7 +1198,8 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 // expired, to ensure the auctioneer is aware the account is being renewed.
 func (m *manager) RenewAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, newExpiry uint32,
-	feeRate chainfee.SatPerKWeight, bestHeight uint32) (*Account,
+	feeRate chainfee.SatPerKWeight, bestHeight uint32,
+	pendingExtension bool) (*Account,
 	*wire.MsgTx, error) {
 
 	// The account can only have its expiry updated if it has confirmed
@@ -1209,6 +1210,12 @@ func (m *manager) RenewAccount(ctx context.Context,
 	}
 	switch account.State {
 	case StateOpen, StateExpired:
+		// continue
+	case StatePendingBatch:
+		if pendingExtension {
+			return nil, nil, errors.New("the account already has " +
+				"an expiry extension pending")
+		}
 	default:
 		return nil, nil, fmt.Errorf("account must be in either of %v "+
 			"to be renewed",
