@@ -68,8 +68,8 @@ type ManagerConfig struct {
 	Signer lndclient.SignerClient
 }
 
-// Manager is responsible for the management of orders.
-type Manager struct {
+// manager is responsible for the management of orders.
+type manager struct {
 	// NOTE: This must be used atomically.
 	hasPendingBatch uint32
 	isStarted       uint32
@@ -91,15 +91,15 @@ type Manager struct {
 }
 
 // NewManager instantiates a new Manager backed by the given config.
-func NewManager(cfg *ManagerConfig) *Manager {
-	return &Manager{
+func NewManager(cfg *ManagerConfig) *manager { // nolint:golint
+	return &manager{
 		cfg:  *cfg,
 		quit: make(chan struct{}),
 	}
 }
 
 // Start starts all concurrent tasks the manager is responsible for.
-func (m *Manager) Start() error {
+func (m *manager) Start() error {
 	if atomic.LoadUint32(&m.isStarted) == 1 {
 		return fmt.Errorf("manager can only be started once")
 	}
@@ -139,7 +139,7 @@ func (m *Manager) Start() error {
 }
 
 // Stop stops all concurrent tasks the manager is responsible for.
-func (m *Manager) Stop() {
+func (m *manager) Stop() {
 	m.stopped.Do(func() {
 		close(m.quit)
 		m.wg.Wait()
@@ -147,7 +147,7 @@ func (m *Manager) Stop() {
 }
 
 // PrepareOrder validates an order, signs it and then stores it locally.
-func (m *Manager) PrepareOrder(ctx context.Context, order Order,
+func (m *manager) PrepareOrder(ctx context.Context, order Order,
 	acct *account.Account,
 	terms *terms.AuctioneerTerms) (*ServerOrderParams, error) {
 
@@ -258,7 +258,7 @@ func (m *Manager) PrepareOrder(ctx context.Context, order Order,
 
 // validateOrder makes sure an order is formally correct and that the associated
 // account contains enough balance to execute the order.
-func (m *Manager) validateOrder(order Order, acct *account.Account,
+func (m *manager) validateOrder(order Order, acct *account.Account,
 	terms *terms.AuctioneerTerms) error {
 
 	duration := order.Details().LeaseDuration
@@ -312,7 +312,7 @@ func (m *Manager) validateOrder(order Order, acct *account.Account,
 }
 
 // OrderMatchValidate verifies an incoming batch is sane before accepting it.
-func (m *Manager) OrderMatchValidate(batch *Batch, bestHeight uint32) error {
+func (m *manager) OrderMatchValidate(batch *Batch, bestHeight uint32) error {
 	// Make sure we have no objection to the current batch. Then store
 	// it in case it ends up being the final version.
 	err := m.batchVerifier.Verify(batch, bestHeight)
@@ -330,12 +330,12 @@ func (m *Manager) OrderMatchValidate(batch *Batch, bestHeight uint32) error {
 }
 
 // HasPendingBatch returns whether a pending batch is currently being processed.
-func (m *Manager) HasPendingBatch() bool {
+func (m *manager) HasPendingBatch() bool {
 	return atomic.LoadUint32(&m.hasPendingBatch) == 1
 }
 
 // PendingBatch returns the current pending batch being validated.
-func (m *Manager) PendingBatch() *Batch {
+func (m *manager) PendingBatch() *Batch {
 	return m.pendingBatch
 }
 
@@ -343,7 +343,7 @@ func (m *Manager) PendingBatch() *Batch {
 // belong to the trader. Before sending off the signature to the auctioneer,
 // we'll also persist the batch to disk as pending to ensure we can recover
 // after a crash.
-func (m *Manager) BatchSign() (BatchSignature, error) {
+func (m *manager) BatchSign() (BatchSignature, error) {
 	sig, err := m.batchSigner.Sign(m.pendingBatch)
 	if err != nil {
 		return nil, err
@@ -359,7 +359,7 @@ func (m *Manager) BatchSign() (BatchSignature, error) {
 
 // BatchFinalize marks a batch as complete upon receiving the finalize message
 // from the auctioneer.
-func (m *Manager) BatchFinalize(batchID BatchID) error {
+func (m *manager) BatchFinalize(batchID BatchID) error {
 	// Only accept the last batch we verified to make sure we didn't miss
 	// a message somewhere in the process.
 	if batchID != m.pendingBatch.ID {
@@ -381,7 +381,7 @@ func (m *Manager) BatchFinalize(batchID BatchID) error {
 
 // OurNodePubkey returns our lnd node's public identity key or an error if the
 // manager wasn't fully started yet.
-func (m *Manager) OurNodePubkey() ([33]byte, error) {
+func (m *manager) OurNodePubkey() ([33]byte, error) {
 	if atomic.LoadUint32(&m.isStarted) != 1 {
 		return [33]byte{}, fmt.Errorf("manager not started yet")
 	}
@@ -394,7 +394,7 @@ func (m *Manager) OurNodePubkey() ([33]byte, error) {
 // information set. We also check that our node initially offered to lease this
 // channel by checking the embedded signature. If everything checks out, we add
 // our signature over the order part to the ticket.
-func (m *Manager) validateAndSignTicketForOrder(ctx context.Context,
+func (m *manager) validateAndSignTicketForOrder(ctx context.Context,
 	t *sidecar.Ticket, bid *Bid, acct *account.Account) error {
 
 	if t.State != sidecar.StateRegistered {

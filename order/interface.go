@@ -2,6 +2,7 @@ package order
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -814,4 +815,39 @@ func PendingChanKey(askNonce, bidNonce Nonce) [32]byte {
 	copy(pid[:], h.Sum(nil))
 
 	return pid
+}
+
+// Manager is the interface a manager implements to deal with
+// the orders.
+type Manager interface {
+	// Start starts all concurrent tasks the manager is responsible for.
+	Start() error
+
+	// Stop stops all concurrent tasks the manager is responsible for.
+	Stop()
+
+	// PrepareOrder validates an order, signs it and then stores it locally.
+	PrepareOrder(ctx context.Context, order Order, acct *account.Account,
+		terms *terms.AuctioneerTerms) (*ServerOrderParams, error)
+
+	// OrderMatchValidate verifies an incoming batch is sane before accepting it.
+	OrderMatchValidate(batch *Batch, bestHeight uint32) error
+
+	// HasPendingBatch returns whether a pending batch is currently being processed.
+	HasPendingBatch() bool
+
+	// PendingBatch returns the current pending batch being validated.
+	PendingBatch() *Batch
+
+	// BatchSign returns the witness stack of all account inputs in a batch that
+	// belong to the trader.
+	BatchSign() (BatchSignature, error)
+
+	// BatchFinalize marks a batch as complete upon receiving the finalize message
+	// from the auctioneer.
+	BatchFinalize(batchID BatchID) error
+
+	// OurNodePubkey returns our lnd node's public identity key or an error if the
+	// manager wasn't fully started yet.
+	OurNodePubkey() ([33]byte, error)
 }
