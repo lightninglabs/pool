@@ -63,7 +63,7 @@ type rpcServer struct {
 	lndClient      lnrpc.LightningClient
 	auctioneer     *auctioneer.Client
 	accountManager *account.Manager
-	orderManager   *order.Manager
+	orderManager   order.Manager
 
 	quit            chan struct{}
 	wg              sync.WaitGroup
