@@ -43,6 +43,99 @@ const (
 	getInfoTimeout = 5 * time.Second
 )
 
+// marshalerConfig contains all of the marshaler's dependencies in order to
+// carry out its duties.
+type marshalerConfig struct {
+	// GetOrders returns all orders that are currently known to the store.
+	GetOrders func() ([]order.Order, error)
+	// Terms returns the current dynamic auctioneer terms like max account
+	// size, max order duration in blocks and the auction fee schedule.
+	Terms func(ctx context.Context) (*terms.AuctioneerTerms, error)
+}
+
+// marshaler is an internal struct type that implements the Marshaler interface.
+type marshaler struct {
+	cfg *marshalerConfig
+}
+
+// NewMarshaler returns an internal type that implements the Marshaler interface.
+func NewMarshaler(cfg *marshalerConfig) *marshaler { // nolint:golint
+	return &marshaler{
+		cfg: cfg,
+	}
+}
+
+// MarshallAccountsWithAvailableBalance returns the RPC representation of an account
+// with the account.AvailableBalance value populated.
+func (m *marshaler) MarshallAccountsWithAvailableBalance(ctx context.Context,
+	accounts []*account.Account) ([]*poolrpc.Account, error) {
+
+	rpcAccounts := make([]*poolrpc.Account, 0, len(accounts))
+	for _, acct := range accounts {
+		rpcAccount, err := MarshallAccount(acct)
+		if err != nil {
+			return nil, err
+		}
+		rpcAccounts = append(rpcAccounts, rpcAccount)
+	}
+
+	// For each account, we'll need to compute the available balance, which
+	// requires us to sum up all the debits from outstanding orders.
+	orders, err := m.cfg.GetOrders()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the current fee schedule so we can compute the worst-case
+	// account debit assuming all our standing orders were matched.
+	auctionTerms, err := m.cfg.Terms(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
+			err)
+	}
+
+	// For each active account, consume the worst-case account delta if the
+	// order were to be matched.
+	accountDebits := make(map[[33]byte]btcutil.Amount)
+	auctionFeeSchedule := auctionTerms.FeeSchedule()
+	for _, acct := range accounts {
+		var (
+			debitAmt btcutil.Amount
+			acctKey  [33]byte
+		)
+
+		copy(
+			acctKey[:],
+			acct.TraderKey.PubKey.SerializeCompressed(),
+		)
+
+		// We'll make sure to accumulate a distinct sum for each
+		// outstanding account the user has.
+		for _, o := range orders {
+			if o.Details().AcctKey != acctKey {
+				continue
+			}
+
+			debitAmt += o.ReservedValue(auctionFeeSchedule)
+		}
+
+		accountDebits[acctKey] = debitAmt
+	}
+
+	// Finally, we'll populate the available balance value for each of the
+	// existing accounts.
+	for _, rpcAccount := range rpcAccounts {
+		var acctKey [33]byte
+		copy(acctKey[:], rpcAccount.TraderKey)
+
+		accountDebit := accountDebits[acctKey]
+		availableBalance := rpcAccount.Value - uint64(accountDebit)
+
+		rpcAccount.AvailableBalance = availableBalance
+	}
+	return rpcAccounts, nil
+}
+
 // rpcServer implements the gRPC server on the client side and answers RPC calls
 // from an end user client program like the command line interface.
 type rpcServer struct {
@@ -64,6 +157,7 @@ type rpcServer struct {
 	auctioneer     *auctioneer.Client
 	accountManager account.Manager
 	orderManager   order.Manager
+	marshaler      Marshaler
 
 	quit            chan struct{}
 	wg              sync.WaitGroup
@@ -116,6 +210,10 @@ func newRPCServer(server *Server) *rpcServer {
 			Lightning: lndServices.Client,
 			Wallet:    lndServices.WalletKit,
 			Signer:    lndServices.Signer,
+		}),
+		marshaler: NewMarshaler(&marshalerConfig{
+			GetOrders: server.db.GetOrders,
+			Terms:     server.AuctioneerClient.Terms,
 		}),
 		quit: make(chan struct{}),
 	}
@@ -589,7 +687,7 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 		validAccounts = append(validAccounts, acct)
 	}
 
-	rpcAccounts, err := s.MarshallAccountsWithAvailableBalance(
+	rpcAccounts, err := s.marshaler.MarshallAccountsWithAvailableBalance(
 		ctx, validAccounts,
 	)
 	if err != nil {
@@ -600,77 +698,6 @@ func (s *rpcServer) ListAccounts(ctx context.Context,
 	return &poolrpc.ListAccountsResponse{
 		Accounts: rpcAccounts,
 	}, nil
-}
-
-// MarshallAccountsWithAvailableBalance returns the RPC representation of an account
-// with the account.AvailableBalance value populated.
-func (s *rpcServer) MarshallAccountsWithAvailableBalance(ctx context.Context,
-	accounts []*account.Account) ([]*poolrpc.Account, error) {
-
-	rpcAccounts := make([]*poolrpc.Account, 0, len(accounts))
-	for _, acct := range accounts {
-		rpcAccount, err := MarshallAccount(acct)
-		if err != nil {
-			return nil, err
-		}
-		rpcAccounts = append(rpcAccounts, rpcAccount)
-	}
-
-	// For each account, we'll need to compute the available balance, which
-	// requires us to sum up all the debits from outstanding orders.
-	orders, err := s.server.db.GetOrders()
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the current fee schedule so we can compute the worst-case
-	// account debit assuming all our standing orders were matched.
-	auctionTerms, err := s.auctioneer.Terms(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
-			err)
-	}
-
-	// For each active account, consume the worst-case account delta if the
-	// order were to be matched.
-	accountDebits := make(map[[33]byte]btcutil.Amount)
-	auctionFeeSchedule := auctionTerms.FeeSchedule()
-	for _, acct := range accounts {
-		var (
-			debitAmt btcutil.Amount
-			acctKey  [33]byte
-		)
-
-		copy(
-			acctKey[:],
-			acct.TraderKey.PubKey.SerializeCompressed(),
-		)
-
-		// We'll make sure to accumulate a distinct sum for each
-		// outstanding account the user has.
-		for _, o := range orders {
-			if o.Details().AcctKey != acctKey {
-				continue
-			}
-
-			debitAmt += o.ReservedValue(auctionFeeSchedule)
-		}
-
-		accountDebits[acctKey] = debitAmt
-	}
-
-	// Finally, we'll populate the available balance value for each of the
-	// existing accounts.
-	for _, rpcAccount := range rpcAccounts {
-		var acctKey [33]byte
-		copy(acctKey[:], rpcAccount.TraderKey)
-
-		accountDebit := accountDebits[acctKey]
-		availableBalance := rpcAccount.Value - uint64(accountDebit)
-
-		rpcAccount.AvailableBalance = availableBalance
-	}
-	return rpcAccounts, nil
 }
 
 // MarshallAccount returns the RPC representation of an account.
@@ -770,7 +797,7 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 		return nil, err
 	}
 
-	rpcModifiedAccounts, err := s.MarshallAccountsWithAvailableBalance(
+	rpcModAccounts, err := s.marshaler.MarshallAccountsWithAvailableBalance(
 		ctx, []*account.Account{modifiedAccount},
 	)
 	if err != nil {
@@ -779,7 +806,7 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 	txHash := tx.TxHash()
 
 	return &poolrpc.DepositAccountResponse{
-		Account:     rpcModifiedAccounts[0],
+		Account:     rpcModAccounts[0],
 		DepositTxid: txHash[:],
 	}, nil
 }
@@ -837,7 +864,7 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 		return nil, err
 	}
 
-	rpcModifiedAccounts, err := s.MarshallAccountsWithAvailableBalance(
+	rpcModAccounts, err := s.marshaler.MarshallAccountsWithAvailableBalance(
 		ctx, []*account.Account{modifiedAccount},
 	)
 	if err != nil {
@@ -846,7 +873,7 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 	txHash := tx.TxHash()
 
 	return &poolrpc.WithdrawAccountResponse{
-		Account:      rpcModifiedAccounts[0],
+		Account:      rpcModAccounts[0],
 		WithdrawTxid: txHash[:],
 	}, nil
 }
@@ -895,7 +922,7 @@ func (s *rpcServer) RenewAccount(ctx context.Context,
 		return nil, err
 	}
 
-	rpcModifiedAccounts, err := s.MarshallAccountsWithAvailableBalance(
+	rpcModAccounts, err := s.marshaler.MarshallAccountsWithAvailableBalance(
 		ctx, []*account.Account{modifiedAccount},
 	)
 	if err != nil {
@@ -904,7 +931,7 @@ func (s *rpcServer) RenewAccount(ctx context.Context,
 	txHash := tx.TxHash()
 
 	return &poolrpc.RenewAccountResponse{
-		Account:     rpcModifiedAccounts[0],
+		Account:     rpcModAccounts[0],
 		RenewalTxid: txHash[:],
 	}, nil
 }
