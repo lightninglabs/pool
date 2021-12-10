@@ -123,7 +123,7 @@ type ManagerConfig struct {
 }
 
 // Manager is responsible for the management of accounts on-chain.
-type Manager struct {
+type manager struct {
 	started sync.Once
 	stopped sync.Once
 
@@ -147,8 +147,8 @@ type Manager struct {
 }
 
 // NewManager instantiates a new Manager backed by the given config.
-func NewManager(cfg *ManagerConfig) *Manager {
-	m := &Manager{
+func NewManager(cfg *ManagerConfig) *manager { // nolint:golint
+	m := &manager{
 		cfg:  *cfg,
 		quit: make(chan struct{}),
 	}
@@ -163,7 +163,7 @@ func NewManager(cfg *ManagerConfig) *Manager {
 }
 
 // Start resumes all account on-chain operation after a restart.
-func (m *Manager) Start() error {
+func (m *manager) Start() error {
 	var err error
 	m.started.Do(func() {
 		err = m.start()
@@ -172,7 +172,7 @@ func (m *Manager) Start() error {
 }
 
 // start resumes all account on-chain operation after a restart.
-func (m *Manager) start() error {
+func (m *manager) start() error {
 	ctx := context.Background()
 
 	// We'll start by resuming all of our accounts. This requires the
@@ -226,7 +226,7 @@ func (m *Manager) start() error {
 }
 
 // Stop safely stops any ongoing operations within the Manager.
-func (m *Manager) Stop() {
+func (m *manager) Stop() {
 	m.stopped.Do(func() {
 		m.watcherCtrl.Stop()
 
@@ -237,7 +237,7 @@ func (m *Manager) Stop() {
 
 // QuoteAccount returns the expected fee rate and total miner fee to send to an
 // account funding output with the given confTarget.
-func (m *Manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
+func (m *manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
 	confTarget uint32) (chainfee.SatPerKWeight, btcutil.Amount, error) {
 
 	// First, make sure we have a valid amount to create the account. We
@@ -275,7 +275,7 @@ func (m *Manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
 
 // InitAccount handles a request to create a new account with the provided
 // parameters.
-func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
+func (m *manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	feeRate chainfee.SatPerKWeight, expiry,
 	bestHeight uint32) (*Account, error) {
 
@@ -361,7 +361,7 @@ func (m *Manager) InitAccount(ctx context.Context, value btcutil.Amount,
 // are expecting the batch transaction to confirm as their next account output.
 // This will cancel all previous spend and conf watchers of all accounts
 // involved in the batch.
-func (m *Manager) WatchMatchedAccounts(ctx context.Context,
+func (m *manager) WatchMatchedAccounts(ctx context.Context,
 	matchedAccounts []*btcec.PublicKey) error {
 
 	for _, matchedAccount := range matchedAccounts {
@@ -402,7 +402,7 @@ func (m *Manager) WatchMatchedAccounts(ctx context.Context,
 
 // maybeBroadcastTx attempts to broadcast the transaction only if all of its
 // inputs have been signed for.
-func (m *Manager) maybeBroadcastTx(ctx context.Context, tx *wire.MsgTx,
+func (m *manager) maybeBroadcastTx(ctx context.Context, tx *wire.MsgTx,
 	label string) error {
 
 	// If any of the transaction inputs aren't signed, don't broadcast.
@@ -418,7 +418,7 @@ func (m *Manager) maybeBroadcastTx(ctx context.Context, tx *wire.MsgTx,
 // verifyAccountSigner ensures that we are able to recreate the account
 // secret for active accounts. That means that the LND signerClient did
 // not change and we are able to generate valid signatures for this account.
-func (m *Manager) verifyAccountSigner(ctx context.Context,
+func (m *manager) verifyAccountSigner(ctx context.Context,
 	account *Account) error {
 
 	// The secret was based on both base keys, the trader and auctioneer's.
@@ -442,7 +442,7 @@ func (m *Manager) verifyAccountSigner(ctx context.Context,
 // resumeAccount performs different operations based on the account's state.
 // This method serves as a way to consolidate the logic of resuming accounts on
 // startup and during normal operation.
-func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
+func (m *manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	onRestart bool, onRecovery bool, feeRate chainfee.SatPerKWeight) error {
 
 	accountOutput, err := account.Output()
@@ -767,7 +767,7 @@ func (m *Manager) resumeAccount(ctx context.Context, account *Account, // nolint
 // locateTxByOutput locates a transaction from the Manager's TxSource by one of
 // its outputs. If a transaction is not found containing the output, then
 // errTxNotFound is returned.
-func (m *Manager) locateTxByOutput(ctx context.Context,
+func (m *manager) locateTxByOutput(ctx context.Context,
 	output *wire.TxOut, fullTx *wire.MsgTx) (*wire.MsgTx, error) {
 
 	// We now store the full raw transaction of the last modification. We
@@ -802,7 +802,7 @@ func (m *Manager) locateTxByOutput(ctx context.Context,
 
 // locateTxByHash locates a transaction from the Manager's TxSource by its hash.
 // If the transaction is not found, then errTxNotFound is returned.
-func (m *Manager) locateTxByHash(ctx context.Context,
+func (m *manager) locateTxByHash(ctx context.Context,
 	hash chainhash.Hash) (*wire.MsgTx, error) {
 
 	// Get all transactions, starting from block 0 and including unconfirmed
@@ -823,7 +823,7 @@ func (m *Manager) locateTxByHash(ctx context.Context,
 
 // handleStateOpen performs the necessary operations for accounts found in
 // StateOpen.
-func (m *Manager) handleStateOpen(ctx context.Context, account *Account) error {
+func (m *manager) handleStateOpen(ctx context.Context, account *Account) error {
 	var traderKey [33]byte
 	copy(traderKey[:], account.TraderKey.PubKey.SerializeCompressed())
 
@@ -864,7 +864,7 @@ func (m *Manager) handleStateOpen(ctx context.Context, account *Account) error {
 
 // HandleAccountConf takes the necessary steps after detecting the confirmation
 // of an account on-chain.
-func (m *Manager) HandleAccountConf(traderKey *btcec.PublicKey,
+func (m *manager) HandleAccountConf(traderKey *btcec.PublicKey,
 	confDetails *chainntnfs.TxConfirmation) error {
 
 	account, err := m.cfg.Store.Account(traderKey)
@@ -906,7 +906,7 @@ func (m *Manager) HandleAccountConf(traderKey *btcec.PublicKey,
 	return m.handleStateOpen(context.Background(), account)
 }
 
-// handleAccountSpend handles the different spend paths of an account. If an
+// HandleAccountSpend handles the different spend paths of an account. If an
 // account is spent by the expiration path, it'll always be marked as closed
 // thereafter. If it is spent by the cooperative path with the auctioneer, then
 // the account will only remain open if the spending transaction recreates the
@@ -915,7 +915,7 @@ func (m *Manager) HandleAccountConf(traderKey *btcec.PublicKey,
 // only track the spend of the latest batch, after it confirmed. So the account
 // output in the spend transaction should always match our database state if
 // it was a cooperative spend.
-func (m *Manager) HandleAccountSpend(traderKey *btcec.PublicKey,
+func (m *manager) HandleAccountSpend(traderKey *btcec.PublicKey,
 	spendDetails *chainntnfs.SpendDetail) error {
 
 	account, err := m.cfg.Store.Account(traderKey)
@@ -1011,8 +1011,8 @@ func (m *Manager) HandleAccountSpend(traderKey *btcec.PublicKey,
 	)
 }
 
-// handleAccountExpiry marks an account as expired within the database.
-func (m *Manager) HandleAccountExpiry(traderKey *btcec.PublicKey,
+// HandleAccountExpiry marks an account as expired within the database.
+func (m *manager) HandleAccountExpiry(traderKey *btcec.PublicKey,
 	height uint32) error {
 
 	account, err := m.cfg.Store.Account(traderKey)
@@ -1051,7 +1051,7 @@ func (m *Manager) HandleAccountExpiry(traderKey *btcec.PublicKey,
 // given trader key such that the new account value is met using inputs sourced
 // from the backing lnd node's wallet. If needed, a change output that does back
 // to lnd may be added to the deposit transaction.
-func (m *Manager) DepositAccount(ctx context.Context,
+func (m *manager) DepositAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, depositAmount btcutil.Amount,
 	feeRate chainfee.SatPerKWeight, bestHeight,
 	expiryHeight uint32) (*Account, *wire.MsgTx, error) {
@@ -1133,7 +1133,7 @@ func (m *Manager) DepositAccount(ctx context.Context,
 
 // WithdrawAccount attempts to withdraw funds from the account associated with
 // the given trader key into the provided outputs.
-func (m *Manager) WithdrawAccount(ctx context.Context,
+func (m *manager) WithdrawAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, outputs []*wire.TxOut,
 	feeRate chainfee.SatPerKWeight,
 	bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error) {
@@ -1196,7 +1196,7 @@ func (m *Manager) WithdrawAccount(ctx context.Context,
 // RenewAccount updates the expiration of an open/expired account. This will
 // always require a signature from the auctioneer, even after the account has
 // expired, to ensure the auctioneer is aware the account is being renewed.
-func (m *Manager) RenewAccount(ctx context.Context,
+func (m *manager) RenewAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, newExpiry uint32,
 	feeRate chainfee.SatPerKWeight, bestHeight uint32) (*Account,
 	*wire.MsgTx, error) {
@@ -1259,7 +1259,7 @@ func (m *Manager) RenewAccount(ctx context.Context,
 // otherwise the fee bump will not succeed. Further invocations of this call for
 // the same account will result in the child being replaced by the higher fee
 // transaction (RBF).
-func (m *Manager) BumpAccountFee(ctx context.Context,
+func (m *manager) BumpAccountFee(ctx context.Context,
 	traderKey *btcec.PublicKey, newFeeRate chainfee.SatPerKWeight) error {
 
 	account, err := m.cfg.Store.Account(traderKey)
@@ -1317,7 +1317,7 @@ func (m *Manager) BumpAccountFee(ctx context.Context,
 // key. Closing the account requires a signature of the auctioneer if the
 // account has not yet expired. The account funds are swept according to the
 // provided fee expression.
-func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
+func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 	feeExpr FeeExpr, bestHeight uint32) (*wire.MsgTx, error) {
 
 	account, err := m.cfg.Store.Account(traderKey)
@@ -1379,7 +1379,7 @@ func (m *Manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 // on-chain. These operations are performed in this order to ensure trader are
 // able to resume the spend of an account upon restarts if they happen to
 // shutdown mid-process.
-func (m *Manager) spendAccount(ctx context.Context, account *Account,
+func (m *manager) spendAccount(ctx context.Context, account *Account,
 	inputs []chanfunding.Coin, outputs []*wire.TxOut, witnessType witnessType,
 	modifiers []Modifier, isClose bool, bestHeight uint32) (*Account,
 	*spendPackage, error) {
@@ -1475,7 +1475,7 @@ func (m *Manager) spendAccount(ctx context.Context, account *Account,
 
 // RecoverAccount re-introduces a recovered account into the database and starts
 // all watchers necessary depending on the account's state.
-func (m *Manager) RecoverAccount(ctx context.Context, account *Account) error {
+func (m *manager) RecoverAccount(ctx context.Context, account *Account) error {
 	if account.TraderKey == nil || account.TraderKey.PubKey == nil {
 		return fmt.Errorf("account is missing trader key")
 	}
@@ -1517,7 +1517,7 @@ func determineWitnessType(account *Account, bestHeight uint32) witnessType {
 // spendAccountExpiry creates the closing transaction of an account based on the
 // expiration script path and signs it. bestHeight is used as the lock time of
 // the transaction in order to satisfy the output's CHECKLOCKTIMEVERIFY.
-func (m *Manager) spendAccountExpiry(ctx context.Context, account *Account,
+func (m *manager) spendAccountExpiry(ctx context.Context, account *Account,
 	outputs []*wire.TxOut, bestHeight uint32) (*spendPackage, error) {
 
 	spendPkg, err := m.createSpendTx(ctx, account, nil, outputs, bestHeight)
@@ -1535,7 +1535,7 @@ func (m *Manager) spendAccountExpiry(ctx context.Context, account *Account,
 // constructMultiSigWitness requests a signature from the auctioneer for the
 // given spending transaction of an account and returns the fully constructed
 // witness to spend the account input.
-func (m *Manager) constructMultiSigWitness(ctx context.Context,
+func (m *manager) constructMultiSigWitness(ctx context.Context,
 	account *Account, spendPkg *spendPackage, modifiers []Modifier,
 	isClose bool) (wire.TxWitness, error) {
 
@@ -1582,7 +1582,7 @@ func (m *Manager) constructMultiSigWitness(ctx context.Context,
 // If the spending transaction takes the expiration path, bestHeight is used as
 // the lock time of the transaction, otherwise it is 0. The transaction has its
 // inputs and outputs sorted according to BIP-69.
-func (m *Manager) createSpendTx(ctx context.Context, account *Account,
+func (m *manager) createSpendTx(ctx context.Context, account *Account,
 	inputs []chanfunding.Coin, outputs []*wire.TxOut,
 	bestHeight uint32) (*spendPackage, error) {
 
@@ -1745,7 +1745,7 @@ func valueAfterAccountUpdate(account *Account, outputs []*wire.TxOut,
 // the inputs is also provided to use when coming across an unexpected failure.
 // If needed, a change output from the backing lnd node's wallet may be returned
 // as well.
-func (m *Manager) inputsForDeposit(ctx context.Context,
+func (m *manager) inputsForDeposit(ctx context.Context,
 	depositAmount btcutil.Amount, witnessType witnessType,
 	feeRate chainfee.SatPerKWeight) ([]chanfunding.Coin, func(),
 	*wire.TxOut, error) {
@@ -1922,7 +1922,7 @@ func locateAccountInput(tx *wire.MsgTx, account *Account) (int, error) {
 }
 
 // signInput signs a P2WKH or NP2WKH input of a transaction.
-func (m *Manager) signInput(ctx context.Context, tx *wire.MsgTx,
+func (m *manager) signInput(ctx context.Context, tx *wire.MsgTx,
 	in chanfunding.Coin, idx int,
 	sigHashType txscript.SigHashType) (*input.Script, error) {
 
@@ -1947,7 +1947,7 @@ func (m *Manager) signInput(ctx context.Context, tx *wire.MsgTx,
 // signAccountInput signs the account input in the spending transaction of an
 // account. If the account is being spent with cooperation of the auctioneer,
 // their signature will be required as well.
-func (m *Manager) signAccountInput(ctx context.Context, tx *wire.MsgTx,
+func (m *manager) signAccountInput(ctx context.Context, tx *wire.MsgTx,
 	account *Account, idx int, sigHashType txscript.SigHashType) ([]byte,
 	[]byte, error) {
 
