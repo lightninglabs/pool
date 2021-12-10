@@ -17,7 +17,8 @@ Many interactions in Pool are based around accounts:
 * Fees gained by selling channels are credited to your account
 * Funds used to open channels to others are deducted from your account
 
-As an account is just a UTXO, anytime a batch is cleared in the auction \(market made, channels bought+sold\), your account is spent, and re-created in the same transaction.
+As an account is just a UTXO, anytime a batch is cleared in the auction \(market made, channels bought+sold\), your account is spent, and re-created in the same transaction. This applies to other actions like
+deposit/withdraw funds from your account.
 
 ## Creating An Account
 

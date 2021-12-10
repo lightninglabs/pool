@@ -3,15 +3,20 @@
 In this section, we'll cover the possible ways of recovering the funds within a
 Pool account upon data corruption/loss. Account funds are locked to a 2-of-2
 multi-sig output of the account owner and the Pool auctioneer until the
-account's expiration has been met, giving the account owner full control of the
-funds. This expiration is included in the account output script, so it must be
-known in order to spend the account funds. There are two possible ways to
-recover an account's funds after data corruption/loss: one that requires the
-Pool auctioneer's cooperation, which is the only method currently supported,
-and one without, which will require storage of an additional data blob similar
-to the Static Channel Backups present within `lnd`. An auctioneer-assisted
-account recovery intent can be issued through the `pool accounts recover`
-command or the `RecoverAccounts` RPC.
+account's expiration has been met, giving the account owner the security that
+funds will not be spend without the owner's consent. This expiration is included
+in the account output script, so it must be known in order to spend the account
+funds. There are two possible ways to recover an account's funds after data 
+corruption/loss:
+
+- With Pool auctioneer's cooperation: which is the only method currently 
+supported.
+- Without Pool auctioneer's cooperation: which will require storage of an 
+additional data blob similar to the Static Channel Backups present within 
+`lnd`. 
+
+An auctioneer-assisted account recovery intent can be issued through the 
+`pool accounts recover` command or the `RecoverAccounts` RPC.
 
 ```text
 $ pool accounts recover -h

@@ -117,6 +117,7 @@ OPTIONS:
    --min_chan_amt value           the minimum amount of satoshis that a resulting channel from this order must have (default: 0)
    --force                        skip order placement confirmation
    --max_batch_fee_rate value     the maximum fee rate (sat/vByte) to use to for the batch transaction (default: 100)
+   --channel_type value           the type of channel resulting from the order being matched ("legacy", "script-enforced") (default: "legacy")
 ```
 
 NOTE: The default values shown in the command line help are different from the actual default values that are used. A value of `0` on the command line indicates: _No actual value set, use the internal default value_. See the table below for more information.
@@ -129,6 +130,7 @@ NOTE: The default values shown in the command line help are different from the a
 | `lease_duration_blocks` | No | `2016` | The minimum number of blocks the offered channels need to stay open for in order to satisfy the contract. Distinct markets are available for the different durations. See [lease duration section](orders.md#lease-duration) for more information. |
 | `min_chan_amt` | No | 10% of `amt` | The minimum size/capacity of any offered channel. Higher values reduce the match potential but decrease the potential total in chain fees that must be paid. Must be a multiple of the base unit \(100k sat\). See [chain fees section](orders.md#chain-fees) for more information. |
 | `max_batch_fee_rate` | No | `100` sat/vByte | The maximum on-chain fee rate at which this order should be eligible to be included in a batch. If the auctioneer estimates a higher fee rate, orders below will be skipped. See [chain fees section](orders.md#chain-fees) for more information. |
+| `channel_type` | No | legacy | the type of channel resulting from the order being matched | 
 | `force` | No | `false` | When set to `true`, no order details will be shown and no confirmation is required. |
 
 ### Bid orders
@@ -160,8 +162,11 @@ OPTIONS:
    --lease_duration_blocks value  the number of blocks that the liquidity should be provided for (default: 2016)
    --min_node_tier value          the min node tier this bid should be matched with, tier 1 nodes are considered 'good', if set to tier 0, then all nodes will be considered regardless of 'quality' (default: 0)
    --min_chan_amt value           the minimum amount of satoshis that a resulting channel from this order must have (default: 0)
-   --force                        skip order placement confirmation
+   --self_chan_balance value      give the channel leased by this bid order an initial balance by adding additional funds from our account into the channel; can be used to create up to 50/50 balanced channels (default: 0)
+   --sidecar_ticket value         instead of leasing a channel for the node connected to this pool instance, lease a channel for another node; use the information within the ticket to identify the receiver of the sidecar channel; using a sidecar ticket will also overwrite the amt, min_chan_amt, lease_duration_blocks and self_chan_balance fields
    --max_batch_fee_rate value     the maximum fee rate (sat/vByte) to use to for the batch transaction (default: 100)
+   --channel_type value           the type of channel resulting from the order being matched ("legacy", "script-enforced") (default: "legacy")
+   --force                        skip order placement confirmation
 ```
 
 NOTE: The default values shown in the command line help are different from the actual default values that are used. A value of `0` on the command line indicates: _No actual value set, use the internal default value_. See the table below for more information.
@@ -175,6 +180,9 @@ NOTE: The default values shown in the command line help are different from the a
 | `min_chan_amt` | No | 10% of `amt` | The minimum size/capacity of any leased channel. Higher values reduce the match potential but decrease the potential total in chain fees that must be paid. Must be a multiple of the base unit \(100k sat\). See [chain fees section](orders.md#chain-fees) for more information. |
 | `min_node_tier` | No | `1` | The minimum quality of node this bid should be matched with. The default \(if no command line flag is set\) is "Tier 1" which means the bid is only matched with asks from nodes that are considered "good". When manually setting this to `--min_node_tier=0` then asks from all nodes should be considered, regardless of their "quality". |
 | `max_batch_fee_rate` | No | `100` sat/vByte | The maximum on-chain fee rate at which this order should be eligible to be included in a batch. If the auctioneer estimates a higher fee rate, orders below will be skipped. See [chain fees section](orders.md#chain-fees) for more information. |
+| `self_chan_balance` | No | `0` | Give the channel leased by this bid order an initial balance by adding additional funds from our account into the channel; can be used to create up to 50/50 balanced channels |
+| `sidecar_ticket` | No | `false` | Instead of leasing a channel for the node connected to this pool instance, lease a channel for another node; use the information within the ticket to identify the receiver of the sidecar channel; using a sidecar ticket will also overwrite the amt, min_chan_amt, lease_duration_blocks and self_chan_balance fields |
+| `channel_type` | No | `legacy` | The type of channel resulting from the order being matched |
 | `force` | No | `false` | When set to `true`, no order details will be shown and no confirmation is required. |
 
 ## Lease duration

@@ -30,5 +30,5 @@ Here we can see I sold a channel for 40k satoshis, and ended up paying 5k satosh
 
 In the alpha version of Pool, _script level enforcement_ isn't yet implemented. Script level enforcement would lock the maker's funds in the channel for the lease period. This ensures that they can't just collect the premium \(before coupon channels\) and close out the channel instantly. With script enforcement, they would be able to close the channel \(force close it\), but their funds would be unavailable until the maturity period has passed.
 
-Instead, we've implemented a feature in `lnd` to prevent channels from being _cooperatively closed_ by the maker until the expiry height \(what we call the `thaw_height`\). Additionally, if we detect a force close by the maker of that channel, then we'll ban them from the market for a set period of time.
+Instead, we've implemented a feature in `lnd` to prevent channels from being _cooperatively closed_ by the maker until the expiry height \(what we call the `thaw_height`\).
 
