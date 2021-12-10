@@ -23,6 +23,13 @@ import (
 // Nonce is a 32 byte pseudo randomly generated unique order ID.
 type Nonce [32]byte
 
+// The size of a SHA256 checksum in bytes.
+//
+// Note: this matches the sha256.Size definition. However, mockgen
+// complains about not being able to find the sha256 package. When
+// that bug is fixed, we can change back to [sha256.Size]byte.
+const hashSize = 32
+
 // String returns the hex encoded representation of the nonce.
 func (n Nonce) String() string {
 	return hex.EncodeToString(n[:])
@@ -266,7 +273,7 @@ type Order interface {
 	// Digest returns a deterministic SHA256 hash over the contents of an
 	// order. Deterministic in this context means that if two orders have
 	// the same content, their digest have to be identical as well.
-	Digest() ([sha256.Size]byte, error)
+	Digest() ([hashSize]byte, error)
 
 	// ReservedValue returns the maximum value that could be deducted from
 	// the account if the order is is matched, and therefore has to be
@@ -392,10 +399,10 @@ func (a *Ask) Type() Type {
 // their digest have to be identical as well.
 //
 // NOTE: This method is part of the Order interface.
-func (a *Ask) Digest() ([sha256.Size]byte, error) {
+func (a *Ask) Digest() ([hashSize]byte, error) {
 	var (
 		msg    bytes.Buffer
-		result [sha256.Size]byte
+		result [hashSize]byte
 	)
 	switch a.Kit.Version {
 	case VersionDefault:
@@ -591,10 +598,10 @@ func (b *Bid) Type() Type {
 // their digest have to be identical as well.
 //
 // NOTE: This method is part of the Order interface.
-func (b *Bid) Digest() ([sha256.Size]byte, error) {
+func (b *Bid) Digest() ([hashSize]byte, error) {
 	var (
 		msg    bytes.Buffer
-		result [sha256.Size]byte
+		result [hashSize]byte
 	)
 	switch b.Kit.Version {
 	case VersionDefault:
