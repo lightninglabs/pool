@@ -48,7 +48,7 @@ type testHarness struct {
 	notifier   *mockChainNotifier
 	wallet     *mockWallet
 	auctioneer *mockAuctioneer
-	manager    *Manager
+	manager    Manager
 }
 
 func newTestHarness(t *testing.T) *testHarness {
@@ -458,15 +458,20 @@ func (h *testHarness) restartManager() {
 
 	h.manager.Stop()
 
+	mgr, ok := h.manager.(*manager)
+	if !ok {
+		h.t.Fatalf("unable to assert account manager type")
+	}
+
 	auctioneer := newMockAuctioneer()
 	h.auctioneer = auctioneer
 	h.manager = NewManager(&ManagerConfig{
-		Store:         h.manager.cfg.Store,
+		Store:         mgr.cfg.Store,
 		Auctioneer:    auctioneer,
-		Wallet:        h.manager.cfg.Wallet,
-		Signer:        h.manager.cfg.Signer,
-		ChainNotifier: h.manager.cfg.ChainNotifier,
-		TxSource:      h.manager.cfg.TxSource,
+		Wallet:        mgr.cfg.Wallet,
+		Signer:        mgr.cfg.Signer,
+		ChainNotifier: mgr.cfg.ChainNotifier,
+		TxSource:      mgr.cfg.TxSource,
 	})
 
 	if err := h.manager.Start(); err != nil {

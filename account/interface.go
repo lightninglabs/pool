@@ -14,6 +14,7 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/terms"
+	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet"
@@ -517,4 +518,92 @@ func (o OutputsWithImplicitFee) CloseOutputs(accountValue btcutil.Amount,
 	witnessType witnessType) ([]*wire.TxOut, error) {
 
 	return o, nil
+}
+
+// Manager is the interface a manager implements to deal with the accounts.
+type Manager interface {
+	// Start resumes all account on-chain operation after a restart.
+	Start() error
+
+	// Stop safely stops any ongoing operations within the Manager.
+	Stop()
+
+	// QuoteAccount returns the expected fee rate and total miner fee to send to an
+	// account funding output with the given confTarget.
+	QuoteAccount(ctx context.Context, value btcutil.Amount,
+		confTarget uint32) (chainfee.SatPerKWeight, btcutil.Amount, error)
+
+	// InitAccount handles a request to create a new account with the provided
+	// parameters.
+	InitAccount(ctx context.Context, value btcutil.Amount,
+		feeRate chainfee.SatPerKWeight, expiry,
+		bestHeight uint32) (*Account, error)
+
+	// WatchMatchedAccounts resumes accounts that were just matched in a batch and
+	// are expecting the batch transaction to confirm as their next account output.
+	// This will cancel all previous spend and conf watchers of all accounts
+	// involved in the batch.
+	WatchMatchedAccounts(ctx context.Context,
+		matchedAccounts []*btcec.PublicKey) error
+
+	// HandleAccountConf takes the necessary steps after detecting the confirmation
+	// of an account on-chain.
+	HandleAccountConf(traderKey *btcec.PublicKey,
+		confDetails *chainntnfs.TxConfirmation) error
+
+	// HandleAccountSpend handles the different spend paths of an account. If an
+	// account is spent by the expiration path, it'll always be marked as closed
+	// thereafter. If it is spent by the cooperative path with the auctioneer, then
+	// the account will only remain open if the spending transaction recreates the
+	// account with the expected next account script. Otherwise, it is also marked
+	// as closed. In case of multiple consecutive batches with the same account, we
+	// only track the spend of the latest batch, after it confirmed. So the account
+	// output in the spend transaction should always match our database state if
+	// it was a cooperative spend.
+	HandleAccountSpend(traderKey *btcec.PublicKey,
+		spendDetails *chainntnfs.SpendDetail) error
+
+	// HandleAccountExpiry marks an account as expired within the database.
+	HandleAccountExpiry(traderKey *btcec.PublicKey,
+		height uint32) error
+
+	// DepositAccount attempts to deposit funds into the account associated with the
+	// given trader key such that the new account value is met using inputs sourced
+	// from the backing lnd node's wallet. If needed, a change output that does back
+	// to lnd may be added to the deposit transaction.
+	DepositAccount(ctx context.Context, traderKey *btcec.PublicKey,
+		depositAmount btcutil.Amount, feeRate chainfee.SatPerKWeight,
+		bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error)
+
+	// WithdrawAccount attempts to withdraw funds from the account associated with
+	// the given trader key into the provided outputs.
+	WithdrawAccount(ctx context.Context, traderKey *btcec.PublicKey,
+		outputs []*wire.TxOut, feeRate chainfee.SatPerKWeight,
+		bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error)
+
+	// RenewAccount updates the expiration of an open/expired account. This will
+	// always require a signature from the auctioneer, even after the account has
+	// expired, to ensure the auctioneer is aware the account is being renewed.
+	RenewAccount(ctx context.Context, traderKey *btcec.PublicKey,
+		newExpiry uint32, feeRate chainfee.SatPerKWeight,
+		bestHeight uint32) (*Account, *wire.MsgTx, error)
+
+	// BumpAccountFee attempts to bump the fee of an account's most recent
+	// transaction. This is done by locating an eligible output for lnd to CPFP,
+	// otherwise the fee bump will not succeed. Further invocations of this call for
+	// the same account will result in the child being replaced by the higher fee
+	// transaction (RBF).
+	BumpAccountFee(ctx context.Context, traderKey *btcec.PublicKey,
+		newFeeRate chainfee.SatPerKWeight) error
+
+	// CloseAccount attempts to close the account associated with the given trader
+	// key. Closing the account requires a signature of the auctioneer if the
+	// account has not yet expired. The account funds are swept according to the
+	// provided fee expression.
+	CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
+		feeExpr FeeExpr, bestHeight uint32) (*wire.MsgTx, error)
+
+	// RecoverAccount re-introduces a recovered account into the database and starts
+	// all watchers necessary depending on the account's state.
+	RecoverAccount(ctx context.Context, account *Account) error
 }

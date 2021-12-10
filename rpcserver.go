@@ -62,7 +62,7 @@ type rpcServer struct {
 	lndServices    *lndclient.LndServices
 	lndClient      lnrpc.LightningClient
 	auctioneer     *auctioneer.Client
-	accountManager *account.Manager
+	accountManager account.Manager
 	orderManager   order.Manager
 
 	quit            chan struct{}
