@@ -24,7 +24,7 @@ You pay based on a percentage across time and it is not quite straightforward to
 
 If you want to pay a specific amount, use trial and error of creating bids until the confirmation shows you your desired fee payment size.
 
-It will not show you an exact total, but you can see how much you will pay in fee to the seller in the confirmation, in the confirmation the seller is called the “maker”
+It will not show you an exact total, but you can see how much you will pay in fee to the seller in the confirmation, in the confirmation the seller is called the “maker”.
 
 ### How will I know if my order was fulfilled?
 
@@ -38,11 +38,15 @@ pool orders list
 
 A channel will be opened as soon as the batch transaction has received a sufficient number of confirmations. Batches are processed whenever the market clears or approximately every 10 minutes or whichever is longer.
 
-The seller has to be online when the batch clears or the match won't be included
+The seller has to be online when the batch clears or the match won't be included.
 
 ### Can I buy a channel for someone else?
 
-Not at this time but this is something we plan to add in the future.
+Yes, [sidecar channels](https://lightning.engineering/posts/2021-05-26-sidecar-channels/) solve this problem by enabling a third party to purchase channels on behalf of a user.
+
+### Troubleshooting
+
+[Join us on Slack](https://lightning.engineering/slack.html) and we'd be happy to help in any way we can.
 
 ## Channels
 
@@ -52,7 +56,7 @@ The channel is opened automatically by the seller once the market clears.
 
 ### How long will the channel stay open?
 
-It will stay open for a minimum of 2016 blocks \(approximately 2 weeks\).
+You can specify the desired lease period in your orders. With a minimum of 2016 blocks \(approximately 2 weeks\).
 
 ### Does the channel close after the maturity date?
 
@@ -68,7 +72,7 @@ No. The channel behaves like a regular channel.
 
 ### What happens if the seller force closes a channel before the maturity date?
 
-If the lender force closes they will be banned from the market. This will not be possible in the future.
+Script level enforcement enables us to lock the maker's funds in the channel for the lease period. However, you need an LND node that supports this feature and you need to opt in. By default, we use a feature in `lnd` to prevent channels from being _cooperatively closed_ by the maker until the expiry height \(what we call the `thaw_height`\).
 
 ### If off-chain funds have moved over to my side, must I keep them there?
 
@@ -88,13 +92,13 @@ This is necessary so that users can recover funds in the event our servers were 
 
 ### What do I do if my account expires?
 
-You will need to close your account and then re-open your account. In the future we will enable account renewals.
+You can renew expired accounts with the `pool accounts renew [command options] trader_key sat_per_vbyte [--expiry_height | --expiry_blocks]`. This will broadcast a chain	transaction as the expiry is enforced within the account output script.
 
 ## Matching
 
 ### Can I choose who to buy from?
 
-You are not able to choose who to buy from but by default only well-connected nodes who are on the Bos Score List are eligible to sell liquidity. 
+You are not able to choose who to buy from but by default only well-connected nodes who are on the Bos Score List are eligible to sell liquidity. You can disable this restriction setting the `--min_node_tier=0` parameter when submiting an order. 
 
 ### Can sellers choose their buyers or blacklist certain buyers?
 
@@ -135,7 +139,7 @@ The seller earns the routing fees. You can also earn fees if that new channel is
 
 ### Can the seller increase their fee rate after opening the channel?
 
-Yes they can adjust their routing policy however this will be penalized in the future.
+Yes they can adjust their routing policy. However, this will be penalized in the future.
 
 ### Can I specify the maximum fee rate of a peer I’m buying liquidity from?
 
