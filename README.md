@@ -64,7 +64,7 @@ learn more about how to use Pool.
 
 ## Marketplace Fee 
 Fees are calculated based on the amount of liquidity purchased. During the
-mainnet alpha, fees will range from 5-25 basis points per user.
+mainnet alpha, fees will range from 5-25 basis points of the matched amount.
 
 ## Development
 The Pool client is currently in early alpha and offers a simple command line
