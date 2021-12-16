@@ -50,10 +50,13 @@ const (
 	// ExtendAccountBatchVersion is the first version where accounts expiry
 	// are extended after participating in a batch.
 	ExtendAccountBatchVersion BatchVersion = 1
+)
+
+const (
 
 	// CurrentBatchVersion points to the version used by the client for
 	// verifying a batch.
-	CurrentBatchVersion = DefaultBatchVersion
+	CurrentBatchVersion = ExtendAccountBatchVersion
 
 	// LegacyLeaseDurationBucket is the single static duration bucket that
 	// was used for orders before dynamic duration buckets were added.
