@@ -19,10 +19,41 @@ import (
 	"github.com/lightningnetwork/lnd/tor"
 )
 
+// OrderParseOption defines a set of functional param options that can be used
+// to modify our we parse orders based on some optional directives.
+type OrderParseOption func(*parseOptions)
+
+// parseOptions houses the set of functional options used to parse RPC orders.
+type parseOptions struct {
+	chanTypeSelector func() ChannelType
+}
+
+// ChanTypeSelector defines a function capable of selecting a channel type
+// based on the version of an lnd node.
+type ChanTypeSelector func() ChannelType
+
+// WithDefaultChannelType allows a caller to select a default channel type
+// based on the version of the lnd node attempting to create the order.
+func WithDefaultChannelType(selector ChanTypeSelector) OrderParseOption {
+	return func(o *parseOptions) {
+		o.chanTypeSelector = selector
+	}
+}
+
+// defaultParseOptions returns the set of default parse options.
+func defaultParseOptions() *parseOptions {
+	return &parseOptions{}
+}
+
 // ParseRPCOrder parses the incoming raw RPC order into the go native data
 // types used in the order struct.
 func ParseRPCOrder(version, leaseDuration uint32,
-	details *poolrpc.Order) (*Kit, error) {
+	details *poolrpc.Order, parseOpts ...OrderParseOption) (*Kit, error) {
+
+	opts := defaultParseOptions()
+	for _, newOpt := range parseOpts {
+		newOpt(opts)
+	}
 
 	var nonce Nonce
 	copy(nonce[:], details.OrderNonce)
@@ -65,10 +96,13 @@ func ParseRPCOrder(version, leaseDuration uint32,
 	switch details.ChannelType {
 	// Default value, trader didn't specify a channel type.
 	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_UNKNOWN:
-		// TODO: Switch to script enforcement by default once we can
-		// enforce the lnd release supporting script enforced channels
-		// as the minimalCompatibleVersion.
-		kit.ChannelType = ChannelTypePeerDependent
+		// If we have a chan type selector, we'll use that, otherwise
+		// we'll just use peer dependent channels as as default.
+		if opts.chanTypeSelector != nil {
+			kit.ChannelType = opts.chanTypeSelector()
+		} else {
+			kit.ChannelType = ChannelTypePeerDependent
+		}
 
 	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_PEER_DEPENDENT:
 		kit.ChannelType = ChannelTypePeerDependent
