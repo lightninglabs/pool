@@ -45,7 +45,7 @@ func TestAccountSubscriptionAuthenticate(t *testing.T) {
 			sendMsg:      sendMsg,
 			signer:       testSigner,
 			msgChan:      srvMsgChan,
-			batchVersion: order.CurrentBatchVersion,
+			batchVersion: order.LatestBatchVersion,
 		}
 	)
 
@@ -108,7 +108,7 @@ func TestAccountSubscriptionAuthenticateAbort(t *testing.T) {
 			sendMsg:      sendMsg,
 			signer:       testSigner,
 			msgChan:      srvMsgChan,
-			batchVersion: order.CurrentBatchVersion,
+			batchVersion: order.LatestBatchVersion,
 		}
 	)
 
@@ -161,7 +161,7 @@ func TestAccountSubscriptionAuthenticateContextClose(t *testing.T) {
 			sendMsg:      sendMsg,
 			signer:       testSigner,
 			msgChan:      srvMsgChan,
-			batchVersion: order.CurrentBatchVersion,
+			batchVersion: order.LatestBatchVersion,
 		}
 		ctxc, cancel = context.WithCancel(context.Background())
 	)
@@ -216,7 +216,7 @@ func TestAccountSubscriptionAuthenticateError(t *testing.T) {
 			sendMsg:      sendMsg,
 			signer:       testSigner,
 			msgChan:      srvMsgChan,
-			batchVersion: order.CurrentBatchVersion,
+			batchVersion: order.LatestBatchVersion,
 			errChan:      make(chan error),
 		}
 	)
