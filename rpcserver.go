@@ -117,6 +117,9 @@ func newRPCServer(server *Server) *rpcServer {
 			Lightning: lndServices.Client,
 			Wallet:    lndServices.WalletKit,
 			Signer:    lndServices.Signer,
+			BatchVersion: order.BatchVersion(
+				server.cfg.DebugConfig.BatchVersion,
+			),
 		}),
 		marshaler: NewMarshaler(&marshalerConfig{
 			GetOrders: server.db.GetOrders,
