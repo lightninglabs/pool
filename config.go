@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcutil"
+	"github.com/lightninglabs/pool/order"
 	"github.com/lightningnetwork/lnd/cert"
 	"github.com/lightningnetwork/lnd/lncfg"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -160,6 +161,15 @@ type Config struct {
 	// AuctioneerDialOpts is a list of dial options that should be used when
 	// dialing the auctioneer server.
 	AuctioneerDialOpts []grpc.DialOption
+
+	// DebugConfig is a set of debug options used for development and
+	// testing only.
+	DebugConfig *DebugConfig `group:"debug" namespace:"debug" hidden:"true"`
+}
+
+// DebugConfig is a set of debug options used for development and testing only.
+type DebugConfig struct {
+	BatchVersion uint32 `long:"batchversion" description:"The batch version to use -- NOTE: for testing purposes only, don't use on mainnet"`
 }
 
 const (
@@ -194,6 +204,9 @@ func DefaultConfig() Config {
 		Lnd: &LndConfig{
 			Host:         "localhost:10009",
 			MacaroonPath: DefaultLndMacaroonPath,
+		},
+		DebugConfig: &DebugConfig{
+			BatchVersion: uint32(order.ExtendAccountBatchVersion),
 		},
 	}
 }
