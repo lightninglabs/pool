@@ -1585,9 +1585,12 @@ func (s *rpcServer) sendRejectBatch(batch *order.Batch, failure error) error {
 	}
 
 	// Attach the status code to the message to give a bit more context.
-	var partialReject *funding.MatchRejectErr
+	var (
+		partialReject   *funding.MatchRejectErr
+		versionMismatch *order.ErrVersionMismatch
+	)
 	switch {
-	case errors.Is(failure, order.ErrVersionMismatch):
+	case errors.As(failure, &versionMismatch):
 		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_BATCH_VERSION_MISMATCH
 
 		// Track this reject by adding an event to our orders.

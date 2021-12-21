@@ -32,22 +32,35 @@ const (
 )
 
 var (
-	// ErrVersionMismatch is the error that is returned if we don't
-	// implement the same batch verification version as the server.
-	ErrVersionMismatch = fmt.Errorf("version %d mismatches server version",
-		CurrentBatchVersion)
-
-	// ErrUnsupportedVersion is the error that is returned if the server
-	// doesn't support the our batch verification version.
-	ErrUnsupportedVersion = fmt.Errorf("version %d is not supported by "+
-		"the server", CurrentBatchVersion)
-
 	// ErrInvalidBatchHeightHint is an error returned by a trader upon
 	// verifying a batch when its proposed height hint is outside of the
 	// trader's acceptable range.
 	ErrInvalidBatchHeightHint = errors.New("proposed batch height hint is " +
 		"outside of acceptable range")
 )
+
+// ErrVersionMismatch is the error that is returned if we don't implement the
+// same batch verification version as the server.
+type ErrVersionMismatch struct {
+	clientVersion BatchVersion
+	serverVersion BatchVersion
+}
+
+// NewErrVersionMismatch returns a new error.
+func NewErrVersionMismatch(clientVersion,
+	serverVersion BatchVersion) *ErrVersionMismatch {
+
+	return &ErrVersionMismatch{
+		clientVersion: clientVersion,
+		serverVersion: serverVersion,
+	}
+}
+
+// Error returns the underlying error message.
+func (e *ErrVersionMismatch) Error() string {
+	return fmt.Sprintf("version %d mismatches server version %d",
+		e.clientVersion, e.serverVersion)
+}
 
 // ManagerConfig contains all of the required dependencies for the Manager to
 // carry out its duties.
