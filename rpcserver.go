@@ -1038,11 +1038,9 @@ func (s *rpcServer) parseRPCOutputs(outputs []*poolrpc.Output) ([]*wire.TxOut,
 	return res, nil
 }
 
-func (s *rpcServer) RecoverAccounts(ctx context.Context,
-	_ *poolrpc.RecoverAccountsRequest) (*poolrpc.RecoverAccountsResponse,
-	error) {
-
-	log.Infof("Attempting to recover accounts...")
+// serverAssistedRecovery executes the server assisted account recovery process.
+func (s *rpcServer) serverAssistedRecovery(ctx context.Context) (
+	[]*account.Account, error) {
 
 	// The account recovery process uses a bi-directional streaming RPC on
 	// the server side. Unfortunately, because of the way streaming RPCs
@@ -1054,14 +1052,6 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 	// the server ever. That's why we call an RPC that's definitely not on
 	// the white list first to kick off LSAT creation.
 	_, _ = s.auctioneer.OrderState(ctx, order.Nonce{})
-
-	s.recoveryMutex.Lock()
-	if s.recoveryPending {
-		defer s.recoveryMutex.Unlock()
-		return nil, fmt.Errorf("recovery already in progress")
-	}
-	s.recoveryPending = true
-	s.recoveryMutex.Unlock()
 
 	// Prepare the keys we are going to try. Possibly not all of them will
 	// be used.
@@ -1079,6 +1069,33 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 	recoveredAccounts, err := s.auctioneer.RecoverAccounts(ctx, acctKeys)
 	if err != nil {
 		return nil, fmt.Errorf("error performing recovery: %v", err)
+	}
+
+	return recoveredAccounts, nil
+}
+
+func (s *rpcServer) RecoverAccounts(ctx context.Context,
+	req *poolrpc.RecoverAccountsRequest) (*poolrpc.RecoverAccountsResponse,
+	error) {
+
+	s.recoveryMutex.Lock()
+	if s.recoveryPending {
+		defer s.recoveryMutex.Unlock()
+		return nil, fmt.Errorf("recovery already in progress")
+	}
+	s.recoveryPending = true
+	s.recoveryMutex.Unlock()
+
+	log.Infof("Attempting to recover accounts...")
+
+	var recoveredAccounts []*account.Account
+	var err error
+
+	if !req.FullClient {
+		recoveredAccounts, err = s.serverAssistedRecovery(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Store the recovered accounts now and start watching them. If anything
