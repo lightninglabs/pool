@@ -16,13 +16,14 @@ import (
 // auction. It can also perform the 3-way authentication handshake that is
 // needed to authenticate a trader for a subscription.
 type acctSubscription struct {
-	acctKey    *keychain.KeyDescriptor
-	commitHash [32]byte
-	sendMsg    func(*auctioneerrpc.ClientAuctionMessage) error
-	signer     lndclient.SignerClient
-	msgChan    chan *auctioneerrpc.ServerAuctionMessage
-	errChan    chan error
-	quit       chan struct{}
+	acctKey      *keychain.KeyDescriptor
+	commitHash   [32]byte
+	sendMsg      func(*auctioneerrpc.ClientAuctionMessage) error
+	signer       lndclient.SignerClient
+	msgChan      chan *auctioneerrpc.ServerAuctionMessage
+	batchVersion order.BatchVersion
+	errChan      chan error
+	quit         chan struct{}
 }
 
 // authenticate performs the 3-way authentication handshake between the trader
@@ -50,7 +51,7 @@ func (s *acctSubscription) authenticate(ctx context.Context) error {
 		Msg: &auctioneerrpc.ClientAuctionMessage_Commit{
 			Commit: &auctioneerrpc.AccountCommitment{
 				CommitHash:   s.commitHash[:],
-				BatchVersion: uint32(order.CurrentBatchVersion),
+				BatchVersion: uint32(s.batchVersion),
 			},
 		},
 	})

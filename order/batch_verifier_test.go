@@ -61,7 +61,9 @@ func TestBatchVerifier(t *testing.T) {
 		{
 			name:         "version mismatch",
 			batchVersion: DefaultBatchVersion,
-			expectedErr:  ErrVersionMismatch.Error(),
+			expectedErr: NewErrVersionMismatch(
+				DefaultBatchVersion, 999,
+			).Error(),
 			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
 				b *Batch) error {
 

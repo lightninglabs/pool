@@ -53,10 +53,8 @@ const (
 )
 
 const (
-
-	// CurrentBatchVersion points to the version used by the client for
-	// verifying a batch.
-	CurrentBatchVersion = ExtendAccountBatchVersion
+	// LatestBatchVersion points to the most recent batch version.
+	LatestBatchVersion = ExtendAccountBatchVersion
 
 	// LegacyLeaseDurationBucket is the single static duration bucket that
 	// was used for orders before dynamic duration buckets were added.

@@ -75,13 +75,12 @@ type batchVerifier struct {
 //
 // NOTE: This method is part of the BatchVerifier interface.
 func (v *batchVerifier) Verify(batch *Batch, bestHeight uint32) error {
-
-	// First of all, make sure the server used the same batch version
-	// than we use for creating the batch. Otherwise we bail out of the batch.
-	// This should already be handled when the client connects/authenticates.
-	// But doesn't hurt to check again.
+	// First, make sure the server used the same batch version than we use
+	// for creating the batch. Otherwise, we bail out of the batch.
+	// This should already be handled when the client connects/
+	// authenticates. But doesn't hurt to check again.
 	if batch.Version != v.version {
-		return ErrVersionMismatch
+		return NewErrVersionMismatch(v.version, batch.Version)
 	}
 
 	// Reject the batch if we're too far in the past or future compared to

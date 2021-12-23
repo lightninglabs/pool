@@ -24,7 +24,8 @@ func TestValidateOrderAccountIsolation(t *testing.T) {
 
 	orderStore := newMockStore()
 	orderManager := NewManager(&ManagerConfig{
-		Store: orderStore,
+		Store:        orderStore,
+		BatchVersion: LatestBatchVersion,
 	})
 
 	// We'll now create two accounts, one that's 1 BTC in size, while the
@@ -109,7 +110,8 @@ func TestValidateOrder(t *testing.T) {
 
 	orderStore := newMockStore()
 	orderManager := NewManager(&ManagerConfig{
-		Store: orderStore,
+		Store:        orderStore,
+		BatchVersion: LatestBatchVersion,
 	})
 
 	// We'll now create an account with sufficient size.
@@ -266,10 +268,11 @@ func TestPrepareOrderSidecarTicket(t *testing.T) {
 	mockLightning := test.NewMockLightning()
 	mockSigner := test.NewMockSigner()
 	mgr := NewManager(&ManagerConfig{
-		AcctStore: &mockAccountStore{},
-		Wallet:    test.NewMockWalletKit(),
-		Lightning: mockLightning,
-		Signer:    mockSigner,
+		AcctStore:    &mockAccountStore{},
+		Wallet:       test.NewMockWalletKit(),
+		Lightning:    mockLightning,
+		Signer:       mockSigner,
+		BatchVersion: LatestBatchVersion,
 	})
 	require.NoError(t, mgr.Start())
 	defer mgr.Stop()

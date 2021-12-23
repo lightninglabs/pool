@@ -12,6 +12,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/internal/test"
+	"github.com/lightninglabs/pool/order"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
@@ -40,10 +41,11 @@ func TestAccountSubscriptionAuthenticate(t *testing.T) {
 			return nil
 		}
 		sub = &acctSubscription{
-			acctKey: testAccountDesc,
-			sendMsg: sendMsg,
-			signer:  testSigner,
-			msgChan: srvMsgChan,
+			acctKey:      testAccountDesc,
+			sendMsg:      sendMsg,
+			signer:       testSigner,
+			msgChan:      srvMsgChan,
+			batchVersion: order.LatestBatchVersion,
 		}
 	)
 
@@ -102,10 +104,11 @@ func TestAccountSubscriptionAuthenticateAbort(t *testing.T) {
 			return nil
 		}
 		sub = &acctSubscription{
-			acctKey: testAccountDesc,
-			sendMsg: sendMsg,
-			signer:  testSigner,
-			msgChan: srvMsgChan,
+			acctKey:      testAccountDesc,
+			sendMsg:      sendMsg,
+			signer:       testSigner,
+			msgChan:      srvMsgChan,
+			batchVersion: order.LatestBatchVersion,
 		}
 	)
 
@@ -154,10 +157,11 @@ func TestAccountSubscriptionAuthenticateContextClose(t *testing.T) {
 			return nil
 		}
 		sub = &acctSubscription{
-			acctKey: testAccountDesc,
-			sendMsg: sendMsg,
-			signer:  testSigner,
-			msgChan: srvMsgChan,
+			acctKey:      testAccountDesc,
+			sendMsg:      sendMsg,
+			signer:       testSigner,
+			msgChan:      srvMsgChan,
+			batchVersion: order.LatestBatchVersion,
 		}
 		ctxc, cancel = context.WithCancel(context.Background())
 	)
@@ -208,11 +212,12 @@ func TestAccountSubscriptionAuthenticateError(t *testing.T) {
 			return nil
 		}
 		sub = &acctSubscription{
-			acctKey: testAccountDesc,
-			sendMsg: sendMsg,
-			signer:  testSigner,
-			msgChan: srvMsgChan,
-			errChan: make(chan error),
+			acctKey:      testAccountDesc,
+			sendMsg:      sendMsg,
+			signer:       testSigner,
+			msgChan:      srvMsgChan,
+			batchVersion: order.LatestBatchVersion,
+			errChan:      make(chan error),
 		}
 	)
 

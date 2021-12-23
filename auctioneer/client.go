@@ -105,6 +105,10 @@ type Config struct {
 	// trader's pending batch.
 	BatchCleaner BatchCleaner
 
+	// BatchVersion is the batch version that we should use when
+	// authenticating with the auction server.
+	BatchVersion order.BatchVersion
+
 	// GenUserAgent is a function that generates a complete user agent
 	// string given the incoming request context.
 	GenUserAgent func(context.Context) string
@@ -581,12 +585,13 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 	// Before we can expect to receive any updates, we need to perform the
 	// 3-way authentication handshake.
 	sub = &acctSubscription{
-		acctKey: acctKey,
-		sendMsg: c.SendAuctionMessage,
-		signer:  c.cfg.Signer,
-		msgChan: make(chan *auctioneerrpc.ServerAuctionMessage),
-		errChan: tempErrChan,
-		quit:    make(chan struct{}),
+		acctKey:      acctKey,
+		sendMsg:      c.SendAuctionMessage,
+		signer:       c.cfg.Signer,
+		msgChan:      make(chan *auctioneerrpc.ServerAuctionMessage),
+		batchVersion: c.cfg.BatchVersion,
+		errChan:      tempErrChan,
+		quit:         make(chan struct{}),
 	}
 	c.subscribedAcctsMtx.Lock()
 	c.subscribedAccts[acctPubKey] = sub
