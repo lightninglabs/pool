@@ -2195,7 +2195,51 @@
       }
     },
     "poolrpcRecoverAccountsRequest": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "full_client": {
+          "type": "boolean",
+          "description": "Recover the latest account states without interacting with the\nLightning Labs server."
+        },
+        "account_target": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Number of accounts that we are trying to recover. Used during the\nfull_client recovery process."
+        },
+        "auctioneer_key": {
+          "type": "string",
+          "description": "Auctioneer's public key. Used during the full_client recovery process.\nThis field should be left empty for testnet/mainnet, its value is already\nhardcoded in our codebase."
+        },
+        "height_hint": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Initial block height. We won't try to look for any account with an expiry\nheight smaller than this value. Used during the full_client recovery\nprocess."
+        },
+        "bitcoin_host": {
+          "type": "string",
+          "description": "bitcoind/btcd instance address. Used during the full_client recovery\nprocess."
+        },
+        "bitcoin_user": {
+          "type": "string",
+          "description": "bitcoind/btcd user name. Used during the full_client recovery\nprocess."
+        },
+        "bitcoin_password": {
+          "type": "string",
+          "description": "bitcoind/btcd password. Used during the full_client recovery\nprocess."
+        },
+        "bitcoin_httppostmode": {
+          "type": "boolean",
+          "description": "Use HTTP POST mode? bitcoind only supports this mode. Used during the\nfull_client recovery process."
+        },
+        "bitcoin_usetls": {
+          "type": "boolean",
+          "description": "Use TLS to connect? bitcoind only supports non-TLS connections. Used\nduring the full_client recovery process."
+        },
+        "bitcoin_tlspath": {
+          "type": "string",
+          "description": "Path to btcd's TLS certificate, if TLS is enabled. Used  during the\nfull_client recovery process."
+        }
+      }
     },
     "poolrpcRecoverAccountsResponse": {
       "type": "object",
