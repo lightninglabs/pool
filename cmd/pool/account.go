@@ -793,7 +793,9 @@ func recoverAccounts(ctx *cli.Context) error {
 	defer cleanup()
 
 	resp, err := client.RecoverAccounts(
-		context.Background(), &poolrpc.RecoverAccountsRequest{},
+		context.Background(), &poolrpc.RecoverAccountsRequest{
+			FullClient: false,
+		},
 	)
 	if err != nil {
 		return err
