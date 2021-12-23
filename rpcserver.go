@@ -1194,12 +1194,30 @@ func prepareAndSubmitOrder(ctx context.Context, o order.Order,
 func (s *rpcServer) SubmitOrder(ctx context.Context,
 	req *poolrpc.SubmitOrderRequest) (*poolrpc.SubmitOrderResponse, error) {
 
+	// We'll use this channel type selector to pick a channel type based on
+	// the current connected lnd version. This lets us graceful update to
+	// new features as they're available, while still supporting older
+	// versions of lnd.
+	chanTypeSelector := order.WithDefaultChannelType(func() order.ChannelType {
+		// If they didn't specify a value, then we'll select one based
+		// on the version of lnd we detect.
+		verErr := lndclient.AssertVersionCompatible(
+			s.server.lndVersion, scriptEnforceVersion,
+		)
+		if verErr == nil {
+			return order.ChannelTypeScriptEnforced
+		}
+
+		return order.ChannelTypePeerDependent
+	})
+
 	var o order.Order
 	switch requestOrder := req.Details.(type) {
 	case *poolrpc.SubmitOrderRequest_Ask:
 		a := requestOrder.Ask
 		kit, err := order.ParseRPCOrder(
 			a.Version, a.LeaseDurationBlocks, a.Details,
+			chanTypeSelector,
 		)
 		if err != nil {
 			return nil, err
@@ -1213,6 +1231,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		b := requestOrder.Bid
 		kit, err := order.ParseRPCOrder(
 			b.Version, b.LeaseDurationBlocks, b.Details,
+			chanTypeSelector,
 		)
 		if err != nil {
 			return nil, err

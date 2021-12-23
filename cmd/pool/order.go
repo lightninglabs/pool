@@ -115,10 +115,6 @@ var sharedFlags = []cli.Flag{
 			"order being matched (%q, %q)",
 			channelTypePeerDependent,
 			channelTypeScriptEnforced),
-		// TODO: Switch to script enforcement by default once we can
-		// enforce the lnd release supporting script enforced channels
-		// as the minimalCompatibleVersion.
-		Value: channelTypePeerDependent,
 	},
 }
 
@@ -248,6 +244,8 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 	// order match.
 	channelType := ctx.String("channel_type")
 	switch channelType {
+	// No values means that the unknown type will be set, which means the
+	// sever will select a type based on the version of the connected node.
 	case "":
 		break
 	case channelTypePeerDependent:
