@@ -99,6 +99,17 @@ func (s *batchStorer) StorePendingBatch(batch *Batch) error {
 				account.IncrementBatchKey(),
 			)
 
+			// The account expiry needs to be updated only when the
+			// client supports it.
+			if batch.Version.SupportsAccountExtension() &&
+				diff.NewExpiry != 0 {
+
+				modifiers = append(
+					modifiers,
+					account.ExpiryModifier(diff.NewExpiry),
+				)
+			}
+
 		// The account was fully spent on-chain. We need to wait for the
 		// batch (spend) TX to be confirmed still.
 		case auctioneerrpc.AccountDiff_OUTPUT_FULLY_SPENT,
@@ -126,16 +137,6 @@ func (s *batchStorer) StorePendingBatch(batch *Batch) error {
 		modifiers = append(
 			modifiers, account.LatestTxModifier(batch.BatchTX),
 		)
-
-		// The account expiry needs to be updated only when the client
-		// supports it.
-		if batch.Version.SupportsAccountExtension() &&
-			diff.NewExpiry != 0 {
-
-			modifiers = append(
-				modifiers, account.ExpiryModifier(diff.NewExpiry),
-			)
-		}
 
 		accountModifiers[idx] = modifiers
 	}

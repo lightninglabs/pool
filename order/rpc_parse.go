@@ -19,9 +19,9 @@ import (
 	"github.com/lightningnetwork/lnd/tor"
 )
 
-// OrderParseOption defines a set of functional param options that can be used
+// ParseOption defines a set of functional param options that can be used
 // to modify our we parse orders based on some optional directives.
-type OrderParseOption func(*parseOptions)
+type ParseOption func(*parseOptions)
 
 // parseOptions houses the set of functional options used to parse RPC orders.
 type parseOptions struct {
@@ -34,7 +34,7 @@ type ChanTypeSelector func() ChannelType
 
 // WithDefaultChannelType allows a caller to select a default channel type
 // based on the version of the lnd node attempting to create the order.
-func WithDefaultChannelType(selector ChanTypeSelector) OrderParseOption {
+func WithDefaultChannelType(selector ChanTypeSelector) ParseOption {
 	return func(o *parseOptions) {
 		o.chanTypeSelector = selector
 	}
@@ -48,7 +48,7 @@ func defaultParseOptions() *parseOptions {
 // ParseRPCOrder parses the incoming raw RPC order into the go native data
 // types used in the order struct.
 func ParseRPCOrder(version, leaseDuration uint32,
-	details *poolrpc.Order, parseOpts ...OrderParseOption) (*Kit, error) {
+	details *poolrpc.Order, parseOpts ...ParseOption) (*Kit, error) {
 
 	opts := defaultParseOptions()
 	for _, newOpt := range parseOpts {
