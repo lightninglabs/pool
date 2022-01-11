@@ -321,7 +321,7 @@ func LocateOutputScript(tx *wire.MsgTx, script []byte) (uint32, bool) {
 }
 
 // MatchPreviousOutPoint determines whether or not a PreviousOutPoint appears
-// in anye of the provided transactions.
+// in any of the provided transactions.
 func MatchPreviousOutPoint(op wire.OutPoint, txs []*wire.MsgTx) (*wire.MsgTx,
 	bool) {
 

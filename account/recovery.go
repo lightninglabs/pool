@@ -10,6 +10,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -34,6 +35,12 @@ const (
 	// batch key in every environment.
 	InitialBatchKey = "02824d0cbac65e01712124c50ff2cc74ce22851d7b444c1bf2" +
 		"ae66afefb8eaf27f"
+
+	// maxBatchCounter is the maximum number of batches that we consider
+	// worth checking.
+	//
+	// NOTE: currently there are about 1100 batches (Jan 2022) on mainnet
+	maxBatchCounter = 5000
 )
 
 // GetAuctioneerData returns the auctioneer data for a given environment.
@@ -175,11 +182,26 @@ func getBitcoinConn(cfg *BitcoinConfig) (*rpcclient.Client, error) {
 	return rpcclient.New(connCfg, nil)
 }
 
+// getBlockTxs returns all the transactions in the block for the given height.
+func getBlockTxs(client *rpcclient.Client, height int64) ([]*wire.MsgTx, error) {
+	blockHash, err := client.GetBlockHash(height)
+	if err != nil {
+		return nil, err
+	}
+
+	block, err := client.GetBlock(blockHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return block.Transactions, nil
+}
+
 // RecoverAccounts tries to recover valid accounts using the given configuration.
 func RecoverAccounts(ctx context.Context, cfg RecoveryConfig) ([]*Account,
 	error) {
 
-	client, err := getBitcoinConn(&BitcoinConfig{})
+	client, err := getBitcoinConn(cfg.BitcoinConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +219,6 @@ func RecoverAccounts(ctx context.Context, cfg RecoveryConfig) ([]*Account,
 	if err != nil {
 		return nil, err
 	}
-
 	// Are we shutting down?
 	select {
 	case <-cfg.Quit:
@@ -215,9 +236,161 @@ func recoverInitialState(ctx context.Context, cfg RecoveryConfig) ([]*Account,
 	log.Debugf("Recovering initial states for %d accounts...",
 		cfg.AccountTarget)
 
-	// TODO (positiveblue): recover initial state
+	possibleAccounts, err := recreatePossibleAccounts(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil, nil
+	accounts := findAccounts(cfg, possibleAccounts)
+	log.Debugf("Found initial tx for %d/%d accounts", len(accounts),
+		cfg.AccountTarget)
+
+	return accounts, nil
+}
+
+// recreatePossibleAccounts returns a set of potentially valid accounts
+// by generating a set of recovery keys.
+func recreatePossibleAccounts(ctx context.Context,
+	cfg RecoveryConfig) ([]*Account, error) {
+
+	possibleAccounts := make([]*Account, 0, cfg.AccountTarget)
+
+	// Prepare the keys we are going to try. Possibly not all of them will
+	// be used.
+	KeyDescriptors, err := GenerateRecoveryKeys(
+		ctx, cfg.AccountTarget, cfg.Wallet,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error generating keys: %v", err)
+	}
+
+	for _, keyDes := range KeyDescriptors {
+		secret, err := cfg.Signer.DeriveSharedKey(
+			ctx, cfg.AuctioneerPubKey, &keyDes.KeyLocator,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error deriving shared key: %v",
+				err)
+		}
+
+		acc := &Account{
+			TraderKey:     keyDes,
+			AuctioneerKey: cfg.AuctioneerPubKey,
+			Secret:        secret,
+			State:         StateOpen,
+		}
+		possibleAccounts = append(possibleAccounts, acc)
+	}
+
+	return possibleAccounts, nil
+}
+
+// findAccounts tries to find on-chain footprint for the creation of a set
+// of possible pool accounts.
+func findAccounts(cfg RecoveryConfig, possibleAccounts []*Account) []*Account {
+	// The process looks like:
+	//     - Fix the batch counter.
+	//     - Fix a block height.
+	//     - Recreate the script for each of the possible accounts.
+	//         - Look for the script in all of the node txs.
+
+	target := cfg.AccountTarget
+	accounts := make([]*Account, 0, target)
+
+	// Once we find an account, we remove it from the target list to avoid
+	// finding later account modification transactions for an account we
+	// already found an initial TX for. We'll walk the chain of updates in
+	// a secondary step. We use the account index as the map key since that
+	// is unique across accounts.
+	remainingAccounts := make(map[uint32]*Account, len(possibleAccounts))
+	for _, possibleAccount := range possibleAccounts {
+		remainingAccounts[possibleAccount.TraderKey.Index] = possibleAccount
+	}
+
+	helper := &poolscript.RecoveryHelper{
+		BatchKey:      cfg.InitialBatchKey,
+		AuctioneerKey: cfg.AuctioneerPubKey,
+	}
+
+	for batchCounter := 0; batchCounter < maxBatchCounter; batchCounter++ {
+		batchKey := helper.BatchKey
+
+	accountLoop:
+		for acctIdx, acc := range remainingAccounts {
+			acc := acc
+			traderKey := acc.TraderKey.PubKey
+
+			helper.NextAccount(traderKey, acc.Secret)
+			for h := cfg.FirstBlock; h < cfg.LastBlock; h++ {
+				// Are we shutting down?
+				select {
+				case <-cfg.Quit:
+					return nil
+				default:
+				}
+
+				tx, idx, ok, err := helper.LocateAnyOutput(
+					h, cfg.Transactions,
+				)
+				if err != nil {
+					log.Debugf("Unable to generate script "+
+						"height=%v, batch_key=%x, "+
+						"trader_key=%x): %v", h,
+						batchKey.SerializeCompressed(),
+						traderKey.SerializeCompressed(),
+						err)
+
+					// Go to next account.
+					continue accountLoop
+				}
+
+				// If it's NOT a match, keep trying.
+				if !ok {
+					continue
+				}
+
+				log.Debugf("Found initial account state for "+
+					"account %x",
+					traderKey.SerializeCompressed())
+
+				// If it's a match, populate the account
+				// information.
+				acc.Expiry = h
+				acc.Value = btcutil.Amount(
+					tx.TxOut[idx].Value,
+				)
+				acc.BatchKey = batchKey
+				acc.OutPoint = wire.OutPoint{
+					Hash:  tx.TxHash(),
+					Index: idx,
+				}
+				acc.LatestTx = tx
+				acc.State = StateOpen
+
+				// Remove the current account, so we don't try
+				// to find it again.
+				delete(remainingAccounts, acctIdx)
+
+				accounts = append(accounts, acc)
+
+				// If we already found all the accounts that
+				// we were looking for quit the search.
+				if len(accounts) == int(target) {
+					return accounts
+				}
+
+			}
+		}
+		helper.NextBatchKey()
+
+		if batchCounter > 0 && batchCounter%100 == 0 {
+			log.Debugf("Tried looking for accounts in %d batches, "+
+				"will try up to %d", batchCounter,
+				maxBatchCounter)
+		}
+	}
+
+	return accounts
 }
 
 // updateAccountStates tries to update the states for every provided
@@ -226,16 +399,112 @@ func recoverInitialState(ctx context.Context, cfg RecoveryConfig) ([]*Account,
 func updateAccountStates(cfg RecoveryConfig,
 	accounts []*Account) ([]*Account, error) {
 
-	// TODO (positiveblue): update account states
+	for i := cfg.FirstBlock; i < uint32(cfg.CurrentBlockHeight); i++ {
+		blockHeight := i
 
-	return nil, nil
+		txs, err := getBlockTxs(cfg.bitcoinClient, int64(blockHeight))
+		if err != nil {
+			return nil, err
+		}
+
+		for idx, acc := range accounts {
+			// It's safe to ignore accounts that are in a
+			// terminal state.
+			if acc.State == StateClosed {
+				continue
+			}
+
+			tx, found := poolscript.MatchPreviousOutPoint(
+				acc.OutPoint, txs,
+			)
+			if !found {
+				// Go to next account.
+				continue
+			}
+
+			newAcc, err := findAccountUpdate(cfg, acc, tx)
+			if err != nil {
+				// If we cannot find the account update
+				// we assume it was closed/spent.
+				acc.State = StateClosed
+				acc.HeightHint = blockHeight
+
+				log.Debugf("Account was spent in tx %x but "+
+					"not re-created. Assuming account was "+
+					"fully spent or closed", tx.TxHash())
+
+				continue
+			}
+
+			newAcc.HeightHint = blockHeight
+			accounts[idx] = newAcc
+		}
+	}
+	return accounts, nil
+}
+
+// findAccountUpdate tries to find the new account values after an update.
+func findAccountUpdate(cfg RecoveryConfig, acc *Account,
+	tx *wire.MsgTx) (*Account, error) {
+
+	newAcc := acc.Copy()
+	newAcc.BatchKey = poolscript.IncrementKey(newAcc.BatchKey)
+
+	helper := &poolscript.RecoveryHelper{
+		BatchKey:      newAcc.BatchKey,
+		AuctioneerKey: cfg.AuctioneerPubKey,
+	}
+
+	helper.NextAccount(acc.TraderKey.PubKey, acc.Secret)
+	// We only have a tx so if there is a match we know what tx it is.
+	_, idx, ok, err := helper.LocateAnyOutput(
+		newAcc.Expiry, []*wire.MsgTx{tx},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("account update not found")
+	}
+	if ok {
+		newAcc.Value = btcutil.Amount(tx.TxOut[idx].Value)
+		newAcc.OutPoint = wire.OutPoint{
+			Hash:  tx.TxHash(),
+			Index: idx,
+		}
+		newAcc.LatestTx = tx
+
+		return newAcc, nil
+	}
+
+	// If the update included a new expiration date we need to brute force
+	// our new expiration date again.
+	for height := cfg.FirstBlock; height <= cfg.LastBlock; height++ {
+		_, idx, ok, err := helper.LocateAnyOutput(
+			height, []*wire.MsgTx{tx},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("account update not found")
+		}
+		if !ok {
+			continue
+		}
+
+		newAcc.Expiry = height
+		newAcc.Value = btcutil.Amount(tx.TxOut[idx].Value)
+		newAcc.OutPoint = wire.OutPoint{
+			Hash:  tx.TxHash(),
+			Index: idx,
+		}
+		newAcc.LatestTx = tx
+
+		return newAcc, nil
+	}
+
+	return nil, fmt.Errorf("account update not found")
 }
 
 // GenerateRecoveryKeys generates a list of key descriptors for all possible
-// keys that could be used for trader accounts, up to a hard coHashded limit.
+// keys that could be used for trader accounts, up to a hard coded limit.
 func GenerateRecoveryKeys(ctx context.Context, accountTarget uint32,
-	wallet lndclient.WalletKitClient) (
-	[]*keychain.KeyDescriptor, error) {
+	wallet lndclient.WalletKitClient) ([]*keychain.KeyDescriptor, error) {
 
 	acctKeys := make([]*keychain.KeyDescriptor, accountTarget)
 	for i := uint32(0); i < accountTarget; i++ {
