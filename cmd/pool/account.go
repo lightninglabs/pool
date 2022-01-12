@@ -68,6 +68,10 @@ const (
 	defaultExpiryRelative = 30 * 144
 
 	defaultFundingConfTarget = 6
+
+	// defaultAccountTarget is the default number of accounts that will try
+	// to recreate in the account recovery process.
+	defaultAccountTarget = 10
 )
 
 var (
@@ -782,6 +786,64 @@ var recoverAccountsCommand = cli.Command{
 	All open or pending orders of any recovered account will be canceled on
 	the auctioneer's side and won't be restored in the trader's database.
 	`,
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name: "full_client",
+			Usage: "fetch the latest account state from the " +
+				"server. If false, the full process will" +
+				"run locally, but it could take hours.",
+		},
+		cli.Uint64Flag{
+			Name: "account_target",
+			Usage: "number of accounts that we are looking to " +
+				"recover. Only used during `full_client` " +
+				"srecoveries",
+			Value: defaultAccountTarget,
+		},
+		cli.StringFlag{
+			Name: "auctioneer_key",
+			Usage: "Auctioneer's public key. Only used during " +
+				"`full_client` recoveries",
+		},
+		cli.Uint64Flag{
+			Name: "height_hint",
+			Usage: "initial block height. Only used during " +
+				"`full_client` recoveries",
+		},
+		cli.StringFlag{
+			Name: "bitcoin_host",
+			Usage: "bitcoind/btcd instance address. Only used " +
+				"during `full_client` recoveries",
+		},
+		cli.StringFlag{
+			Name: "bitcoin_user",
+			Usage: "bitcoind/btcd user name. Only used during " +
+				"`full_client` recoveries",
+		},
+		cli.StringFlag{
+			Name: "bitcoin_password",
+			Usage: "bitcoind/btcd password. Only used during " +
+				"`full_client` recoveries",
+		},
+		cli.BoolFlag{
+			Name: "bitcoin_httppostmode",
+			Usage: "Use HTTP POST mode? bitcoind only supports " +
+				"this mode. Only used during `full_client` " +
+				"recoveries",
+		},
+		cli.BoolFlag{
+			Name: "bitcoin_usetls",
+			Usage: "Use TLS to connect? bitcoind only supports  " +
+				"non-TLS connections. Only used during " +
+				"`full_client` recoveries",
+		},
+		cli.StringFlag{
+			Name: "bitcoin_tlspath",
+			Usage: "Path to btcd's TLS certificate, if TLS is " +
+				"enabled. Only used during `full_client` " +
+				"recoveries",
+		},
+	},
 	Action: recoverAccounts,
 }
 
@@ -794,7 +856,19 @@ func recoverAccounts(ctx *cli.Context) error {
 
 	resp, err := client.RecoverAccounts(
 		context.Background(), &poolrpc.RecoverAccountsRequest{
-			FullClient: false,
+			FullClient:    ctx.Bool("full_client"),
+			AccountTarget: uint32(ctx.Uint64("account_target")),
+			AuctioneerKey: ctx.String("auctioneer_key"),
+			HeightHint:    uint32(ctx.Uint64("height_hint")),
+
+			// bitcoind/btcd configuration, ignored unless
+			// full_client is true.
+			BitcoinHost:         ctx.String("bitcoin_host"),
+			BitcoinUser:         ctx.String("bitcoin_user"),
+			BitcoinPassword:     ctx.String("bitcoin_password"),
+			BitcoinHttppostmode: ctx.Bool("bitcoin_httppostmode"),
+			BitcoinUsetls:       ctx.Bool("bitcoin_usetls"),
+			BitcoinTlspath:      ctx.String("bitcoin_tlspath"),
 		},
 	)
 	if err != nil {
