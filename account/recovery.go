@@ -18,12 +18,13 @@ var (
 )
 
 // GenerateRecoveryKeys generates a list of key descriptors for all possible
-// keys that could be used for trader accounts, up to a hard coded limit.
-func GenerateRecoveryKeys(ctx context.Context,
-	wallet lndclient.WalletKitClient) ([]*keychain.KeyDescriptor, error) {
+// keys that could be used for trader accounts, up to a hard coHashded limit.
+func GenerateRecoveryKeys(ctx context.Context, accountTarget uint32,
+	wallet lndclient.WalletKitClient) (
+	[]*keychain.KeyDescriptor, error) {
 
-	acctKeys := make([]*keychain.KeyDescriptor, DefaultAccountKeyWindow)
-	for i := uint32(0); i < DefaultAccountKeyWindow; i++ {
+	acctKeys := make([]*keychain.KeyDescriptor, accountTarget)
+	for i := uint32(0); i < accountTarget; i++ {
 		key, err := wallet.DeriveKey(ctx, &keychain.KeyLocator{
 			Family: poolscript.AccountKeyFamily,
 			Index:  i,

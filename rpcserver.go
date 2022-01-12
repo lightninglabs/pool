@@ -1039,7 +1039,7 @@ func (s *rpcServer) parseRPCOutputs(outputs []*poolrpc.Output) ([]*wire.TxOut,
 }
 
 // serverAssistedRecovery executes the server assisted account recovery process.
-func (s *rpcServer) serverAssistedRecovery(ctx context.Context) (
+func (s *rpcServer) serverAssistedRecovery(ctx context.Context, target uint32) (
 	[]*account.Account, error) {
 
 	// The account recovery process uses a bi-directional streaming RPC on
@@ -1056,7 +1056,7 @@ func (s *rpcServer) serverAssistedRecovery(ctx context.Context) (
 	// Prepare the keys we are going to try. Possibly not all of them will
 	// be used.
 	acctKeys, err := account.GenerateRecoveryKeys(
-		ctx, s.lndServices.WalletKit,
+		ctx, target, s.lndServices.WalletKit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error generating keys: %v", err)
@@ -1091,8 +1091,13 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 	var recoveredAccounts []*account.Account
 	var err error
 
+	target := req.AccountTarget
+	if target == 0 {
+		target = account.DefaultAccountKeyWindow
+	}
+
 	if !req.FullClient {
-		recoveredAccounts, err = s.serverAssistedRecovery(ctx)
+		recoveredAccounts, err = s.serverAssistedRecovery(ctx, target)
 		if err != nil {
 			return nil, err
 		}

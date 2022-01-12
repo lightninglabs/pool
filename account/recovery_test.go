@@ -13,7 +13,9 @@ func TestGenerateRecoveryKeys(t *testing.T) {
 	t.Parallel()
 
 	walletKit := test.NewMockWalletKit()
-	keys, err := GenerateRecoveryKeys(context.Background(), walletKit)
+	keys, err := GenerateRecoveryKeys(
+		context.Background(), DefaultAccountKeyWindow, walletKit,
+	)
 	if err != nil {
 		t.Fatalf("could not generate keys: %v", err)
 	}
