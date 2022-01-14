@@ -1194,6 +1194,12 @@ func prepareAndSubmitOrder(ctx context.Context, o order.Order,
 func (s *rpcServer) SubmitOrder(ctx context.Context,
 	req *poolrpc.SubmitOrderRequest) (*poolrpc.SubmitOrderResponse, error) {
 
+	// Guard this RPC from being used before we've started up fully.
+	if s.server.lndServices == nil {
+		return nil, fmt.Errorf("cannot submit order, trader daemon " +
+			"still starting up")
+	}
+
 	// We'll use this channel type selector to pick a channel type based on
 	// the current connected lnd version. This lets us graceful update to
 	// new features as they're available, while still supporting older
@@ -1202,7 +1208,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		// If they didn't specify a value, then we'll select one based
 		// on the version of lnd we detect.
 		verErr := lndclient.AssertVersionCompatible(
-			s.server.lndVersion, scriptEnforceVersion,
+			s.server.lndServices.Version, scriptEnforceVersion,
 		)
 		if verErr == nil {
 			return order.ChannelTypeScriptEnforced
