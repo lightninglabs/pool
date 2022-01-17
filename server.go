@@ -340,8 +340,7 @@ func (s *Server) Start() error {
 // StartAsSubserver is an alternative start method where the RPC server does not
 // create its own gRPC server but registers on an existing one.
 func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
-	lndGrpc *lndclient.GrpcLndServices,
-	createDefaultMacaroonFile bool) error {
+	lndGrpc *lndclient.GrpcLndServices, withMacaroonService bool) error {
 
 	if atomic.AddInt32(&s.started, 1) != 1 {
 		return fmt.Errorf("trader can only be started once")
@@ -366,7 +365,7 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 		}
 	}()
 
-	if createDefaultMacaroonFile {
+	if withMacaroonService {
 		// Create and start the macaroon service and let it create its default
 		// macaroon in case it doesn't exist yet.
 		var err error
