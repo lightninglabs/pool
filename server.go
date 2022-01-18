@@ -25,7 +25,6 @@ import (
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
-	"github.com/lightningnetwork/lnd/kvdb"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/macaroons"
@@ -95,8 +94,7 @@ type Server struct {
 	grpcListener    net.Listener
 	restListener    net.Listener
 	restCancel      func()
-	macaroonDB      kvdb.Backend
-	macaroonService *macaroons.Service
+	macaroonService *lndclient.MacaroonService
 	wg              sync.WaitGroup
 }
 
@@ -154,12 +152,32 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	// Start the macaroon service and let it create its default macaroon in
-	// case it doesn't exist yet.
-	if err := s.startMacaroonService(true); err != nil {
+	// Create and start the macaroon service and let it create its default
+	// macaroon in case it doesn't exist yet.
+	s.macaroonService, err = lndclient.NewMacaroonService(
+		&lndclient.MacaroonServiceConfig{
+			DBPath:           s.cfg.BaseDir,
+			DBTimeout:        clientdb.DefaultPoolDBTimeout,
+			MacaroonLocation: poolMacaroonLocation,
+			MacaroonPath:     s.cfg.MacaroonPath,
+			Checkers: []macaroons.Checker{
+				macaroons.IPLockChecker,
+			},
+			RequiredPerms: RequiredPermissions,
+			DBPassword:    macDbDefaultPw,
+			LndClient:     &s.lndServices.LndServices,
+			EphemeralKey:  lndclient.SharedKeyNUMS,
+			KeyLocator:    lndclient.SharedKeyLocator,
+		},
+	)
+	if err != nil {
 		return err
 	}
-	shutdownFuncs["macaroon"] = s.stopMacaroonService
+
+	if err := s.macaroonService.Start(); err != nil {
+		return err
+	}
+	shutdownFuncs["macaroon"] = s.macaroonService.Stop
 
 	// Setup the auctioneer client and interceptor.
 	err = s.setupClient()
@@ -179,7 +197,7 @@ func (s *Server) Start() error {
 
 	// Let's create our interceptor chain, starting with the security
 	// interceptors that will check macaroons for their validity.
-	unaryMacIntercept, streamMacIntercept, err := s.macaroonInterceptor()
+	unaryMacIntercept, streamMacIntercept, err := s.macaroonService.Interceptors()
 	if err != nil {
 		return fmt.Errorf("error with macaroon interceptor: %v", err)
 	}
@@ -322,8 +340,7 @@ func (s *Server) Start() error {
 // StartAsSubserver is an alternative start method where the RPC server does not
 // create its own gRPC server but registers on an existing one.
 func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
-	lndGrpc *lndclient.GrpcLndServices,
-	createDefaultMacaroonFile bool) error {
+	lndGrpc *lndclient.GrpcLndServices, withMacaroonService bool) error {
 
 	if atomic.AddInt32(&s.started, 1) != 1 {
 		return fmt.Errorf("trader can only be started once")
@@ -348,12 +365,35 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 		}
 	}()
 
-	// Start the macaroon service and let it create its default macaroon in
-	// case it doesn't exist yet.
-	if err := s.startMacaroonService(createDefaultMacaroonFile); err != nil {
-		return err
+	if withMacaroonService {
+		// Create and start the macaroon service and let it create its default
+		// macaroon in case it doesn't exist yet.
+		var err error
+		s.macaroonService, err = lndclient.NewMacaroonService(
+			&lndclient.MacaroonServiceConfig{
+				DBPath:           s.cfg.BaseDir,
+				DBTimeout:        clientdb.DefaultPoolDBTimeout,
+				MacaroonLocation: poolMacaroonLocation,
+				MacaroonPath:     s.cfg.MacaroonPath,
+				Checkers: []macaroons.Checker{
+					macaroons.IPLockChecker,
+				},
+				RequiredPerms: RequiredPermissions,
+				DBPassword:    macDbDefaultPw,
+				LndClient:     &s.lndServices.LndServices,
+				EphemeralKey:  lndclient.SharedKeyNUMS,
+				KeyLocator:    lndclient.SharedKeyLocator,
+			},
+		)
+		if err != nil {
+			return err
+		}
+
+		if err := s.macaroonService.Start(); err != nil {
+			return err
+		}
+		shutdownFuncs["macaroon"] = s.macaroonService.Stop
 	}
-	shutdownFuncs["macaroon"] = s.stopMacaroonService
 
 	// Setup the auctioneer client and interceptor.
 	err := s.setupClient()
@@ -393,6 +433,10 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 // as lnd but still validate its own macaroons.
 func (s *Server) ValidateMacaroon(ctx context.Context,
 	requiredPermissions []bakery.Op, fullMethod string) error {
+
+	if s.macaroonService == nil {
+		return fmt.Errorf("macaroon service has not been initialised")
+	}
 
 	// Delegate the call to pool's own macaroon validator service.
 	return s.macaroonService.ValidateMacaroon(
@@ -599,8 +643,10 @@ func (s *Server) Stop() error {
 	if err := s.db.Close(); err != nil {
 		log.Errorf("Error closing DB: %v", err)
 	}
-	if err := s.stopMacaroonService(); err != nil {
-		log.Errorf("Error stopping macaroon service: %v", err)
+	if s.macaroonService != nil {
+		if err := s.macaroonService.Stop(); err != nil {
+			log.Errorf("Error stopping macaroon service: %v", err)
+		}
 	}
 	s.lndServices.Close()
 	s.wg.Wait()

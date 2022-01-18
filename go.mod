@@ -14,12 +14,11 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.5.0
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/lightninglabs/aperture v0.1.6-beta
-	github.com/lightninglabs/lndclient v0.14.0-7
+	github.com/lightninglabs/lndclient v0.14.0-8
 	github.com/lightninglabs/pool/auctioneerrpc v1.0.5
 	github.com/lightninglabs/protobuf-hex-display v1.4.3-hex-display
 	github.com/lightningnetwork/lnd v0.14.1-beta
 	github.com/lightningnetwork/lnd/cert v1.1.0
-	github.com/lightningnetwork/lnd/kvdb v1.2.1
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli v1.20.0
 	go.etcd.io/bbolt v1.3.6
