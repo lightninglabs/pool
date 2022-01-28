@@ -429,9 +429,12 @@ func updateAccountStates(cfg RecoveryConfig,
 				acc.State = StateClosed
 				acc.HeightHint = blockHeight
 
-				log.Debugf("Account was spent in tx %x but "+
+				traderKey := acc.TraderKey.PubKey
+				log.Debugf("Account %x was spent in tx %v but "+
 					"not re-created. Assuming account was "+
-					"fully spent or closed", tx.TxHash())
+					"fully spent or closed",
+					traderKey.SerializeCompressed(),
+					tx.TxHash())
 
 				continue
 			}
