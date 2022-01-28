@@ -1038,11 +1038,9 @@ func (s *rpcServer) parseRPCOutputs(outputs []*poolrpc.Output) ([]*wire.TxOut,
 	return res, nil
 }
 
-func (s *rpcServer) RecoverAccounts(ctx context.Context,
-	_ *poolrpc.RecoverAccountsRequest) (*poolrpc.RecoverAccountsResponse,
-	error) {
-
-	log.Infof("Attempting to recover accounts...")
+// serverAssistedRecovery executes the server assisted account recovery process.
+func (s *rpcServer) serverAssistedRecovery(ctx context.Context, target uint32) (
+	[]*account.Account, error) {
 
 	// The account recovery process uses a bi-directional streaming RPC on
 	// the server side. Unfortunately, because of the way streaming RPCs
@@ -1055,18 +1053,10 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 	// the white list first to kick off LSAT creation.
 	_, _ = s.auctioneer.OrderState(ctx, order.Nonce{})
 
-	s.recoveryMutex.Lock()
-	if s.recoveryPending {
-		defer s.recoveryMutex.Unlock()
-		return nil, fmt.Errorf("recovery already in progress")
-	}
-	s.recoveryPending = true
-	s.recoveryMutex.Unlock()
-
 	// Prepare the keys we are going to try. Possibly not all of them will
 	// be used.
 	acctKeys, err := account.GenerateRecoveryKeys(
-		ctx, s.lndServices.WalletKit,
+		ctx, target, s.lndServices.WalletKit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error generating keys: %v", err)
@@ -1079,6 +1069,108 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 	recoveredAccounts, err := s.auctioneer.RecoverAccounts(ctx, acctKeys)
 	if err != nil {
 		return nil, fmt.Errorf("error performing recovery: %v", err)
+	}
+
+	return recoveredAccounts, nil
+}
+
+// fullClientRecovery executes the account recovery process.
+func (s *rpcServer) fullClientRecovery(ctx context.Context,
+	req *poolrpc.RecoverAccountsRequest) ([]*account.Account, error) {
+
+	lndTxs, err := s.lndServices.Client.ListTransactions(ctx, 0, -1)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get txs from lnd: %v", err)
+	}
+
+	// Reverse transaction order, so we have older ones at the beginning.
+	for i, j := 0, len(lndTxs)-1; i < j; i, j = i+1, j-1 {
+		lndTxs[i], lndTxs[j] = lndTxs[j], lndTxs[i]
+	}
+
+	txs := make([]*wire.MsgTx, 0, len(lndTxs))
+	for _, tx := range lndTxs {
+		txs = append(txs, tx.Tx)
+	}
+
+	key, fstBlock := account.GetAuctioneerData(s.server.cfg.Network)
+	if req.AuctioneerKey == "" {
+		req.AuctioneerKey = key
+	}
+	if req.HeightHint == 0 {
+		req.HeightHint = fstBlock
+	}
+
+	if req.AuctioneerKey == "" || req.HeightHint == 0 {
+		return nil, fmt.Errorf("unable to get auctioner data")
+	}
+
+	auctioneerPubKey, err := account.DecodeAndParseKey(req.AuctioneerKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode an parse key: %v", err)
+	}
+	batchKey, err := account.DecodeAndParseKey(account.InitialBatchKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode an parse key: %v", err)
+	}
+
+	cfg := account.RecoveryConfig{
+		Network:       s.server.cfg.Network,
+		AccountTarget: req.AccountTarget,
+		FirstBlock:    req.HeightHint,
+		BitcoinConfig: &account.BitcoinConfig{
+			Host:         req.BitcoinHost,
+			User:         req.BitcoinUser,
+			Password:     req.BitcoinPassword,
+			HTTPPostMode: req.BitcoinHttppostmode,
+			UseTLS:       req.BitcoinUsetls,
+			TLSPath:      req.BitcoinTlspath,
+		},
+		Transactions:     txs,
+		Signer:           s.lndServices.Signer,
+		Wallet:           s.lndServices.WalletKit,
+		InitialBatchKey:  batchKey,
+		AuctioneerPubKey: auctioneerPubKey,
+		Quit:             s.quit,
+	}
+
+	recoveredAccounts, err := account.RecoverAccounts(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error performing recovery: %v", err)
+	}
+
+	return recoveredAccounts, nil
+}
+
+func (s *rpcServer) RecoverAccounts(ctx context.Context,
+	req *poolrpc.RecoverAccountsRequest) (*poolrpc.RecoverAccountsResponse,
+	error) {
+
+	s.recoveryMutex.Lock()
+	if s.recoveryPending {
+		defer s.recoveryMutex.Unlock()
+		return nil, fmt.Errorf("recovery already in progress")
+	}
+	s.recoveryPending = true
+	s.recoveryMutex.Unlock()
+
+	log.Infof("Attempting to recover accounts...")
+
+	var recoveredAccounts []*account.Account
+	var err error
+
+	target := req.AccountTarget
+	if target == 0 {
+		target = account.DefaultAccountKeyWindow
+	}
+
+	if !req.FullClient {
+		recoveredAccounts, err = s.serverAssistedRecovery(ctx, target)
+	} else {
+		recoveredAccounts, err = s.fullClientRecovery(ctx, req)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	// Store the recovered accounts now and start watching them. If anything

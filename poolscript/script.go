@@ -91,12 +91,22 @@ func AccountWitnessScript(expiry uint32, traderKey, auctioneerKey,
 	tweakedTraderKey := input.TweakPubKeyWithTweak(traderKey, traderKeyTweak)
 	tweakedAuctioneerKey := input.TweakPubKey(auctioneerKey, tweakedTraderKey)
 
+	return accountWitnessScript(
+		expiry, tweakedTraderKey.SerializeCompressed(),
+		tweakedAuctioneerKey.SerializeCompressed(),
+	)
+}
+
+// accountWitnessScript returns the witness script of an account from the
+// tweaked and serialized trader and auctioneer key.
+func accountWitnessScript(expiry uint32, tweakedTraderKey,
+	tweakedAuctioneerKey []byte) ([]byte, error) {
 	builder := txscript.NewScriptBuilder()
 
-	builder.AddData(tweakedTraderKey.SerializeCompressed())
+	builder.AddData(tweakedTraderKey)
 	builder.AddOp(txscript.OP_CHECKSIGVERIFY)
 
-	builder.AddData(tweakedAuctioneerKey.SerializeCompressed())
+	builder.AddData(tweakedAuctioneerKey)
 	builder.AddOp(txscript.OP_CHECKSIG)
 
 	builder.AddOp(txscript.OP_IFDUP)
@@ -106,6 +116,104 @@ func AccountWitnessScript(expiry uint32, traderKey, auctioneerKey,
 	builder.AddOp(txscript.OP_ENDIF)
 
 	return builder.Script()
+}
+
+// RecoveryHelper is a type that helps speed up account recovery by caching the
+// tweaked trader and auctioneer keys for faster script lookups.
+type RecoveryHelper struct {
+	// TraderKey is the trader's public key.
+	TraderKey *btcec.PublicKey
+
+	// AuctioneerKey is the auctioneer's public key.
+	AuctioneerKey *btcec.PublicKey
+
+	// BatchKey is the current batch key.
+	BatchKey *btcec.PublicKey
+
+	// Secret is the shared secret between trader and auctioneer.
+	Secret [32]byte
+
+	tweakedTraderKey     []byte
+	tweakedAuctioneerKey []byte
+}
+
+// NextBatchKey increments the currently used batch key and re-calculates the
+// tweaked keys.
+func (r *RecoveryHelper) NextBatchKey() {
+	r.BatchKey = IncrementKey(r.BatchKey)
+
+	r.tweakKeys()
+}
+
+// NextAccount sets a fresh trader key and secret, then re-calculates the
+// tweaked keys.
+func (r *RecoveryHelper) NextAccount(traderKey *btcec.PublicKey,
+	secret [32]byte) {
+
+	r.TraderKey = traderKey
+	r.Secret = secret
+
+	r.tweakKeys()
+}
+
+// tweakKeys caches the tweaked keys from the current values.
+func (r *RecoveryHelper) tweakKeys() {
+	traderKeyTweak := TraderKeyTweak(r.BatchKey, r.Secret, r.TraderKey)
+	tweakedTraderKey := input.TweakPubKeyWithTweak(
+		r.TraderKey, traderKeyTweak,
+	)
+	tweakedAuctioneerKey := input.TweakPubKey(
+		r.AuctioneerKey, tweakedTraderKey,
+	)
+
+	r.tweakedTraderKey = tweakedTraderKey.SerializeCompressed()
+	r.tweakedAuctioneerKey = tweakedAuctioneerKey.SerializeCompressed()
+}
+
+// LocateOutput looks for an account output in the given transaction that
+// corresponds to a script derived with the current settings of the helper and
+// the given account expiry.
+func (r *RecoveryHelper) LocateOutput(expiry uint32, tx *wire.MsgTx) (uint32,
+	bool, error) {
+
+	witnessScript, err := accountWitnessScript(
+		expiry, r.tweakedTraderKey, r.tweakedAuctioneerKey,
+	)
+	if err != nil {
+		return 0, false, err
+	}
+
+	scriptHash, err := input.WitnessScriptHash(witnessScript)
+	if err != nil {
+		return 0, false, err
+	}
+
+	idx, ok := LocateOutputScript(tx, scriptHash)
+	return idx, ok, nil
+}
+
+// LocateAnyOutput looks for an account output in and of the given transactions
+// that corresponds to a script derived with the current settings of the helper
+// and the given account expiry.
+func (r *RecoveryHelper) LocateAnyOutput(expiry uint32,
+	txns []*wire.MsgTx) (*wire.MsgTx, uint32, bool, error) {
+
+	for _, tx := range txns {
+		// We shouldn't return a pointer to a loop iterator value, so
+		// make a copy first.
+		tx := tx
+
+		idx, ok, err := r.LocateOutput(expiry, tx)
+		if err != nil {
+			return nil, 0, false, err
+		}
+
+		if ok {
+			return tx, idx, true, nil
+		}
+	}
+
+	return nil, 0, false, nil
 }
 
 // AccountScript returns the output script of an account on-chain.
@@ -210,4 +318,36 @@ func LocateOutputScript(tx *wire.MsgTx, script []byte) (uint32, bool) {
 		return uint32(i), true
 	}
 	return 0, false
+}
+
+// MatchPreviousOutPoint determines whether or not a PreviousOutPoint appears
+// in any of the provided transactions.
+func MatchPreviousOutPoint(op wire.OutPoint, txs []*wire.MsgTx) (*wire.MsgTx,
+	bool) {
+
+	for _, tx := range txs {
+		tx := tx
+		if IncludesPreviousOutPoint(tx, op) {
+			return tx, true
+		}
+	}
+
+	return nil, false
+}
+
+// IncludesPreviousOutPoint determines whether a transaction includes a
+// given OutPoint as a txIn PreviousOutpoint.
+func IncludesPreviousOutPoint(tx *wire.MsgTx, output wire.OutPoint) bool {
+	for _, txIn := range tx.TxIn {
+		if txIn.PreviousOutPoint.Index != output.Index {
+			continue
+		}
+
+		if !bytes.Equal(txIn.PreviousOutPoint.Hash[:], output.Hash[:]) {
+			continue
+		}
+
+		return true
+	}
+	return false
 }
