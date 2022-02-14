@@ -314,6 +314,23 @@ func (a *SidecarNegotiator) autoSidecarReceiver(ctx context.Context,
 
 				select {
 				case <-retryTimer.backOff(backoffLabel):
+					// It is possible that we were not able to receive the
+					// packet because the server went down. In that case,
+					// we will try to init the sidecar mailbox again.
+					// There is no need to log/check this error. There are
+					// three possibilities:
+					//
+					// 1) If the error was not related with the sever being
+					// down, we will get an `AlreadyExists` error.
+					//
+					// 2) If the server is back, we will be able to reconnect
+					// successfully and receive the sidecar pkt in the next
+					// iteration.
+					//
+					// 3) If the server is down, we won't be able to reconnect.
+					_ = a.cfg.MailBox.InitSidecarMailbox(
+						recipientStreamID, startingPkt.ReceiverTicket,
+					)
 					continue
 				case <-a.quit:
 					return
@@ -588,6 +605,21 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context,
 
 				select {
 				case <-retryTimer.backOff(backoffLabel):
+					// It is possible that we were not able to receive the
+					// packet because the server went down. In that case,
+					// we will try to init the sidecar mailbox again.
+					// There is no need to log/check this error. There are
+					// three possibilities:
+					//
+					// 1) If the error was not related with the sever being
+					// down, we will get an `AlreadyExists` error.
+					//
+					// 2) If the server is back, we will be able to reconnect
+					// successfully and receive the sidecar pkt in the next
+					// iteration.
+					//
+					// 3) If the server is down, we won't be able to reconnect.
+					_ = a.cfg.MailBox.InitAcctMailbox(streamID, acct.TraderKey)
 					continue
 				case <-a.quit:
 					return
