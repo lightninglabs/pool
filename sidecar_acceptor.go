@@ -601,6 +601,13 @@ func (a *SidecarAcceptor) matchPrepare(pendingBatch *order.Batch,
 	sdcrLog.Infof("Received PrepareMsg for batch=%x, num_orders=%v",
 		batch.ID[:], len(batch.MatchedOrders))
 
+	// Ensure that we do not have any registered shims for the orders
+	// in this batch. This is not supposed to happen but we have a bug.
+	if err = a.removeShims(batch); err != nil {
+		return nil, fmt.Errorf("unable to cleanup shims before start "+
+			"preparing the current batch: %v", err)
+	}
+
 	// If there is still a pending batch around from a previous iteration,
 	// we need to clean up the pending channels first.
 	if pendingBatch != nil {
