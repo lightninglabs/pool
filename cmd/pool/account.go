@@ -141,6 +141,10 @@ func newAccount(ctx *cli.Context) error {
 
 	switch {
 	case satPerVByte > 0:
+		// If the user specified `sat_per_vbyte` we do not need to use the
+		// default confTarget.
+		confTarget = 0
+
 		// Enforce a minimum fee rate of 253 sat/kw by rounding up if 1
 		// sat/byte is used.
 		feeRate := chainfee.SatPerKVByte(satPerVByte * 1000).FeePerKWeight()
