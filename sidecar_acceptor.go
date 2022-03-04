@@ -3,6 +3,7 @@ package pool
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -792,15 +793,34 @@ func (a *SidecarAcceptor) sendRejectBatch(batchID []byte, batch *order.Batch,
 		a.pendingBatch = nil
 	}
 
-	// TODO(positiveblue): send the reject with the right Reason/Reason code
-	// to the backend. Before that, we need to update the server to handle
-	// partial rejections by the sidecar recipient.
 	msg := &auctioneerrpc.ClientAuctionMessage_Reject{
 		Reject: &auctioneerrpc.OrderMatchReject{
-			BatchId:    batchID,
-			Reason:     failure.Error(),
-			ReasonCode: auctioneerrpc.OrderMatchReject_BATCH_VERSION_MISMATCH,
+			BatchId: batchID,
+			Reason:  failure.Error(),
 		},
+	}
+
+	// Attach the status code to the message to give a bit more context.
+	var (
+		partialReject   *funding.MatchRejectErr
+		versionMismatch *order.ErrVersionMismatch
+	)
+	switch {
+	case errors.As(failure, &versionMismatch):
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_BATCH_VERSION_MISMATCH
+
+	case errors.Is(failure, order.ErrMismatchErr):
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_SERVER_MISBEHAVIOR
+
+	case errors.As(failure, &partialReject):
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_PARTIAL_REJECT
+		msg.Reject.RejectedOrders = make(map[string]*auctioneerrpc.OrderReject)
+		for nonce, reject := range partialReject.RejectedOrders {
+			msg.Reject.RejectedOrders[nonce.String()] = reject
+		}
+
+	default:
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_UNKNOWN
 	}
 
 	rpcLog.Infof("Sending sidecar batch rejection message for batch %x with "+
