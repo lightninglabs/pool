@@ -3,6 +3,7 @@ package pool
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -525,41 +526,23 @@ func (a *SidecarAcceptor) handleServerMessage(
 	switch msg := serverMsg.Msg.(type) {
 
 	case *auctioneerrpc.ServerAuctionMessage_Prepare:
-		batchID := msg.Prepare.BatchId
 
 		sdcrLog.Tracef("Received prepare msg from server, "+
-			"batch_id=%x: %v", batchID, spew.Sdump(msg))
+			"batch_id=%x: %v", msg.Prepare.BatchId, spew.Sdump(msg))
 
-		newBatch, err := a.matchPrepare(a.pendingBatch, msg.Prepare)
-		if err != nil {
-			sdcrLog.Errorf("Error handling prepare message: %v",
-				err)
-			return a.sendRejectBatch(batchID, err)
+		if err := a.matchPrepare(msg.Prepare); err != nil {
+			sdcrLog.Errorf("unable to handle prepare message: %v", err)
+			return a.sendRejectBatch(msg.Prepare.BatchId, nil, err)
 		}
-
-		// We know we're involved in a batch, so let's store it for the
-		// next step.
-		a.pendingBatch = newBatch
 
 	case *auctioneerrpc.ServerAuctionMessage_Sign:
-		batchID := msg.Sign.BatchId
 
 		sdcrLog.Tracef("Received sign msg from server, batch_id=%x: %v",
-			batchID, spew.Sdump(msg))
+			msg.Sign.BatchId, spew.Sdump(msg))
 
-		// Assert we're in the correct state to receive a sign message.
-		if a.pendingBatch == nil ||
-			!bytes.Equal(batchID, a.pendingBatch.ID[:]) {
-
-			err := fmt.Errorf("error processing batch sign "+
-				"message, unknown batch with ID %x", batchID)
-			sdcrLog.Errorf("Error handling sign message: %v", err)
-			return a.sendRejectBatch(batchID, err)
-		}
-
-		if err := a.matchSign(a.pendingBatch); err != nil {
-			sdcrLog.Errorf("Error handling sign message: %v", err)
-			return a.sendRejectBatch(batchID, err)
+		if err := a.matchSign(msg.Sign); err != nil {
+			sdcrLog.Errorf("unable to handle sign message: %v", err)
+			return a.sendRejectBatch(a.pendingBatch.ID[:], a.pendingBatch, err)
 		}
 
 	case *auctioneerrpc.ServerAuctionMessage_Finalize:
@@ -568,13 +551,8 @@ func (a *SidecarAcceptor) handleServerMessage(
 		sdcrLog.Tracef("Received finalize msg from server, "+
 			"batch_id=%x: %v", batchID, spew.Sdump(msg))
 
-		// All we need to do now is some cleanup. Even if the cleanup
-		// fails, we want to clear the pending batch as we won't receive
-		// any more messages for it.
-		batch := a.pendingBatch
-		a.pendingBatch = nil
-
-		a.matchFinalize(batch)
+		// This operation cannot fail.
+		a.matchFinalize()
 
 	default:
 		sdcrLog.Debugf("Received msg %v from auctioneer on sidecar "+
@@ -589,13 +567,13 @@ func (a *SidecarAcceptor) handleServerMessage(
 // a bid order) the tasks are simplified compared to normal bid order execution.
 //
 // NOTE: The lock must be held when calling this method.
-func (a *SidecarAcceptor) matchPrepare(pendingBatch *order.Batch,
-	msg *auctioneerrpc.OrderMatchPrepare) (*order.Batch, error) {
+func (a *SidecarAcceptor) matchPrepare(
+	msg *auctioneerrpc.OrderMatchPrepare) error {
 
 	// Parse and formally validate what we got from the server.
 	batch, err := order.ParseRPCBatch(msg)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse batch: %v", err)
+		return fmt.Errorf("unable to parse batch: %v", err)
 	}
 
 	sdcrLog.Infof("Received PrepareMsg for batch=%x, num_orders=%v",
@@ -604,17 +582,17 @@ func (a *SidecarAcceptor) matchPrepare(pendingBatch *order.Batch,
 	// Ensure that we do not have any registered shims for the orders
 	// in this batch. This is not supposed to happen but we have a bug.
 	if err = a.removeShims(batch); err != nil {
-		return nil, fmt.Errorf("unable to cleanup shims before start "+
+		return fmt.Errorf("unable to cleanup shims before start "+
 			"preparing the current batch: %v", err)
 	}
 
 	// If there is still a pending batch around from a previous iteration,
 	// we need to clean up the pending channels first.
-	if pendingBatch != nil {
-		if err := a.removeShims(pendingBatch); err != nil {
-			return nil, fmt.Errorf("unable to cleanup previous "+
-				"batch: %v", err)
+	if a.pendingBatch != nil {
+		if err := a.removeShims(a.pendingBatch); err != nil {
+			return fmt.Errorf("unable to cleanup previous batch: %v", err)
 		}
+		a.pendingBatch = nil
 	}
 
 	// Before we accept the batch, we'll finish preparations on our end
@@ -624,8 +602,7 @@ func (a *SidecarAcceptor) matchPrepare(pendingBatch *order.Batch,
 	// that's being used to pay for the sidecar channel.
 	err = a.cfg.FundingManager.PrepChannelFunding(batch, a.getSidecarAsOrder)
 	if err != nil {
-		return nil, fmt.Errorf("error preparing channel funding: %v",
-			err)
+		return fmt.Errorf("error preparing channel funding: %w", err)
 	}
 
 	// Accept the match now.
@@ -640,10 +617,27 @@ func (a *SidecarAcceptor) matchPrepare(pendingBatch *order.Batch,
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error sending accept msg: %v", err)
+		return fmt.Errorf("error sending accept msg: %v", err)
 	}
 
-	return batch, nil
+	// We know we're involved in a batch, so let's store it for the
+	// next step.
+	a.pendingBatch = batch
+
+	return nil
+}
+
+// isPending returns true if the provided batchID matches the current pending
+// one.
+func (a *SidecarAcceptor) isPending(batchID []byte) bool {
+	if a.pendingBatch == nil || !bytes.Equal(batchID, a.pendingBatch.ID[:]) {
+		sdcrLog.Errorf("error processing batch sign message, unknown batch "+
+			"with ID %x", batchID)
+
+		return false
+	}
+
+	return true
 }
 
 // matchSign handles an incoming OrderMatchSignBegin message from the server.
@@ -651,12 +645,23 @@ func (a *SidecarAcceptor) matchPrepare(pendingBatch *order.Batch,
 // a bid order) the tasks are simplified compared to normal bid order execution.
 //
 // NOTE: The lock must be held when calling this method.
-func (a *SidecarAcceptor) matchSign(batch *order.Batch) error {
+func (a *SidecarAcceptor) matchSign(
+	msg *auctioneerrpc.OrderMatchSignBegin) error {
+
+	// Assert we're in the correct state to receive a sign message.
+	if !a.isPending(msg.BatchId) {
+		return fmt.Errorf("pending batchID was: %x got: %x",
+			a.pendingBatch.ID[:], msg.BatchId)
+	}
+
+	batch := a.pendingBatch
+	batchID := a.pendingBatch.ID[:]
+
 	channelInfos, err := a.cfg.FundingManager.SidecarBatchChannelSetup(
-		a.pendingBatch, a.pendingOpenChanClient, a.getSidecarAsOrder,
+		batch, a.pendingOpenChanClient, a.getSidecarAsOrder,
 	)
 	if err != nil {
-		return fmt.Errorf("error setting up channels: %v", err)
+		return fmt.Errorf("error setting up channels: %w", err)
 	}
 
 	rpcChannelInfos, err := marshallChannelInfo(channelInfos)
@@ -665,13 +670,13 @@ func (a *SidecarAcceptor) matchSign(batch *order.Batch) error {
 	}
 
 	sdcrLog.Infof("Received OrderMatchSignBegin for batch=%x, "+
-		"num_orders=%v", batch.ID[:], len(batch.MatchedOrders))
+		"num_orders=%v", batchID, len(batch.MatchedOrders))
 
-	sdcrLog.Infof("Sending OrderMatchSign for batch %x", batch.ID[:])
+	sdcrLog.Infof("Sending OrderMatchSign for batch %x", batchID)
 	return a.client.SendAuctionMessage(&auctioneerrpc.ClientAuctionMessage{
 		Msg: &auctioneerrpc.ClientAuctionMessage_Sign{
 			Sign: &auctioneerrpc.OrderMatchSign{
-				BatchId:      batch.ID[:],
+				BatchId:      batchID,
 				ChannelInfos: rpcChannelInfos,
 			},
 		},
@@ -707,8 +712,14 @@ func (a *SidecarAcceptor) finalizeTicketIfExists(ticket *sidecar.Ticket) {
 // a bid order) the tasks are simplified compared to normal bid order execution.
 //
 // NOTE: The lock must be held when calling this method.
-func (a *SidecarAcceptor) matchFinalize(batch *order.Batch) {
-	sdcrLog.Infof("Received FinalizeMsg for batch=%x", batch.ID[:])
+func (a *SidecarAcceptor) matchFinalize() {
+	sdcrLog.Infof("Received FinalizeMsg for batch=%x", a.pendingBatch.ID[:])
+
+	// All we need to do now is some cleanup. Even if the cleanup
+	// fails, we want to clear the pending batch as we won't receive
+	// any more messages for it.
+	batch := a.pendingBatch
+	a.pendingBatch = nil
 
 	// Remove pending shim and update sidecar ticket.
 	for ourOrder := range batch.MatchedOrders {
@@ -770,14 +781,52 @@ func (a *SidecarAcceptor) getSidecarAsOrder(o order.Nonce) (order.Order, error) 
 
 // sendRejectBatch sends a reject message to the server with the properly
 // decoded reason code and the full reason message as a string.
-func (a *SidecarAcceptor) sendRejectBatch(batchID []byte, failure error) error {
+func (a *SidecarAcceptor) sendRejectBatch(batchID []byte, batch *order.Batch,
+	failure error) error {
+
+	if batch != nil {
+		// As we're rejecting this batch, we'll cancel all funding shims that
+		// we may have registered.
+		if err := a.removeShims(batch); err != nil {
+			return err
+		}
+		a.pendingBatch = nil
+	}
+
 	msg := &auctioneerrpc.ClientAuctionMessage_Reject{
 		Reject: &auctioneerrpc.OrderMatchReject{
-			BatchId:    batchID,
-			Reason:     failure.Error(),
-			ReasonCode: auctioneerrpc.OrderMatchReject_BATCH_VERSION_MISMATCH,
+			BatchId: batchID,
+			Reason:  failure.Error(),
 		},
 	}
+
+	// Attach the status code to the message to give a bit more context.
+	var (
+		partialReject   *funding.MatchRejectErr
+		versionMismatch *order.ErrVersionMismatch
+	)
+	switch {
+	case errors.As(failure, &versionMismatch):
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_BATCH_VERSION_MISMATCH
+
+	case errors.Is(failure, order.ErrMismatchErr):
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_SERVER_MISBEHAVIOR
+
+	case errors.As(failure, &partialReject):
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_PARTIAL_REJECT
+		msg.Reject.RejectedOrders = make(map[string]*auctioneerrpc.OrderReject)
+		for nonce, reject := range partialReject.RejectedOrders {
+			msg.Reject.RejectedOrders[nonce.String()] = reject
+		}
+
+	default:
+		msg.Reject.ReasonCode = auctioneerrpc.OrderMatchReject_UNKNOWN
+	}
+
+	rpcLog.Infof("Sending sidecar batch rejection message for batch %x with "+
+		"code %v and message: %v", batchID, msg.Reject.ReasonCode,
+		failure)
+
 	return a.client.SendAuctionMessage(&auctioneerrpc.ClientAuctionMessage{
 		Msg: msg,
 	})
