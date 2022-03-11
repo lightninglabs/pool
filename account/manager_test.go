@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/lntest/wait"
@@ -123,15 +123,6 @@ func (h *testHarness) assertAccountExists(expected *Account) {
 		}
 
 		if !reflect.DeepEqual(found, expected) {
-			// Nil the public key curves before spew to prevent
-			// extraneous output.
-			found.TraderKey.PubKey.Curve = nil
-			expected.TraderKey.PubKey.Curve = nil
-			found.AuctioneerKey.Curve = nil
-			expected.AuctioneerKey.Curve = nil
-			found.BatchKey.Curve = nil
-			expected.BatchKey.Curve = nil
-
 			return fmt.Errorf("expected account: %v\ngot: %v",
 				spew.Sdump(expected), spew.Sdump(found))
 		}

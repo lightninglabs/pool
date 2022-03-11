@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/internal/test"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightningnetwork/lnd/keychain"

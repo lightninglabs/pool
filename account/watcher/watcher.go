@@ -3,7 +3,7 @@ package watcher
 import (
 	"sync"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 )
 
 // expiryWatcher implements the ExpiryWatcher interface

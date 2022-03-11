@@ -9,10 +9,10 @@ import (
 	reflect "reflect"
 	time "time"
 
-	btcec "github.com/btcsuite/btcd/btcec"
+	btcec "github.com/btcsuite/btcd/btcec/v2"
+	btcutil "github.com/btcsuite/btcd/btcutil"
 	chainhash "github.com/btcsuite/btcd/chaincfg/chainhash"
 	wire "github.com/btcsuite/btcd/wire"
-	btcutil "github.com/btcsuite/btcutil"
 	wtxmgr "github.com/btcsuite/btcwallet/wtxmgr"
 	gomock "github.com/golang/mock/gomock"
 	lndclient "github.com/lightninglabs/lndclient"

@@ -13,10 +13,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneerrpc"
@@ -294,15 +294,11 @@ func (c *Client) ReserveAccount(ctx context.Context, value btcutil.Amount,
 		return nil, err
 	}
 
-	auctioneerKey, err := btcec.ParsePubKey(
-		resp.AuctioneerKey, btcec.S256(),
-	)
+	auctioneerKey, err := btcec.ParsePubKey(resp.AuctioneerKey)
 	if err != nil {
 		return nil, err
 	}
-	initialBatchKey, err := btcec.ParsePubKey(
-		resp.InitialBatchKey, btcec.S256(),
-	)
+	initialBatchKey, err := btcec.ParsePubKey(resp.InitialBatchKey)
 	if err != nil {
 		return nil, err
 	}
@@ -784,7 +780,7 @@ func (c *Client) RecoverAccounts(ctx context.Context,
 			// The trader key must match our key, otherwise
 			// something got out of order.
 			acctKey, err := btcec.ParsePubKey(
-				acctMsg.Account.TraderKey, btcec.S256(),
+				acctMsg.Account.TraderKey,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing account "+
@@ -834,16 +830,12 @@ func incompleteAcctFromErr(traderKey *keychain.KeyDescriptor,
 		err error
 	)
 
-	acct.AuctioneerKey, err = btcec.ParsePubKey(
-		resErr.AuctioneerKey[:], btcec.S256(),
-	)
+	acct.AuctioneerKey, err = btcec.ParsePubKey(resErr.AuctioneerKey[:])
 	if err != nil {
 		return nil, fmt.Errorf("error parsing auctioneer key: %v", err)
 	}
 
-	acct.BatchKey, err = btcec.ParsePubKey(
-		resErr.InitialBatchKey[:], btcec.S256(),
-	)
+	acct.BatchKey, err = btcec.ParsePubKey(resErr.InitialBatchKey[:])
 	if err != nil {
 		return nil, fmt.Errorf("error parsing batch key: %v", err)
 	}
@@ -1233,11 +1225,11 @@ func unmarshallServerRecoveredAccount(keyDesc *keychain.KeyDescriptor,
 	a *auctioneerrpc.AuctionAccount) (*account.Account, error) {
 
 	// Parse all raw public keys.
-	auctioneerKey, err := btcec.ParsePubKey(a.AuctioneerKey, btcec.S256())
+	auctioneerKey, err := btcec.ParsePubKey(a.AuctioneerKey)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing auctioneer key: %v", err)
 	}
-	batchKey, err := btcec.ParsePubKey(a.BatchKey, btcec.S256())
+	batchKey, err := btcec.ParsePubKey(a.BatchKey)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing batch key: %v", err)
 	}

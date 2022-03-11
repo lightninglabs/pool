@@ -1,14 +1,13 @@
 package sidecar
 
 import (
-	"math/big"
 	"math/rand"
 	"testing"
 	"testing/quick"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcutil/base58"
+	"github.com/btcsuite/btcd/btcutil/base58"
+	"github.com/lightninglabs/pool/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,11 +38,8 @@ func TestEncodeDecode(t *testing.T) {
 			PushAmt:             888,
 			LeaseDurationBlocks: 2016,
 			SignPubKey:          testPubKey,
-			SigOfferDigest: &btcec.Signature{
-				R: new(big.Int).SetInt64(44),
-				S: new(big.Int).SetInt64(22),
-			},
-			Auto: true,
+			SigOfferDigest:      test.NewSignatureFromInt(44, 22),
+			Auto:                true,
 		},
 		Recipient: &Recipient{
 			NodePubKey:       testPubKey,
@@ -51,11 +47,8 @@ func TestEncodeDecode(t *testing.T) {
 			MultiSigKeyIndex: 77,
 		},
 		Order: &Order{
-			BidNonce: [32]byte{11, 22, 33, 44},
-			SigOrderDigest: &btcec.Signature{
-				R: new(big.Int).SetInt64(99),
-				S: new(big.Int).SetInt64(33),
-			},
+			BidNonce:       [32]byte{11, 22, 33, 44},
+			SigOrderDigest: test.NewSignatureFromInt(99, 33),
 		},
 		Execution: &Execution{
 			PendingChannelID: [32]byte{99, 88, 77},

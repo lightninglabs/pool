@@ -3,10 +3,10 @@ package sidecar
 import (
 	"bytes"
 	"encoding/hex"
-	"math/big"
 	"testing"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/lightninglabs/pool/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,8 +19,8 @@ var (
 		"0319d616f6a373b24fe5d45fb2964bea4054196820f41ef1a093a9c8e234" +
 			"e57cf7",
 	)
-	testPubKey, _  = btcec.ParsePubKey(testPubKeyRaw, btcec.S256())
-	testPubKey2, _ = btcec.ParsePubKey(testPubKeyRaw2, btcec.S256())
+	testPubKey, _  = btcec.ParsePubKey(testPubKeyRaw)
+	testPubKey2, _ = btcec.ParsePubKey(testPubKeyRaw2)
 )
 
 func TestSerializeTicket(t *testing.T) {
@@ -70,25 +70,19 @@ func TestSerializeTicket(t *testing.T) {
 		Version: Version(99),
 		State:   StateRegistered,
 		Offer: Offer{
-			Capacity:   777,
-			PushAmt:    888,
-			SignPubKey: testPubKey,
-			SigOfferDigest: &btcec.Signature{
-				R: new(big.Int).SetInt64(22),
-				S: new(big.Int).SetInt64(55),
-			},
-			Auto: true,
+			Capacity:       777,
+			PushAmt:        888,
+			SignPubKey:     testPubKey,
+			SigOfferDigest: test.NewSignatureFromInt(22, 55),
+			Auto:           true,
 		},
 		Recipient: &Recipient{
 			NodePubKey:     testPubKey,
 			MultiSigPubKey: testPubKey2,
 		},
 		Order: &Order{
-			BidNonce: [32]byte{11, 22, 33, 44},
-			SigOrderDigest: &btcec.Signature{
-				R: new(big.Int).SetInt64(99),
-				S: new(big.Int).SetInt64(33),
-			},
+			BidNonce:       [32]byte{11, 22, 33, 44},
+			SigOrderDigest: test.NewSignatureFromInt(99, 33),
 		},
 		Execution: &Execution{
 			PendingChannelID: [32]byte{99, 88, 77},

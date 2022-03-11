@@ -1,6 +1,6 @@
 package order
 
-import "github.com/btcsuite/btcutil"
+import "github.com/btcsuite/btcd/btcutil"
 
 // SupplyUnit is a type that represents the smallest unit of an order that can
 // be fulfilled. One unit corresponds to the smallest channel size that can be

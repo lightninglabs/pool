@@ -2,11 +2,9 @@ package order
 
 import (
 	"context"
-	"math/big"
 	"testing"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/internal/test"
@@ -304,10 +302,8 @@ func TestPrepareOrderSidecarTicket(t *testing.T) {
 		},
 	}
 
-	testSig := &btcec.Signature{
-		R: new(big.Int).SetInt64(44),
-		S: new(big.Int).SetInt64(22),
-	}
+	testSig := test.NewSignatureFromInt(44, 22)
+
 	mockSigner.Signature = testSig.Serialize()
 
 	testCases := []struct {

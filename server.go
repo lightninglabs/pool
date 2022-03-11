@@ -14,7 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	proxy "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/lightninglabs/aperture/lsat"
 	"github.com/lightninglabs/lndclient"
@@ -469,9 +469,7 @@ func (s *Server) setupClient() error {
 	}
 
 	// Parse our lnd node's public key.
-	nodePubKey, err := btcec.ParsePubKey(
-		s.lndServices.NodePubkey[:], btcec.S256(),
-	)
+	nodePubKey, err := btcec.ParsePubKey(s.lndServices.NodePubkey[:])
 	if err != nil {
 		return fmt.Errorf("unable to parse node pubkey: %v", err)
 	}

@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
@@ -80,7 +81,7 @@ func (s *batchSigner) Sign(batch *Batch) (BatchSignature, error) {
 		if err != nil {
 			return nil, err
 		}
-		ourSigs[acctKey], err = btcec.ParseDERSignature(sigs[0], btcec.S256())
+		ourSigs[acctKey], err = ecdsa.ParseDERSignature(sigs[0])
 		if err != nil {
 			return nil, err
 		}

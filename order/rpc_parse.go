@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
@@ -200,7 +200,7 @@ func ParseRPCServerOrder(version uint32, details *auctioneerrpc.ServerOrder,
 
 	copy(kit.AcctKey[:], details.TraderKey)
 
-	nodePubKey, err := btcec.ParsePubKey(details.NodePub, btcec.S256())
+	nodePubKey, err := btcec.ParsePubKey(details.NodePub)
 	if err != nil {
 		return nil, nodeKey, nil, multiSigKey,
 			fmt.Errorf("unable to parse node pub key: %v",
@@ -213,9 +213,7 @@ func ParseRPCServerOrder(version uint32, details *auctioneerrpc.ServerOrder,
 		return nil, nodeKey, nil, multiSigKey, err
 	}
 
-	multiSigPubkey, err := btcec.ParsePubKey(
-		details.MultiSigKey, btcec.S256(),
-	)
+	multiSigPubkey, err := btcec.ParsePubKey(details.MultiSigKey)
 	if err != nil {
 		return nil, nodeKey, nodeAddrs, multiSigKey,
 			fmt.Errorf("unable to parse multi sig pub key: %v", err)
@@ -349,7 +347,7 @@ func ParseRPCBatch(prepareMsg *auctioneerrpc.OrderMatchPrepare) (*Batch,
 	// Parse account diff.
 	for _, diff := range prepareMsg.ChargedAccounts {
 		var acctKeyRaw [33]byte
-		acctKey, err := btcec.ParsePubKey(diff.TraderKey, btcec.S256())
+		acctKey, err := btcec.ParsePubKey(diff.TraderKey)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing account key: %v",
 				err)
@@ -389,7 +387,7 @@ func ParseRPCBatch(prepareMsg *auctioneerrpc.OrderMatchPrepare) (*Batch,
 	)
 
 	// Parse the batch ID as public key just to make sure it's valid.
-	_, err = btcec.ParsePubKey(prepareMsg.BatchId, btcec.S256())
+	_, err = btcec.ParsePubKey(prepareMsg.BatchId)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing batch ID: %v", err)
 	}

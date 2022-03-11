@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool"
 	"github.com/lightninglabs/pool/poolrpc"

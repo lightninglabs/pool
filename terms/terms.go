@@ -3,7 +3,7 @@ package terms
 import (
 	"time"
 
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )

@@ -3,12 +3,11 @@ package pool
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	gomock "github.com/golang/mock/gomock"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
@@ -23,12 +22,9 @@ import (
 )
 
 var (
-	_, providerPubKey = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x02})
-	_, ourNodePubKey  = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x03})
-	testOfferSig      = &btcec.Signature{
-		R: new(big.Int).SetInt64(44),
-		S: new(big.Int).SetInt64(22),
-	}
+	_, providerPubKey = btcec.PrivKeyFromBytes([]byte{0x02})
+	_, ourNodePubKey  = btcec.PrivKeyFromBytes([]byte{0x03})
+	testOfferSig      = test.NewSignatureFromInt(44, 22)
 )
 
 func registerSidecarEmptySetter(ticket *sidecar.Ticket,
@@ -79,11 +75,8 @@ var registerSidecarTestCases = []struct {
 	ticket: &sidecar.Ticket{
 		State: sidecar.StateOffered,
 		Offer: sidecar.Offer{
-			SignPubKey: providerPubKey,
-			SigOfferDigest: &btcec.Signature{
-				R: new(big.Int).SetInt64(33),
-				S: new(big.Int).SetInt64(33),
-			},
+			SignPubKey:     providerPubKey,
+			SigOfferDigest: test.NewSignatureFromInt(33, 33),
 		},
 	},
 	expectedErr: "signature not valid for public key",

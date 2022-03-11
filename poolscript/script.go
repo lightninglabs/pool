@@ -3,11 +3,11 @@ package poolscript
 import (
 	"bytes"
 	"crypto/sha256"
-	"math/big"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 )
@@ -279,33 +279,41 @@ func IsMultiSigSpend(witness wire.TxWitness) bool {
 }
 
 // IncrementKey increments the given key by the backing curve's base point.
-func IncrementKey(key *btcec.PublicKey) *btcec.PublicKey {
-	curveParams := key.Curve.Params()
-	newX, newY := key.Curve.Add(key.X, key.Y, curveParams.Gx, curveParams.Gy)
-	return &btcec.PublicKey{
-		X:     newX,
-		Y:     newY,
-		Curve: btcec.S256(),
-	}
+func IncrementKey(pubKey *btcec.PublicKey) *btcec.PublicKey {
+	var (
+		key, g, res btcec.JacobianPoint
+	)
+	pubKey.AsJacobian(&key)
+
+	// Multiply G by 1 to get G.
+	secp.ScalarBaseMultNonConst(new(secp.ModNScalar).SetInt(1), &g)
+
+	secp.AddNonConst(&key, &g, &res)
+	res.ToAffine()
+	return btcec.NewPublicKey(&res.X, &res.Y)
 }
 
 // DecrementKey is the opposite of IncrementKey, it "subtracts one" from the
 // current key to arrive at the key used before the IncrementKey operation.
-func DecrementKey(key *btcec.PublicKey) *btcec.PublicKey {
+func DecrementKey(pubKey *btcec.PublicKey) *btcec.PublicKey {
+	var (
+		key, g, res btcec.JacobianPoint
+	)
+	pubKey.AsJacobian(&key)
+
+	// Multiply G by 1 to get G.
+	secp.ScalarBaseMultNonConst(new(secp.ModNScalar).SetInt(1), &g)
+
+	// Get -G by negating the Y axis.
+	g.Y.Normalize()
+	g.Y.Negate(1)
+
 	//  priorKey = key - G
 	//  priorKey = (key.x, key.y) + (G.x, -G.y)
-	curveParams := btcec.S256().Params()
-	negY := new(big.Int).Neg(curveParams.Gy)
-	negY = negY.Mod(negY, curveParams.P)
-	x, y := key.Curve.Add(
-		key.X, key.Y, curveParams.Gx, negY,
-	)
+	secp.AddNonConst(&key, &g, &res)
 
-	return &btcec.PublicKey{
-		X:     x,
-		Y:     y,
-		Curve: btcec.S256(),
-	}
+	res.ToAffine()
+	return btcec.NewPublicKey(&res.X, &res.Y)
 }
 
 // LocateOutputScript determines whether a transaction includes an output with a

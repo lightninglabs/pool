@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/internal/test"
@@ -18,11 +18,11 @@ import (
 )
 
 var (
-	_, startBatchKey = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x01})
+	_, startBatchKey = btcec.PrivKeyFromBytes([]byte{0x01})
 
-	_, acctKeyBig = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x02})
+	_, acctKeyBig = btcec.PrivKeyFromBytes([]byte{0x02})
 
-	_, acctKeySmall = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x03})
+	_, acctKeySmall = btcec.PrivKeyFromBytes([]byte{0x03})
 
 	nodePubkey            = [33]byte{03, 77, 44, 55}
 	execFeeBase           = btcutil.Amount(1_100)

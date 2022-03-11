@@ -2,21 +2,17 @@ package sidecar
 
 import (
 	"context"
-	"math/big"
 	"testing"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/lightninglabs/pool/internal/test"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/stretchr/testify/require"
 )
 
 var (
-	_, providerPubKey = btcec.PrivKeyFromBytes(btcec.S256(), []byte{0x02})
-	testOfferSig      = &btcec.Signature{
-		R: new(big.Int).SetInt64(44),
-		S: new(big.Int).SetInt64(22),
-	}
+	_, providerPubKey = btcec.PrivKeyFromBytes([]byte{0x02})
+	testOfferSig      = test.NewSignatureFromInt(44, 22)
 )
 
 // TestSignOffer makes sure that a sidecar ticket's offer part can be signed
@@ -130,11 +126,8 @@ func TestVerifyOffer(t *testing.T) {
 			ID:    [8]byte{1, 2, 3, 4},
 			State: StateOffered,
 			Offer: Offer{
-				SignPubKey: providerPubKey,
-				SigOfferDigest: &btcec.Signature{
-					R: new(big.Int).SetInt64(33),
-					S: new(big.Int).SetInt64(33),
-				},
+				SignPubKey:     providerPubKey,
+				SigOfferDigest: test.NewSignatureFromInt(33, 33),
 			},
 		},
 		expectedErr: "signature not valid for public key",
@@ -277,11 +270,8 @@ func TestVerifyOrder(t *testing.T) {
 				SigOfferDigest: testOfferSig,
 			},
 			Order: &Order{
-				SigOrderDigest: &btcec.Signature{
-					R: new(big.Int).SetInt64(33),
-					S: new(big.Int).SetInt64(33),
-				},
-				BidNonce: [32]byte{1, 2, 3},
+				SigOrderDigest: test.NewSignatureFromInt(33, 33),
+				BidNonce:       [32]byte{1, 2, 3},
 			},
 		},
 		expectedErr: "signature not valid for public key",

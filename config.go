@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightningnetwork/lnd/cert"
 	"github.com/lightningnetwork/lnd/lncfg"

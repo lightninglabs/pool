@@ -7,10 +7,10 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -65,7 +65,7 @@ func DecodeAndParseKey(key string) (*btcec.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	k, err := btcec.ParsePubKey(kStr, btcec.S256())
+	k, err := btcec.ParsePubKey(kStr)
 	if err != nil {
 		return nil, err
 	}

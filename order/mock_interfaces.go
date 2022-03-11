@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	btcutil "github.com/btcsuite/btcutil"
+	btcutil "github.com/btcsuite/btcd/btcutil"
 	gomock "github.com/golang/mock/gomock"
 	account "github.com/lightninglabs/pool/account"
 	terms "github.com/lightninglabs/pool/terms"

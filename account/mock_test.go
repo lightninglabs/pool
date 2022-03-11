@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/poolscript"
@@ -25,10 +25,10 @@ import (
 
 var (
 	testRawAuctioneerKey, _ = hex.DecodeString("02187d1a0e30f4e5016fc1137363ee9e7ed5dde1e6c50f367422336df7a108b716")
-	testAuctioneerKey, _    = btcec.ParsePubKey(testRawAuctioneerKey, btcec.S256())
+	testAuctioneerKey, _    = btcec.ParsePubKey(testRawAuctioneerKey)
 
 	testRawTraderKey, _ = hex.DecodeString("036b51e0cc2d9e5988ee4967e0ba67ef3727bb633fea21a0af58e0c9395446ba09")
-	testTraderKey, _    = btcec.ParsePubKey(testRawTraderKey, btcec.S256())
+	testTraderKey, _    = btcec.ParsePubKey(testRawTraderKey)
 
 	testTraderKeyDesc = &keychain.KeyDescriptor{
 		KeyLocator: keychain.KeyLocator{
@@ -39,7 +39,7 @@ var (
 	}
 
 	testRawBatchKey, _ = hex.DecodeString("02824d0cbac65e01712124c50ff2cc74ce22851d7b444c1bf2ae66afefb8eaf27f")
-	testBatchKey, _    = btcec.ParsePubKey(testRawBatchKey, btcec.S256())
+	testBatchKey, _    = btcec.ParsePubKey(testRawBatchKey)
 
 	sharedSecret = [32]byte{0x73, 0x65, 0x63, 0x72, 0x65, 0x74}
 )

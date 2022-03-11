@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/pool/internal/test"
 	"github.com/lightninglabs/pool/poolscript"
@@ -18,12 +18,12 @@ var (
 	initialKeyBytes, _ = hex.DecodeString(
 		"034ba8df633bc689472b1fecb9ca0a7d9462467477c975108029f87ca6fb7fc1c1",
 	)
-	initialKey, _ = btcec.ParsePubKey(initialKeyBytes, btcec.S256())
+	initialKey, _ = btcec.ParsePubKey(initialKeyBytes)
 
 	unrelatedKeyBytes, _ = hex.DecodeString(
 		"02975a91ca82550b19355b4826e67c6d2b064f9ec62fb4fd44e044ffbeb8d35127",
 	)
-	unrelatedKey, _ = btcec.ParsePubKey(unrelatedKeyBytes, btcec.S256())
+	unrelatedKey, _ = btcec.ParsePubKey(unrelatedKeyBytes)
 )
 
 func TestDecrementingBatchIDs(t *testing.T) {

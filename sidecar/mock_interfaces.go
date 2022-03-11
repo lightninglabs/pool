@@ -7,7 +7,7 @@ package sidecar
 import (
 	reflect "reflect"
 
-	btcec "github.com/btcsuite/btcd/btcec"
+	v2 "github.com/btcsuite/btcd/btcec/v2"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -49,7 +49,7 @@ func (mr *MockStoreMockRecorder) AddSidecar(sidecar interface{}) *gomock.Call {
 }
 
 // Sidecar mocks base method.
-func (m *MockStore) Sidecar(id [8]byte, offerSignPubKey *btcec.PublicKey) (*Ticket, error) {
+func (m *MockStore) Sidecar(id [8]byte, offerSignPubKey *v2.PublicKey) (*Ticket, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sidecar", id, offerSignPubKey)
 	ret0, _ := ret[0].(*Ticket)

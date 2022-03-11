@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/tlv"
 )
@@ -324,7 +324,7 @@ func deserializeExecution(executionBytes []byte) (Execution, error) {
 // ESig is an Encoder for the btcec.Signature type. An error is returned if val
 // is not a **btcec.Signature.
 func ESig(w io.Writer, val interface{}, buf *[8]byte) error {
-	if v, ok := val.(**btcec.Signature); ok {
+	if v, ok := val.(**ecdsa.Signature); ok {
 		var s [64]byte
 		if *v != nil {
 			rawSig := (*v).Serialize()
@@ -343,7 +343,7 @@ func ESig(w io.Writer, val interface{}, buf *[8]byte) error {
 // DSig is a Decoder for the btcec.Signature type. An error is returned if val
 // is not a **btcec.Signature.
 func DSig(r io.Reader, val interface{}, buf *[8]byte, l uint64) error {
-	if v, ok := val.(**btcec.Signature); ok && l == 64 {
+	if v, ok := val.(**ecdsa.Signature); ok && l == 64 {
 		var s [64]byte
 		if err := tlv.DBytes64(r, &s, buf, 64); err != nil {
 			return err

@@ -4,12 +4,13 @@ import (
 	"crypto/sha256"
 	"testing"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 )
 
 var (
 	privKeyBytes    = sha256.Sum256([]byte("brainwallet_private_key"))
-	privKey, pubKey = btcec.PrivKeyFromBytes(btcec.S256(), privKeyBytes[:])
+	privKey, pubKey = btcec.PrivKeyFromBytes(privKeyBytes[:])
 	clientNonce     = sha256.Sum256([]byte("nonce1"))
 	serverNonce     = sha256.Sum256([]byte("nonce2"))
 )
@@ -31,10 +32,7 @@ func TestAuthHandshake(t *testing.T) {
 	// a signature over authHash and sends that to the server, together with
 	// the nonce they chose and the public key they used to sign.
 	authHash := AuthHash(commitHash, authChallenge)
-	sig, err := privKey.Sign(authHash[:])
-	if err != nil {
-		t.Fatalf("error signing auth hash: %v", err)
-	}
+	sig := ecdsa.Sign(privKey, authHash[:])
 
 	// Step 3b: The server receives the signature, the client's nonce and
 	// public key. The server then reconstructs the full authHash and

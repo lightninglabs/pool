@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
@@ -671,7 +671,7 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 		btcutil.Amount(req.AmountSat), req.TraderKey)
 
 	// Ensure the trader key is well formed.
-	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
+	traderKey, err := btcec.ParsePubKey(req.TraderKey)
 	if err != nil {
 		return nil, err
 	}
@@ -730,7 +730,7 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 	rpcLog.Infof("Withdrawing from acct=%x", req.TraderKey)
 
 	// Ensure the trader key is well formed.
-	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
+	traderKey, err := btcec.ParsePubKey(req.TraderKey)
 	if err != nil {
 		return nil, err
 	}
@@ -798,7 +798,7 @@ func (s *rpcServer) RenewAccount(ctx context.Context,
 	rpcLog.Infof("Updating account expiration for account %x", req.AccountKey)
 
 	// Ensure the account key is well formed.
-	accountKey, err := btcec.ParsePubKey(req.AccountKey, btcec.S256())
+	accountKey, err := btcec.ParsePubKey(req.AccountKey)
 	if err != nil {
 		return nil, err
 	}
@@ -855,7 +855,7 @@ func (s *rpcServer) RenewAccount(ctx context.Context,
 func (s *rpcServer) BumpAccountFee(ctx context.Context,
 	req *poolrpc.BumpAccountFeeRequest) (*poolrpc.BumpAccountFeeResponse, error) {
 
-	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
+	traderKey, err := btcec.ParsePubKey(req.TraderKey)
 	if err != nil {
 		return nil, err
 	}
@@ -875,7 +875,7 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 
 	rpcLog.Infof("Closing acct=%x", req.TraderKey)
 
-	traderKey, err := btcec.ParsePubKey(req.TraderKey, btcec.S256())
+	traderKey, err := btcec.ParsePubKey(req.TraderKey)
 	if err != nil {
 		return nil, err
 	}
@@ -1362,9 +1362,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	}
 
 	// Verify that the account exists.
-	acctKey, err := btcec.ParsePubKey(
-		o.Details().AcctKey[:], btcec.S256(),
-	)
+	acctKey, err := btcec.ParsePubKey(o.Details().AcctKey[:])
 	if err != nil {
 		return nil, err
 	}
@@ -1897,7 +1895,7 @@ func (s *rpcServer) Leases(ctx context.Context,
 	// for. If none are specified, leases for all accounts will be returned.
 	accounts := make(map[[33]byte]struct{}, len(req.Accounts))
 	for _, rawAccountKey := range req.Accounts {
-		_, err := btcec.ParsePubKey(rawAccountKey, btcec.S256())
+		_, err := btcec.ParsePubKey(rawAccountKey)
 		if err != nil {
 			return nil, fmt.Errorf("invalid account key: %v", err)
 		}
@@ -1918,9 +1916,7 @@ func (s *rpcServer) Leases(ctx context.Context,
 		}
 	} else {
 		for _, rawBatchID := range req.BatchIds {
-			batchKey, err := btcec.ParsePubKey(
-				rawBatchID, btcec.S256(),
-			)
+			batchKey, err := btcec.ParsePubKey(rawBatchID)
 			if err != nil {
 				return nil, fmt.Errorf("invalid batch id: %v",
 					err)
@@ -1998,9 +1994,7 @@ func fetchNodeRatings(ctx context.Context, batches []*clientdb.LocalBatchSnapsho
 
 	nodeKeys := make([]*btcec.PublicKey, 0, len(nodeRatings))
 	for pubKey := range nodeRatings {
-		nodeKey, err := btcec.ParsePubKey(
-			pubKey[:], btcec.S256(),
-		)
+		nodeKey, err := btcec.ParsePubKey(pubKey[:])
 		if err != nil {
 			return nil, err
 		}
@@ -2314,7 +2308,7 @@ func (s *rpcServer) NodeRatings(ctx context.Context,
 
 	pubKeys := make([]*btcec.PublicKey, 0, len(req.NodePubkeys))
 	for _, nodeKeyBytes := range req.NodePubkeys {
-		nodeKey, err := btcec.ParsePubKey(nodeKeyBytes, btcec.S256())
+		nodeKey, err := btcec.ParsePubKey(nodeKeyBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -2345,7 +2339,7 @@ func (s *rpcServer) GetInfo(ctx context.Context,
 	if err != nil {
 		return nil, fmt.Errorf("cannot get our node pubkey: %v", err)
 	}
-	nodePubkey, err := btcec.ParsePubKey(nodePubkeyRaw[:], btcec.S256())
+	nodePubkey, err := btcec.ParsePubKey(nodePubkeyRaw[:])
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse our node pubkey: %v", err)
 	}
@@ -2456,9 +2450,7 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 	// We'll need to look up the account state in the database to make sure
 	// the account is actually still open (able to submit bids), and also
 	// to grab the KeyDescriptor that we'll need for signing later.
-	acctKey, err := btcec.ParsePubKey(
-		req.Bid.Details.TraderKey, btcec.S256(),
-	)
+	acctKey, err := btcec.ParsePubKey(req.Bid.Details.TraderKey)
 	if err != nil {
 		return nil, err
 	}

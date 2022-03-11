@@ -8,9 +8,9 @@ import (
 	context "context"
 	reflect "reflect"
 
-	btcec "github.com/btcsuite/btcd/btcec"
+	v2 "github.com/btcsuite/btcd/btcec/v2"
+	btcutil "github.com/btcsuite/btcd/btcutil"
 	wire "github.com/btcsuite/btcd/wire"
-	btcutil "github.com/btcsuite/btcutil"
 	wtxmgr "github.com/btcsuite/btcwallet/wtxmgr"
 	gomock "github.com/golang/mock/gomock"
 	lndclient "github.com/lightninglabs/lndclient"
@@ -44,7 +44,7 @@ func (m *MockStore) EXPECT() *MockStoreMockRecorder {
 }
 
 // Account mocks base method.
-func (m *MockStore) Account(arg0 *btcec.PublicKey) (*Account, error) {
+func (m *MockStore) Account(arg0 *v2.PublicKey) (*Account, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Account", arg0)
 	ret0, _ := ret[0].(*Account)
@@ -202,7 +202,7 @@ func (mr *MockAuctioneerMockRecorder) ModifyAccount(arg0, arg1, arg2, arg3, arg4
 }
 
 // ReserveAccount mocks base method.
-func (m *MockAuctioneer) ReserveAccount(arg0 context.Context, arg1 btcutil.Amount, arg2 uint32, arg3 *btcec.PublicKey) (*Reservation, error) {
+func (m *MockAuctioneer) ReserveAccount(arg0 context.Context, arg1 btcutil.Amount, arg2 uint32, arg3 *v2.PublicKey) (*Reservation, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReserveAccount", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*Reservation)
@@ -383,7 +383,7 @@ func (m *MockManager) EXPECT() *MockManagerMockRecorder {
 }
 
 // BumpAccountFee mocks base method.
-func (m *MockManager) BumpAccountFee(ctx context.Context, traderKey *btcec.PublicKey, newFeeRate chainfee.SatPerKWeight) error {
+func (m *MockManager) BumpAccountFee(ctx context.Context, traderKey *v2.PublicKey, newFeeRate chainfee.SatPerKWeight) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BumpAccountFee", ctx, traderKey, newFeeRate)
 	ret0, _ := ret[0].(error)
@@ -397,7 +397,7 @@ func (mr *MockManagerMockRecorder) BumpAccountFee(ctx, traderKey, newFeeRate int
 }
 
 // CloseAccount mocks base method.
-func (m *MockManager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey, feeExpr FeeExpr, bestHeight uint32) (*wire.MsgTx, error) {
+func (m *MockManager) CloseAccount(ctx context.Context, traderKey *v2.PublicKey, feeExpr FeeExpr, bestHeight uint32) (*wire.MsgTx, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CloseAccount", ctx, traderKey, feeExpr, bestHeight)
 	ret0, _ := ret[0].(*wire.MsgTx)
@@ -412,7 +412,7 @@ func (mr *MockManagerMockRecorder) CloseAccount(ctx, traderKey, feeExpr, bestHei
 }
 
 // DepositAccount mocks base method.
-func (m *MockManager) DepositAccount(ctx context.Context, traderKey *btcec.PublicKey, depositAmount btcutil.Amount, feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error) {
+func (m *MockManager) DepositAccount(ctx context.Context, traderKey *v2.PublicKey, depositAmount btcutil.Amount, feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DepositAccount", ctx, traderKey, depositAmount, feeRate, bestHeight, expiryHeight)
 	ret0, _ := ret[0].(*Account)
@@ -428,7 +428,7 @@ func (mr *MockManagerMockRecorder) DepositAccount(ctx, traderKey, depositAmount,
 }
 
 // HandleAccountConf mocks base method.
-func (m *MockManager) HandleAccountConf(traderKey *btcec.PublicKey, confDetails *chainntnfs.TxConfirmation) error {
+func (m *MockManager) HandleAccountConf(traderKey *v2.PublicKey, confDetails *chainntnfs.TxConfirmation) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HandleAccountConf", traderKey, confDetails)
 	ret0, _ := ret[0].(error)
@@ -442,7 +442,7 @@ func (mr *MockManagerMockRecorder) HandleAccountConf(traderKey, confDetails inte
 }
 
 // HandleAccountExpiry mocks base method.
-func (m *MockManager) HandleAccountExpiry(traderKey *btcec.PublicKey, height uint32) error {
+func (m *MockManager) HandleAccountExpiry(traderKey *v2.PublicKey, height uint32) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HandleAccountExpiry", traderKey, height)
 	ret0, _ := ret[0].(error)
@@ -456,7 +456,7 @@ func (mr *MockManagerMockRecorder) HandleAccountExpiry(traderKey, height interfa
 }
 
 // HandleAccountSpend mocks base method.
-func (m *MockManager) HandleAccountSpend(traderKey *btcec.PublicKey, spendDetails *chainntnfs.SpendDetail) error {
+func (m *MockManager) HandleAccountSpend(traderKey *v2.PublicKey, spendDetails *chainntnfs.SpendDetail) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HandleAccountSpend", traderKey, spendDetails)
 	ret0, _ := ret[0].(error)
@@ -515,7 +515,7 @@ func (mr *MockManagerMockRecorder) RecoverAccount(ctx, account interface{}) *gom
 }
 
 // RenewAccount mocks base method.
-func (m *MockManager) RenewAccount(ctx context.Context, traderKey *btcec.PublicKey, newExpiry uint32, feeRate chainfee.SatPerKWeight, bestHeight uint32) (*Account, *wire.MsgTx, error) {
+func (m *MockManager) RenewAccount(ctx context.Context, traderKey *v2.PublicKey, newExpiry uint32, feeRate chainfee.SatPerKWeight, bestHeight uint32) (*Account, *wire.MsgTx, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RenewAccount", ctx, traderKey, newExpiry, feeRate, bestHeight)
 	ret0, _ := ret[0].(*Account)
@@ -557,7 +557,7 @@ func (mr *MockManagerMockRecorder) Stop() *gomock.Call {
 }
 
 // WatchMatchedAccounts mocks base method.
-func (m *MockManager) WatchMatchedAccounts(ctx context.Context, matchedAccounts []*btcec.PublicKey) error {
+func (m *MockManager) WatchMatchedAccounts(ctx context.Context, matchedAccounts []*v2.PublicKey) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WatchMatchedAccounts", ctx, matchedAccounts)
 	ret0, _ := ret[0].(error)
@@ -571,7 +571,7 @@ func (mr *MockManagerMockRecorder) WatchMatchedAccounts(ctx, matchedAccounts int
 }
 
 // WithdrawAccount mocks base method.
-func (m *MockManager) WithdrawAccount(ctx context.Context, traderKey *btcec.PublicKey, outputs []*wire.TxOut, feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error) {
+func (m *MockManager) WithdrawAccount(ctx context.Context, traderKey *v2.PublicKey, outputs []*wire.TxOut, feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WithdrawAccount", ctx, traderKey, outputs, feeRate, bestHeight, expiryHeight)
 	ret0, _ := ret[0].(*Account)

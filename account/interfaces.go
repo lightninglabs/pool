@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/poolscript"
@@ -230,6 +229,12 @@ func (a *Account) NextOutputScript() ([]byte, error) {
 	)
 }
 
+// CopyPubKey creates a copy of a public key.
+func CopyPubKey(pub *btcec.PublicKey) *btcec.PublicKey {
+	newPubKey, _ := btcec.ParsePubKey(pub.SerializeCompressed())
+	return newPubKey
+}
+
 // Copy returns a deep copy of the account with the given modifiers applied.
 func (a *Account) Copy(modifiers ...Modifier) *Account {
 	accountCopy := &Account{
@@ -237,26 +242,14 @@ func (a *Account) Copy(modifiers ...Modifier) *Account {
 		Expiry: a.Expiry,
 		TraderKey: &keychain.KeyDescriptor{
 			KeyLocator: a.TraderKey.KeyLocator,
-			PubKey: &btcec.PublicKey{
-				X:     big.NewInt(0).Set(a.TraderKey.PubKey.X),
-				Y:     big.NewInt(0).Set(a.TraderKey.PubKey.Y),
-				Curve: a.TraderKey.PubKey.Curve,
-			},
+			PubKey:     CopyPubKey(a.TraderKey.PubKey),
 		},
-		AuctioneerKey: &btcec.PublicKey{
-			X:     big.NewInt(0).Set(a.AuctioneerKey.X),
-			Y:     big.NewInt(0).Set(a.AuctioneerKey.Y),
-			Curve: a.AuctioneerKey.Curve,
-		},
-		BatchKey: &btcec.PublicKey{
-			X:     big.NewInt(0).Set(a.BatchKey.X),
-			Y:     big.NewInt(0).Set(a.BatchKey.Y),
-			Curve: a.BatchKey.Curve,
-		},
-		Secret:     a.Secret,
-		State:      a.State,
-		HeightHint: a.HeightHint,
-		OutPoint:   a.OutPoint,
+		AuctioneerKey: CopyPubKey(a.AuctioneerKey),
+		BatchKey:      CopyPubKey(a.BatchKey),
+		Secret:        a.Secret,
+		State:         a.State,
+		HeightHint:    a.HeightHint,
+		OutPoint:      a.OutPoint,
 	}
 	if a.State != StateInitiated {
 		accountCopy.LatestTx = a.LatestTx.Copy()

@@ -3,7 +3,7 @@ package clientdb
 import (
 	"testing"
 
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/lightninglabs/pool/account"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/bbolt"
