@@ -1951,16 +1951,25 @@ func (s *rpcServer) Leases(ctx context.Context,
 	// response.
 	chanLeaseExpiries := make(map[string]uint32)
 	for _, channel := range openChans.Channels {
-		if channel.ThawHeight == 0 {
-			continue
-		}
 
-		// The thaw height is relative for channels pre
-		// script-enforcement, so we'll add an offset from the
-		// confirmation height of the channel.
-		sid := lnwire.NewShortChanIDFromInt(channel.ChanId)
-		expiryHeight := channel.ThawHeight + sid.BlockHeight
-		chanLeaseExpiries[channel.ChannelPoint] = expiryHeight
+		switch height := channel.ThawHeight; {
+		case height == 0:
+			continue
+
+		case height < 500_000:
+			// If the value is lower than 500,000, then it's
+			// interpreted as a relative height and we need to add
+			// an offset from the confirmation height of the
+			// channel.
+			sid := lnwire.NewShortChanIDFromInt(channel.ChanId)
+			expiryHeight := height + sid.BlockHeight
+			chanLeaseExpiries[channel.ChannelPoint] = expiryHeight
+
+		default:
+			// If the value is greater than 500,000, it is
+			// interpreted as an absolute value.
+			chanLeaseExpiries[channel.ChannelPoint] = height
+		}
 	}
 
 	return s.prepareLeasesResponse(
