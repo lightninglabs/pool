@@ -343,6 +343,26 @@ func (m *manager) OrderMatchValidate(batch *Batch, bestHeight uint32) error {
 		return fmt.Errorf("error validating batch: %w", err)
 	}
 
+	// Verify that the id of the matched node was not filtered out.
+	for nonce, matches := range batch.MatchedOrders {
+		o, err := m.cfg.Store.GetOrder(nonce)
+		if err != nil {
+			return fmt.Errorf("error validating matched orders: %w",
+				err)
+		}
+
+		for _, match := range matches {
+			isValidMatch := IsNodeIDAValidMatch(
+				match.NodeKey, o.Details().AllowedNodeIDs,
+				o.Details().NotAllowedNodeIDs,
+			)
+			if !isValidMatch {
+				return fmt.Errorf("invalid match with %x in "+
+					"order %x", match.NodeKey, nonce)
+			}
+		}
+	}
+
 	m.pendingBatch = batch
 	atomic.StoreUint32(&m.hasPendingBatch, 1)
 
@@ -521,4 +541,35 @@ func parseNodeUris(uris []string) ([]net.Addr, error) {
 
 	}
 	return result, nil
+}
+
+// IsNodeIDAValidMatch takes a nodeID and the list of allowed/not allowed node
+// ids and returns if we are allowed to match with it.
+func IsNodeIDAValidMatch(nodeID [33]byte, allowed, notAllowed [][33]byte) bool {
+	// We are valid to match if:
+	//     - We are in the allowed list
+	//     - We are not in the not allowed list
+	//     - Both lists are empty (no restrictions)
+
+	// The lists are only taken into account if they are not empty.
+	if len(allowed) > 0 {
+		for _, allowedNodeID := range allowed {
+			if nodeID == allowedNodeID {
+				return true
+			}
+		}
+		return false
+	}
+
+	if len(notAllowed) > 0 {
+		for _, notAllowedNodeID := range notAllowed {
+			if nodeID == notAllowedNodeID {
+				return false
+			}
+		}
+		return true
+	}
+
+	// If we get here is because both lists were empty.
+	return true
 }
