@@ -340,6 +340,14 @@ type Kit struct {
 	// ChannelType denotes the channel type that must be used for the
 	// resulting matched channels.
 	ChannelType ChannelType
+
+	// AllowedNodeIDs is the list of node ids this order is allowed to
+	// match with.
+	AllowedNodeIDs [][33]byte
+
+	// NotAllowedNodeIDs is the list of node ids this order is not allowed
+	// to match with.
+	NotAllowedNodeIDs [][33]byte
 }
 
 // Nonce is the unique identifier of each order and MUST be created by hashing a

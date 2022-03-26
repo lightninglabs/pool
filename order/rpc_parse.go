@@ -115,6 +115,31 @@ func ParseRPCOrder(version, leaseDuration uint32,
 			details.ChannelType)
 	}
 
+	if len(details.AllowedNodeIds) > 0 &&
+		len(details.NotAllowedNodeIds) > 0 {
+
+		return nil, errors.New("allowed and not allowed node ids set " +
+			"at the same time")
+	}
+
+	kit.AllowedNodeIDs = make([][33]byte, len(details.AllowedNodeIds))
+	for idx, nodeID := range details.AllowedNodeIds {
+		if _, err := btcec.ParsePubKey(nodeID); err != nil {
+			return nil, fmt.Errorf("invalid allowed_node_id: %x",
+				nodeID)
+		}
+		copy(kit.AllowedNodeIDs[idx][:], nodeID)
+	}
+
+	kit.NotAllowedNodeIDs = make([][33]byte, len(details.NotAllowedNodeIds))
+	for idx, nodeID := range details.NotAllowedNodeIds {
+		if _, err := btcec.ParsePubKey(nodeID); err != nil {
+			return nil, fmt.Errorf("invalid not_allowed_node_id: "+
+				"%x", nodeID)
+		}
+		copy(kit.NotAllowedNodeIDs[idx][:], nodeID)
+	}
+
 	return kit, nil
 }
 
