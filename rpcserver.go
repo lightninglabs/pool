@@ -1535,6 +1535,9 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			CreationTimestampNs: uint64(evt.Timestamp().UnixNano()),
 			Events:              rpcEvents,
 			MinUnitsMatch:       uint32(dbOrder.Details().MinUnitsMatch),
+			ChannelType: marshallChannelType(
+				dbOrder.Details().ChannelType,
+			),
 		}
 
 		switch o := dbOrder.(type) {
@@ -2955,6 +2958,20 @@ func unmarshallNodeTier(nodeTier auctioneerrpc.NodeTier) (order.NodeTier,
 
 	default:
 		return 0, fmt.Errorf("unknown node tier: %v", nodeTier)
+	}
+}
+
+// marshallChannelType maps the channel type into the RPC counterpart.
+func marshallChannelType(
+	channelType order.ChannelType) auctioneerrpc.OrderChannelType {
+
+	switch channelType {
+	case order.ChannelTypePeerDependent:
+		return auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_PEER_DEPENDENT
+	case order.ChannelTypeScriptEnforced:
+		return auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED
+	default:
+		return auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_UNKNOWN
 	}
 }
 
