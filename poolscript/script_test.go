@@ -2,14 +2,18 @@ package poolscript
 
 import (
 	"encoding/hex"
+	"math/rand"
 	"testing"
+	"testing/quick"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/stretchr/testify/require"
 )
 
 const (
-	numOperations = 1000
+	numOperations          = 10000
+	numOperationsQuickTest = 1000
 )
 
 var (
@@ -22,10 +26,10 @@ var (
 	)
 
 	// batchKeyIncremented1kTimesBytes is the initial batch keys incremented
-	// by G 1000 times.
-	batchKeyIncremented1kTimesBytes, _ = hex.DecodeString(
-		"0280488e115da2415389bbe07854133840de2741b31dabd60184c7f5d80c" +
-			"057d79",
+	// by G 10000 times.
+	batchKeyIncremented10kTimesBytes, _ = hex.DecodeString(
+		"03d9dfc4971c9cbabb1b9a4c991914211aa21286e007c15d7e9d828da0b8" +
+			"f07763",
 	)
 )
 
@@ -34,24 +38,28 @@ var (
 func TestIncrementDecrementKey(t *testing.T) {
 	t.Parallel()
 
-	privKey, err := btcec.NewPrivateKey()
-	require.NoError(t, err)
+	rand.Seed(time.Now().Unix())
 
-	randomStartBatchKey := privKey.PubKey()
+	type byteInput [32]byte
+	mainScenario := func(b byteInput) bool {
+		_, randomStartBatchKey := btcec.PrivKeyFromBytes(b[:])
 
-	// Increment the key numOperations times.
-	currentKey := randomStartBatchKey
-	for i := 0; i < numOperations; i++ {
-		currentKey = IncrementKey(currentKey)
+		// Increment the key numOperations times.
+		currentKey := randomStartBatchKey
+		for i := 0; i < numOperationsQuickTest; i++ {
+			currentKey = IncrementKey(currentKey)
+		}
+
+		// Decrement the key again.
+		for i := 0; i < numOperationsQuickTest; i++ {
+			currentKey = DecrementKey(currentKey)
+		}
+
+		// We should arrive at the same start key again.
+		return randomStartBatchKey.IsEqual(currentKey)
 	}
 
-	// Decrement the key again.
-	for i := 0; i < numOperations; i++ {
-		currentKey = DecrementKey(currentKey)
-	}
-
-	// We should arrive at the same start key again.
-	require.Equal(t, randomStartBatchKey, currentKey)
+	require.NoError(t, quick.Check(mainScenario, nil))
 }
 
 // TestIncrementBatchKey tests that incrementing the static, hard-coded batch
@@ -63,8 +71,8 @@ func TestIncrementBatchKey(t *testing.T) {
 	startBatchKey, err := btcec.ParsePubKey(initialBatchKeyBytes)
 	require.NoError(t, err)
 
-	batchKeyIncremented1kTimes, err := btcec.ParsePubKey(
-		batchKeyIncremented1kTimesBytes,
+	batchKeyIncremented10kTimes, err := btcec.ParsePubKey(
+		batchKeyIncremented10kTimesBytes,
 	)
 	require.NoError(t, err)
 
@@ -73,7 +81,7 @@ func TestIncrementBatchKey(t *testing.T) {
 		currentKey = IncrementKey(currentKey)
 	}
 
-	require.Equal(t, batchKeyIncremented1kTimes, currentKey)
+	require.Equal(t, batchKeyIncremented10kTimes, currentKey)
 
 	for i := 0; i < numOperations; i++ {
 		currentKey = DecrementKey(currentKey)
