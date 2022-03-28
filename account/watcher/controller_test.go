@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	gomock "github.com/golang/mock/gomock"
@@ -167,7 +167,7 @@ var controllerWatchAccountTestCases = []struct {
 func TestWatcherControllerWatchAccount(t *testing.T) {
 	traderKeyStr := "036b51e0cc2d9e5988ee4967e0ba67ef3727bb633fea21a0af58e0c9395446ba09"
 	traderKeyRaw, _ := hex.DecodeString(traderKeyStr)
-	traderKey, _ := btcec.ParsePubKey(traderKeyRaw, btcec.S256())
+	traderKey, _ := btcec.ParsePubKey(traderKeyRaw)
 
 	var txHash chainhash.Hash
 	if _, err := rand.Read(txHash[:]); err != nil { // nolint:gosec
@@ -264,7 +264,7 @@ var controllerWatchAccountSpendTestCases = []struct {
 func TestWatcherControllerWatchAccountSpend(t *testing.T) {
 	traderKeyStr := "036b51e0cc2d9e5988ee4967e0ba67ef3727bb633fea21a0af58e0c9395446ba09"
 	traderKeyRaw, _ := hex.DecodeString(traderKeyStr)
-	traderKey, _ := btcec.ParsePubKey(traderKeyRaw, btcec.S256())
+	traderKey, _ := btcec.ParsePubKey(traderKeyRaw)
 
 	outpoint := wire.OutPoint{}
 

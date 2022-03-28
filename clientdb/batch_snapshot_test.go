@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"

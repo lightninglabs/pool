@@ -6,15 +6,15 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"net"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/chaninfo"
@@ -278,11 +278,10 @@ func newManagerHarness(t *testing.T) *managerHarness {
 		LightningClient: lightningClient,
 		BaseClient:      baseClientMock,
 		SignerClient:    signerClient,
-		NodePubKey: &btcec.PublicKey{
-			Curve: btcec.S256(),
-			X:     new(big.Int),
-			Y:     new(big.Int),
-		},
+		NodePubKey: btcec.NewPublicKey(
+			new(btcec.FieldVal).SetInt(0),
+			new(btcec.FieldVal).SetInt(0),
+		),
 		NewNodesOnly:     true,
 		BatchStepTimeout: 400 * time.Millisecond,
 	})
@@ -839,13 +838,12 @@ func TestOfferSidecar(t *testing.T) {
 
 	// We'll need a formally valid signature to pass the parsing. So we'll
 	// just create a dummy signature from a random key pair.
-	privKey, err := btcec.NewPrivateKey(btcec.S256())
+	privKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 	hash := sha256.New()
 	_, _ = hash.Write([]byte("foo"))
 	digest := hash.Sum(nil)
-	sig, err := privKey.Sign(digest)
-	require.NoError(t, err)
+	sig := ecdsa.Sign(privKey, digest)
 
 	h.mgr.cfg.NodePubKey = privKey.PubKey()
 	h.signerMock.Signature = sig.Serialize()

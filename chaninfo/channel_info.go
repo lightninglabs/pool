@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chanbackup"
@@ -79,9 +79,7 @@ func GatherChannelInfo(ctx context.Context, client lndclient.LightningClient,
 	if err != nil {
 		return nil, err
 	}
-	localNodeKey, err := btcec.ParsePubKey(
-		nodeInfo.IdentityPubkey[:], btcec.S256(),
-	)
+	localNodeKey, err := btcec.ParsePubKey(nodeInfo.IdentityPubkey[:])
 	if err != nil {
 		return nil, err
 	}

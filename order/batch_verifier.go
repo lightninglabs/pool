@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/terms"
@@ -104,7 +104,7 @@ func (v *batchVerifier) Verify(batch *Batch, bestHeight uint32) error {
 		// We'll index our account tallies by the serialized form of
 		// the account key so some copying is necessary first.
 		acctKeyRaw := ourOrder.Details().AcctKey
-		acctKey, err := btcec.ParsePubKey(acctKeyRaw[:], btcec.S256())
+		acctKey, err := btcec.ParsePubKey(acctKeyRaw[:])
 		if err != nil {
 			return err
 		}

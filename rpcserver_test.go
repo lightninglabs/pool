@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
 	gomock "github.com/golang/mock/gomock"
 	"github.com/lightninglabs/pool/account"
@@ -24,7 +24,7 @@ var (
 )
 
 func getAccountKey(acctKey []byte) *btcec.PublicKey {
-	res, _ := btcec.ParsePubKey(acctKey, btcec.S256())
+	res, _ := btcec.ParsePubKey(acctKey)
 	return res
 }
 
@@ -96,7 +96,7 @@ var renewAccountTestCases = []struct {
 			AccountKey: []byte{3, 5, 8},
 		}
 	},
-	expectedError: "invalid pub key length 3",
+	expectedError: "malformed public key: invalid length: 3",
 	mockSetter: func(req *poolrpc.RenewAccountRequest,
 		accMgr *account.MockManager, marshalerMock *MockMarshaler) {
 	},

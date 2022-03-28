@@ -7,17 +7,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	gomock "github.com/golang/mock/gomock"
 )
 
 func randomPrivateKey(seed int64) *btcec.PrivateKey {
 	r := rand.New(rand.NewSource(seed))
-	key, err := ecdsa.GenerateKey(btcec.S256(), r)
+	key, err := ecdsa.GenerateKey(secp.S256(), r)
 	if err != nil {
 		return nil
 	}
-	return (*btcec.PrivateKey)(key)
+	return secp.PrivKeyFromBytes(key.D.Bytes())
 }
 
 func randomPublicKey(seed int64) *btcec.PublicKey {
@@ -79,7 +80,7 @@ var overdueExpirationsTestCases = []struct {
 			if len(watcher.expirations) != 1 {
 				return errors.New(
 					"handled expirations were " +
-						" not deleted",
+						"not deleted",
 				)
 			}
 			return nil

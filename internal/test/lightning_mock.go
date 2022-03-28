@@ -9,11 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chanbackup"
 	"github.com/lightningnetwork/lnd/channeldb"
@@ -165,7 +166,7 @@ func (m *MockLightning) AddInvoice(_ context.Context,
 		return lntypes.Hash{}, "", err
 	}
 
-	privKey, err := btcec.NewPrivateKey(btcec.S256())
+	privKey, err := btcec.NewPrivateKey()
 	if err != nil {
 		return lntypes.Hash{}, "", err
 	}
@@ -173,12 +174,14 @@ func (m *MockLightning) AddInvoice(_ context.Context,
 	payReqString, err := payReq.Encode(
 		zpay32.MessageSigner{
 			SignCompact: func(hash []byte) ([]byte, error) {
-				// btcec.SignCompact returns a pubkey-recoverable signature
-				sig, err := btcec.SignCompact(
-					btcec.S256(), privKey, hash, true,
+				// ecdsa.SignCompact returns a
+				// pubkey-recoverable signature.
+				sig, err := ecdsa.SignCompact(
+					privKey, hash, true,
 				)
 				if err != nil {
-					return nil, fmt.Errorf("can't sign the hash: %v", err)
+					return nil, fmt.Errorf("can't sign "+
+						"the hash: %v", err)
 				}
 
 				return sig, nil
@@ -287,7 +290,7 @@ func (m *MockLightning) ListPayments(context.Context,
 func (m *MockLightning) ChannelBackup(_ context.Context,
 	op wire.OutPoint) ([]byte, error) {
 
-	fakeKey, _ := btcec.NewPrivateKey(btcec.S256())
+	fakeKey, _ := btcec.NewPrivateKey()
 	pubKey := fakeKey.PubKey()
 
 	for _, chanInfo := range m.Channels {

@@ -7,9 +7,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneerrpc"
@@ -314,7 +315,7 @@ type MatchedOrder struct {
 // BatchSignature is a map type that is keyed by a trader's account key and
 // contains the multi-sig signature for the input that
 // spends from the current account in a batch.
-type BatchSignature map[[33]byte]*btcec.Signature
+type BatchSignature map[[33]byte]*ecdsa.Signature
 
 // BatchVerifier is an interface that can verify a batch from the point of view
 // of the trader.

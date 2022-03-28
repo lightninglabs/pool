@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/internal/test"
 	"github.com/lightninglabs/pool/order"
@@ -20,7 +20,7 @@ var (
 	testTraderKeyStr = "036b51e0cc2d9e5988ee4967e0ba67ef3727bb633fea21" +
 		"a0af58e0c9395446ba09"
 	testRawTraderKey, _ = hex.DecodeString(testTraderKeyStr)
-	testTraderKey, _    = btcec.ParsePubKey(testRawTraderKey, btcec.S256())
+	testTraderKey, _    = btcec.ParsePubKey(testRawTraderKey)
 	testAccountDesc     = &keychain.KeyDescriptor{
 		KeyLocator: keychain.KeyLocator{},
 		PubKey:     testTraderKey,

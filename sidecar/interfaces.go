@@ -6,8 +6,9 @@ import (
 	"crypto/sha256"
 	"fmt"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/lightningnetwork/lnd/lnwire"
 )
 
@@ -125,7 +126,7 @@ type Offer struct {
 
 	// SigOfferDigest is a signature over the offer digest, signed with the
 	// private key that corresponds to the SignPubKey above.
-	SigOfferDigest *btcec.Signature
+	SigOfferDigest *ecdsa.Signature
 
 	// Auto determines if the provider requires that the ticket be
 	// completed using an automated negotiation sequence.
@@ -158,7 +159,7 @@ type Order struct {
 
 	// SigOrderDigest is a signature over the order digest, signed with the
 	// private key that corresponds to the SignPubKey in the Offer struct.
-	SigOrderDigest *btcec.Signature
+	SigOrderDigest *ecdsa.Signature
 }
 
 // Execution is a struct holding information about the sidecar bid order during
