@@ -317,7 +317,7 @@ func (w *mockWallet) ReleaseOutput(_ context.Context, lockID wtxmgr.LockID,
 }
 
 func (w *mockWallet) SignOutputRaw(context.Context, *wire.MsgTx,
-	[]*lndclient.SignDescriptor) ([][]byte, error) {
+	[]*lndclient.SignDescriptor, []*wire.TxOut) ([][]byte, error) {
 
 	return [][]byte{[]byte("trader sig")}, nil
 }

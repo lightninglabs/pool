@@ -1979,7 +1979,7 @@ func (m *manager) signAccountInput(ctx context.Context, tx *wire.MsgTx,
 		InputIndex:    idx,
 	}
 	sigs, err := m.cfg.Signer.SignOutputRaw(
-		ctx, tx, []*lndclient.SignDescriptor{signDesc},
+		ctx, tx, []*lndclient.SignDescriptor{signDesc}, nil,
 	)
 	if err != nil {
 		return nil, nil, err
