@@ -93,18 +93,18 @@ func (mr *MockSignerClientMockRecorder) SignMessage(ctx, msg, locator interface{
 }
 
 // SignOutputRaw mocks base method.
-func (m *MockSignerClient) SignOutputRaw(ctx context.Context, tx *wire.MsgTx, signDescriptors []*lndclient.SignDescriptor) ([][]byte, error) {
+func (m *MockSignerClient) SignOutputRaw(ctx context.Context, tx *wire.MsgTx, signDescriptors []*lndclient.SignDescriptor, prevOutputs []*wire.TxOut) ([][]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SignOutputRaw", ctx, tx, signDescriptors)
+	ret := m.ctrl.Call(m, "SignOutputRaw", ctx, tx, signDescriptors, prevOutputs)
 	ret0, _ := ret[0].([][]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SignOutputRaw indicates an expected call of SignOutputRaw.
-func (mr *MockSignerClientMockRecorder) SignOutputRaw(ctx, tx, signDescriptors interface{}) *gomock.Call {
+func (mr *MockSignerClientMockRecorder) SignOutputRaw(ctx, tx, signDescriptors, prevOutputs interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignOutputRaw", reflect.TypeOf((*MockSignerClient)(nil).SignOutputRaw), ctx, tx, signDescriptors)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignOutputRaw", reflect.TypeOf((*MockSignerClient)(nil).SignOutputRaw), ctx, tx, signDescriptors, prevOutputs)
 }
 
 // VerifyMessage mocks base method.

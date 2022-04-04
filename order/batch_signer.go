@@ -76,7 +76,7 @@ func (s *batchSigner) Sign(batch *Batch) (BatchSignature, error) {
 		}
 		sigs, err := s.signer.SignOutputRaw(
 			context.Background(), batch.BatchTX,
-			[]*lndclient.SignDescriptor{signDesc},
+			[]*lndclient.SignDescriptor{signDesc}, nil,
 		)
 		if err != nil {
 			return nil, err
