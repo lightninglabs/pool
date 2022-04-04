@@ -480,8 +480,8 @@ github.com/lightninglabs/gozmq v0.0.0-20191113021534-d20a764486bf h1:HZKvJUHlcXI
 github.com/lightninglabs/gozmq v0.0.0-20191113021534-d20a764486bf/go.mod h1:vxmQPeIQxPf6Jf9rM8R+B4rKBqLA2AjttNxkFBL2Plk=
 github.com/lightninglabs/lightning-node-connect/hashmailrpc v1.0.2/go.mod h1:antQGRDRJiuyQF6l+k6NECCSImgCpwaZapATth2Chv4=
 github.com/lightninglabs/lndclient v0.15.0-0/go.mod h1:ORS/YFe9hAXlzN/Uj+gvTmrnXEml6yD6dWwzCjpTJyQ=
-github.com/lightninglabs/lndclient v1.0.1-0.20220328143152-e7bebec99366 h1:m2LkVfLgO9XyXJ811Uk5TLzB8VmUUytkHGBFnexbsEI=
-github.com/lightninglabs/lndclient v1.0.1-0.20220328143152-e7bebec99366/go.mod h1:bef6exkGOboLNGZpx+nJFspmyV/CSiO/aIeWj9UFqE4=
+github.com/lightninglabs/lndclient v0.15.0-2 h1:sbw0LGwxrTodcX3rkFMfKjosfLTWUXdDPVTclDtD7Qg=
+github.com/lightninglabs/lndclient v0.15.0-2/go.mod h1:bef6exkGOboLNGZpx+nJFspmyV/CSiO/aIeWj9UFqE4=
 github.com/lightninglabs/neutrino v0.13.2 h1:rmCJf9BSVPNvDcah9CnhmgzhBmD783AES4hrrlYmBqA=
 github.com/lightninglabs/neutrino v0.13.2/go.mod h1:Cv/v8oHiPhuGiGvGgO+rIMhwCwEdsQFu6as840i2afw=
 github.com/lightninglabs/protobuf-hex-display v1.4.3-hex-display h1:RZJ8H4ueU/aQ9pFtx5wqsuD3B/DezrewJeVwDKKYY8E=

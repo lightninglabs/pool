@@ -17,7 +17,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.5.0
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/lightninglabs/aperture v0.1.17-beta.0.20220328072456-4a2632d0be38
-	github.com/lightninglabs/lndclient v1.0.1-0.20220328143152-e7bebec99366
+	github.com/lightninglabs/lndclient v0.15.0-2
 	github.com/lightninglabs/pool/auctioneerrpc v1.0.5
 	github.com/lightninglabs/protobuf-hex-display v1.4.3-hex-display
 	github.com/lightningnetwork/lnd v0.14.1-beta.0.20220330161355-8072b20d548d
