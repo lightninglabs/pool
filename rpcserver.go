@@ -1148,11 +1148,18 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 
 	s.recoveryMutex.Lock()
 	if s.recoveryPending {
-		defer s.recoveryMutex.Unlock()
+		s.recoveryMutex.Unlock()
 		return nil, fmt.Errorf("recovery already in progress")
 	}
 	s.recoveryPending = true
 	s.recoveryMutex.Unlock()
+
+	// Mark the recovery process as done whenever we finish.
+	defer func() {
+		s.recoveryMutex.Lock()
+		s.recoveryPending = false
+		s.recoveryMutex.Unlock()
+	}()
 
 	log.Infof("Attempting to recover accounts...")
 
@@ -1187,10 +1194,6 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 			rpcLog.Errorf("error storing recovered account: %v", err)
 		}
 	}
-
-	s.recoveryMutex.Lock()
-	s.recoveryPending = false
-	s.recoveryMutex.Unlock()
 
 	return &poolrpc.RecoverAccountsResponse{
 		NumRecoveredAccounts: uint32(numRecovered),
