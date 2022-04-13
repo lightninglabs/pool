@@ -770,7 +770,8 @@ func (s *Server) syncLocalOrderState() error {
 			context.Background(), orderNonce,
 		)
 		if err != nil {
-			return fmt.Errorf("unable to fetch order state: %v", err)
+			return fmt.Errorf("unable to fetch order(%v): %v",
+				orderNonce, err)
 		}
 		remoteOrderState, err := rpcOrderStateToDBState(
 			orderStateResp.State,
