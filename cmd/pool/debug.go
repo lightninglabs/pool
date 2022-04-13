@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -27,6 +28,7 @@ var debugCommands = []cli.Command{
 			dumpOrdersCommand,
 			dumpPendingBatcheCommand,
 			removePendingBatchCommand,
+			deleteOrderCommand,
 		},
 	},
 }
@@ -161,6 +163,55 @@ func dumpOrders(ctx *cli.Context) error {
 	printRespJSON(&poolrpc.ListOrdersResponse{Asks: asks, Bids: bids})
 
 	return nil
+}
+
+var deleteOrderCommand = cli.Command{
+	Name:  "deleteorder",
+	Usage: "delete an order from the local database",
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:  "order_nonce",
+			Usage: "the order nonce of the order to delete",
+		},
+		cli.StringFlag{
+			Name: "db",
+			Usage: "the specific pool database to use instead " +
+				"of the default one on ~/.pool/<network>/" +
+				"pool.db",
+		},
+	},
+	Action: deleteOrder,
+}
+
+func deleteOrder(ctx *cli.Context) error {
+	var (
+		nonceHex string
+		args     = ctx.Args()
+	)
+
+	db, err := getPoolDB(ctx)
+	if err != nil {
+		return fmt.Errorf("error loading DB: %v", err)
+	}
+
+	switch {
+	case ctx.IsSet("order_nonce"):
+		nonceHex = ctx.String("order_nonce")
+	case args.Present():
+		nonceHex = args.First()
+	default:
+		return fmt.Errorf("order_nonce argument missing")
+	}
+
+	decodedOnce, err := hex.DecodeString(nonceHex)
+	if err != nil {
+		return fmt.Errorf("cannot hex decode order nonce: %v", err)
+	}
+
+	var nonce order.Nonce
+	copy(nonce[:], decodedOnce)
+
+	return db.DeleteOrder(nonce)
 }
 
 var dumpPendingBatcheCommand = cli.Command{
