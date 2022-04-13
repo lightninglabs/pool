@@ -131,6 +131,20 @@ func (m *MockStore) EXPECT() *MockStoreMockRecorder {
 	return m.recorder
 }
 
+// DeleteOrder mocks base method.
+func (m *MockStore) DeleteOrder(arg0 Nonce) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOrder", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteOrder indicates an expected call of DeleteOrder.
+func (mr *MockStoreMockRecorder) DeleteOrder(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOrder", reflect.TypeOf((*MockStore)(nil).DeleteOrder), arg0)
+}
+
 // GetOrder mocks base method.
 func (m *MockStore) GetOrder(arg0 Nonce) (Order, error) {
 	m.ctrl.T.Helper()
