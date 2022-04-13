@@ -1,4 +1,4 @@
-FROM golang:1.14-alpine as builder
+FROM --platform=${BUILDPLATFORM} golang:1.16-alpine as builder
 
 # Copy in the local repository to build from.
 COPY . /go/src/github.com/lightninglabs/pool
@@ -18,7 +18,7 @@ RUN apk add --no-cache --update alpine-sdk \
 &&  make install
 
 # Start a new, final image to reduce size.
-FROM alpine as final
+FROM --platform=${BUILDPLATFORM} alpine as final
 
 # Expose poold ports (gRPC and REST).
 EXPOSE 12010 8281
