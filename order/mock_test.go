@@ -83,8 +83,8 @@ func (s *mockStore) GetOrders() ([]Order, error) {
 	return orders, nil
 }
 
-// DelOrder removes the order with the given nonce from the local store.
-func (s *mockStore) DelOrder(nonce Nonce) error {
+// DeleteOrder removes the order with the given nonce from the local store.
+func (s *mockStore) DeleteOrder(nonce Nonce) error {
 	delete(s.orders, nonce)
 	return nil
 }

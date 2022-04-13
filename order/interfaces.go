@@ -757,6 +757,12 @@ type Store interface {
 	// GetOrders returns all orders that are currently known to the store.
 	GetOrders() ([]Order, error)
 
+	// DeleteOrder removes the order with the given Nonce.
+	//
+	// Note: this method deletes the order without checking if it is
+	// referenced somewhere else (e.g. pending batch).
+	DeleteOrder(Nonce) error
+
 	// StorePendingBatch atomically stages all modified orders/accounts as a
 	// result of a pending batch. If any single operation fails, the whole
 	// set of changes is rolled back. Once the batch has been
