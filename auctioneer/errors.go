@@ -3,9 +3,11 @@ package auctioneer
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/lightninglabs/pool/auctioneerrpc"
+	"github.com/lightninglabs/pool/clientdb"
 )
 
 var (
@@ -71,4 +73,12 @@ func AcctResNotCompletedErrFromRPC(
 	copy(result.AuctioneerKey[:], rpcAcc.AuctioneerKey)
 	copy(result.InitialBatchKey[:], rpcAcc.BatchKey)
 	return result
+}
+
+// IsNotFoundErr tries to match the given error with ErrNoOrder. Useful to
+// check rpc errors from the server.
+func IsOrderNotFoundErr(err error) bool {
+	// The rpc error will look like
+	//     rpc error: code = Unknown desc = no order found
+	return strings.Contains(err.Error(), clientdb.ErrNoOrder.Error())
 }
