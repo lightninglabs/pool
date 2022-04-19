@@ -297,6 +297,28 @@ func (db *DB) GetOrders() ([]order.Order, error) {
 	return orders, nil
 }
 
+// DeleteOrder removes the order with the given nonce. If no order with that
+// nonce exists in the store, ErrNoOrder is returned.
+//
+// NOTE: This is part of the Store interface.
+func (db *DB) DeleteOrder(nonce order.Nonce) error {
+	return db.Update(func(tx *bbolt.Tx) error {
+		// First, we'll grab our main order bucket key.
+		rootBucket, err := getBucket(tx, ordersBucketKey)
+		if err != nil {
+			return err
+		}
+
+		// Check that the order exists in the main bucket.
+		orderBucket := rootBucket.Bucket(nonce[:])
+		if orderBucket == nil {
+			return ErrNoOrder
+		}
+
+		return rootBucket.DeleteBucket(nonce[:])
+	})
+}
+
 // storeOrderTX saves a byte serialized order in its specific sub bucket within
 // the root orders bucket.
 func storeOrderTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
