@@ -1306,7 +1306,13 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 			s.server.lndServices.Version, scriptEnforceVersion,
 		)
 		if verErr == nil {
-			return order.ChannelTypeScriptEnforced
+			// TODO(guggero): Use order.ChannelTypeScriptEnforced
+			// here as soon as a large percentage of ask orders
+			// support script enforced channel types to not cause a
+			// market segregation for lnd 0.14.x or later users
+			// without them being aware of why their bids aren't
+			// getting matched.
+			return order.ChannelTypePeerDependent
 		}
 
 		return order.ChannelTypePeerDependent
