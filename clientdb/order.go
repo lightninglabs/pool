@@ -26,6 +26,14 @@ const (
 	// orderChannelType is the tlv type we use to store the desired channel
 	// type resulting from a matched order.
 	orderChannelType tlv.Type = 3
+
+	// allowedNodeIDsType is the tlv type we use to store the list of node
+	// ids the order is allowed to match with.
+	allowedNodeIDsType tlv.Type = 4
+
+	// notAllowedNodeIDsType is the tlv type we use to store the list of
+	// node ids the order is not allowed to match with.
+	notAllowedNodeIDsType tlv.Type = 5
 )
 
 var (
@@ -661,9 +669,11 @@ func DeserializeOrder(nonce order.Nonce, r io.Reader) (
 // non-default values of the additional data will be set on the given order.
 func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 	var (
-		selfChanBalance uint64
-		sidecarTicket   []byte
-		channelType     uint8
+		selfChanBalance   uint64
+		sidecarTicket     []byte
+		channelType       uint8
+		allowedNodeIDs    []byte
+		notAllowedNodeIDs []byte
 	)
 
 	// We'll add records for all possible additional order data fields here
@@ -675,6 +685,10 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 		),
 		tlv.MakePrimitiveRecord(bidSidecarTicketType, &sidecarTicket),
 		tlv.MakePrimitiveRecord(orderChannelType, &channelType),
+		tlv.MakePrimitiveRecord(allowedNodeIDsType, &allowedNodeIDs),
+		tlv.MakePrimitiveRecord(
+			notAllowedNodeIDsType, &notAllowedNodeIDs,
+		),
 	)
 	if err != nil {
 		return err
@@ -709,6 +723,22 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 
 	if t, ok := parsedTypes[orderChannelType]; ok && t == nil {
 		o.Details().ChannelType = order.ChannelType(channelType)
+	}
+
+	if t, ok := parsedTypes[allowedNodeIDsType]; ok && t == nil {
+		nodeIDs, err := AssemblePubKeySlice(allowedNodeIDs)
+		if err != nil {
+			return fmt.Errorf("invalid allowedNodeIDs: %v", err)
+		}
+		o.Details().AllowedNodeIDs = nodeIDs
+	}
+
+	if t, ok := parsedTypes[notAllowedNodeIDsType]; ok && t == nil {
+		nodeIDs, err := AssemblePubKeySlice(notAllowedNodeIDs)
+		if err != nil {
+			return fmt.Errorf("invalid notAllowedNodeIDs: %v", err)
+		}
+		o.Details().NotAllowedNodeIDs = nodeIDs
 	}
 
 	return nil
@@ -750,10 +780,60 @@ func serializeOrderTlvData(w io.Writer, o order.Order) error {
 		orderChannelType, &channelType,
 	))
 
+	if len(o.Details().AllowedNodeIDs) > 0 {
+		idBytes := FlattenPubKeySlice(o.Details().AllowedNodeIDs)
+		tlvRecords = append(
+			tlvRecords, tlv.MakePrimitiveRecord(
+				allowedNodeIDsType, &idBytes,
+			),
+		)
+	}
+
+	if len(o.Details().NotAllowedNodeIDs) > 0 {
+		idBytes := FlattenPubKeySlice(o.Details().NotAllowedNodeIDs)
+		tlvRecords = append(
+			tlvRecords, tlv.MakePrimitiveRecord(
+				notAllowedNodeIDsType, &idBytes,
+			),
+		)
+	}
+
 	tlvStream, err := tlv.NewStream(tlvRecords...)
 	if err != nil {
 		return err
 	}
 
 	return tlvStream.Encode(w)
+}
+
+// FlattenPubKeySlice returns a flatten array of bytes from the
+// given array of public keys.
+func FlattenPubKeySlice(pubKeys [][33]byte) []byte {
+	flatten := make([]byte, len(pubKeys)*33)
+
+	for i, key := range pubKeys {
+		copy(flatten[i*33:(i+1)*33], key[:])
+	}
+
+	return flatten
+}
+
+// AssemblePubKeySlice is the inverse of FlattenPubKeySlice. Given a slice of
+// bytes representing a flattened slice of pubkeys returns the original slice
+// of pubkeys.
+func AssemblePubKeySlice(flatten []byte) ([][33]byte, error) {
+	// Sanity check that this is a valid encoded slice.
+	if len(flatten)%33 != 0 {
+		return nil, fmt.Errorf("invalid length for a [][33]byte "+
+			"encoded slice: %v", len(flatten))
+	}
+	numOfPubKeys := len(flatten) / 33
+	pubKeys := make([][33]byte, 0, numOfPubKeys)
+
+	for i := 0; i < numOfPubKeys; i++ {
+		var pubKey [33]byte
+		copy(pubKey[:], flatten[i*33:(i+1)*33])
+		pubKeys = append(pubKeys, pubKey)
+	}
+	return pubKeys, nil
 }

@@ -431,6 +431,22 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		MaxBatchFeeRateSatPerKw: uint64(o.Details().MaxBatchFeeRate),
 	}
 
+	details.AllowedNodeIds = make(
+		[][]byte, len(o.Details().AllowedNodeIDs),
+	)
+	for idx, nodeID := range o.Details().AllowedNodeIDs {
+		details.AllowedNodeIds[idx] = make([]byte, len(nodeID))
+		copy(details.AllowedNodeIds[idx], nodeID[:])
+	}
+
+	details.NotAllowedNodeIds = make(
+		[][]byte, len(o.Details().NotAllowedNodeIDs),
+	)
+	for idx, nodeID := range o.Details().NotAllowedNodeIDs {
+		details.NotAllowedNodeIds[idx] = make([]byte, len(nodeID))
+		copy(details.NotAllowedNodeIds[idx], nodeID[:])
+	}
+
 	// Split into server message which is type specific.
 	switch castOrder := o.(type) {
 	case *order.Ask:

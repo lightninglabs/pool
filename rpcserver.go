@@ -1248,6 +1248,16 @@ func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
 			leaseDuration, auctionTerms.LeaseDurationBuckets)
 	}
 
+	// If the order does not specify any AllowedNodeIDs/NotAllowedNodeIDs
+	// it means that it can match with any other order. However, both
+	// fields cannot be set at the same time.
+	if len(order.Details().AllowedNodeIDs) > 0 &&
+		len(order.Details().NotAllowedNodeIDs) > 0 {
+
+		return fmt.Errorf("allowed and not allowed node ids set at " +
+			"the same time")
+	}
+
 	return nil
 }
 

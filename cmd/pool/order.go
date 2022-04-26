@@ -116,6 +116,20 @@ var sharedFlags = []cli.Flag{
 			channelTypePeerDependent,
 			channelTypeScriptEnforced),
 	},
+	cli.StringSliceFlag{
+		Name: "allowed_node_id",
+		Usage: "the list of nodes this order is allowed to match " +
+			"with; if empty, the order will be able to match " +
+			"with any node unless not_allowed_node_id is set. " +
+			"Can be specified multiple times",
+	},
+	cli.StringSliceFlag{
+		Name: "not_allowed_node_id",
+		Usage: "the list of nodes this order is not allowed to match " +
+			"with; if empty, the order will be able to match " +
+			"with any node unless allowed_node_id is set. Can be " +
+			"specified multiple times",
+	},
 }
 
 // promptForConfirmation continuously prompts the user for the message until
@@ -256,6 +270,32 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 		return nil, fmt.Errorf("unknown channel type %q", channelType)
 	}
 
+	// Get the list of node ids this order is allowed/not allowed to match
+	// with.
+	allowedNodeIDs, err := parseNodePubKeySlice(ctx, "allowed_node_id")
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse allowed_node_id: %v",
+			err)
+	}
+
+	notAllowedNodeIDs, err := parseNodePubKeySlice(
+		ctx, "not_allowed_node_id",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse "+
+			"not_allowed_node_id: %v", err)
+	}
+
+	// By default the order is able to match with all the orders unless
+	// one of this fields is specified. They are incompatible.
+	if len(allowedNodeIDs) > 0 && len(notAllowedNodeIDs) > 0 {
+		return nil, fmt.Errorf("allowed_node_id and " +
+			"not_allowed_node_id cannot be set together")
+	}
+
+	params.AllowedNodeIds = allowedNodeIDs
+	params.NotAllowedNodeIds = notAllowedNodeIDs
+
 	return params, nil
 }
 
@@ -279,6 +319,26 @@ func parseAccountKey(ctx *cli.Context, args cli.Args) ([]byte, error) {
 			"must be hex encoded 33 byte public key")
 	}
 	return hex.DecodeString(acctKeyStr)
+}
+
+// parseNodePubKeySlice parses the list of node ids in the paramater matching
+// the given `key`.
+//
+// NOTE: the parameter must contain a string slice. The strings are hex decoded
+// but not parsed as a btcec.PublicKey.
+func parseNodePubKeySlice(ctx *cli.Context, key string) ([][]byte, error) {
+	hexNodeIDs := ctx.StringSlice(key)
+	nodeIDs := make([][]byte, 0, len(hexNodeIDs))
+	for _, hexNodeID := range hexNodeIDs {
+		nodeID, err := hex.DecodeString(hexNodeID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid node ID %v: %v",
+				hexNodeID, err)
+		}
+		nodeIDs = append(nodeIDs, nodeID)
+	}
+
+	return nodeIDs, nil
 }
 
 var ordersSubmitAskCommand = cli.Command{

@@ -43,6 +43,12 @@ func TestSubmitOrder(t *testing.T) {
 	}
 	o.Details().MinUnitsMatch = 10
 	o.Details().ChannelType = order.ChannelTypeScriptEnforced
+
+	// It is not possible for a oder to have AllowedNodeIDs and
+	// NotAllowedNodeIDs at the same time but we want to test
+	// serialization/deserialization here.
+	o.Details().AllowedNodeIDs = [][33]byte{{1, 2, 3}, {2, 3, 4}, {3, 4, 5}}
+	o.Details().NotAllowedNodeIDs = [][33]byte{{4, 5, 6}, {5, 6, 7}}
 	err := store.SubmitOrder(o)
 	if err != nil {
 		t.Fatalf("unable to store order: %v", err)
