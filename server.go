@@ -754,6 +754,16 @@ func (s *Server) syncLocalOrderState() error {
 		noncesToUpdate []order.Nonce
 		ordersToUpdate [][]order.Modifier
 	)
+
+	addUpdate := func(nonce order.Nonce, state order.State) {
+		noncesToUpdate = append(noncesToUpdate, nonce)
+		ordersToUpdate = append(
+			ordersToUpdate,
+			[]order.Modifier{
+				order.StateModifier(state),
+			},
+		)
+	}
 	for _, dbOrder := range dbOrders {
 		orderNonce := dbOrder.Nonce()
 		localOrderState := dbOrder.Details().State
@@ -770,9 +780,24 @@ func (s *Server) syncLocalOrderState() error {
 			context.Background(), orderNonce,
 		)
 		if err != nil {
-			return fmt.Errorf("unable to fetch order(%v): %v",
-				orderNonce, err)
+			switch {
+			// If the server does not know about this order mark it
+			// as failed and allow the client start up with the
+			// rest of valid orders.
+			//
+			// NOTE: This should never happen under normal
+			// conditions. This was added to handle a specific
+			// failure that's being investigated.
+			case auctioneer.IsOrderNotFoundErr(err):
+				addUpdate(orderNonce, order.StateFailed)
+
+			default:
+				return fmt.Errorf("unable to fetch order(%v): "+
+					"%v", orderNonce, err)
+			}
+			continue
 		}
+
 		remoteOrderState, err := rpcOrderStateToDBState(
 			orderStateResp.State,
 		)
@@ -791,14 +816,7 @@ func (s *Server) syncLocalOrderState() error {
 		// complete the handshake and poll to see if there're any
 		// pending batches we need to process.
 		if remoteOrderState == order.StateCanceled {
-			noncesToUpdate = append(noncesToUpdate, orderNonce)
-			ordersToUpdate = append(
-				ordersToUpdate,
-				[]order.Modifier{
-					order.StateModifier(order.StateCanceled),
-				},
-			)
-
+			addUpdate(orderNonce, order.StateCanceled)
 			log.Debugf("Order(%v) is cancelled, updating local "+
 				"state", orderNonce)
 		} else {
