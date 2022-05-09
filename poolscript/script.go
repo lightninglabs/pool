@@ -304,9 +304,13 @@ func DecrementKey(pubKey *btcec.PublicKey) *btcec.PublicKey {
 	// Multiply G by 1 to get G.
 	secp.ScalarBaseMultNonConst(new(secp.ModNScalar).SetInt(1), &g)
 
-	// Get -G by negating the Y axis.
+	// Get -G by negating the Y axis. We normalize first, so we can negate
+	// with the magnitude of 1 and then again to make sure everything is
+	// normalized again after the negation.
+	g.ToAffine()
 	g.Y.Normalize()
 	g.Y.Negate(1)
+	g.Y.Normalize()
 
 	//  priorKey = key - G
 	//  priorKey = (key.x, key.y) + (G.x, -G.y)
