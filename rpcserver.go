@@ -904,7 +904,7 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 		switch feeExpr := dest.OutputWithFee.Fees.(type) {
 		case *poolrpc.OutputWithFee_ConfTarget:
 			var err error
-			feeRate, err = s.lndServices.WalletKit.EstimateFee(
+			feeRate, err = s.lndServices.WalletKit.EstimateFeeRate(
 				ctx, int32(feeExpr.ConfTarget),
 			)
 			if err != nil {

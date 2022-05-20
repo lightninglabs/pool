@@ -195,7 +195,7 @@ func (m *manager) start() error {
 	// We calculate the default fee rate that will be used
 	// for resuming accounts for which we haven't created and broadcast
 	// a transaction yet
-	feeRate, err := m.cfg.Wallet.EstimateFee(
+	feeRate, err := m.cfg.Wallet.EstimateFeeRate(
 		ctx, int32(DefaultFundingConfTarget),
 	)
 	if err != nil {
@@ -257,7 +257,7 @@ func (m *manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
 	}
 
 	// Now calculate the estimated fee rate from the confTarget.
-	feeRate, err := m.cfg.Wallet.EstimateFee(ctx, int32(confTarget))
+	feeRate, err := m.cfg.Wallet.EstimateFeeRate(ctx, int32(confTarget))
 	if err != nil {
 		return 0, 0, fmt.Errorf("error estimating fee rate: %v", err)
 	}
@@ -2034,7 +2034,7 @@ func validateAccountParams(value, maxValue btcutil.Amount, expiry,
 	return validateAccountExpiry(expiry, bestHeight)
 }
 
-// numConfsForValue chooses an appropriate number of confirmations to wait for
+// NumConfsForValue chooses an appropriate number of confirmations to wait for
 // an account based on its initial value.
 //
 // TODO(wilmer): Determine the recommend number of blocks to wait for a

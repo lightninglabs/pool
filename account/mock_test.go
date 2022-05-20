@@ -334,7 +334,7 @@ func (w *mockWallet) ComputeInputScript(context.Context, *wire.MsgTx,
 	}}, nil
 }
 
-func (w *mockWallet) EstimateFee(_ context.Context,
+func (w *mockWallet) EstimateFeeRate(_ context.Context,
 	_ int32) (chainfee.SatPerKWeight, error) {
 
 	return chainfee.FeePerKwFloor, nil
