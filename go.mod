@@ -16,9 +16,9 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.5.0
 	github.com/jessevdk/go-flags v1.4.0
-	github.com/lightninglabs/aperture v0.1.17-beta.0.20220328072456-4a2632d0be38
+	github.com/lightninglabs/aperture v0.1.18-beta
 	github.com/lightninglabs/lndclient v0.15.0-6
-	github.com/lightninglabs/pool/auctioneerrpc v1.0.5
+	github.com/lightninglabs/pool/auctioneerrpc v1.0.6
 	github.com/lightninglabs/protobuf-hex-display v1.4.3-hex-display
 	github.com/lightningnetwork/lnd v0.15.0-beta.rc3
 	github.com/lightningnetwork/lnd/cert v1.1.1
