@@ -129,7 +129,7 @@ func (m *MockWalletKit) SendOutputs(_ context.Context, outputs []*wire.TxOut,
 	return &tx, nil
 }
 
-func (m *MockWalletKit) EstimateFee(_ context.Context, confTarget int32) (
+func (m *MockWalletKit) EstimateFeeRate(_ context.Context, confTarget int32) (
 	chainfee.SatPerKWeight, error) {
 
 	if confTarget <= 1 {

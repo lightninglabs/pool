@@ -77,6 +77,86 @@ func (mr *MockSignerClientMockRecorder) DeriveSharedKey(ctx, ephemeralPubKey, ke
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeriveSharedKey", reflect.TypeOf((*MockSignerClient)(nil).DeriveSharedKey), ctx, ephemeralPubKey, keyLocator)
 }
 
+// MuSig2Cleanup mocks base method.
+func (m *MockSignerClient) MuSig2Cleanup(ctx context.Context, sessionID [32]byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MuSig2Cleanup", ctx, sessionID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MuSig2Cleanup indicates an expected call of MuSig2Cleanup.
+func (mr *MockSignerClientMockRecorder) MuSig2Cleanup(ctx, sessionID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MuSig2Cleanup", reflect.TypeOf((*MockSignerClient)(nil).MuSig2Cleanup), ctx, sessionID)
+}
+
+// MuSig2CombineSig mocks base method.
+func (m *MockSignerClient) MuSig2CombineSig(ctx context.Context, sessionID [32]byte, otherPartialSigs [][]byte) (bool, []byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MuSig2CombineSig", ctx, sessionID, otherPartialSigs)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].([]byte)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// MuSig2CombineSig indicates an expected call of MuSig2CombineSig.
+func (mr *MockSignerClientMockRecorder) MuSig2CombineSig(ctx, sessionID, otherPartialSigs interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MuSig2CombineSig", reflect.TypeOf((*MockSignerClient)(nil).MuSig2CombineSig), ctx, sessionID, otherPartialSigs)
+}
+
+// MuSig2CreateSession mocks base method.
+func (m *MockSignerClient) MuSig2CreateSession(ctx context.Context, signerLoc *keychain.KeyLocator, signers [][32]byte, opts ...lndclient.MuSig2SessionOpts) (*input.MuSig2SessionInfo, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, signerLoc, signers}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "MuSig2CreateSession", varargs...)
+	ret0, _ := ret[0].(*input.MuSig2SessionInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MuSig2CreateSession indicates an expected call of MuSig2CreateSession.
+func (mr *MockSignerClientMockRecorder) MuSig2CreateSession(ctx, signerLoc, signers interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, signerLoc, signers}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MuSig2CreateSession", reflect.TypeOf((*MockSignerClient)(nil).MuSig2CreateSession), varargs...)
+}
+
+// MuSig2RegisterNonces mocks base method.
+func (m *MockSignerClient) MuSig2RegisterNonces(ctx context.Context, sessionID [32]byte, nonces [][66]byte) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MuSig2RegisterNonces", ctx, sessionID, nonces)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MuSig2RegisterNonces indicates an expected call of MuSig2RegisterNonces.
+func (mr *MockSignerClientMockRecorder) MuSig2RegisterNonces(ctx, sessionID, nonces interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MuSig2RegisterNonces", reflect.TypeOf((*MockSignerClient)(nil).MuSig2RegisterNonces), ctx, sessionID, nonces)
+}
+
+// MuSig2Sign mocks base method.
+func (m *MockSignerClient) MuSig2Sign(ctx context.Context, sessionID, message [32]byte, cleanup bool) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MuSig2Sign", ctx, sessionID, message, cleanup)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MuSig2Sign indicates an expected call of MuSig2Sign.
+func (mr *MockSignerClientMockRecorder) MuSig2Sign(ctx, sessionID, message, cleanup interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MuSig2Sign", reflect.TypeOf((*MockSignerClient)(nil).MuSig2Sign), ctx, sessionID, message, cleanup)
+}
+
 // SignMessage mocks base method.
 func (m *MockSignerClient) SignMessage(ctx context.Context, msg []byte, locator keychain.KeyLocator) ([]byte, error) {
 	m.ctrl.T.Helper()
@@ -189,19 +269,19 @@ func (mr *MockWalletKitClientMockRecorder) DeriveNextKey(ctx, family interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeriveNextKey", reflect.TypeOf((*MockWalletKitClient)(nil).DeriveNextKey), ctx, family)
 }
 
-// EstimateFee mocks base method.
-func (m *MockWalletKitClient) EstimateFee(ctx context.Context, confTarget int32) (chainfee.SatPerKWeight, error) {
+// EstimateFeeRate mocks base method.
+func (m *MockWalletKitClient) EstimateFeeRate(ctx context.Context, confTarget int32) (chainfee.SatPerKWeight, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EstimateFee", ctx, confTarget)
+	ret := m.ctrl.Call(m, "EstimateFeeRate", ctx, confTarget)
 	ret0, _ := ret[0].(chainfee.SatPerKWeight)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// EstimateFee indicates an expected call of EstimateFee.
-func (mr *MockWalletKitClientMockRecorder) EstimateFee(ctx, confTarget interface{}) *gomock.Call {
+// EstimateFeeRate indicates an expected call of EstimateFeeRate.
+func (mr *MockWalletKitClientMockRecorder) EstimateFeeRate(ctx, confTarget interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EstimateFee", reflect.TypeOf((*MockWalletKitClient)(nil).EstimateFee), ctx, confTarget)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EstimateFeeRate", reflect.TypeOf((*MockWalletKitClient)(nil).EstimateFeeRate), ctx, confTarget)
 }
 
 // LeaseOutput mocks base method.
