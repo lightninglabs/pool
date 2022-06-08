@@ -11,6 +11,7 @@ import (
 
 	btcec "github.com/btcsuite/btcd/btcec/v2"
 	btcutil "github.com/btcsuite/btcd/btcutil"
+	psbt "github.com/btcsuite/btcd/btcutil/psbt"
 	chainhash "github.com/btcsuite/btcd/chaincfg/chainhash"
 	wire "github.com/btcsuite/btcd/wire"
 	wtxmgr "github.com/btcsuite/btcwallet/wtxmgr"
@@ -284,6 +285,39 @@ func (mr *MockWalletKitClientMockRecorder) EstimateFeeRate(ctx, confTarget inter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EstimateFeeRate", reflect.TypeOf((*MockWalletKitClient)(nil).EstimateFeeRate), ctx, confTarget)
 }
 
+// FinalizePsbt mocks base method.
+func (m *MockWalletKitClient) FinalizePsbt(ctx context.Context, packet *psbt.Packet, account string) (*psbt.Packet, *wire.MsgTx, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FinalizePsbt", ctx, packet, account)
+	ret0, _ := ret[0].(*psbt.Packet)
+	ret1, _ := ret[1].(*wire.MsgTx)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// FinalizePsbt indicates an expected call of FinalizePsbt.
+func (mr *MockWalletKitClientMockRecorder) FinalizePsbt(ctx, packet, account interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinalizePsbt", reflect.TypeOf((*MockWalletKitClient)(nil).FinalizePsbt), ctx, packet, account)
+}
+
+// FundPsbt mocks base method.
+func (m *MockWalletKitClient) FundPsbt(ctx context.Context, req *walletrpc.FundPsbtRequest) (*psbt.Packet, int32, []*walletrpc.UtxoLease, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FundPsbt", ctx, req)
+	ret0, _ := ret[0].(*psbt.Packet)
+	ret1, _ := ret[1].(int32)
+	ret2, _ := ret[2].([]*walletrpc.UtxoLease)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
+}
+
+// FundPsbt indicates an expected call of FundPsbt.
+func (mr *MockWalletKitClientMockRecorder) FundPsbt(ctx, req interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FundPsbt", reflect.TypeOf((*MockWalletKitClient)(nil).FundPsbt), ctx, req)
+}
+
 // LeaseOutput mocks base method.
 func (m *MockWalletKitClient) LeaseOutput(ctx context.Context, lockID wtxmgr.LockID, op wire.OutPoint, leaseTime time.Duration) (time.Time, error) {
 	m.ctrl.T.Helper()
@@ -345,18 +379,18 @@ func (mr *MockWalletKitClientMockRecorder) ListUnspent(ctx, minConfs, maxConfs i
 }
 
 // NextAddr mocks base method.
-func (m *MockWalletKitClient) NextAddr(ctx context.Context) (btcutil.Address, error) {
+func (m *MockWalletKitClient) NextAddr(ctx context.Context, accountName string, addressType walletrpc.AddressType, change bool) (btcutil.Address, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NextAddr", ctx)
+	ret := m.ctrl.Call(m, "NextAddr", ctx, accountName, addressType, change)
 	ret0, _ := ret[0].(btcutil.Address)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // NextAddr indicates an expected call of NextAddr.
-func (mr *MockWalletKitClientMockRecorder) NextAddr(ctx interface{}) *gomock.Call {
+func (mr *MockWalletKitClientMockRecorder) NextAddr(ctx, accountName, addressType, change interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NextAddr", reflect.TypeOf((*MockWalletKitClient)(nil).NextAddr), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NextAddr", reflect.TypeOf((*MockWalletKitClient)(nil).NextAddr), ctx, accountName, addressType, change)
 }
 
 // PublishTransaction mocks base method.
@@ -400,6 +434,21 @@ func (m *MockWalletKitClient) SendOutputs(ctx context.Context, outputs []*wire.T
 func (mr *MockWalletKitClientMockRecorder) SendOutputs(ctx, outputs, feeRate, label interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendOutputs", reflect.TypeOf((*MockWalletKitClient)(nil).SendOutputs), ctx, outputs, feeRate, label)
+}
+
+// SignPsbt mocks base method.
+func (m *MockWalletKitClient) SignPsbt(ctx context.Context, packet *psbt.Packet) (*psbt.Packet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SignPsbt", ctx, packet)
+	ret0, _ := ret[0].(*psbt.Packet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SignPsbt indicates an expected call of SignPsbt.
+func (mr *MockWalletKitClientMockRecorder) SignPsbt(ctx, packet interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignPsbt", reflect.TypeOf((*MockWalletKitClient)(nil).SignPsbt), ctx, packet)
 }
 
 // MockChainNotifierClient is a mock of ChainNotifierClient interface.

@@ -25,6 +25,7 @@ import (
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwallet/chanfunding"
@@ -1345,7 +1346,8 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 	// script was not populated, we'll generate one from the backing lnd
 	// node's wallet.
 	if feeExpr, ok := feeExpr.(*OutputWithFee); ok && feeExpr.PkScript == nil {
-		addr, err := m.cfg.Wallet.NextAddr(ctx)
+		changeType := walletrpc.AddressType_WITNESS_PUBKEY_HASH
+		addr, err := m.cfg.Wallet.NextAddr(ctx, "", changeType, false)
 		if err != nil {
 			return nil, err
 		}
@@ -1825,11 +1827,12 @@ coinSelection:
 	// A change output will only exist as long as the remaining amount is
 	// above the network's dust limit.
 	var changeOutput *wire.TxOut
-	dustLimit := lnwallet.DustLimitForSize(
-		input.P2WPKHSize,
-	)
+	dustLimit := lnwallet.DustLimitForSize(input.P2WPKHSize)
+	changeType := walletrpc.AddressType_WITNESS_PUBKEY_HASH
 	if changeAmt >= dustLimit {
-		addr, err := m.cfg.Wallet.NextAddr(context.Background())
+		addr, err := m.cfg.Wallet.NextAddr(
+			context.Background(), "", changeType, true,
+		)
 		if err != nil {
 			releaseInputs()
 			return nil, nil, nil, err
