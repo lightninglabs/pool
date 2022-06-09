@@ -670,6 +670,13 @@ enum AuctionAccountState {
     The account has recently participated in a batch and is not yet confirmed.
     */
     STATE_PENDING_BATCH = 5;
+
+    /*
+    The account has reached the expiration height while it had a pending update
+    that hasn't yet confirmed. This allows accounts to be renewed once
+    confirmed and expired.
+    */
+    STATE_EXPIRED_PENDING_UPDATE = 6;
 }
 
 message AuctionAccount {

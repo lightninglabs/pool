@@ -1278,6 +1278,9 @@ func unmarshallServerRecoveredAccount(keyDesc *keychain.KeyDescriptor,
 
 	case auctioneerrpc.AuctionAccountState_STATE_EXPIRED:
 		state = account.StateExpired
+
+	case auctioneerrpc.AuctionAccountState_STATE_EXPIRED_PENDING_UPDATE:
+		state = account.StateExpiredPendingUpdate
 	}
 
 	// Parse the rest of the more complex values.
