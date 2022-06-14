@@ -14,6 +14,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lightninglabs/pool/perms"
+
 	"github.com/btcsuite/btcd/btcec/v2"
 	proxy "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/lightninglabs/aperture/lsat"
@@ -163,7 +165,7 @@ func (s *Server) Start() error {
 			Checkers: []macaroons.Checker{
 				macaroons.IPLockChecker,
 			},
-			RequiredPerms: RequiredPermissions,
+			RequiredPerms: perms.RequiredPermissions,
 			DBPassword:    macDbDefaultPw,
 			LndClient:     &s.lndServices.LndServices,
 			EphemeralKey:  lndclient.SharedKeyNUMS,
@@ -378,7 +380,7 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 				Checkers: []macaroons.Checker{
 					macaroons.IPLockChecker,
 				},
-				RequiredPerms: RequiredPermissions,
+				RequiredPerms: perms.RequiredPermissions,
 				DBPassword:    macDbDefaultPw,
 				LndClient:     &s.lndServices.LndServices,
 				EphemeralKey:  lndclient.SharedKeyNUMS,
