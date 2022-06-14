@@ -9,11 +9,13 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 )
 
 var (
@@ -522,4 +524,58 @@ func GenerateRecoveryKeys(ctx context.Context, accountTarget uint32,
 		acctKeys[i] = key
 	}
 	return acctKeys, nil
+}
+
+// AdvanceAccountDerivationIndex asserts that the internal wallet has at least
+// the given minimum index for deriving account keys.
+func AdvanceAccountDerivationIndex(ctx context.Context, minimumIndex uint32,
+	wallet lndclient.WalletKitClient, chainParams *chaincfg.Params) error {
+
+	allAccounts, err := wallet.ListAccounts(
+		ctx, "", walletrpc.AddressType_UNKNOWN,
+	)
+	if err != nil {
+		return fmt.Errorf("error listing accounts: %v", err)
+	}
+
+	poolAccountsPath := fmt.Sprintf("m/%d'/%d'/%d'",
+		keychain.BIP0043Purpose, chainParams.HDCoinType,
+		poolscript.AccountKeyFamily)
+
+	// Before we change anything in the wallet, let's check if maybe we
+	// already have enough keys?
+	for _, acct := range allAccounts {
+		if acct.DerivationPath == poolAccountsPath {
+			// If we did find our account in the list and already
+			// have enough keys derived, we don't need to do
+			// anything here. This is the key _count_, so it must be
+			// strictly greater than the minimum _index_ that we
+			// want.
+			if acct.ExternalKeyCount > minimumIndex {
+				log.Debugf("Account %s already has %d "+
+					"external keys (want minimum index "+
+					"%d), not deriving any keys",
+					poolAccountsPath, acct.ExternalKeyCount,
+					minimumIndex)
+
+				return nil
+			}
+
+			break
+		}
+	}
+
+	for {
+		key, err := wallet.DeriveNextKey(
+			ctx, int32(poolscript.AccountKeyFamily),
+		)
+		if err != nil {
+			return fmt.Errorf("error deriving next key: %v", err)
+		}
+
+		log.Debugf("Derived next account key with index %d", key.Index)
+		if key.Index >= minimumIndex {
+			return nil
+		}
+	}
 }
