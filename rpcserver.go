@@ -1185,14 +1185,32 @@ func (s *rpcServer) RecoverAccounts(ctx context.Context,
 	// nice since it allows us to try recovery multiple times until it
 	// actually works.
 	numRecovered := len(recoveredAccounts)
+	var maxIndex uint32
 	for _, acct := range recoveredAccounts {
+		// We need to know the highest index we ever used so we can make
+		// sure lnd's wallet is also at that index and the next account
+		// will be derived from the proper index.
+		if acct.TraderKey.Index > maxIndex {
+			maxIndex = acct.TraderKey.Index
+		}
+
 		err = s.accountManager.RecoverAccount(ctx, acct)
 		if err != nil {
 			// If something goes wrong for one account we still want
 			// to continue with the others.
 			numRecovered--
-			rpcLog.Errorf("error storing recovered account: %v", err)
+			rpcLog.Errorf("Error storing recovered account: %v", err)
 		}
+	}
+
+	// Try to ratchet forward lnd's derivation index for accounts.
+	err = account.AdvanceAccountDerivationIndex(
+		ctx, maxIndex, s.lndServices.WalletKit,
+		s.lndServices.ChainParams,
+	)
+	if err != nil {
+		rpcLog.Errorf("Error advancing lnd's wallet to index %d: %v",
+			maxIndex, err)
 	}
 
 	return &poolrpc.RecoverAccountsResponse{
