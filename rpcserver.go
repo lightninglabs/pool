@@ -15,7 +15,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
@@ -246,15 +245,16 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 				continue
 			}
 
-			rpcLog.Debugf("Received message from the server: %v", msg)
+			rpcLog.Debugf("Received message from the server: %s",
+				poolrpc.PrintMsg(msg))
 			err := s.handleServerMessage(msg)
 
 			// Only shut down if this was a terminal error, and not
 			// a batch reject (should rarely happen, but it's
 			// possible).
 			if err != nil && !errors.Is(err, order.ErrMismatchErr) {
-				rpcLog.Errorf("Error handling server message: %v",
-					err)
+				rpcLog.Errorf("Error handling server message: "+
+					"%v", err)
 				interceptor.RequestShutdown()
 			}
 
@@ -266,16 +266,16 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 				rpcLog.Errorf("Error in server stream: %v", err)
 				err := s.auctioneer.HandleServerShutdown(err)
 				if err != nil {
-					rpcLog.Errorf("Error closing stream: %v",
-						err)
+					rpcLog.Errorf("Error closing stream: "+
+						"%v", err)
 				}
 			}
 
 			rpcLog.Error("Unknown server error: %v", err)
 
 		case height := <-blockChan:
-			rpcLog.Infof("Received new block notification: height=%v",
-				height)
+			rpcLog.Infof("Received new block notification: "+
+				"height=%v", height)
 			s.updateHeight(height)
 
 		case err := <-blockErrChan:
@@ -307,8 +307,9 @@ func (s *rpcServer) handleServerMessage(
 	// A new batch has been assembled with some of our orders.
 	case *auctioneerrpc.ServerAuctionMessage_Prepare:
 		// Parse and formally validate what we got from the server.
-		rpcLog.Tracef("Received prepare msg from server, batch_id=%x: %v",
-			msg.Prepare.BatchId, spew.Sdump(msg))
+		rpcLog.Tracef("Received prepare msg from server, "+
+			"batch_id=%x: %v", msg.Prepare.BatchId,
+			poolrpc.PrintMsg(msg.Prepare))
 		batch, err := order.ParseRPCBatch(msg.Prepare)
 		if err != nil {
 			// If we aren't able to parse the batch for some
@@ -416,8 +417,9 @@ func (s *rpcServer) handleServerMessage(
 	// The previously prepared batch has been executed and we can finalize
 	// it by opening the channel and persisting the account and order diffs.
 	case *auctioneerrpc.ServerAuctionMessage_Finalize:
-		rpcLog.Tracef("Received finalize msg from server, batch_id=%x: %v",
-			msg.Finalize.BatchId, spew.Sdump(msg))
+		rpcLog.Tracef("Received finalize msg from server, "+
+			"batch_id=%x: %v", msg.Finalize.BatchId,
+			poolrpc.PrintMsg(msg.Finalize))
 
 		rpcLog.Infof("Received FinalizeMsg for batch=%x",
 			msg.Finalize.BatchId)
@@ -470,7 +472,8 @@ func (s *rpcServer) handleServerMessage(
 		)
 
 	default:
-		return fmt.Errorf("unknown server message: %v", msg)
+		return fmt.Errorf("unknown server message: %v",
+			poolrpc.PrintMsg(rpcMsg))
 	}
 
 	return nil

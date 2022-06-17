@@ -1001,7 +1001,9 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 
 		// Read next message from server.
 		msg, err := c.serverStream.Recv()
-		log.Tracef("Received msg=%#v, err=%v from server", msg, err)
+		log.Tracef("Received msg=%v, err=%v from server",
+			poolrpc.PrintMsg(msg), err)
+
 		switch {
 		// EOF is the "normal" close signal, meaning the server has
 		// cut its side of the connection. We will only get this during
