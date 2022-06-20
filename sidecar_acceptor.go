@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
@@ -16,6 +15,7 @@ import (
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/funding"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/subscribe"
@@ -526,37 +526,40 @@ func (a *SidecarAcceptor) handleServerMessage(
 	switch msg := serverMsg.Msg.(type) {
 
 	case *auctioneerrpc.ServerAuctionMessage_Prepare:
-
 		sdcrLog.Tracef("Received prepare msg from server, "+
-			"batch_id=%x: %v", msg.Prepare.BatchId, spew.Sdump(msg))
+			"batch_id=%x: %v", msg.Prepare.BatchId,
+			poolrpc.PrintMsg(msg.Prepare))
 
 		if err := a.matchPrepare(msg.Prepare); err != nil {
-			sdcrLog.Errorf("unable to handle prepare message: %v", err)
+			sdcrLog.Errorf("unable to handle prepare message: %v",
+				err)
 			return a.sendRejectBatch(msg.Prepare.BatchId, nil, err)
 		}
 
 	case *auctioneerrpc.ServerAuctionMessage_Sign:
-
 		sdcrLog.Tracef("Received sign msg from server, batch_id=%x: %v",
-			msg.Sign.BatchId, spew.Sdump(msg))
+			msg.Sign.BatchId, poolrpc.PrintMsg(msg.Sign))
 
 		if err := a.matchSign(msg.Sign); err != nil {
 			sdcrLog.Errorf("unable to handle sign message: %v", err)
-			return a.sendRejectBatch(a.pendingBatch.ID[:], a.pendingBatch, err)
+			return a.sendRejectBatch(
+				a.pendingBatch.ID[:], a.pendingBatch, err,
+			)
 		}
 
 	case *auctioneerrpc.ServerAuctionMessage_Finalize:
 		batchID := msg.Finalize.BatchId
 
 		sdcrLog.Tracef("Received finalize msg from server, "+
-			"batch_id=%x: %v", batchID, spew.Sdump(msg))
+			"batch_id=%x: %v", batchID,
+			poolrpc.PrintMsg(msg.Finalize))
 
 		// This operation cannot fail.
 		a.matchFinalize()
 
 	default:
 		sdcrLog.Debugf("Received msg %v from auctioneer on sidecar "+
-			"client: %v", msg)
+			"client: %v", poolrpc.PrintMsg(serverMsg))
 	}
 
 	return nil

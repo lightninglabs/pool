@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
@@ -85,7 +86,9 @@ func (m *MockWalletKit) DeriveKey(_ context.Context, in *keychain.KeyLocator) (
 	}, nil
 }
 
-func (m *MockWalletKit) NextAddr(context.Context) (btcutil.Address, error) {
+func (m *MockWalletKit) NextAddr(context.Context, string,
+	walletrpc.AddressType, bool) (btcutil.Address, error) {
+
 	addr, err := btcutil.NewAddressWitnessPubKeyHash(
 		make([]byte, 20), &chaincfg.TestNet3Params,
 	)
@@ -96,7 +99,7 @@ func (m *MockWalletKit) NextAddr(context.Context) (btcutil.Address, error) {
 }
 
 func (m *MockWalletKit) PublishTransaction(_ context.Context,
-	tx *wire.MsgTx, label string) error {
+	tx *wire.MsgTx, _ string) error {
 
 	m.AddTx(tx)
 	m.TxPublishChannel <- tx
@@ -149,7 +152,7 @@ func (m *MockWalletKit) ListSweeps(_ context.Context) ([]string, error) {
 	return m.Sweeps, nil
 }
 
-// AddRelevantTx marks the given transaction as relevant.
+// AddTx marks the given transaction as relevant.
 func (m *MockWalletKit) AddTx(tx *wire.MsgTx) {
 	m.lock.Lock()
 	m.Transactions = append(m.Transactions, tx.Copy())
@@ -169,4 +172,63 @@ func (m *MockWalletKit) ListAccounts(context.Context, string,
 	walletrpc.AddressType) ([]*walletrpc.Account, error) {
 
 	return nil, nil
+}
+
+// FundPsbt creates a fully populated PSBT that contains enough inputs
+// to fund the outputs specified in the template. There are two ways of
+// specifying a template: Either by passing in a PSBT with at least one
+// output declared or by passing in a raw TxTemplate message. If there
+// are no inputs specified in the template, coin selection is performed
+// automatically. If the template does contain any inputs, it is assumed
+// that full coin selection happened externally and no additional inputs
+// are added. If the specified inputs aren't enough to fund the outputs
+// with the given fee rate, an error is returned.
+// After either selecting or verifying the inputs, all input UTXOs are
+// locked with an internal app ID.
+//
+// NOTE: If this method returns without an error, it is the caller's
+// responsibility to either spend the locked UTXOs (by finalizing and
+// then publishing the transaction) or to unlock/release the locked
+// UTXOs in case of an error on the caller's side.
+func (m *MockWalletKit) FundPsbt(_ context.Context,
+	_ *walletrpc.FundPsbtRequest) (*psbt.Packet, int32,
+	[]*walletrpc.UtxoLease, error) {
+
+	return nil, 0, nil, nil
+}
+
+// SignPsbt expects a partial transaction with all inputs and outputs
+// fully declared and tries to sign all unsigned inputs that have all
+// required fields (UTXO information, BIP32 derivation information,
+// witness or sig scripts) set.
+// If no error is returned, the PSBT is ready to be given to the next
+// signer or to be finalized if lnd was the last signer.
+//
+// NOTE: This RPC only signs inputs (and only those it can sign), it
+// does not perform any other tasks (such as coin selection, UTXO
+// locking or input/output/fee value validation, PSBT finalization). Any
+// input that is incomplete will be skipped.
+func (m *MockWalletKit) SignPsbt(_ context.Context,
+	_ *psbt.Packet) (*psbt.Packet, error) {
+
+	return nil, nil
+}
+
+// FinalizePsbt expects a partial transaction with all inputs and
+// outputs fully declared and tries to sign all inputs that belong to
+// the wallet. Lnd must be the last signer of the transaction. That
+// means, if there are any unsigned non-witness inputs or inputs without
+// UTXO information attached or inputs without witness data that do not
+// belong to lnd's wallet, this method will fail. If no error is
+// returned, the PSBT is ready to be extracted and the final TX within
+// to be broadcast.
+//
+// NOTE: This method does NOT publish the transaction once finalized. It
+// is the caller's responsibility to either publish the transaction on
+// success or unlock/release any locked UTXOs in case of an error in
+// this method.
+func (m *MockWalletKit) FinalizePsbt(_ context.Context, _ *psbt.Packet,
+	_ string) (*psbt.Packet, *wire.MsgTx, error) {
+
+	return nil, nil, nil
 }

@@ -9,8 +9,10 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/lndclient"
@@ -19,6 +21,7 @@ import (
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -275,7 +278,9 @@ func (w *mockWallet) SendOutputs(ctx context.Context, outputs []*wire.TxOut,
 	return tx, nil
 }
 
-func (w *mockWallet) NextAddr(ctx context.Context) (btcutil.Address, error) {
+func (w *mockWallet) NextAddr(context.Context, string,
+	walletrpc.AddressType, bool) (btcutil.Address, error) {
+
 	pubKeyHash := btcutil.Hash160(testTraderKey.SerializeCompressed())
 	return btcutil.NewAddressWitnessPubKeyHash(
 		pubKeyHash, &chaincfg.MainNetParams,
@@ -344,6 +349,43 @@ func (w *mockWallet) EstimateFeeToP2WSH(_ context.Context, _ btcutil.Amount,
 	_ int32) (btcutil.Amount, error) {
 
 	return btcutil.Amount(chainfee.FeePerKwFloor), nil
+}
+
+func (w *mockWallet) FundPsbt(_ context.Context,
+	req *walletrpc.FundPsbtRequest) (*psbt.Packet, int32,
+	[]*walletrpc.UtxoLease, error) {
+
+	return nil, 0, nil, nil
+}
+
+func (w *mockWallet) SignPsbt(_ context.Context,
+	packet *psbt.Packet) (*psbt.Packet, error) {
+
+	for idx := range packet.Inputs {
+		packet.Inputs[idx].PartialSigs = []*psbt.PartialSig{{
+			Signature: []byte{
+				// A dummy signature must still have the sighash
+				// flag appended correctly.
+				33, 44, 55, 66, byte(txscript.SigHashAll),
+			},
+		}}
+	}
+
+	return packet, nil
+}
+
+func (w *mockWallet) FinalizePsbt(_ context.Context, packet *psbt.Packet,
+	account string) (*psbt.Packet, *wire.MsgTx, error) {
+
+	for idx := range packet.UnsignedTx.TxIn {
+		packet.UnsignedTx.TxIn[idx].Witness = [][]byte{{
+			// A dummy signature must still have the sighash flag
+			// appended correctly.
+			33, 44, 55, 66, byte(txscript.SigHashAll),
+		}}
+	}
+
+	return packet, packet.UnsignedTx, nil
 }
 
 type mockChainNotifier struct {
