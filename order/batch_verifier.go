@@ -230,7 +230,7 @@ func (v *batchVerifier) Verify(batch *Batch, bestHeight uint32) error {
 
 		// Now that we know how many channels were created from the
 		// given account, let's also account for the chain fees.
-		tally.ChainFees(batch.BatchTxFeeRate)
+		tally.ChainFees(batch.BatchTxFeeRate, acct.Version)
 
 		// Even if the account output is dust, we should arrive at the
 		// same number with our tally as the server.

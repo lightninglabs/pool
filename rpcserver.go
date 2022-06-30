@@ -2270,8 +2270,15 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 
 			// Estimate the chain fees paid for the number of
 			// channels created in this batch and tally them.
+			//
+			// TODO(guggero): This is just an approximation! We
+			// should properly calculate the fees _per account_ as
+			// that's what we do on the server side. Then we can
+			// also take a look at the actual account version at the
+			// time of the batch.
 			chainFee := order.EstimateTraderFee(
 				uint32(numChans), batch.BatchTxFeeRate,
+				account.VersionInitialNoVersion,
 			)
 
 			// We'll need to compute the chain fee paid for each

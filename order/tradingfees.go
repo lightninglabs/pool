@@ -3,6 +3,7 @@ package order
 import (
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/input"
@@ -65,8 +66,8 @@ func PerBlockPremium(amt btcutil.Amount, fixedRate uint32) float64 {
 // EstimateTraderFee calculates the chain fees a trader has to pay for their
 // part of a batch transaction. The more outputs a trader creates (channels),
 // the higher fee they will pay.
-func EstimateTraderFee(numTraderChans uint32,
-	feeRate chainfee.SatPerKWeight) btcutil.Amount {
+func EstimateTraderFee(numTraderChans uint32, feeRate chainfee.SatPerKWeight,
+	accountVersion account.Version) btcutil.Amount {
 
 	var weightEstimate int64
 
@@ -90,7 +91,13 @@ func EstimateTraderFee(numTraderChans uint32,
 
 	// Finally, we tack on the size of the witness spending the account
 	// outpoint.
-	weightEstimate += poolscript.MultiSigWitnessSize
+	switch accountVersion {
+	case account.VersionTaprootEnabled:
+		weightEstimate += poolscript.TaprootMultiSigWitnessSize
+
+	default:
+		weightEstimate += poolscript.MultiSigWitnessSize
+	}
 
 	return feeRate.FeeForWeight(weightEstimate)
 }
@@ -124,7 +131,12 @@ func NewQuote(amt, minChanAmt btcutil.Amount, rate FixedRatePremium,
 	exeFee := schedule.BaseFee() + schedule.ExecutionFee(amt)
 
 	maxNumMatches := amt / minChanAmt
-	chainFee := maxNumMatches * EstimateTraderFee(1, maxBatchFeeRate)
+
+	// For an order quote we always return the worst case fees, which means
+	// with a legacy account.
+	chainFee := maxNumMatches * EstimateTraderFee(
+		1, maxBatchFeeRate, account.VersionInitialNoVersion,
+	)
 
 	return &Quote{
 		TotalPremium:      rate.LumpSumPremium(amt, leaseDuration),
@@ -251,8 +263,12 @@ func (t *AccountTally) CalcTakerDelta(feeSchedule terms.FeeSchedule,
 // ChainFees estimates the chain fees that need to be paid for the number of
 // channels created for this account and subtracts that value from the ending
 // balance.
-func (t *AccountTally) ChainFees(feeRate chainfee.SatPerKWeight) {
-	chainFeesDue := EstimateTraderFee(t.NumChansCreated, feeRate)
+func (t *AccountTally) ChainFees(feeRate chainfee.SatPerKWeight,
+	accountVersion account.Version) {
+
+	chainFeesDue := EstimateTraderFee(
+		t.NumChansCreated, feeRate, accountVersion,
+	)
 	t.EndingBalance -= chainFeesDue
 }
 

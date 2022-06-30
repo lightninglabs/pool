@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/terms"
 )
 
@@ -15,8 +16,9 @@ func TestOrderReservedValue(t *testing.T) {
 	simpleFeeSchedule := terms.NewLinearFeeSchedule(1, 100)
 
 	testCases := []struct {
-		name  string
-		order Order
+		name           string
+		order          Order
+		accountVersion account.Version
 	}{
 		{
 			name: "bid 1 unit",
@@ -236,7 +238,7 @@ func TestOrderReservedValue(t *testing.T) {
 					LumpSumPremium(amt, o.LeaseDuration)
 				exeFee := executionFee(amt, simpleFeeSchedule)
 				chainFee := EstimateTraderFee(
-					1, o.MaxBatchFeeRate,
+					1, o.MaxBatchFeeRate, tc.accountVersion,
 				)
 
 				// For bids the lump sum, chain fee  and the
@@ -274,7 +276,7 @@ func TestOrderReservedValue(t *testing.T) {
 					LumpSumPremium(amt, 144)
 				exeFee := executionFee(amt, simpleFeeSchedule)
 				chainFee := EstimateTraderFee(
-					1, o.MaxBatchFeeRate,
+					1, o.MaxBatchFeeRate, tc.accountVersion,
 				)
 
 				// For asks the amount itself, the chain fee

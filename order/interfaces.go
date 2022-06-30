@@ -275,8 +275,12 @@ type Order interface {
 	Digest() ([hashSize]byte, error)
 
 	// ReservedValue returns the maximum value that could be deducted from
-	// the account if the order is is matched, and therefore has to be
-	// reserved to ensure the trader can afford it.
+	// the account if the order is matched, and therefore has to be
+	// reserved to ensure the trader can afford it. This always uses the
+	// worst-case fee estimation using the version 0 p2wsh script witness
+	// size calculation for the account spend.
+	//
+	// TODO(guggero): Update to be more precise for p2tr accounts.
 	ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount
 }
 
@@ -453,10 +457,13 @@ func (a *Ask) Digest() ([hashSize]byte, error) {
 // account if the given order is matched under the worst case fee conditions.
 // This usually means the order is partially matched with the minimum match
 // size, all in different batches, leading to maximum chain and execution fees
-// being paid.
+// being paid. This always uses the worst-case fee estimation using the version
+// 0 p2wsh script witness size calculation for the account spend.
 //
 // The passed function should be set to either calculate the maker or taker
 // balance delta for a single match of the given amount.
+//
+// TODO(guggero): Update to be more precise for p2tr accounts.
 func reservedValue(o Order,
 	perMatchDelta func(btcutil.Amount) btcutil.Amount) btcutil.Amount {
 
@@ -490,9 +497,13 @@ func reservedValue(o Order,
 
 	// Subtract the worst case chain fee from the balance.
 	maxFeeRate := o.Details().MaxBatchFeeRate
-	balanceDelta -= maxNumMatches * EstimateTraderFee(1, maxFeeRate)
+	balanceDelta -= maxNumMatches * EstimateTraderFee(
+		1, maxFeeRate, account.VersionInitialNoVersion,
+	)
 	if rem > 0 {
-		balanceDelta -= EstimateTraderFee(1, maxFeeRate)
+		balanceDelta -= EstimateTraderFee(
+			1, maxFeeRate, account.VersionInitialNoVersion,
+		)
 	}
 
 	// If the balance delta is negative, meaning this order will decrease
@@ -507,7 +518,7 @@ func reservedValue(o Order,
 }
 
 // ReservedValue returns the maximum value that could be deducted from a single
-// account if the ask is is matched under the worst case fee conditions.
+// account if the ask is matched under the worst case fee conditions.
 func (a *Ask) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
 	// For an ask the clearing price will be no lower than the ask's fixed
 	// rate, resulting in the smallest gain for the asker.
@@ -681,7 +692,7 @@ func (b *Bid) Digest() ([hashSize]byte, error) {
 }
 
 // ReservedValue returns the maximum value that could be deducted from a single
-// account if the bid is is matched under the worst case fee conditions.
+// account if the bid is matched under the worst case fee conditions.
 func (b *Bid) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
 	// For a bid, the final clearing price is never higher that the bid's
 	// fixed rate, resulting in the highest possible premium paid by the
