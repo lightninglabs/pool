@@ -109,6 +109,8 @@ func newRPCServer(server *Server) *rpcServer {
 			TxSource:       lndServices.Client,
 			TxFeeEstimator: lndServices.Client,
 			TxLabelPrefix:  server.cfg.TxLabelPrefix,
+			ChainParams:    lndServices.ChainParams,
+			LndVersion:     lndServices.Version,
 		}),
 		orderManager: order.NewManager(&order.ManagerConfig{
 			Store:     server.db,

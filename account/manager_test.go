@@ -18,6 +18,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightningnetwork/lnd/chainntnfs"
+	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/lntest/wait"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -71,6 +72,12 @@ func newTestHarness(t *testing.T) *testHarness {
 			ChainNotifier:  notifier,
 			TxSource:       wallet,
 			TxFeeEstimator: wallet,
+			ChainParams:    &chaincfg.TestNet3Params,
+			LndVersion: &verrpc.Version{
+				AppMajor: 0,
+				AppMinor: 15,
+				AppPatch: 1,
+			},
 		}),
 	}
 }
@@ -463,6 +470,8 @@ func (h *testHarness) restartManager() {
 		Signer:        mgr.cfg.Signer,
 		ChainNotifier: mgr.cfg.ChainNotifier,
 		TxSource:      mgr.cfg.TxSource,
+		ChainParams:   mgr.cfg.ChainParams,
+		LndVersion:    mgr.cfg.LndVersion,
 	})
 
 	if err := h.manager.Start(); err != nil {

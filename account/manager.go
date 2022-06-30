@@ -14,6 +14,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/txsort"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -25,6 +26,7 @@ import (
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -121,6 +123,12 @@ type ManagerConfig struct {
 	// TxLabelPrefix is set, then all transactions the account manager
 	// makes will use this string as a prefix for added transaction labels.
 	TxLabelPrefix string
+
+	// ChainParams are the currently used chain parameters.
+	ChainParams *chaincfg.Params
+
+	// LndVersion is the version of the connected lnd node.
+	LndVersion *verrpc.Version
 }
 
 // Manager is responsible for the management of accounts on-chain.
