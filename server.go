@@ -560,9 +560,7 @@ func (s *Server) setupClient() error {
 		MaxBackoff:    s.cfg.MaxBackoff,
 		BatchSource:   s.db,
 		BatchCleaner:  s.fundingManager,
-		BatchVersion: order.BatchVersion(
-			s.cfg.DebugConfig.BatchVersion,
-		),
+		BatchVersion:  s.determineBatchVersion(),
 		GenUserAgent: func(ctx context.Context) string {
 			return UserAgent(InitiatorFromContext(ctx))
 		},
@@ -724,7 +722,7 @@ func (i *regtestInterceptor) UnaryInterceptor(ctx context.Context, method string
 	return invoker(idCtx, method, req, reply, cc, opts...)
 }
 
-// StreamingInterceptor intercepts streaming requests and appends the dummy LSAT
+// StreamInterceptor intercepts streaming requests and appends the dummy LSAT
 // ID.
 func (i *regtestInterceptor) StreamInterceptor(ctx context.Context,
 	desc *grpc.StreamDesc, cc *grpc.ClientConn, method string,
@@ -830,4 +828,34 @@ func (s *Server) syncLocalOrderState() error {
 	// Now that we know the set of orders we need to update, we'll update
 	// them all in an atomic batch.
 	return s.db.UpdateOrders(noncesToUpdate, ordersToUpdate)
+}
+
+// determineBatchVersion determines the batch version that will be sent to the
+// auctioneer to signal compatibility with the different features the trader
+// client can support.
+func (s *Server) determineBatchVersion() order.BatchVersion {
+	configVersion := s.cfg.DebugConfig.BatchVersion
+
+	// We set the default value of the config flag to -1, so we can
+	// differentiate between no value set and the first version (0).
+	if configVersion >= 0 {
+		return order.BatchVersion(configVersion)
+	}
+
+	isTaprootCompatible := false
+	verErr := lndclient.AssertVersionCompatible(
+		s.lndServices.Version, taprootVersion,
+	)
+	if verErr == nil {
+		isTaprootCompatible = true
+	}
+
+	// We can only auto-upgrade accounts to Taproot if the underlying node
+	// has the required capabilities.
+	if isTaprootCompatible {
+		return order.UpgradeAccountTaprootBatchVersion
+	}
+
+	// Fall back to the previous default version.
+	return order.LatestBatchVersion
 }

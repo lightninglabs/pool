@@ -113,14 +113,12 @@ func newRPCServer(server *Server) *rpcServer {
 			LndVersion:     lndServices.Version,
 		}),
 		orderManager: order.NewManager(&order.ManagerConfig{
-			Store:     server.db,
-			AcctStore: accountStore,
-			Lightning: lndServices.Client,
-			Wallet:    lndServices.WalletKit,
-			Signer:    lndServices.Signer,
-			BatchVersion: order.BatchVersion(
-				server.cfg.DebugConfig.BatchVersion,
-			),
+			Store:        server.db,
+			AcctStore:    accountStore,
+			Lightning:    lndServices.Client,
+			Wallet:       lndServices.WalletKit,
+			Signer:       lndServices.Signer,
+			BatchVersion: server.determineBatchVersion(),
 		}),
 		marshaler: NewMarshaler(&marshalerConfig{
 			GetOrders: server.db.GetOrders,

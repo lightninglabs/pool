@@ -51,7 +51,26 @@ const (
 	// ExtendAccountBatchVersion is the first version where accounts expiry
 	// are extended after participating in a batch.
 	ExtendAccountBatchVersion BatchVersion = 1
+
+	// UpgradeAccountTaprootBatchVersion is the batch version where accounts
+	// are automatically upgraded to Taproot accounts. We leave a gap up to
+	// 10 on purpose to allow for in-between versions (that aren't dependent
+	// on a lnd version) to be added.
+	UpgradeAccountTaprootBatchVersion BatchVersion = 10
 )
+
+// SupportsAccountExtension is a helper function to easily check if a version
+// supports account extension after participating in a batch or not.
+func (bv BatchVersion) SupportsAccountExtension() bool {
+	return bv >= ExtendAccountBatchVersion
+}
+
+// SupportsAccountTaprootUpgrade is a helper function to easily check if a
+// version supports upgrading SegWit v0 (p2wsh) accounts to Taproot (p2tr) or
+// not.
+func (bv BatchVersion) SupportsAccountTaprootUpgrade() bool {
+	return bv >= UpgradeAccountTaprootBatchVersion
+}
 
 const (
 	// LatestBatchVersion points to the most recent batch version.
@@ -61,12 +80,6 @@ const (
 	// was used for orders before dynamic duration buckets were added.
 	LegacyLeaseDurationBucket uint32 = 2016
 )
-
-// SupportsAccountExtension is a helper function to easily check if a version
-// supports or not account extension after participating in a batch.
-func (bv BatchVersion) SupportsAccountExtension() bool {
-	return bv >= ExtendAccountBatchVersion
-}
 
 // BatchID is a 33-byte point that uniquely identifies this batch. This ID
 // will be used later for account key derivation when constructing the batch
