@@ -511,8 +511,8 @@ github.com/lightninglabs/gozmq v0.0.0-20191113021534-d20a764486bf h1:HZKvJUHlcXI
 github.com/lightninglabs/gozmq v0.0.0-20191113021534-d20a764486bf/go.mod h1:vxmQPeIQxPf6Jf9rM8R+B4rKBqLA2AjttNxkFBL2Plk=
 github.com/lightninglabs/lightning-node-connect/hashmailrpc v1.0.2/go.mod h1:antQGRDRJiuyQF6l+k6NECCSImgCpwaZapATth2Chv4=
 github.com/lightninglabs/lndclient v0.15.0-0/go.mod h1:ORS/YFe9hAXlzN/Uj+gvTmrnXEml6yD6dWwzCjpTJyQ=
-github.com/lightninglabs/lndclient v0.15.0-9 h1:r1IOjnnhBdyDdzqHKI2jw1gEbkkty9zJ3KpVl/i6JxM=
-github.com/lightninglabs/lndclient v0.15.0-9/go.mod h1:KqftwAxD1dDGKYB9hrnbFx2BkwA4mxY22cBfTw4GbF0=
+github.com/lightninglabs/lndclient v0.15.0-10 h1:x1kPuAb6yZzsFJzTBs1ZhnCgDzThpKC3GyvQMY8XsCI=
+github.com/lightninglabs/lndclient v0.15.0-10/go.mod h1:x5ZVWYON0qnlUIeQL/da8vk3b5zNhODlHb9GJJBVMMo=
 github.com/lightninglabs/neutrino v0.13.2/go.mod h1:Cv/v8oHiPhuGiGvGgO+rIMhwCwEdsQFu6as840i2afw=
 github.com/lightninglabs/neutrino v0.14.2 h1:yrnZUCYMZ5ECtXhgDrzqPq2oX8awoAN2D/cgCewJcCo=
 github.com/lightninglabs/neutrino v0.14.2/go.mod h1:OICUeTCn+4Tu27YRJIpWvvqySxx4oH4vgdP33Sw9RDc=
@@ -521,9 +521,8 @@ github.com/lightninglabs/protobuf-hex-display v1.4.3-hex-display/go.mod h1:2oKOB
 github.com/lightningnetwork/lightning-onion v1.0.2-0.20220211021909-bb84a1ccb0c5 h1:TkKwqFcQTGYoI+VEqyxA8rxpCin8qDaYX0AfVRinT3k=
 github.com/lightningnetwork/lightning-onion v1.0.2-0.20220211021909-bb84a1ccb0c5/go.mod h1:7dDx73ApjEZA0kcknI799m2O5kkpfg4/gr7N092ojNo=
 github.com/lightningnetwork/lnd v0.14.1-beta.0.20220324135938-0dcaa511a249/go.mod h1:Tp3ZxsfioUl6kQ30RrbMqWoZyZ4K+fv/o1lMEU8U7rA=
-github.com/lightningnetwork/lnd v0.15.0-beta.rc5/go.mod h1:Tm7LZrYeR2JQH1gEOKmd0NTCgjJ1Bnujkx4lcz9b5+A=
-github.com/lightningnetwork/lnd v0.15.0-beta.rc6 h1:CY+vmWgfJcdRpDSrklwq+TYFx9JhLMy6CANOPdaKA3o=
-github.com/lightningnetwork/lnd v0.15.0-beta.rc6/go.mod h1:Tm7LZrYeR2JQH1gEOKmd0NTCgjJ1Bnujkx4lcz9b5+A=
+github.com/lightningnetwork/lnd v0.15.0-beta h1:smzYjJqL4nGuj4qrAWdikrPzPJ8fcPRFHQ86S2tHR1M=
+github.com/lightningnetwork/lnd v0.15.0-beta/go.mod h1:Tm7LZrYeR2JQH1gEOKmd0NTCgjJ1Bnujkx4lcz9b5+A=
 github.com/lightningnetwork/lnd/cert v1.1.1 h1:Nsav0RlIDRbOnzz2Yu69SQlK939IKya3Q2S0mDviIN8=
 github.com/lightningnetwork/lnd/cert v1.1.1/go.mod h1:1P46svkkd73oSoeI4zjkVKgZNwGq8bkGuPR8z+5vQUs=
 github.com/lightningnetwork/lnd/clock v1.0.1/go.mod h1:KnQudQ6w0IAMZi1SgvecLZQZ43ra2vpDNj7H/aasemg=
