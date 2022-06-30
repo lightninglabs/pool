@@ -1333,21 +1333,11 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 	// new features as they're available, while still supporting older
 	// versions of lnd.
 	chanTypeSelector := order.WithDefaultChannelType(func() order.ChannelType {
-		// If they didn't specify a value, then we'll select one based
-		// on the version of lnd we detect.
-		verErr := lndclient.AssertVersionCompatible(
-			s.server.lndServices.Version, scriptEnforceVersion,
-		)
-		if verErr == nil {
-			// TODO(guggero): Use order.ChannelTypeScriptEnforced
-			// here as soon as a large percentage of ask orders
-			// support script enforced channel types to not cause a
-			// market segregation for lnd 0.14.x or later users
-			// without them being aware of why their bids aren't
-			// getting matched.
-			return order.ChannelTypePeerDependent
-		}
-
+		// TODO(guggero): Use order.ChannelTypeScriptEnforced here as
+		// soon as a large percentage of ask orders support script
+		// enforced channel types to not cause a market segregation for
+		// lnd 0.14.x or later users without them being aware of why
+		// their bids aren't getting matched.
 		return order.ChannelTypePeerDependent
 	})
 

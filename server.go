@@ -41,26 +41,14 @@ var (
 	// required in lnd to run pool.
 	minimalCompatibleVersion = &verrpc.Version{
 		AppMajor: 0,
-		AppMinor: 12,
-		AppPatch: 0,
+		AppMinor: 14,
+		AppPatch: 3,
 
 		// We don't actually require the invoicesrpc calls. But if we
 		// try to use lndclient on an lnd that doesn't have it enabled,
 		// the library will try to load the invoices.macaroon anyway and
 		// fail. So until that bug is fixed in lndclient, we require the
 		// build tag to be active.
-		BuildTags: []string{
-			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
-		},
-	}
-
-	// scriptEnforceVersion is the version of lnd that enabled lease duration script
-	// enforcement as a new channel type. We'll use this to decide what
-	// order type to default to.
-	scriptEnforceVersion = &verrpc.Version{
-		AppMajor: 0,
-		AppMinor: 14,
-		AppPatch: 0,
 		BuildTags: []string{
 			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
 		},
