@@ -19,6 +19,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightningnetwork/lnd/chainntnfs"
+	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/lntest/wait"
 	"github.com/lightningnetwork/lnd/lnwallet"
@@ -36,6 +37,7 @@ const (
 
 var (
 	p2wsh, _   = hex.DecodeString("00208c2865c87ffd33fc5d698c7df9cf2d0fb39d93103c637a06dea32c848ebc3e1d")
+	p2tr, _    = hex.DecodeString("5120bb91443dd777945ef4422cffddec00d5feed2aca2562a902fbe8d2a258b337da")
 	p2wpkh, _  = hex.DecodeString("0014ccdeffed4f9c91d5bf45c34e4b8f03a5025ec062")
 	np2wpkh, _ = hex.DecodeString("a91458c11505b54582ab04e96d36908f85a8b689459787")
 
@@ -51,6 +53,7 @@ type testCase struct {
 	feeExpr     FeeExpr
 	fee         btcutil.Amount
 	version     Version
+	newVersion  Version
 	expectedErr string
 
 	// The following fields are only used by deposit tests.
@@ -233,7 +236,9 @@ func (h *testHarness) closeAccount(account *Account, feeExpr FeeExpr,
 
 	// This should prompt the account's closing transaction to be broadcast
 	// and its state transitioned to StatePendingClosed.
-	closeTx := h.assertSpendTxBroadcast(account, nil, nil, nil)
+	closeTx := h.assertSpendTxBroadcast(
+		account, nil, nil, nil, account.Version,
+	)
 
 	account.Value = 0
 	account.State = StatePendingClosed
@@ -258,7 +263,7 @@ func (h *testHarness) closeAccount(account *Account, feeExpr FeeExpr,
 
 func (h *testHarness) assertSpendTxBroadcast(accountBeforeSpend *Account,
 	externalInputs []*lnwallet.Utxo, externalOutputs []*wire.TxOut,
-	newValue *btcutil.Amount) *wire.MsgTx {
+	newValue *btcutil.Amount, newVersion Version) *wire.MsgTx {
 
 	h.t.Helper()
 
@@ -306,7 +311,10 @@ func (h *testHarness) assertSpendTxBroadcast(accountBeforeSpend *Account,
 	// inputs and outputs. If it recreates the account output, we should
 	// also attempt to locate it.
 	require.Len(h.t, spendTx.TxIn, len(externalInputs)+1)
-	nextPkScript, err := accountBeforeSpend.NextOutputScript()
+
+	// Perhaps this is an in-flight account upgrade?
+	upgradedAccount := accountBeforeSpend.Copy(VersionModifier(newVersion))
+	nextPkScript, err := upgradedAccount.NextOutputScript()
 	require.NoError(h.t, err)
 	outputs := externalOutputs
 	if newValue != nil {
@@ -360,15 +368,30 @@ func (h *testHarness) assertAuctioneerReceived(inputs []*lnwallet.Utxo,
 	defer h.auctioneer.mu.Unlock()
 
 	require.Len(h.t, inputs, len(h.auctioneer.inputsReceived))
-	for _, input := range inputs {
+	for _, inp := range inputs {
 		found := false
 		for _, inputReceived := range h.auctioneer.inputsReceived {
-			if input.OutPoint == inputReceived.PreviousOutPoint {
+			if inp.OutPoint == inputReceived.PreviousOutPoint {
 				found = true
 				break
 			}
 		}
-		require.Truef(h.t, found, "input %v missing", input.OutPoint)
+		require.Truef(h.t, found, "input %v missing", inp.OutPoint)
+	}
+	for _, inp := range inputs {
+		found := false
+		for _, outReceived := range h.auctioneer.prevOutputsReceived {
+			if bytes.Equal(inp.PkScript, outReceived.PkScript) &&
+				int64(inp.Value) == outReceived.Value {
+
+				found = true
+				break
+			}
+		}
+		require.Truef(
+			h.t, found, "input %v not in previous outputs",
+			inp.OutPoint,
+		)
 	}
 
 	require.Len(h.t, outputs, len(h.auctioneer.outputsReceived))
@@ -385,6 +408,33 @@ func (h *testHarness) assertAuctioneerReceived(inputs []*lnwallet.Utxo,
 
 	h.auctioneer.inputsReceived = nil
 	h.auctioneer.outputsReceived = nil
+	h.auctioneer.prevOutputsReceived = nil
+}
+
+// assertAuctioneerMuSig2NoncesReceived makes sure that the nonces we created for
+// our local MuSig2 session were sent to the auctioneer.
+func (h *testHarness) assertAuctioneerMuSig2NoncesReceived() {
+	h.t.Helper()
+
+	h.auctioneer.mu.Lock()
+	defer h.auctioneer.mu.Unlock()
+
+	h.wallet.Lock()
+	defer h.wallet.Unlock()
+
+	require.Len(h.t, h.wallet.muSig2Sessions, 0)
+	require.Len(h.t, h.wallet.muSig2RemovedSessions, 1)
+
+	var sessionInfo *input.MuSig2SessionInfo
+	for _, info := range h.wallet.muSig2RemovedSessions {
+		sessionInfo = info
+		break
+	}
+	require.NotNil(h.t, sessionInfo)
+
+	require.Equal(
+		h.t, sessionInfo.PublicNonce[:], h.auctioneer.noncesReceived,
+	)
 }
 
 // assertAccountModification provides several assertions for an account
@@ -393,8 +443,8 @@ func (h *testHarness) assertAuctioneerReceived(inputs []*lnwallet.Utxo,
 // StateOpen.
 func (h *testHarness) assertAccountModification(account *Account,
 	inputs []*lnwallet.Utxo, outputs []*wire.TxOut,
-	newAccountValue btcutil.Amount, accountInputIdx,
-	accountOutputIdx uint32, broadcastHeight uint32) {
+	newAccountValue btcutil.Amount, newAccountVersion Version,
+	accountInputIdx, accountOutputIdx uint32, broadcastHeight uint32) {
 
 	h.t.Helper()
 
@@ -402,11 +452,17 @@ func (h *testHarness) assertAccountModification(account *Account,
 	// modification parameters.
 	h.assertAuctioneerReceived(inputs, outputs)
 
+	// Make sure a MuSig2 signing session was created for a Taproot/MuSig2
+	// spend.
+	if account.Version >= VersionTaprootEnabled {
+		h.assertAuctioneerMuSig2NoncesReceived()
+	}
+
 	// A proper spend transaction should have been broadcast that contains
 	// the expected inputs and outputs from above, and the recreated account
 	// output.
 	spendTx := h.assertSpendTxBroadcast(
-		account, inputs, outputs, &newAccountValue,
+		account, inputs, outputs, &newAccountValue, newAccountVersion,
 	)
 
 	// The account should be found within the store with the following
@@ -421,6 +477,7 @@ func (h *testHarness) assertAccountModification(account *Account,
 		HeightHintModifier(broadcastHeight),
 		IncrementBatchKey(),
 		LatestTxModifier(spendTx),
+		VersionModifier(newAccountVersion),
 	}
 	for _, mod := range mods {
 		mod(account)
@@ -492,8 +549,12 @@ func TestNewAccountHappyFlow(t *testing.T) {
 
 	cases := []*testCase{
 		{
-			name:    "happy path",
+			name:    "happy path version 0",
 			version: VersionInitialNoVersion,
+		},
+		{
+			name:    "happy path version 1",
+			version: VersionTaprootEnabled,
 		},
 	}
 
@@ -520,8 +581,12 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 
 	cases := []*testCase{
 		{
-			name:    "happy path",
+			name:    "happy path version 0",
 			version: VersionInitialNoVersion,
+		},
+		{
+			name:    "happy path version 1",
+			version: VersionTaprootEnabled,
 		},
 	}
 
@@ -573,6 +638,7 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 			Secret:        sharedSecret,
 			HeightHint:    bestHeight,
 			State:         StateInitiated,
+			Version:       tc.version,
 		}
 		h.assertAccountExists(account)
 
@@ -701,6 +767,24 @@ func TestAccountClose(t *testing.T) {
 			},
 			fee: btcutil.Amount(70_000),
 		},
+		{
+			name: "taproot single wallet P2WKH output",
+			feeExpr: &OutputWithFee{
+				PkScript: nil,
+				FeeRate:  chainfee.FeePerKwFloor,
+			},
+			fee:     btcutil.Amount(100),
+			version: VersionTaprootEnabled,
+		},
+		{
+			name: "taproot single wallet P2TR output",
+			feeExpr: &OutputWithFee{
+				PkScript: p2tr,
+				FeeRate:  chainfee.FeePerKwFloor,
+			},
+			fee:     btcutil.Amount(112),
+			version: VersionTaprootEnabled,
+		},
 	}
 
 	runSubTests(t, cases, func(t *testing.T, h *testHarness, tc *testCase) {
@@ -757,7 +841,7 @@ func TestAccountClose(t *testing.T) {
 
 		// The account's closing transaction should be broadcast.
 		closeTx := h.assertSpendTxBroadcast(
-			account, nil, externalOutputs, nil,
+			account, nil, externalOutputs, nil, tc.version,
 		)
 
 		// Finally, compute the resulting fee of the transaction and
@@ -779,8 +863,12 @@ func TestAccountExpiration(t *testing.T) {
 
 	cases := []*testCase{
 		{
-			name:    "happy path",
+			name:    "happy path version 0",
 			version: VersionInitialNoVersion,
+		},
+		{
+			name:    "happy path version 1",
+			version: VersionTaprootEnabled,
 		},
 	}
 
@@ -802,8 +890,18 @@ func TestAccountSpendBatchNotFinalized(t *testing.T) {
 
 	cases := []*testCase{
 		{
-			name:    "happy path",
+			name:    "happy path version 0",
 			version: VersionInitialNoVersion,
+		},
+		{
+			name:       "happy path version 1",
+			version:    VersionTaprootEnabled,
+			newVersion: VersionTaprootEnabled,
+		},
+		{
+			name:       "happy path version upgrade during batch",
+			version:    VersionInitialNoVersion,
+			newVersion: VersionTaprootEnabled,
 		},
 	}
 
@@ -817,7 +915,8 @@ func TestAccountSpendBatchNotFinalized(t *testing.T) {
 		// should take the multi-sig path to trigger the pending batch
 		// logic.
 		const newValue = maxAccountValue / 2
-		newPkScript, err := account.NextOutputScript()
+		upgradedAccount := account.Copy(VersionModifier(tc.newVersion))
+		newPkScript, err := upgradedAccount.NextOutputScript()
 		require.NoError(h.t, err)
 		spendTx := &wire.MsgTx{
 			Version: 2,
@@ -845,6 +944,7 @@ func TestAccountSpendBatchNotFinalized(t *testing.T) {
 				Index: 0,
 			}),
 			IncrementBatchKey(),
+			VersionModifier(tc.newVersion),
 		}
 		h.store.setPendingBatch(func() error {
 			return h.store.updateAccount(account, mods...)
@@ -871,7 +971,26 @@ func TestAccountWithdrawal(t *testing.T) {
 
 	cases := []*testCase{
 		{
-			name: "happy path",
+			name:    "happy path version 0",
+			version: VersionInitialNoVersion,
+
+			// We'll use the lowest fee rate possible, which should
+			// yield a transaction fee of 260 satoshis when taking
+			// into account the outputs we'll be withdrawing to.
+			fee: 260,
+		},
+		{
+			name:       "happy path version 1",
+			version:    VersionTaprootEnabled,
+			newVersion: VersionTaprootEnabled,
+			fee:        219,
+		},
+		{
+			name: "happy path version upgrade during " +
+				"withdrawal",
+			version:    VersionInitialNoVersion,
+			newVersion: VersionTaprootEnabled,
+			fee:        260,
 		},
 	}
 
@@ -887,7 +1006,7 @@ func TestAccountWithdrawal(t *testing.T) {
 		_, _, err := h.manager.WithdrawAccount(
 			context.Background(), account.TraderKey.PubKey,
 			[]*wire.TxOut{dustOutput}, feeRate, bestHeight, 0,
-			tc.version,
+			tc.newVersion,
 		)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "dust output")
@@ -912,18 +1031,13 @@ func TestAccountWithdrawal(t *testing.T) {
 			},
 		}
 
-		// We'll use the lowest fee rate possible, which should yield a
-		// transaction fee of 260 satoshis when taking into account the
-		// outputs we'll be withdrawing to.
-		const expectedFee btcutil.Amount = 260
-
 		// Attempt the withdrawal.
 		//
 		// If successful, we'll follow with a series of assertions to
 		// ensure it was performed correctly.
 		_, _, err = h.manager.WithdrawAccount(
 			context.Background(), account.TraderKey.PubKey, outputs,
-			feeRate, bestHeight, 0, tc.version,
+			feeRate, bestHeight, 0, tc.newVersion,
 		)
 		require.NoError(h.t, err)
 
@@ -933,10 +1047,10 @@ func TestAccountWithdrawal(t *testing.T) {
 			len(outputs),
 		)
 		valueAfterWithdrawal := account.Value - withdrawOutputSum -
-			expectedFee
+			tc.fee
 		h.assertAccountModification(
-			account, nil, outputs, valueAfterWithdrawal, 0, 0,
-			bestHeight,
+			account, nil, outputs, valueAfterWithdrawal,
+			tc.newVersion, 0, 0, bestHeight,
 		)
 
 		// Finally, close the account to ensure we can process another
@@ -960,10 +1074,11 @@ func TestAccountDeposit(t *testing.T) {
 
 	const feeRate = chainfee.FeePerKwFloor
 	const accountInputFees = 110
+	const accountInputFeesTaproot = 68
 
 	cases := []*testCase{
 		{
-			name:               "happy path",
+			name:               "happy path version 0",
 			fundedOutputAmount: depositAmount + accountInputFees,
 
 			// We'll use the lowest fee rate possible, which should
@@ -977,6 +1092,7 @@ func TestAccountDeposit(t *testing.T) {
 				PkScript:    p2wpkh,
 				OutPoint:    wire.OutPoint{Index: 1},
 			},
+			version: VersionInitialNoVersion,
 		},
 		{
 			name:               "insufficient fees",
@@ -992,8 +1108,47 @@ func TestAccountDeposit(t *testing.T) {
 				PkScript:    p2wpkh,
 				OutPoint:    wire.OutPoint{Index: 1},
 			},
+			version: VersionInitialNoVersion,
 			expectedErr: "signed transaction only pays 120 sats " +
 				"in fees while 255 are required for relay",
+		},
+		{
+			name: "happy path version 1",
+			fundedOutputAmount: depositAmount +
+				accountInputFeesTaproot,
+
+			// We'll use the lowest fee rate possible, which should
+			// yield a transaction fee of 304 satoshis when taking
+			// into account the additional inputs needed to satisfy
+			// the deposit.
+			fundingTxFee: accountInputFeesTaproot + 236,
+			utxo: &lnwallet.Utxo{
+				AddressType: lnwallet.WitnessPubKey,
+				Value:       utxoAmount,
+				PkScript:    p2wpkh,
+				OutPoint:    wire.OutPoint{Index: 1},
+			},
+			version:    VersionTaprootEnabled,
+			newVersion: VersionTaprootEnabled,
+		},
+		{
+			name: "happy path version upgrade during deposit",
+			fundedOutputAmount: depositAmount +
+				accountInputFees,
+
+			// We'll use the lowest fee rate possible, which should
+			// yield a transaction fee of 346 satoshis when taking
+			// into account the additional inputs needed to satisfy
+			// the deposit.
+			fundingTxFee: accountInputFees + 236,
+			utxo: &lnwallet.Utxo{
+				AddressType: lnwallet.WitnessPubKey,
+				Value:       utxoAmount,
+				PkScript:    p2wpkh,
+				OutPoint:    wire.OutPoint{Index: 1},
+			},
+			version:    VersionInitialNoVersion,
+			newVersion: VersionTaprootEnabled,
 		},
 	}
 
@@ -1003,7 +1158,8 @@ func TestAccountDeposit(t *testing.T) {
 			bestHeight, tc.version,
 		)
 
-		accountOutputScript, _ := account.NextOutputScript()
+		upgradedAccount := account.Copy(VersionModifier(tc.newVersion))
+		accountOutputScript, _ := upgradedAccount.NextOutputScript()
 
 		// We'll provide a funded PSBT to the manager that has a change
 		// output.
@@ -1030,6 +1186,13 @@ func TestAccountDeposit(t *testing.T) {
 					Value:    int64(tc.utxo.Value),
 					PkScript: tc.utxo.PkScript,
 				},
+				// Normally the FinalizePsbt call would add the
+				// signatures for the wallet UTXOs. Since we're
+				// only using a mock, we add some signatures
+				// manually.
+				PartialSigs: []*psbt.PartialSig{{
+					Signature: []byte{1, 2, 3},
+				}},
 			}},
 			Outputs: []psbt.POutput{{}, {}},
 		}
@@ -1041,7 +1204,7 @@ func TestAccountDeposit(t *testing.T) {
 		// ensure it was performed correctly.
 		_, _, err := h.manager.DepositAccount(
 			context.Background(), account.TraderKey.PubKey,
-			depositAmount, feeRate, bestHeight, 0, tc.version,
+			depositAmount, feeRate, bestHeight, 0, tc.newVersion,
 		)
 
 		if tc.expectedErr != "" {
@@ -1061,8 +1224,8 @@ func TestAccountDeposit(t *testing.T) {
 		h.assertAccountModification(
 			account, h.wallet.utxos,
 			[]*wire.TxOut{h.wallet.fundPsbt.UnsignedTx.TxOut[0]},
-			valueAfterDeposit, accountInputIdx, accountOutputIdx,
-			bestHeight,
+			valueAfterDeposit, tc.newVersion, accountInputIdx,
+			accountOutputIdx, bestHeight,
 		)
 
 		// Finally, close the account to ensure we can process another
@@ -1080,8 +1243,13 @@ func TestAccountConsecutiveBatches(t *testing.T) {
 
 	cases := []*testCase{
 		{
-			name:    "happy path",
+			name:    "happy path version 0",
 			version: VersionInitialNoVersion,
+		},
+		{
+			name:       "happy path version 1",
+			version:    VersionTaprootEnabled,
+			newVersion: VersionTaprootEnabled,
 		},
 	}
 
@@ -1128,6 +1296,7 @@ func TestAccountConsecutiveBatches(t *testing.T) {
 					Index: 0,
 				}),
 				IncrementBatchKey(),
+				VersionModifier(tc.newVersion),
 			}
 			err = h.store.updateAccount(account, mods...)
 			require.NoError(t, err)
@@ -1161,8 +1330,12 @@ func TestAccountUpdateSubscriptionOnRestart(t *testing.T) {
 
 	cases := []*testCase{
 		{
-			name:    "happy path",
+			name:    "happy path version 0",
 			version: VersionInitialNoVersion,
+		},
+		{
+			name:    "happy path version 1",
+			version: VersionTaprootEnabled,
 		},
 	}
 

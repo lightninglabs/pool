@@ -187,18 +187,19 @@ func (mr *MockAuctioneerMockRecorder) InitAccount(arg0, arg1 interface{}) *gomoc
 }
 
 // ModifyAccount mocks base method.
-func (m *MockAuctioneer) ModifyAccount(arg0 context.Context, arg1 *Account, arg2 []*wire.TxIn, arg3 []*wire.TxOut, arg4 []Modifier) ([]byte, error) {
+func (m *MockAuctioneer) ModifyAccount(ctx context.Context, acct *Account, inputs []*wire.TxIn, outputs []*wire.TxOut, modifiers []Modifier, traderNonces []byte, previousOutputs []*wire.TxOut) ([]byte, []byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ModifyAccount", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "ModifyAccount", ctx, acct, inputs, outputs, modifiers, traderNonces, previousOutputs)
 	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].([]byte)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // ModifyAccount indicates an expected call of ModifyAccount.
-func (mr *MockAuctioneerMockRecorder) ModifyAccount(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+func (mr *MockAuctioneerMockRecorder) ModifyAccount(ctx, acct, inputs, outputs, modifiers, traderNonces, previousOutputs interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyAccount", reflect.TypeOf((*MockAuctioneer)(nil).ModifyAccount), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyAccount", reflect.TypeOf((*MockAuctioneer)(nil).ModifyAccount), ctx, acct, inputs, outputs, modifiers, traderNonces, previousOutputs)
 }
 
 // ReserveAccount mocks base method.

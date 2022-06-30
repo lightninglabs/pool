@@ -338,14 +338,18 @@ func (c *Client) InitAccount(ctx context.Context, account *account.Account) erro
 // ModifyAccount sends an intent to the auctioneer that we'd like to modify the
 // account with the associated trader key. The auctioneer's signature is
 // returned, allowing us to broadcast a transaction spending from the account
-// allowing our modifications to take place. The inputs and outputs provided
-// should exclude the account input being spent and the account output
-// potentially being recreated, since the auctioneer can construct those
-// themselves. If no modifiers are present, then the auctioneer will interpret
-// the request as an account closure.
+// allowing our modifications to take place. If the account spend is a MuSig2
+// spend, then the trader's nonces must be sent and the server's nonces are
+// returned upon success. The inputs and outputs provided should exclude the
+// account input being spent and the account output potentially being recreated,
+// since the auctioneer can construct those themselves. If no modifiers are
+// present, then the auctioneer will interpret the request as an account
+// closure. The previous outputs must always contain the UTXO information for
+// _every_ input of the transaction, so inputs+account_input.
 func (c *Client) ModifyAccount(ctx context.Context, account *account.Account,
 	inputs []*wire.TxIn, outputs []*wire.TxOut,
-	modifiers []account.Modifier) ([]byte, error) {
+	modifiers []account.Modifier, traderNonces []byte,
+	previousOutputs []*wire.TxOut) ([]byte, []byte, error) {
 
 	rpcInputs := make([]*auctioneerrpc.ServerInput, 0, len(inputs))
 	for _, input := range inputs {
@@ -367,28 +371,36 @@ func (c *Client) ModifyAccount(ctx context.Context, account *account.Account,
 		})
 	}
 
-	var rpcNewParams *auctioneerrpc.ServerModifyAccountRequest_NewAccountParameters
-	modifiedAccount := account.Copy(modifiers...)
+	req := &auctioneerrpc.ServerModifyAccountRequest{
+		TraderKey:    account.TraderKey.PubKey.SerializeCompressed(),
+		NewInputs:    rpcInputs,
+		NewOutputs:   rpcOutputs,
+		TraderNonces: traderNonces,
+		PrevOutputs:  make([]*auctioneerrpc.TxOut, len(previousOutputs)),
+	}
+
 	if len(modifiers) > 0 {
-		rpcNewParams = &auctioneerrpc.ServerModifyAccountRequest_NewAccountParameters{
-			Value:  uint64(modifiedAccount.Value),
-			Expiry: modifiedAccount.Expiry,
+		modifiedAccount := account.Copy(modifiers...)
+		req.NewParams = &auctioneerrpc.ServerModifyAccountRequest_NewAccountParameters{
+			Value:   uint64(modifiedAccount.Value),
+			Expiry:  modifiedAccount.Expiry,
+			Version: uint32(modifiedAccount.Version),
 		}
 	}
 
-	resp, err := c.client.ModifyAccount(
-		ctx, &auctioneerrpc.ServerModifyAccountRequest{
-			TraderKey:  account.TraderKey.PubKey.SerializeCompressed(),
-			NewInputs:  rpcInputs,
-			NewOutputs: rpcOutputs,
-			NewParams:  rpcNewParams,
-		},
-	)
-	if err != nil {
-		return nil, err
+	for idx, prevOutput := range previousOutputs {
+		req.PrevOutputs[idx] = &auctioneerrpc.TxOut{
+			Value:    uint64(prevOutput.Value),
+			PkScript: prevOutput.PkScript,
+		}
 	}
 
-	return resp.AccountSig, nil
+	resp, err := c.client.ModifyAccount(ctx, req)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return resp.AccountSig, resp.ServerNonces, nil
 }
 
 // SubmitOrder sends a fully finished order message to the server and interprets
