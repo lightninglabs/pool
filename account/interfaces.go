@@ -222,6 +222,7 @@ const (
 // Output returns the current on-chain output associated with the account.
 func (a *Account) Output() (*wire.TxOut, error) {
 	script, err := poolscript.AccountScript(
+		poolscript.VersionWitnessScript,
 		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey, a.BatchKey,
 		a.Secret,
 	)
@@ -241,6 +242,7 @@ func (a *Account) Output() (*wire.TxOut, error) {
 func (a *Account) NextOutputScript() ([]byte, error) {
 	nextBatchKey := poolscript.IncrementKey(a.BatchKey)
 	return poolscript.AccountScript(
+		poolscript.VersionWitnessScript,
 		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey, nextBatchKey,
 		a.Secret,
 	)
