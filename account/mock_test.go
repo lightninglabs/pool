@@ -163,6 +163,8 @@ type mockAuctioneer struct {
 	outputsReceived []wire.TxOut
 }
 
+var _ Auctioneer = (*mockAuctioneer)(nil)
+
 func newMockAuctioneer() *mockAuctioneer {
 	return &mockAuctioneer{
 		subscribed: make(map[[33]byte]struct{}),
@@ -170,7 +172,8 @@ func newMockAuctioneer() *mockAuctioneer {
 }
 
 func (a *mockAuctioneer) ReserveAccount(context.Context,
-	btcutil.Amount, uint32, *btcec.PublicKey) (*Reservation, error) {
+	btcutil.Amount, uint32, *btcec.PublicKey, Version) (*Reservation,
+	error) {
 
 	return &Reservation{
 		AuctioneerKey:   testAuctioneerKey,

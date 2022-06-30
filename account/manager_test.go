@@ -143,14 +143,14 @@ func (h *testHarness) assertAccountExists(expected *Account) {
 }
 
 func (h *testHarness) openAccount(value btcutil.Amount, expiry uint32, // nolint:unparam
-	bestHeight uint32) *Account { // nolint:unparam
+	bestHeight uint32, version Version) *Account { // nolint:unparam
 
 	h.t.Helper()
 
 	// Create a new account. Its initial state should be StatePendingOpen.
 	ctx := context.Background()
 	account, err := h.manager.InitAccount(
-		ctx, value, chainfee.FeePerKwFloor, expiry, bestHeight,
+		ctx, value, version, chainfee.FeePerKwFloor, expiry, bestHeight,
 	)
 	if err != nil {
 		h.t.Fatalf("unable to create new account: %v", err)
@@ -493,6 +493,7 @@ func TestNewAccountHappyFlow(t *testing.T) {
 
 	account := h.openAccount(
 		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+		VersionInitialNoVersion,
 	)
 
 	expr := defaultFeeExpr
@@ -538,8 +539,8 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 	// persisted intent to create the account.
 	go func() {
 		_, _ = h.manager.InitAccount(
-			context.Background(), value, chainfee.FeePerKwFloor, expiry,
-			bestHeight,
+			context.Background(), value, VersionInitialNoVersion,
+			chainfee.FeePerKwFloor, expiry, bestHeight,
 		)
 	}()
 
@@ -707,7 +708,7 @@ func TestAccountClose(t *testing.T) {
 			// value for each test.
 			account := h.openAccount(
 				MinAccountValue, bestHeight+maxAccountExpiry,
-				bestHeight,
+				bestHeight, VersionInitialNoVersion,
 			)
 
 			// We'll immediately attempt to close the account with
@@ -787,6 +788,7 @@ func TestAccountExpiration(t *testing.T) {
 
 	account := h.openAccount(
 		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+		VersionInitialNoVersion,
 	)
 
 	h.expireAccount(account)
@@ -806,6 +808,7 @@ func TestAccountSpendBatchNotFinalized(t *testing.T) {
 
 	account := h.openAccount(
 		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+		VersionInitialNoVersion,
 	)
 
 	// Create an account spend which we'll notify later. This spend should
@@ -868,6 +871,7 @@ func TestAccountWithdrawal(t *testing.T) {
 
 	account := h.openAccount(
 		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+		VersionInitialNoVersion,
 	)
 
 	// With our account created, we'll start with an invalid withdrawal to a
@@ -876,6 +880,7 @@ func TestAccountWithdrawal(t *testing.T) {
 	_, _, err := h.manager.WithdrawAccount(
 		context.Background(), account.TraderKey.PubKey,
 		[]*wire.TxOut{dustOutput}, feeRate, bestHeight, 0,
+		VersionInitialNoVersion,
 	)
 	if err == nil || !strings.Contains(err.Error(), "dust output") {
 		t.Fatalf("expected dust output error, got: %v", err)
@@ -912,7 +917,7 @@ func TestAccountWithdrawal(t *testing.T) {
 	// was performed correctly.
 	_, _, err = h.manager.WithdrawAccount(
 		context.Background(), account.TraderKey.PubKey, outputs,
-		feeRate, bestHeight, 0,
+		feeRate, bestHeight, 0, VersionInitialNoVersion,
 	)
 	if err != nil {
 		t.Fatalf("unable to process account withdrawal: %v", err)
@@ -960,6 +965,7 @@ func TestAccountDeposit(t *testing.T) {
 	const bestHeight = 100
 	account := h.openAccount(
 		initialAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+		VersionInitialNoVersion,
 	)
 
 	accountOutputScript, _ := account.NextOutputScript()
@@ -1003,7 +1009,7 @@ func TestAccountDeposit(t *testing.T) {
 	// was performed correctly.
 	_, _, err := h.manager.DepositAccount(
 		context.Background(), account.TraderKey.PubKey, depositAmount,
-		feeRate, bestHeight, 0,
+		feeRate, bestHeight, 0, VersionInitialNoVersion,
 	)
 	require.NoError(t, err)
 
@@ -1052,6 +1058,7 @@ func TestAccountDepositInsufficientFee(t *testing.T) {
 	const bestHeight = 100
 	account := h.openAccount(
 		initialAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+		VersionInitialNoVersion,
 	)
 
 	accountOutputScript, _ := account.NextOutputScript()
@@ -1095,7 +1102,7 @@ func TestAccountDepositInsufficientFee(t *testing.T) {
 	// was performed correctly.
 	_, _, err := h.manager.DepositAccount(
 		context.Background(), account.TraderKey.PubKey, depositAmount,
-		feeRate, bestHeight, 0,
+		feeRate, bestHeight, 0, VersionInitialNoVersion,
 	)
 	require.Error(t, err)
 	require.Contains(
@@ -1123,6 +1130,7 @@ func TestAccountConsecutiveBatches(t *testing.T) {
 
 	account := h.openAccount(
 		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+		VersionInitialNoVersion,
 	)
 
 	// Then, we'll simulate the maximum number of unconfirmed batches to
@@ -1200,6 +1208,7 @@ func TestAccountUpdateSubscriptionOnRestart(t *testing.T) {
 
 	account := h.openAccount(
 		maxAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+		VersionInitialNoVersion,
 	)
 
 	// StateOpen case.

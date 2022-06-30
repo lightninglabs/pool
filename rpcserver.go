@@ -565,6 +565,14 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 			"must be specified")
 	}
 
+	// In order to be able to choose a default value (or to validate the
+	// account version), we need to know if the version of the connected lnd
+	// supports Taproot.
+	version, err := s.determineAccountVersion(req.Version)
+	if err != nil {
+		return nil, err
+	}
+
 	if feeRate < chainfee.FeePerKwFloor {
 		return nil, fmt.Errorf("fee rate of %d sat/kw is too low, "+
 			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
@@ -572,7 +580,7 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 
 	acct, err := s.accountManager.InitAccount(
 		ContextWithInitiator(ctx, req.Initiator),
-		btcutil.Amount(req.AccountValue), feeRate,
+		btcutil.Amount(req.AccountValue), version, feeRate,
 		expiryHeight, bestHeight,
 	)
 	if err != nil {
@@ -645,6 +653,18 @@ func MarshallAccount(a *account.Account) (*poolrpc.Account, error) {
 		return nil, fmt.Errorf("unknown state %v", a.State)
 	}
 
+	var rpcVersion poolrpc.AccountVersion
+	switch a.Version {
+	case account.VersionInitialNoVersion:
+		rpcVersion = poolrpc.AccountVersion_ACCOUNT_VERSION_LEGACY
+
+	case account.VersionTaprootEnabled:
+		rpcVersion = poolrpc.AccountVersion_ACCOUNT_VERSION_TAPROOT
+
+	default:
+		return nil, fmt.Errorf("unknown version <%d>", a.Version)
+	}
+
 	// The latest transaction is only known after the account has been
 	// funded.
 	var latestTxHash chainhash.Hash
@@ -662,13 +682,15 @@ func MarshallAccount(a *account.Account) (*poolrpc.Account, error) {
 		ExpirationHeight: a.Expiry,
 		State:            rpcState,
 		LatestTxid:       latestTxHash[:],
+		Version:          rpcVersion,
 	}, nil
 }
 
 // DepositAccount handles a trader's request to deposit funds into the specified
 // account by spending the specified inputs.
 func (s *rpcServer) DepositAccount(ctx context.Context,
-	req *poolrpc.DepositAccountRequest) (*poolrpc.DepositAccountResponse, error) {
+	req *poolrpc.DepositAccountRequest) (*poolrpc.DepositAccountResponse,
+	error) {
 
 	rpcLog.Infof("Depositing %v into acct=%x",
 		btcutil.Amount(req.AmountSat), req.TraderKey)
@@ -700,11 +722,19 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 		expiryHeight = req.GetRelativeExpiry() + bestHeight
 	}
 
+	// In order to be able to choose a default value (or to validate the
+	// account version), we need to know if the version of the connected lnd
+	// supports Taproot.
+	version, err := s.determineAccountVersion(req.NewVersion)
+	if err != nil {
+		return nil, err
+	}
+
 	// Proceed to process the deposit and map its response to the RPC's
 	// response.
 	modifiedAccount, tx, err := s.accountManager.DepositAccount(
 		ctx, traderKey, btcutil.Amount(req.AmountSat), feeRate,
-		bestHeight, expiryHeight,
+		bestHeight, expiryHeight, version,
 	)
 	if err != nil {
 		return nil, err
@@ -728,7 +758,8 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 // specified account by spending the current account output to the specified
 // outputs.
 func (s *rpcServer) WithdrawAccount(ctx context.Context,
-	req *poolrpc.WithdrawAccountRequest) (*poolrpc.WithdrawAccountResponse, error) {
+	req *poolrpc.WithdrawAccountRequest) (*poolrpc.WithdrawAccountResponse,
+	error) {
 
 	rpcLog.Infof("Withdrawing from acct=%x", req.TraderKey)
 
@@ -768,10 +799,19 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 		expiryHeight = req.GetRelativeExpiry() + bestHeight
 	}
 
+	// In order to be able to choose a default value (or to validate the
+	// account version), we need to know if the version of the connected lnd
+	// supports Taproot.
+	version, err := s.determineAccountVersion(req.NewVersion)
+	if err != nil {
+		return nil, err
+	}
+
 	// Proceed to process the withdrawal and map its response to the RPC's
 	// response.
 	modifiedAccount, tx, err := s.accountManager.WithdrawAccount(
 		ctx, traderKey, outputs, feeRate, bestHeight, expiryHeight,
+		version,
 	)
 	if err != nil {
 		return nil, err
@@ -795,8 +835,8 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 // will always require a signature from the auctioneer, even after the account
 // has expired, to ensure the auctioneer is aware the account is being renewed.
 func (s *rpcServer) RenewAccount(ctx context.Context,
-	req *poolrpc.RenewAccountRequest) (
-	*poolrpc.RenewAccountResponse, error) {
+	req *poolrpc.RenewAccountRequest) (*poolrpc.RenewAccountResponse,
+	error) {
 
 	rpcLog.Infof("Updating account expiration for account %x", req.AccountKey)
 
@@ -826,10 +866,18 @@ func (s *rpcServer) RenewAccount(ctx context.Context,
 			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
 	}
 
+	// In order to be able to choose a default value (or to validate the
+	// account version), we need to know if the version of the connected lnd
+	// supports Taproot.
+	version, err := s.determineAccountVersion(req.NewVersion)
+	if err != nil {
+		return nil, err
+	}
+
 	// Proceed to process the expiration update and map its response to the
 	// RPC's response.
 	modifiedAccount, tx, err := s.accountManager.RenewAccount(
-		ctx, accountKey, expiryHeight, feeRate, bestHeight,
+		ctx, accountKey, expiryHeight, feeRate, bestHeight, version,
 	)
 	if err != nil {
 		return nil, err
@@ -856,7 +904,8 @@ func (s *rpcServer) RenewAccount(ctx context.Context,
 // and this RPC is invoked again, then a replacing transaction (RBF) of the
 // child will be broadcast.
 func (s *rpcServer) BumpAccountFee(ctx context.Context,
-	req *poolrpc.BumpAccountFeeRequest) (*poolrpc.BumpAccountFeeResponse, error) {
+	req *poolrpc.BumpAccountFeeRequest) (*poolrpc.BumpAccountFeeResponse,
+	error) {
 
 	traderKey, err := btcec.ParsePubKey(req.TraderKey)
 	if err != nil {
@@ -2807,6 +2856,42 @@ func (s *rpcServer) setTicketStateForOrder(newState sidecar.State,
 	}
 
 	return nil
+}
+
+// determineAccountVersion parses the RPC version and makes sure it can actually
+// be used.
+func (s *rpcServer) determineAccountVersion(
+	newVersion poolrpc.AccountVersion) (account.Version, error) {
+
+	isTaprootCompatible := false
+	verErr := lndclient.AssertVersionCompatible(
+		s.server.lndServices.Version, taprootVersion,
+	)
+	if verErr == nil {
+		isTaprootCompatible = true
+	}
+
+	// Now we can do the account version validation.
+	switch newVersion {
+	case poolrpc.AccountVersion_ACCOUNT_VERSION_LND_DEPENDENT:
+		if isTaprootCompatible {
+			return account.VersionTaprootEnabled, nil
+		}
+
+	case poolrpc.AccountVersion_ACCOUNT_VERSION_TAPROOT:
+		if !isTaprootCompatible {
+			return 0, fmt.Errorf("cannot use Taproot enabled "+
+				"account version, the lnd node Pool is "+
+				"connected to is version %v but needs to be "+
+				"at least %v",
+				s.server.lndServices.Version.AppMinor,
+				taprootVersion.AppMinor)
+		}
+
+		return account.VersionTaprootEnabled, nil
+	}
+
+	return account.VersionInitialNoVersion, nil
 }
 
 // rpcOrderStateToDBState maps the order state as received over the RPC

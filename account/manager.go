@@ -303,7 +303,7 @@ func (m *manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
 // InitAccount handles a request to create a new account with the provided
 // parameters.
 func (m *manager) InitAccount(ctx context.Context, value btcutil.Amount,
-	feeRate chainfee.SatPerKWeight, expiry,
+	version Version, feeRate chainfee.SatPerKWeight, expiry,
 	bestHeight uint32) (*Account, error) {
 
 	// We'll make sure to acquire the reservation lock throughout the
@@ -321,7 +321,7 @@ func (m *manager) InitAccount(ctx context.Context, value btcutil.Amount,
 			err)
 	}
 	err = validateAccountParams(
-		value, terms.MaxAccountValue, expiry, bestHeight,
+		value, terms.MaxAccountValue, expiry, bestHeight, version,
 	)
 	if err != nil {
 		return nil, err
@@ -340,7 +340,7 @@ func (m *manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	// who will provide us with their base key and our initial per-batch
 	// key.
 	reservation, err := m.cfg.Auctioneer.ReserveAccount(
-		ctx, value, expiry, keyDesc.PubKey,
+		ctx, value, expiry, keyDesc.PubKey, version,
 	)
 	if err != nil {
 		return nil, err
@@ -368,6 +368,7 @@ func (m *manager) InitAccount(ctx context.Context, value btcutil.Amount,
 		Secret:        secret,
 		State:         StateInitiated,
 		HeightHint:    bestHeight,
+		Version:       version,
 	}
 	if err := m.cfg.Store.AddAccount(account); err != nil {
 		return nil, err
@@ -1080,8 +1081,8 @@ func (m *manager) HandleAccountExpiry(traderKey *btcec.PublicKey,
 // to lnd may be added to the deposit transaction.
 func (m *manager) DepositAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, depositAmount btcutil.Amount,
-	feeRate chainfee.SatPerKWeight, bestHeight,
-	expiryHeight uint32) (*Account, *wire.MsgTx, error) {
+	feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32,
+	newVersion Version) (*Account, *wire.MsgTx, error) {
 
 	// The account can only be modified in `StateOpen` and its new value
 	// should not exceed the maximum allowed.
@@ -1092,6 +1093,12 @@ func (m *manager) DepositAccount(ctx context.Context,
 	if account.State != StateOpen {
 		return nil, nil, fmt.Errorf("account must be in %v to be "+
 			"modified", StateOpen)
+	}
+
+	// Can't downgrade an account.
+	if newVersion < account.Version {
+		return nil, nil, fmt.Errorf("cannot downgrade account "+
+			"version to %s", newVersion)
 	}
 
 	// The auctioneer defines the maximum account size.
@@ -1161,8 +1168,8 @@ func (m *manager) DepositAccount(ctx context.Context,
 // the given trader key into the provided outputs.
 func (m *manager) WithdrawAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, outputs []*wire.TxOut,
-	feeRate chainfee.SatPerKWeight,
-	bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error) {
+	feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32,
+	newVersion Version) (*Account, *wire.MsgTx, error) {
 
 	// The account can only be modified in `StateOpen`.
 	account, err := m.cfg.Store.Account(traderKey)
@@ -1172,6 +1179,12 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 	if account.State != StateOpen {
 		return nil, nil, fmt.Errorf("account must be in %v to be "+
 			"modified", StateOpen)
+	}
+
+	// Can't downgrade an account.
+	if newVersion < account.Version {
+		return nil, nil, fmt.Errorf("cannot downgrade account "+
+			"version to %s", newVersion)
 	}
 
 	var newExpiry *uint32
@@ -1230,8 +1243,8 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 // expired, to ensure the auctioneer is aware the account is being renewed.
 func (m *manager) RenewAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, newExpiry uint32,
-	feeRate chainfee.SatPerKWeight, bestHeight uint32) (*Account,
-	*wire.MsgTx, error) {
+	feeRate chainfee.SatPerKWeight, bestHeight uint32,
+	newVersion Version) (*Account, *wire.MsgTx, error) {
 
 	// The account can only have its expiry updated if it has confirmed
 	// and/or has expired.
@@ -1250,6 +1263,12 @@ func (m *manager) RenewAccount(ctx context.Context,
 	// Validate the new expiry.
 	if err := validateAccountExpiry(newExpiry, bestHeight); err != nil {
 		return nil, nil, err
+	}
+
+	// Can't downgrade an account.
+	if newVersion < account.Version {
+		return nil, nil, fmt.Errorf("cannot downgrade account "+
+			"version to %s", newVersion)
 	}
 
 	// Determine the new account output after attempting the expiry update.
@@ -2174,13 +2193,17 @@ func validateAccountExpiry(expiry, bestHeight uint32) error {
 // validateAccountParams ensures that a trader has provided sane parameters for
 // the creation of a new account.
 func validateAccountParams(value, maxValue btcutil.Amount, expiry,
-	bestHeight uint32) error {
+	bestHeight uint32, version Version) error {
 
 	err := validateAccountValue(value, maxValue)
 	if err != nil {
 		return err
 	}
-	return validateAccountExpiry(expiry, bestHeight)
+	err = validateAccountExpiry(expiry, bestHeight)
+	if err != nil {
+		return err
+	}
+	return ValidateVersion(version)
 }
 
 // NumConfsForValue chooses an appropriate number of confirmations to wait for

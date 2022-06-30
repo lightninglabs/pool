@@ -280,14 +280,15 @@ func (c *Client) closeStream() error {
 // public key we should use for them in our 2-of-2 multi-sig construction, and
 // the initial batch key.
 func (c *Client) ReserveAccount(ctx context.Context, value btcutil.Amount,
-	expiry uint32, traderKey *btcec.PublicKey) (*account.Reservation,
-	error) {
+	expiry uint32, traderKey *btcec.PublicKey,
+	version account.Version) (*account.Reservation, error) {
 
 	resp, err := c.client.ReserveAccount(
 		ctx, &auctioneerrpc.ReserveAccountRequest{
 			AccountValue:  uint64(value),
 			TraderKey:     traderKey.SerializeCompressed(),
 			AccountExpiry: expiry,
+			Version:       uint32(version),
 		},
 	)
 	if err != nil {
@@ -328,6 +329,7 @@ func (c *Client) InitAccount(ctx context.Context, account *account.Account) erro
 			AccountExpiry: account.Expiry,
 			TraderKey:     account.TraderKey.PubKey.SerializeCompressed(),
 			UserAgent:     c.cfg.GenUserAgent(ctx),
+			Version:       uint32(account.Version),
 		},
 	)
 	return err
@@ -842,6 +844,7 @@ func incompleteAcctFromErr(traderKey *keychain.KeyDescriptor,
 			TraderKey:  traderKey,
 			Expiry:     resErr.Expiry,
 			HeightHint: resErr.HeightHint,
+			Version:    account.Version(resErr.Version),
 		}
 		err error
 	)
@@ -1318,6 +1321,7 @@ func unmarshallServerRecoveredAccount(keyDesc *keychain.KeyDescriptor,
 			Index: a.Outpoint.OutputIndex,
 		},
 		LatestTx: latestTx,
+		Version:  account.Version(a.Version),
 	}, nil
 }
 

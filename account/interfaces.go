@@ -55,6 +55,43 @@ const (
 	VersionTaprootEnabled Version = 1
 )
 
+// String returns the string representation of the version.
+func (v Version) String() string {
+	switch v {
+	case VersionInitialNoVersion:
+		return "account_p2wsh"
+
+	case VersionTaprootEnabled:
+		return "account_p2tr"
+
+	default:
+		return fmt.Sprintf("unknown <%d>", v)
+	}
+}
+
+// ScriptVersion returns the version of the pool script used by this account
+// version.
+func (v Version) ScriptVersion() poolscript.Version {
+	switch v {
+	case VersionTaprootEnabled:
+		return poolscript.VersionTaprootMuSig2
+
+	default:
+		return poolscript.VersionWitnessScript
+	}
+}
+
+// ValidateVersion ensures that a given version is a valid and known version.
+func ValidateVersion(version Version) error {
+	switch version {
+	case VersionInitialNoVersion, VersionTaprootEnabled:
+		return nil
+
+	default:
+		return fmt.Errorf("unknown version <%d>", version)
+	}
+}
+
 // State describes the different possible states of an account.
 type State uint8
 
@@ -222,9 +259,8 @@ const (
 // Output returns the current on-chain output associated with the account.
 func (a *Account) Output() (*wire.TxOut, error) {
 	script, err := poolscript.AccountScript(
-		poolscript.VersionWitnessScript,
-		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey, a.BatchKey,
-		a.Secret,
+		a.Version.ScriptVersion(), a.Expiry, a.TraderKey.PubKey,
+		a.AuctioneerKey, a.BatchKey, a.Secret,
 	)
 	if err != nil {
 		return nil, err
@@ -242,9 +278,8 @@ func (a *Account) Output() (*wire.TxOut, error) {
 func (a *Account) NextOutputScript() ([]byte, error) {
 	nextBatchKey := poolscript.IncrementKey(a.BatchKey)
 	return poolscript.AccountScript(
-		poolscript.VersionWitnessScript,
-		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey, nextBatchKey,
-		a.Secret,
+		a.Version.ScriptVersion(), a.Expiry, a.TraderKey.PubKey,
+		a.AuctioneerKey, nextBatchKey, a.Secret,
 	)
 }
 
@@ -386,7 +421,7 @@ type Auctioneer interface {
 	// the trader crashes before confirming the account with the auctioneer,
 	// we also send the trader key and expiry along with the reservation.
 	ReserveAccount(context.Context, btcutil.Amount, uint32,
-		*btcec.PublicKey) (*Reservation, error)
+		*btcec.PublicKey, Version) (*Reservation, error)
 
 	// InitAccount initializes an account with the auctioneer such that it
 	// can be used once fully confirmed.
@@ -556,7 +591,7 @@ type Manager interface {
 
 	// InitAccount handles a request to create a new account with the provided
 	// parameters.
-	InitAccount(ctx context.Context, value btcutil.Amount,
+	InitAccount(ctx context.Context, value btcutil.Amount, version Version,
 		feeRate chainfee.SatPerKWeight, expiry,
 		bestHeight uint32) (*Account, error)
 
@@ -594,20 +629,23 @@ type Manager interface {
 	// to lnd may be added to the deposit transaction.
 	DepositAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		depositAmount btcutil.Amount, feeRate chainfee.SatPerKWeight,
-		bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error)
+		bestHeight, expiryHeight uint32, newVersion Version) (*Account,
+		*wire.MsgTx, error)
 
 	// WithdrawAccount attempts to withdraw funds from the account associated with
 	// the given trader key into the provided outputs.
 	WithdrawAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		outputs []*wire.TxOut, feeRate chainfee.SatPerKWeight,
-		bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error)
+		bestHeight, expiryHeight uint32, newVersion Version) (*Account,
+		*wire.MsgTx, error)
 
 	// RenewAccount updates the expiration of an open/expired account. This will
 	// always require a signature from the auctioneer, even after the account has
 	// expired, to ensure the auctioneer is aware the account is being renewed.
 	RenewAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		newExpiry uint32, feeRate chainfee.SatPerKWeight,
-		bestHeight uint32) (*Account, *wire.MsgTx, error)
+		bestHeight uint32, newVersion Version) (*Account, *wire.MsgTx,
+		error)
 
 	// BumpAccountFee attempts to bump the fee of an account's most recent
 	// transaction. This is done by locating an eligible output for lnd to CPFP,

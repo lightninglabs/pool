@@ -52,6 +52,18 @@ var (
 			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
 		},
 	}
+
+	// taprootVersion is the version of lnd that enabled Taproot
+	// functionality in its wallet. We'll use this to decide what account
+	// version to default to.
+	taprootVersion = &verrpc.Version{
+		AppMajor: 0,
+		AppMinor: 15,
+		AppPatch: 0,
+		BuildTags: []string{
+			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
+		},
+	}
 )
 
 // Server is the main poold trader server.
