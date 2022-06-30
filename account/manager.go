@@ -1137,8 +1137,9 @@ func (m *manager) DepositAccount(ctx context.Context,
 	// required new value of the account as part of the deposit. The
 	// selected inputs, along with a change output if needed, will then be
 	// included in the deposit transaction we'll broadcast.
+	spendWitnessType := determineWitnessType(account, bestHeight)
 	packet, releaseInputs, err := m.inputsForDeposit(
-		ctx, account, newAccountOutput, depositAmount, multiSigWitness,
+		ctx, account, newAccountOutput, depositAmount, spendWitnessType,
 		feeRate,
 	)
 	if err != nil {
@@ -1153,7 +1154,7 @@ func (m *manager) DepositAccount(ctx context.Context,
 	// and assuming it's valid, broadcast the deposit transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
 	modifiedAccount, spendPkg, err := m.spendAccount(
-		ctx, account, packet, multiSigWitness, modifiers, false,
+		ctx, account, packet, spendWitnessType, modifiers, false,
 		bestHeight,
 	)
 	if err != nil {
@@ -1202,8 +1203,9 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 	// To start, we'll need to determine the new value of the account after
 	// creating the outputs specified as part of the withdrawal, which we'll
 	// then use to create the new account output.
+	spendWitnessType := determineWitnessType(account, bestHeight)
 	newAccountValue, err := valueAfterAccountUpdate(
-		account, outputs, multiSigWitness, feeRate,
+		account, outputs, spendWitnessType, feeRate,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1228,7 +1230,7 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 	// and assuming it's valid, broadcast the withdrawal transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
 	modifiedAccount, spendPkg, err := m.spendAccount(
-		ctx, account, packet, multiSigWitness, modifiers, false,
+		ctx, account, packet, spendWitnessType, modifiers, false,
 		bestHeight,
 	)
 	if err != nil {
@@ -1272,8 +1274,11 @@ func (m *manager) RenewAccount(ctx context.Context,
 	}
 
 	// Determine the new account output after attempting the expiry update.
+	// We'll always use the multisig spend path, even if the account is
+	// expired, to make sure the auctioneer is aware of the change.
+	spendWitnessType := multiSigWitness
 	newAccountValue, err := valueAfterAccountUpdate(
-		account, nil, multiSigWitness, feeRate,
+		account, nil, spendWitnessType, feeRate,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1296,7 +1301,7 @@ func (m *manager) RenewAccount(ctx context.Context,
 	// and assuming it's valid, broadcast the update transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
 	modifiedAccount, spendPkg, err := m.spendAccount(
-		ctx, account, packet, multiSigWitness, modifiers, false,
+		ctx, account, packet, spendWitnessType, modifiers, false,
 		bestHeight,
 	)
 	if err != nil {
@@ -1389,7 +1394,7 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 
 	// Determine the appropriate witness type for the account input based on
 	// whether it's expired or not.
-	witnessType := determineWitnessType(account, bestHeight)
+	spendWitnessType := determineWitnessType(account, bestHeight)
 
 	// We'll then use the fee expression to determine the closing
 	// transaction of the account.
@@ -1408,7 +1413,9 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 			return nil, err
 		}
 	}
-	closeOutputs, err := feeExpr.CloseOutputs(account.Value, witnessType)
+	closeOutputs, err := feeExpr.CloseOutputs(
+		account.Value, spendWitnessType,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1424,7 +1431,7 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		ValueModifier(0), StateModifier(StatePendingClosed),
 	}
 	_, spendPkg, err := m.spendAccount(
-		ctx, account, packet, witnessType, modifiers, true,
+		ctx, account, packet, spendWitnessType, modifiers, true,
 		bestHeight,
 	)
 	if err != nil {
@@ -1776,8 +1783,8 @@ func addBaseAccountModificationWeight(weightEstimator *input.TxWeightEstimator,
 // valueAfterAccountUpdate determines the new value of an account after
 // processing a withdrawal to the specified outputs at the provided fee rate.
 func valueAfterAccountUpdate(account *Account, outputs []*wire.TxOut,
-	witnessType witnessType, feeRate chainfee.SatPerKWeight) (
-	btcutil.Amount, error) {
+	witnessType witnessType,
+	feeRate chainfee.SatPerKWeight) (btcutil.Amount, error) {
 
 	// To determine the new value of the account, we'll need to subtract the
 	// values of all additional outputs and the resulting fee of the
