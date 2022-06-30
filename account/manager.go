@@ -10,6 +10,7 @@ import (
 
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -1644,12 +1645,13 @@ func (m *manager) signSpendTx(ctx context.Context, account *Account,
 
 	// Ensure the transaction crafted passes some basic sanity checks before
 	// we attempt to sign it.
-	if err := sanityCheckAccountSpendTx(account, packet); err != nil {
+	err := sanityCheckAccountSpendTx(account, packet, witnessType)
+	if err != nil {
 		return nil, err
 	}
 
-	// Determine the new index of the account input now that the transaction
-	// has been sorted.
+	// Determine the new index of the account input now that we know we have
+	// the full transaction.
 	accountInputIdx, err := locateAccountInput(tx, account)
 	if err != nil {
 		return nil, err
@@ -1960,7 +1962,10 @@ func createNewAccountOutput(account *Account, newAccountValue btcutil.Amount,
 
 // sanityCheckAccountSpendTx ensures that the spending transaction of an account
 // is well-formed by performing various sanity checks on its inputs and outputs.
-func sanityCheckAccountSpendTx(account *Account, packet *psbt.Packet) error {
+// It returns the total amount of fees in satoshis paid by the transaction.
+func sanityCheckAccountSpendTx(account *Account, packet *psbt.Packet,
+	witnessType witnessType) error {
+
 	tx := packet.UnsignedTx
 	err := blockchain.CheckTransactionSanity(btcutil.NewTx(tx))
 	if err != nil {
@@ -1976,17 +1981,50 @@ func sanityCheckAccountSpendTx(account *Account, packet *psbt.Packet) error {
 
 	// CheckTransactionSanity doesn't have enough context to attempt fee
 	// calculation, but we do.
-	//
-	// TODO(wilmer): Calculate the fee for this transaction and assert that
-	// it is greater than the lowest possible fee for it?
-	var inputTotal, outputTotal btcutil.Amount
+	var (
+		inputTotal, outputTotal btcutil.Amount
+		witnessSize             int64
+	)
 	for idx, inp := range tx.TxIn {
+		pIn := packet.Inputs[idx]
 		if inp.PreviousOutPoint == account.OutPoint {
 			inputTotal += account.Value
+
+			acctWitnessSize, err := witnessType.witnessSize()
+			if err != nil {
+				return err
+			}
+			witnessSize += int64(acctWitnessSize)
 		} else {
-			inputTotal += btcutil.Amount(
-				packet.Inputs[idx].WitnessUtxo.Value,
-			)
+			utxo := pIn.WitnessUtxo
+			inputTotal += btcutil.Amount(utxo.Value)
+
+			pkScript, err := txscript.ParsePkScript(utxo.PkScript)
+			if err != nil {
+				return err
+			}
+
+			switch pkScript.Class() {
+			case txscript.WitnessV0PubKeyHashTy:
+				witnessSize += input.P2WKHWitnessSize
+
+			case txscript.ScriptHashTy:
+				witnessSize += input.P2WKHWitnessSize
+
+				// The redeem script counts 4 times because
+				// that's not include in the witness.
+				witnessSize += int64(
+					blockchain.WitnessScaleFactor *
+						len(pIn.RedeemScript),
+				)
+
+			case txscript.WitnessV1TaprootTy:
+				witnessSize += 1 + 1 + schnorr.SignatureSize
+
+			default:
+				return fmt.Errorf("unsupported deposit input "+
+					"of class <%s>", pkScript.Class())
+			}
 		}
 	}
 	for _, output := range tx.TxOut {
@@ -1994,8 +2032,29 @@ func sanityCheckAccountSpendTx(account *Account, packet *psbt.Packet) error {
 	}
 
 	if inputTotal < outputTotal {
-		return fmt.Errorf("output value of %v exceeds input value of %v",
-			outputTotal, inputTotal)
+		return fmt.Errorf("output value of %v exceeds input value "+
+			"of %v", outputTotal, inputTotal)
+	}
+
+	feesPaid := inputTotal - outputTotal
+
+	// The unsigned TX within the package doesn't have any witness set.
+	// We'll add the witness weight manually in the next step. Fortunately
+	// with the PSBT funding
+	txWeightNoWitness := blockchain.GetTransactionWeight(btcutil.NewTx(
+		packet.UnsignedTx,
+	))
+
+	// The witness size can be translated to weight directly, no scale
+	// factor is needed. But we need to add the 2 bytes for the marker and
+	// flag fields that weren't counted above because the unsigned TX has no
+	// witness.
+	fullWeight := txWeightNoWitness + 2 + witnessSize
+	minRelayFee := chainfee.FeePerKwFloor.FeeForWeight(fullWeight)
+	if feesPaid < minRelayFee {
+		return fmt.Errorf("signed transaction only pays %d sats "+
+			"in fees while %d are required for relay", feesPaid,
+			minRelayFee)
 	}
 
 	return nil

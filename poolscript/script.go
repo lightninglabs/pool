@@ -19,6 +19,15 @@ const (
 	// TODO(wilmer): decide on actual value.
 	AccountKeyFamily keychain.KeyFamily = 220
 
+	// MaxWitnessSigLen is the maximum length of a DER encoded signature and
+	// is when both R and S are 33 bytes each and the sighash flag is
+	// appended to it. R and S can be 33 bytes because a 256-bit integer
+	// requires 32 bytes and an additional leading null byte might be
+	// required if the high bit is set in the value.
+	//
+	// 0x30 + <1-byte> + 0x02 + 0x21 + <33 bytes> + 0x2 + 0x21 + <33 bytes>
+	MaxWitnessSigLen = 72 + 1
+
 	// AccountWitnessScriptSize: 79 bytes
 	//	- OP_DATA: 1 byte (trader_key length)
 	//	- <trader_key>: 33 bytes
@@ -42,7 +51,8 @@ const (
 	//	- <auctioneer_sig>: 73 bytes
 	//	- witness_script_varint_len: 1 byte
 	//	- <witness_script>: 79 bytes
-	MultiSigWitnessSize = 1 + 1 + 73 + 1 + 73 + 1 + AccountWitnessScriptSize
+	MultiSigWitnessSize = 1 + 1 + MaxWitnessSigLen + 1 + MaxWitnessSigLen +
+		1 + AccountWitnessScriptSize
 
 	// ExpiryWitnessSize: 154 bytes
 	//      - num_witness_elements: 1 byte
@@ -50,7 +60,8 @@ const (
 	//	- <trader_sig>: 73 bytes
 	//	- witness_script_varint_len: 1 byte (nil length)
 	//	- <witness_script>: 79 bytes
-	ExpiryWitnessSize = 1 + 1 + 73 + 1 + AccountWitnessScriptSize
+	ExpiryWitnessSize = 1 + 1 + MaxWitnessSigLen +
+		1 + AccountWitnessScriptSize
 )
 
 // TraderKeyTweak computes the tweak based on the current per-batch key and

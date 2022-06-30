@@ -1025,6 +1025,90 @@ func TestAccountDeposit(t *testing.T) {
 	_ = h.closeAccount(account, &expr, bestHeight)
 }
 
+// TestAccountDepositInsufficientFee ensures that we get an error if for some
+// reason we get a funded transaction with insufficient fees.
+func TestAccountDepositInsufficientFee(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHarness(t)
+	h.start()
+	defer h.stop()
+
+	// We'll start by defining our initial account value and its value after
+	// a successful deposit.
+	const initialAccountValue = MinAccountValue
+	const valueAfterDeposit = initialAccountValue * 2
+	const utxoAmount = initialAccountValue * 3
+	const depositAmount = valueAfterDeposit - initialAccountValue
+
+	// We'll use a fee that is lower than the lowest fee rate possible
+	// (346 satoshis), so we should get an error.
+	const feeRate = chainfee.FeePerKwFloor
+	const accountInputFees = 110
+	const expectedFee btcutil.Amount = accountInputFees + 10
+
+	const fundedOutputAmount = depositAmount + accountInputFees
+
+	const bestHeight = 100
+	account := h.openAccount(
+		initialAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+	)
+
+	accountOutputScript, _ := account.NextOutputScript()
+
+	// We'll provide a funded PSBT to the manager that has a change output.
+	h.wallet.utxos = []*lnwallet.Utxo{{
+		AddressType: lnwallet.WitnessPubKey,
+		Value:       utxoAmount,
+		PkScript:    p2wpkh,
+		OutPoint:    wire.OutPoint{Index: 1},
+	}}
+	h.wallet.fundPsbt = &psbt.Packet{
+		UnsignedTx: &wire.MsgTx{
+			Version: 2,
+			TxIn: []*wire.TxIn{{
+				PreviousOutPoint: h.wallet.utxos[0].OutPoint,
+			}},
+			TxOut: []*wire.TxOut{{
+				Value:    int64(fundedOutputAmount),
+				PkScript: accountOutputScript,
+			}, {
+				Value: int64(
+					utxoAmount - depositAmount - expectedFee,
+				),
+				PkScript: np2wpkh,
+			}},
+		},
+		Inputs: []psbt.PInput{{
+			WitnessUtxo: &wire.TxOut{
+				Value:    int64(h.wallet.utxos[0].Value),
+				PkScript: h.wallet.utxos[0].PkScript,
+			},
+		}},
+		Outputs: []psbt.POutput{{}, {}},
+	}
+	h.wallet.fundPsbtChangeIdx = 1
+
+	// Attempt the deposit.
+	//
+	// If successful, we'll follow with a series of assertions to ensure it
+	// was performed correctly.
+	_, _, err := h.manager.DepositAccount(
+		context.Background(), account.TraderKey.PubKey, depositAmount,
+		feeRate, bestHeight, 0,
+	)
+	require.Error(t, err)
+	require.Contains(
+		t, err.Error(), "signed transaction only pays 120 sats in "+
+			"fees while 255 are required for relay",
+	)
+
+	// Finally, close the account to ensure we can process another spend
+	// after the withdrawal.
+	expr := defaultFeeExpr
+	_ = h.closeAccount(account, &expr, bestHeight)
+}
+
 // TestAccountConsecutiveBatches ensures that we can process an account update
 // through multiple consecutive batches that only confirm after we've already
 // updated our database state.
