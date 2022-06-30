@@ -1425,29 +1425,29 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 	packet *psbt.Packet, witnessType witnessType, modifiers []Modifier,
 	isClose bool, bestHeight uint32) (*Account, *spendPackage, error) {
 
-	// Create the spending transaction of an account based on the provided
-	// witness type.
-	var (
-		spendPkg *spendPackage
-		err      error
-	)
+	var lockTime uint32
 	switch witnessType {
 	case expiryWitness:
 		if !isClose {
-			return nil, nil, errors.New("modifications for expired " +
-				"accounts are not currently supported")
+			return nil, nil, errors.New("modifications for " +
+				"expired accounts are not currently supported")
 		}
 
-		spendPkg, err = m.spendAccountExpiry(
-			ctx, account, packet, bestHeight,
-		)
+		lockTime = bestHeight
 
 	case multiSigWitness:
-		spendPkg, err = m.signSpendTx(ctx, account, packet, 0)
+		lockTime = 0
 
 	default:
-		err = fmt.Errorf("unhandled witness type: %v", witnessType)
+		return nil, nil, fmt.Errorf("unhandled witness type: %v",
+			witnessType)
 	}
+
+	// Create the spending transaction of an account based on the provided
+	// witness type.
+	spendPkg, err := m.signSpendTx(
+		ctx, account, packet, lockTime, witnessType,
+	)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1555,24 +1555,6 @@ func determineWitnessType(account *Account, bestHeight uint32) witnessType {
 	return multiSigWitness
 }
 
-// spendAccountExpiry creates the closing transaction of an account based on the
-// expiration script path and signs it. bestHeight is used as the lock time of
-// the transaction in order to satisfy the output's CHECKLOCKTIMEVERIFY.
-func (m *manager) spendAccountExpiry(ctx context.Context, account *Account,
-	packet *psbt.Packet, bestHeight uint32) (*spendPackage, error) {
-
-	spendPkg, err := m.signSpendTx(ctx, account, packet, bestHeight)
-	if err != nil {
-		return nil, fmt.Errorf("error signing TX: %v", err)
-	}
-
-	spendPkg.tx.TxIn[0].Witness = poolscript.SpendExpiry(
-		spendPkg.witnessScript, spendPkg.ourSig,
-	)
-
-	return spendPkg, nil
-}
-
 // constructMultiSigWitness requests a signature from the auctioneer for the
 // given spending transaction of an account and returns the fully constructed
 // witness to spend the account input.
@@ -1650,10 +1632,15 @@ func (m *manager) createSpendTx(account *Account,
 // the lock time of the transaction, otherwise it is 0. The transaction has its
 // inputs and outputs sorted according to BIP-69.
 func (m *manager) signSpendTx(ctx context.Context, account *Account,
-	packet *psbt.Packet, bestHeight uint32) (*spendPackage, error) {
+	packet *psbt.Packet, lockTime uint32,
+	witnessType witnessType) (*spendPackage, error) {
 
 	tx := packet.UnsignedTx
-	tx.LockTime = bestHeight
+
+	// lockTime is used as the lock time of the transaction in order to
+	// satisfy the output's CHECKLOCKTIMEVERIFY in case we're using the
+	// expiry witness.
+	tx.LockTime = lockTime
 
 	// Ensure the transaction crafted passes some basic sanity checks before
 	// we attempt to sign it.
@@ -1693,11 +1680,21 @@ func (m *manager) signSpendTx(ctx context.Context, account *Account,
 
 	ourSig := pIn.PartialSigs[0].Signature
 
-	// We temporarily set the final witness to the partial sig to allow
-	// extraction of the final TX.
-	pIn.FinalScriptWitness, err = serializeWitness([][]byte{ourSig})
+	// We temporarily set the final witness to the partial sig to allow the
+	// extraction of the final TX. Unless we're using the expiry path in
+	// which case we _can_ create the full and final witness.
+	switch witnessType {
+	case expiryWitness:
+		pIn.FinalScriptWitness, err = serializeWitness(
+			poolscript.SpendExpiry(witnessScript, ourSig),
+		)
+
+	default:
+		pIn.FinalScriptWitness, err = serializeWitness([][]byte{ourSig})
+	}
 	if err != nil {
-		return nil, fmt.Errorf("error serializing witness: %v", err)
+		return nil, fmt.Errorf("error serializing witness: %v",
+			err)
 	}
 
 	// We either have a single account input (renew, withdraw, close) that
