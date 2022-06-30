@@ -249,6 +249,13 @@ func (v *batchVerifier) Verify(batch *Batch, bestHeight uint32) error {
 			acct.Expiry = diff.NewExpiry
 		}
 
+		// Update account version if needed.
+		if batch.Version.SupportsAccountTaprootUpgrade() &&
+			diff.NewVersion > acct.Version {
+
+			acct.Version = diff.NewVersion
+		}
+
 		// Make sure the ending state of the account is correct.
 		err := diff.validateEndingState(batch.BatchTX, acct)
 		if err != nil {

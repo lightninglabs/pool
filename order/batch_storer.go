@@ -110,6 +110,17 @@ func (s *batchStorer) StorePendingBatch(batch *Batch) error {
 				)
 			}
 
+			// The account version can be upgraded during the batch
+			// if the client supports it.
+			if batch.Version.SupportsAccountTaprootUpgrade() &&
+				diff.NewVersion > acct.Version {
+
+				modifiers = append(
+					modifiers,
+					account.VersionModifier(diff.NewVersion),
+				)
+			}
+
 		// The account was fully spent on-chain. We need to wait for the
 		// batch (spend) TX to be confirmed still.
 		case auctioneerrpc.AccountDiff_OUTPUT_FULLY_SPENT,

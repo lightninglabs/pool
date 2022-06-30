@@ -11,6 +11,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
@@ -386,6 +387,7 @@ func ParseRPCBatch(prepareMsg *auctioneerrpc.OrderMatchPrepare) (*Batch,
 				EndingBalance: btcutil.Amount(diff.EndingBalance),
 				OutpointIndex: diff.OutpointIndex,
 				NewExpiry:     diff.NewExpiry,
+				NewVersion:    account.Version(diff.NewVersion),
 			},
 		)
 	}

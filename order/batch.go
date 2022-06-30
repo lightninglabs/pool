@@ -119,6 +119,12 @@ type AccountDiff struct {
 	// NewExpiry is the new expiry height for this account. This field
 	// can be safely ignored if its value is 0.
 	NewExpiry uint32
+
+	// NewVersion is the version of the account that should be used after
+	// the batch went through. This field influences the type of account
+	// output that is created by this batch. If this differs from the
+	// CurrentVersion, then the account was upgraded in this batch.
+	NewVersion account.Version
 }
 
 // validateEndingState validates that the ending state of an account as
