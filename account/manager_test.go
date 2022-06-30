@@ -13,6 +13,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -944,41 +945,57 @@ func TestAccountDeposit(t *testing.T) {
 	// a successful deposit.
 	const initialAccountValue = MinAccountValue
 	const valueAfterDeposit = initialAccountValue * 2
+	const utxoAmount = initialAccountValue * 3
 	const depositAmount = valueAfterDeposit - initialAccountValue
+
+	// We'll use the lowest fee rate possible, which should yield a
+	// transaction fee of 346 satoshis when taking into account the
+	// additional inputs needed to satisfy the deposit.
+	const feeRate = chainfee.FeePerKwFloor
+	const accountInputFees = 110
+	const expectedFee btcutil.Amount = accountInputFees + 236
+
+	const fundedOutputAmount = depositAmount + accountInputFees
 
 	const bestHeight = 100
 	account := h.openAccount(
 		initialAccountValue, bestHeight+maxAccountExpiry, bestHeight,
 	)
 
-	// We'll provide two outputs to the mock wallet that will be consumed by
-	// the deposit and should result in a change output.
-	h.wallet.utxos = []*lnwallet.Utxo{
-		{
-			AddressType: lnwallet.NestedWitnessPubKey,
-			Value:       depositAmount,
-			OutPoint:    wire.OutPoint{Index: 1},
-			PkScript:    np2wpkh,
-		},
-		{
-			AddressType: lnwallet.WitnessPubKey,
-			Value:       depositAmount,
-			// Use an outpoint greater than the current account to
-			// test the filtering of inputs provided to the
-			// auctioneer.
-			OutPoint: wire.OutPoint{
-				Hash:  account.OutPoint.Hash,
-				Index: account.OutPoint.Index + 1,
-			},
-			PkScript: p2wpkh,
-		},
-	}
+	accountOutputScript, _ := account.NextOutputScript()
 
-	// We'll use the lowest fee rate possible, which should yield a
-	// transaction fee of 346 satoshis when taking into account the
-	// additional inputs needed to satisfy the deposit.
-	const feeRate = chainfee.FeePerKwFloor
-	const expectedFee btcutil.Amount = 346
+	// We'll provide a funded PSBT to the manager that has a change output.
+	h.wallet.utxos = []*lnwallet.Utxo{{
+		AddressType: lnwallet.WitnessPubKey,
+		Value:       utxoAmount,
+		PkScript:    p2wpkh,
+		OutPoint:    wire.OutPoint{Index: 1},
+	}}
+	h.wallet.fundPsbt = &psbt.Packet{
+		UnsignedTx: &wire.MsgTx{
+			Version: 2,
+			TxIn: []*wire.TxIn{{
+				PreviousOutPoint: h.wallet.utxos[0].OutPoint,
+			}},
+			TxOut: []*wire.TxOut{{
+				Value:    int64(fundedOutputAmount),
+				PkScript: accountOutputScript,
+			}, {
+				Value: int64(
+					utxoAmount - depositAmount - expectedFee,
+				),
+				PkScript: np2wpkh,
+			}},
+		},
+		Inputs: []psbt.PInput{{
+			WitnessUtxo: &wire.TxOut{
+				Value:    int64(h.wallet.utxos[0].Value),
+				PkScript: h.wallet.utxos[0].PkScript,
+			},
+		}},
+		Outputs: []psbt.POutput{{}, {}},
+	}
+	h.wallet.fundPsbtChangeIdx = 1
 
 	// Attempt the deposit.
 	//
@@ -988,35 +1005,16 @@ func TestAccountDeposit(t *testing.T) {
 		context.Background(), account.TraderKey.PubKey, depositAmount,
 		feeRate, bestHeight, 0,
 	)
-	if err != nil {
-		t.Fatalf("unable to process account deposit: %v", err)
-	}
+	require.NoError(t, err)
 
-	// We should expect to see a change output with the current UTXOs
-	// available, so we'll reconstruct what we expect to see in the deposit
-	// transaction.
-	addr, err := btcutil.NewAddressWitnessPubKeyHash(
-		btcutil.Hash160(testRawTraderKey), &chaincfg.MainNetParams,
-	)
-	if err != nil {
-		t.Fatalf("unable to create address: %v", err)
-	}
-	pkScript, err := txscript.PayToAddrScript(addr)
-	if err != nil {
-		t.Fatalf("unable to create address script: %v", err)
-	}
-	changeOutput := &wire.TxOut{
-		Value:    int64(depositAmount - expectedFee),
-		PkScript: pkScript,
-	}
-
-	// The transaction should have find the expected account input and
+	// The transaction should have found the expected account input and
 	// output at the following indices.
 	const accountInputIdx = 1
 	const accountOutputIdx = 1
 
 	h.assertAccountModification(
-		account, h.wallet.utxos, []*wire.TxOut{changeOutput},
+		account, h.wallet.utxos,
+		[]*wire.TxOut{h.wallet.fundPsbt.UnsignedTx.TxOut[0]},
 		valueAfterDeposit, accountInputIdx, accountOutputIdx,
 		bestHeight,
 	)
