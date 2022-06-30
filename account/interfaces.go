@@ -41,6 +41,20 @@ type Reservation struct {
 	InitialBatchKey *btcec.PublicKey
 }
 
+// Version represents the version of an account.
+type Version uint8
+
+const (
+	// VersionInitialNoVersion is the initial version any legacy account has
+	// that technically wasn't versioned at all. The version field isn't
+	// even serialized for those accounts.
+	VersionInitialNoVersion Version = 0
+
+	// VersionTaprootEnabled is the version that introduced account
+	// versioning and the upgrade to Taproot (with MuSig2 multi-sig).
+	VersionTaprootEnabled Version = 1
+)
+
 // State describes the different possible states of an account.
 type State uint8
 
@@ -192,6 +206,9 @@ type Account struct {
 	// NOTE: This is only nil within the StateInitiated phase. There are no
 	// guarantees as to whether the transaction has its witness populated.
 	LatestTx *wire.MsgTx
+
+	// Version is the version of the account.
+	Version Version
 }
 
 const (
@@ -250,6 +267,7 @@ func (a *Account) Copy(modifiers ...Modifier) *Account {
 		State:         a.State,
 		HeightHint:    a.HeightHint,
 		OutPoint:      a.OutPoint,
+		Version:       a.Version,
 	}
 	if a.State != StateInitiated {
 		accountCopy.LatestTx = a.LatestTx.Copy()
@@ -315,6 +333,14 @@ func HeightHintModifier(heightHint uint32) Modifier {
 func LatestTxModifier(tx *wire.MsgTx) Modifier {
 	return func(account *Account) {
 		account.LatestTx = tx
+	}
+}
+
+// VersionModifier is a functional option that modifies the version of an
+// account.
+func VersionModifier(version Version) Modifier {
+	return func(account *Account) {
+		account.Version = version
 	}
 }
 

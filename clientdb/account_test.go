@@ -130,6 +130,7 @@ func TestAccounts(t *testing.T) {
 		a, account.StateModifier(account.StatePendingOpen),
 		account.OutPointModifier(accountPoint),
 		account.LatestTxModifier(accountTx),
+		account.VersionModifier(account.VersionTaprootEnabled),
 	)
 	if err != nil {
 		t.Fatalf("unable to update account: %v", err)

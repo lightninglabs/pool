@@ -94,7 +94,7 @@ type LocalBatchSnapshot struct {
 	MatchedOrders map[order.Nonce][]*order.MatchedOrder
 }
 
-// NewSnapshots creates a new LocalBatchSnapshot from the passed order batched.
+// NewSnapshot creates a new LocalBatchSnapshot from the passed order batched.
 func NewSnapshot(batch *order.Batch, ourOrders []order.Order,
 	accounts []*account.Account) (*LocalBatchSnapshot, error) {
 

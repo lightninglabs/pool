@@ -7,7 +7,20 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/lightninglabs/pool/account"
+	"github.com/lightningnetwork/lnd/tlv"
 	"go.etcd.io/bbolt"
+)
+
+const (
+	// accountStateVersionedMask is a bit mask for detecting from the state
+	// of an account whether that account has a version field encoded with
+	// it or not. We use the first bit of the uint8 state field because we
+	// are unlikely to ever have more than 127 different states.
+	accountStateVersionedMask account.State = 0b1000_0000
+
+	// accountVersionType is the first additional field we added to the
+	// account as a TLV field and it encodes the account's version.
+	accountVersionType tlv.Type = 0
 )
 
 var (
@@ -20,6 +33,23 @@ var (
 	// information about an account but it is not found.
 	ErrAccountNotFound = errors.New("account not found")
 )
+
+// isVersioned returns true if the version bit is set in the given account
+// state.
+func isVersioned(state account.State) bool {
+	return state&accountStateVersionedMask == accountStateVersionedMask
+}
+
+// setVersionBit sets the version bit in the given account state.
+func setVersionBit(state account.State) account.State {
+	return state | accountStateVersionedMask
+}
+
+// clearVersionBit clears the version bit in the given account state.
+func clearVersionBit(state account.State) account.State {
+	// The &^ operator means AND NOT, also known as the Bitclear operator.
+	return state &^ accountStateVersionedMask
+}
 
 // getAccountKey returns the key for an account which is not partial.
 func getAccountKey(account *account.Account) []byte {
@@ -156,9 +186,15 @@ func readAccount(sourceBucket *bbolt.Bucket,
 }
 
 func serializeAccount(w *bytes.Buffer, a *account.Account) error {
+	rawState := a.State
+	accountIsVersioned := a.Version > account.VersionInitialNoVersion
+	if accountIsVersioned {
+		rawState = setVersionBit(rawState)
+	}
+
 	err := WriteElements(
 		w, a.Value, a.Expiry, a.TraderKey, a.AuctioneerKey, a.BatchKey,
-		a.Secret, a.State, a.HeightHint, a.OutPoint,
+		a.Secret, rawState, a.HeightHint, a.OutPoint,
 	)
 	if err != nil {
 		return err
@@ -175,18 +211,106 @@ func serializeAccount(w *bytes.Buffer, a *account.Account) error {
 		}
 	}
 
+	// The version flag encoded within the state will inform the
+	// de-serialize method that it should read another field. Therefore, we
+	// can safely write it here.
+	if accountIsVersioned {
+		if err := serializeAccountTlvData(w, a); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// serializeAccountTlvData writes all additional TLV fields of an account to the
+// given writer. This should only be called for accounts with a version > 0 as
+// otherwise this will mess up the assumptions used for encoding/decoding
+// accounts within a batch snapshot blob.
+func serializeAccountTlvData(w *bytes.Buffer, a *account.Account) error {
+	version := uint8(a.Version)
+	tlvRecords := []tlv.Record{
+		tlv.MakePrimitiveRecord(accountVersionType, &version),
+	}
+
+	tlvStream, err := tlv.NewStream(tlvRecords...)
+	if err != nil {
+		return err
+	}
+
+	// We can't just encode the stream to the writer directly, because there
+	// might be multiple accounts lined up after each other. And since a TLV
+	// reader will always try to read until the end of a stream, we need to
+	// be able to cap it somehow. So we write the number of bytes and then
+	// the stream bytes itself.
+	var buf bytes.Buffer
+	err = tlvStream.Encode(&buf)
+	if err != nil {
+		return err
+	}
+
+	return WriteElements(w, uint32(buf.Len()), buf.Bytes())
+}
+
+// deserializeAccountTlvData reads all additional TLV fields of an account from
+// the given reader. This should only be called for accounts with a version > 0
+// as otherwise this will mess up the assumptions used for encoding/decoding
+// accounts within a batch snapshot blob.
+func deserializeAccountTlvData(r io.Reader, a *account.Account) error {
+	// We first need to find out how many bytes there are for this TLV
+	// stream and only read those bytes. Otherwise, the TLV reader will try
+	// to read as many bytes as it can.
+	var streamLen uint32
+	if err := ReadElement(r, &streamLen); err != nil {
+		return err
+	}
+
+	streamBytes := make([]byte, streamLen)
+	if err := ReadElement(r, streamBytes); err != nil {
+		return err
+	}
+
+	var (
+		version uint8
+	)
+	tlvStream, err := tlv.NewStream(
+		tlv.MakePrimitiveRecord(accountVersionType, &version),
+	)
+	if err != nil {
+		return err
+	}
+
+	parsedTypes, err := tlvStream.DecodeWithParsedTypes(
+		bytes.NewReader(streamBytes),
+	)
+	if err != nil {
+		return err
+	}
+
+	if t, ok := parsedTypes[accountVersionType]; ok && t == nil {
+		a.Version = account.Version(version)
+	}
+
 	return nil
 }
 
 func deserializeAccount(r io.Reader) (*account.Account, error) {
-	var a account.Account
+	var (
+		a        account.Account
+		rawState account.State
+	)
 	err := ReadElements(
 		r, &a.Value, &a.Expiry, &a.TraderKey, &a.AuctioneerKey,
-		&a.BatchKey, &a.Secret, &a.State, &a.HeightHint, &a.OutPoint,
+		&a.BatchKey, &a.Secret, &rawState, &a.HeightHint, &a.OutPoint,
 	)
 	if err != nil {
 		return nil, err
 	}
+
+	// We might have a version flag encoded within the state. We want to
+	// hide that internal mechanism from the caller, so we need to remove
+	// the flag again.
+	a.State = clearVersionBit(rawState)
 
 	// The latest transaction is not found within StateInitiated and
 	// StateCanceledAfterRecovery.
@@ -195,6 +319,14 @@ func deserializeAccount(r io.Reader) (*account.Account, error) {
 
 	default:
 		if err := ReadElement(r, &a.LatestTx); err != nil {
+			return nil, err
+		}
+	}
+
+	// If there was a version flag, we know we're supposed to read another
+	// field here.
+	if isVersioned(rawState) {
+		if err := deserializeAccountTlvData(r, &a); err != nil {
 			return nil, err
 		}
 	}

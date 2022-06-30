@@ -56,6 +56,9 @@ func WriteElement(w *bytes.Buffer, element interface{}) error {
 	case account.State:
 		return lnwire.WriteElement(w, uint8(e))
 
+	case account.Version:
+		return lnwire.WriteElement(w, uint8(e))
+
 	case order.Version:
 		return lnwire.WriteElement(w, uint32(e))
 
@@ -151,6 +154,13 @@ func ReadElement(r io.Reader, element interface{}) error { // nolint:gocyclo
 			return err
 		}
 		*e = account.State(s)
+
+	case *account.Version:
+		var v uint8
+		if err := lnwire.ReadElement(r, &v); err != nil {
+			return err
+		}
+		*e = account.Version(v)
 
 	case *order.Version:
 		var v uint32
