@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/lndclient"
@@ -239,6 +238,18 @@ type Batch struct {
 	// which the batch transaction can be found within. This will be used by
 	// traders to base off their absolute channel lease maturity height.
 	HeightHint uint32
+
+	// ServerNonces is the map of all the auctioneer's public nonces for
+	// each of the (Taproot enabled) accounts in the batch, keyed by the
+	// account's trader key. This is volatile (in-memory only) information
+	// that is _not_ persisted as part of the batch snapshot.
+	ServerNonces AccountNonces
+
+	// PreviousOutputs is the list of previous output scripts and amounts
+	// (UTXO information) for all the inputs being spent by the batch
+	// transaction. This is volatile (in-memory only) information that is
+	// _not_ persisted as part of the batch snapshot.
+	PreviousOutputs []*wire.TxOut
 }
 
 // Fetcher describes a function that's able to fetch the latest version of an
@@ -332,9 +343,13 @@ type MatchedOrder struct {
 }
 
 // BatchSignature is a map type that is keyed by a trader's account key and
-// contains the multi-sig signature for the input that
-// spends from the current account in a batch.
-type BatchSignature map[[33]byte]*ecdsa.Signature
+// contains the multi-sig signature for the input that spends from the current
+// account in a batch.
+type BatchSignature map[[33]byte][]byte
+
+// AccountNonces is a map of all server or client nonces for a batch signing
+// session, keyed by the account key.
+type AccountNonces map[[33]byte]poolscript.MuSig2Nonces
 
 // BatchVerifier is an interface that can verify a batch from the point of view
 // of the trader.
@@ -349,7 +364,7 @@ type BatchVerifier interface {
 type BatchSigner interface {
 	// Sign returns the witness stack of all account inputs in a batch that
 	// belong to the trader.
-	Sign(*Batch) (BatchSignature, error)
+	Sign(*Batch) (BatchSignature, AccountNonces, error)
 }
 
 // BatchStorer is an interface that can store a batch to the local database by

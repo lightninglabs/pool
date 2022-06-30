@@ -387,18 +387,18 @@ func (m *manager) PendingBatch() *Batch {
 // belong to the trader. Before sending off the signature to the auctioneer,
 // we'll also persist the batch to disk as pending to ensure we can recover
 // after a crash.
-func (m *manager) BatchSign() (BatchSignature, error) {
-	sig, err := m.batchSigner.Sign(m.pendingBatch)
+func (m *manager) BatchSign() (BatchSignature, AccountNonces, error) {
+	sig, nonces, err := m.batchSigner.Sign(m.pendingBatch)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	err = m.batchStorer.StorePendingBatch(m.pendingBatch)
 	if err != nil {
-		return nil, fmt.Errorf("unable to store batch: %v", err)
+		return nil, nil, fmt.Errorf("unable to store batch: %v", err)
 	}
 
-	return sig, nil
+	return sig, nonces, nil
 }
 
 // BatchFinalize marks a batch as complete upon receiving the finalize message

@@ -387,10 +387,22 @@ func (s *rpcServer) handleServerMessage(
 		}
 
 	case *auctioneerrpc.ServerAuctionMessage_Sign:
+		batch := s.orderManager.PendingBatch()
+
+		// There is some auxiliary information in the "sign" message
+		// that we need for the MuSig2/Taproot signing, let's try to
+		// parse that first.
+		serverNonces, prevOutputs, err := order.ParseRPCSign(msg.Sign)
+		if err != nil {
+			rpcLog.Errorf("Error parsing sign aux info: %v", err)
+			return s.sendRejectBatch(batch, err)
+		}
+		batch.ServerNonces = serverNonces
+		batch.PreviousOutputs = prevOutputs
+
 		// We were able to accept the batch. Inform the auctioneer,
 		// then start negotiating with the remote peers. We'll sign
 		// once all channel partners have responded.
-		batch := s.orderManager.PendingBatch()
 		channelKeys, err := s.server.fundingManager.BatchChannelSetup(
 			batch,
 		)
@@ -403,12 +415,12 @@ func (s *rpcServer) handleServerMessage(
 			"num_orders=%v", batch.ID[:], len(batch.MatchedOrders))
 
 		// Sign for the accounts in the batch.
-		sigs, err := s.orderManager.BatchSign()
+		sigs, nonces, err := s.orderManager.BatchSign()
 		if err != nil {
 			rpcLog.Errorf("Error signing batch: %v", err)
 			return s.sendRejectBatch(batch, err)
 		}
-		err = s.sendSignBatch(batch, sigs, channelKeys)
+		err = s.sendSignBatch(batch, sigs, nonces, channelKeys)
 		if err != nil {
 			rpcLog.Errorf("Error sending sign msg: %v", err)
 			return s.sendRejectBatch(batch, err)
@@ -1911,6 +1923,7 @@ func (s *rpcServer) GetLsatTokens(_ context.Context,
 // sendSignBatch sends a sign message to the server with the witness stacks of
 // all accounts that are involved in the batch.
 func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
+	nonces order.AccountNonces,
 	chanInfos map[wire.OutPoint]*chaninfo.ChannelInfo) error {
 
 	// Prepare the list of witness stacks and channel infos and send them to
@@ -1918,7 +1931,17 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 	rpcSigs := make(map[string][]byte, len(sigs))
 	for acctKey, sig := range sigs {
 		key := hex.EncodeToString(acctKey[:])
-		rpcSigs[key] = sig.Serialize()
+		rpcSigs[key] = make([]byte, len(sig))
+		copy(rpcSigs[key], sig)
+	}
+
+	// Prepare the trader's nonces too (if there are any Taproot/MuSig2
+	// accounts in the batch).
+	rpcNonces := make(map[string][]byte, len(nonces))
+	for acctKey, nonce := range nonces {
+		key := hex.EncodeToString(acctKey[:])
+		rpcNonces[key] = make([]byte, 66)
+		copy(rpcNonces[key], nonce[:])
 	}
 
 	rpcChannelInfos, err := marshallChannelInfo(chanInfos)
@@ -1941,6 +1964,7 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 			Sign: &auctioneerrpc.OrderMatchSign{
 				BatchId:      batch.ID[:],
 				AccountSigs:  rpcSigs,
+				TraderNonces: rpcNonces,
 				ChannelInfos: rpcChannelInfos,
 			},
 		},

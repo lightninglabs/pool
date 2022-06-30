@@ -288,12 +288,13 @@ func (mr *MockManagerMockRecorder) BatchFinalize(batchID interface{}) *gomock.Ca
 }
 
 // BatchSign mocks base method.
-func (m *MockManager) BatchSign() (BatchSignature, error) {
+func (m *MockManager) BatchSign() (BatchSignature, AccountNonces, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BatchSign")
 	ret0, _ := ret[0].(BatchSignature)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(AccountNonces)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // BatchSign indicates an expected call of BatchSign.
