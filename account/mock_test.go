@@ -1,6 +1,7 @@
 package account
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -382,12 +383,43 @@ func (w *mockWallet) SignPsbt(_ context.Context,
 func (w *mockWallet) FinalizePsbt(_ context.Context, packet *psbt.Packet,
 	account string) (*psbt.Packet, *wire.MsgTx, error) {
 
-	for idx := range packet.UnsignedTx.TxIn {
-		packet.UnsignedTx.TxIn[idx].Witness = [][]byte{{
-			// A dummy signature must still have the sighash flag
-			// appended correctly.
-			33, 44, 55, 66, byte(txscript.SigHashAll),
-		}}
+	// Just copy over any sigs we might have. This is copy/paste code from
+	// the psbt Finalizer, minus the IsComplete() check.
+	tx := packet.UnsignedTx
+	for idx := range tx.TxIn {
+		pIn := &packet.Inputs[idx]
+
+		switch {
+		case len(pIn.FinalScriptSig) > 0:
+			tx.TxIn[idx].SignatureScript = pIn.FinalScriptSig
+		
+		case len(pIn.FinalScriptWitness) > 0:
+			witnessReader := bytes.NewReader(
+				pIn.FinalScriptWitness,
+			)
+
+			witCount, err := wire.ReadVarInt(witnessReader, 0)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			tx.TxIn[idx].Witness = make(wire.TxWitness, witCount)
+			for j := uint64(0); j < witCount; j++ {
+				wit, err := wire.ReadVarBytes(
+					witnessReader, 0,
+					txscript.MaxScriptSize, "witness",
+				)
+				if err != nil {
+					return nil, nil, err
+				}
+				tx.TxIn[idx].Witness[j] = wit
+			}
+
+		case len(pIn.PartialSigs) > 0:
+			tx.TxIn[idx].Witness = [][]byte{
+				pIn.PartialSigs[0].Signature,
+			}
+		}
 	}
 
 	return packet, packet.UnsignedTx, nil

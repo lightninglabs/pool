@@ -434,19 +434,32 @@ func (h *testHarness) assertAccountModification(account *Account,
 	// Notify the transaction as a spend of the account. The account should
 	// remain in StatePendingUpdate until it reaches the appropriate number
 	// of confirmations.
-	h.notifier.spendChan <- &chainntnfs.SpendDetail{
+	select {
+	case h.notifier.spendChan <- &chainntnfs.SpendDetail{
 		SpendingTx:        spendTx,
 		SpenderInputIndex: accountInputIdx,
+	}:
+
+	case <-time.After(timeout):
+		h.t.Fatalf("couldn't send tx spend notification")
 	}
+
 	h.assertAccountExists(account)
 
 	// Notify the confirmation, causing the account to transition back to
 	// StateOpen.
 	confHeight := broadcastHeight + 6
-	h.notifier.confChan <- &chainntnfs.TxConfirmation{
+
+	select {
+	case h.notifier.confChan <- &chainntnfs.TxConfirmation{
 		Tx:          spendTx,
 		BlockHeight: confHeight,
+	}:
+
+	case <-time.After(timeout):
+		h.t.Fatalf("couldn't send tx confirmation")
 	}
+
 	StateModifier(StateOpen)(account)
 	HeightHintModifier(confHeight)(account)
 	h.assertAccountExists(account)

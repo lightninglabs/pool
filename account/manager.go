@@ -84,24 +84,6 @@ func (wt witnessType) witnessSize() (int, error) {
 	}
 }
 
-// spendPackage tracks useful information regarding an account spend.
-type spendPackage struct {
-	// tx is the spending transaction of the account.
-	tx *wire.MsgTx
-
-	// accountInputIdx is the index of the account input in the spending
-	// transaction.
-	accountInputIdx int
-
-	// witnessScript is the witness script of the account input being spent.
-	witnessScript []byte
-
-	// ourSig is our signature of the spending transaction above. If the
-	// spend is taking the multi-sig path, then the auctioneer's signature
-	// will be required as well for a valid spend.
-	ourSig []byte
-}
-
 // ManagerConfig contains all of the required dependencies for the Manager to
 // carry out its duties.
 type ManagerConfig struct {
@@ -182,7 +164,8 @@ func NewManager(cfg *ManagerConfig) *manager { // nolint:golint
 
 	m.watcherCtrl = watcher.NewController(&watcher.CtrlConfig{
 		ChainNotifier: cfg.ChainNotifier,
-		// The manager implements the EventHandler interface
+
+		// The manager implements the EventHandler interface.
 		Handlers: m,
 	})
 
@@ -1153,7 +1136,7 @@ func (m *manager) DepositAccount(ctx context.Context,
 	// rest of the flow. This should request a signature from the auctioneer
 	// and assuming it's valid, broadcast the deposit transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
-	modifiedAccount, spendPkg, err := m.spendAccount(
+	modifiedAccount, spendTx, err := m.spendAccount(
 		ctx, account, packet, spendWitnessType, modifiers, false,
 		bestHeight,
 	)
@@ -1162,7 +1145,7 @@ func (m *manager) DepositAccount(ctx context.Context,
 		return nil, nil, err
 	}
 
-	return modifiedAccount, spendPkg.tx, nil
+	return modifiedAccount, spendTx, nil
 }
 
 // WithdrawAccount attempts to withdraw funds from the account associated with
@@ -1229,7 +1212,7 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 	// rest of the flow. This should request a signature from the auctioneer
 	// and assuming it's valid, broadcast the withdrawal transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
-	modifiedAccount, spendPkg, err := m.spendAccount(
+	modifiedAccount, spendTx, err := m.spendAccount(
 		ctx, account, packet, spendWitnessType, modifiers, false,
 		bestHeight,
 	)
@@ -1237,7 +1220,7 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 		return nil, nil, err
 	}
 
-	return modifiedAccount, spendPkg.tx, nil
+	return modifiedAccount, spendTx, nil
 }
 
 // RenewAccount updates the expiration of an open/expired account. This will
@@ -1300,7 +1283,7 @@ func (m *manager) RenewAccount(ctx context.Context,
 	// rest of the flow. This should request a signature from the auctioneer
 	// and assuming it's valid, broadcast the update transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
-	modifiedAccount, spendPkg, err := m.spendAccount(
+	modifiedAccount, spendTx, err := m.spendAccount(
 		ctx, account, packet, spendWitnessType, modifiers, false,
 		bestHeight,
 	)
@@ -1312,7 +1295,7 @@ func (m *manager) RenewAccount(ctx context.Context,
 	// existing expiration request.
 	m.watcherCtrl.WatchAccountExpiration(traderKey, modifiedAccount.Expiry)
 
-	return modifiedAccount, spendPkg.tx, nil
+	return modifiedAccount, spendTx, nil
 }
 
 // BumpAccountFee attempts to bump the fee of an account's most recent
@@ -1430,7 +1413,7 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 	modifiers := []Modifier{
 		ValueModifier(0), StateModifier(StatePendingClosed),
 	}
-	_, spendPkg, err := m.spendAccount(
+	_, spendTx, err := m.spendAccount(
 		ctx, account, packet, spendWitnessType, modifiers, true,
 		bestHeight,
 	)
@@ -1438,7 +1421,7 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		return nil, err
 	}
 
-	return spendPkg.tx, nil
+	return spendTx, nil
 }
 
 // spendAccount houses most of the logic required to properly spend an account
@@ -1450,7 +1433,36 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 // shutdown mid-process.
 func (m *manager) spendAccount(ctx context.Context, account *Account,
 	packet *psbt.Packet, witnessType witnessType, modifiers []Modifier,
-	isClose bool, bestHeight uint32) (*Account, *spendPackage, error) {
+	isClose bool, bestHeight uint32) (*Account, *wire.MsgTx, error) {
+
+	// In case we're not closing the account, let's now locate our
+	// re-created account output.
+	accountOutputIdx := -1
+	if !isClose {
+		// The account output should be recreated, so we need to locate
+		// the new account outpoint.
+		newAccountOutput, err := account.Copy(modifiers...).Output()
+		if err != nil {
+			return nil, nil, err
+		}
+		idx, ok := poolscript.LocateOutputScript(
+			packet.UnsignedTx, newAccountOutput.PkScript,
+		)
+		if !ok {
+			return nil, nil, fmt.Errorf("new account output "+
+				"script %x not found in spending transaction",
+				newAccountOutput.PkScript)
+		}
+
+		accountOutputIdx = int(idx)
+
+		// The TX is finished now, only the witness is missing. So we
+		// can create the modifier for the new outpoint now already.
+		modifiers = append(modifiers, OutPointModifier(wire.OutPoint{
+			Hash:  packet.UnsignedTx.TxHash(),
+			Index: uint32(accountOutputIdx),
+		}))
+	}
 
 	var lockTime uint32
 	switch witnessType {
@@ -1472,8 +1484,9 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 
 	// Create the spending transaction of an account based on the provided
 	// witness type.
-	spendPkg, err := m.signSpendTx(
-		ctx, account, packet, lockTime, witnessType,
+	spendTx, err := m.signSpendTx(
+		ctx, account, packet, lockTime, witnessType, accountOutputIdx,
+		modifiers,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1481,44 +1494,11 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 
 	// Update the account's height hint and latest transaction.
 	modifiers = append(modifiers, HeightHintModifier(bestHeight))
-	modifiers = append(modifiers, LatestTxModifier(spendPkg.tx))
+	modifiers = append(modifiers, LatestTxModifier(spendTx))
 
 	// With the transaction crafted, update our on-disk state and broadcast
 	// the transaction. We'll need some additional modifiers if the account
 	// is being modified.
-	if !isClose {
-		// The account output should be recreated, so we need to locate
-		// the new account outpoint.
-		newAccountOutput, err := account.Copy(modifiers...).Output()
-		if err != nil {
-			return nil, nil, err
-		}
-		idx, ok := poolscript.LocateOutputScript(
-			spendPkg.tx, newAccountOutput.PkScript,
-		)
-		if !ok {
-			return nil, nil, fmt.Errorf("new account output "+
-				"script %x not found in spending transaction",
-				newAccountOutput.PkScript)
-		}
-		modifiers = append(modifiers, OutPointModifier(wire.OutPoint{
-			Hash:  spendPkg.tx.TxHash(),
-			Index: idx,
-		}))
-	}
-
-	// If we require the auctioneer's signature, request it now before
-	// updating the account on disk.
-	if witnessType == multiSigWitness {
-		witness, err := m.constructMultiSigWitness(
-			ctx, account, spendPkg, modifiers, isClose,
-		)
-		if err != nil {
-			return nil, nil, err
-		}
-		spendPkg.tx.TxIn[spendPkg.accountInputIdx].Witness = witness
-	}
-
 	prevAccountState := account.Copy()
 	if err := m.cfg.Store.UpdateAccount(account, modifiers...); err != nil {
 		return nil, nil, err
@@ -1534,11 +1514,11 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 
 	label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
 
-	if err := m.maybeBroadcastTx(ctx, spendPkg.tx, label); err != nil {
+	if err := m.maybeBroadcastTx(ctx, spendTx, label); err != nil {
 		return nil, nil, err
 	}
 
-	return account, spendPkg, nil
+	return account, spendTx, nil
 }
 
 // RecoverAccount re-introduces a recovered account into the database and starts
@@ -1582,50 +1562,36 @@ func determineWitnessType(account *Account, bestHeight uint32) witnessType {
 	return multiSigWitness
 }
 
-// constructMultiSigWitness requests a signature from the auctioneer for the
+// getAuctioneerSig requests a signature from the auctioneer for the
 // given spending transaction of an account and returns the fully constructed
 // witness to spend the account input.
-func (m *manager) constructMultiSigWitness(ctx context.Context,
-	account *Account, spendPkg *spendPackage, modifiers []Modifier,
-	isClose bool) (wire.TxWitness, error) {
+func (m *manager) getAuctioneerSig(ctx context.Context,
+	account *Account, spendTx *wire.MsgTx, accountInputIdx,
+	accountOutputIdx int, modifiers []Modifier) ([]byte, error) {
 
-	var (
-		auctioneerSig []byte
-		err           error
-	)
-
-	if isClose {
+	if accountOutputIdx < 0 {
 		// If the account is being closed, we shouldn't provide any
 		// modifiers.
-		auctioneerSig, err = m.cfg.Auctioneer.ModifyAccount(
-			ctx, account, nil, spendPkg.tx.TxOut, nil,
-		)
-	} else {
-		// Otherwise, the account output is being re-created due to a
-		// modification, so we need to filter out its spent input and
-		// re-created output from the spending transaction as the
-		// auctioneer can reconstruct those themselves.
-		inputIdx := spendPkg.accountInputIdx
-		inputs := make([]*wire.TxIn, 0, len(spendPkg.tx.TxIn)-1)
-		inputs = append(inputs, spendPkg.tx.TxIn[:inputIdx]...)
-		inputs = append(inputs, spendPkg.tx.TxIn[inputIdx+1:]...)
-
-		outputIdx := account.Copy(modifiers...).OutPoint.Index
-		outputs := make([]*wire.TxOut, 0, len(spendPkg.tx.TxOut)-1)
-		outputs = append(outputs, spendPkg.tx.TxOut[:outputIdx]...)
-		outputs = append(outputs, spendPkg.tx.TxOut[outputIdx+1:]...)
-
-		auctioneerSig, err = m.cfg.Auctioneer.ModifyAccount(
-			ctx, account, inputs, outputs, modifiers,
+		return m.cfg.Auctioneer.ModifyAccount(
+			ctx, account, nil, spendTx.TxOut, nil,
 		)
 	}
-	if err != nil {
-		return nil, err
-	}
 
-	return poolscript.SpendMultiSig(
-		spendPkg.witnessScript, spendPkg.ourSig, auctioneerSig,
-	), nil
+	// Otherwise, the account output is being re-created due to a
+	// modification, so we need to filter out its spent input and re-created
+	// output from the spending transaction as the auctioneer can
+	// reconstruct those themselves.
+	inputs := make([]*wire.TxIn, 0, len(spendTx.TxIn)-1)
+	inputs = append(inputs, spendTx.TxIn[:accountInputIdx]...)
+	inputs = append(inputs, spendTx.TxIn[accountInputIdx+1:]...)
+
+	outputs := make([]*wire.TxOut, 0, len(spendTx.TxOut)-1)
+	outputs = append(outputs, spendTx.TxOut[:accountOutputIdx]...)
+	outputs = append(outputs, spendTx.TxOut[accountOutputIdx+1:]...)
+
+	return m.cfg.Auctioneer.ModifyAccount(
+		ctx, account, inputs, outputs, modifiers,
+	)
 }
 
 // createSpendTx creates a PSBT that spends the current account output.
@@ -1659,8 +1625,8 @@ func (m *manager) createSpendTx(account *Account,
 // the lock time of the transaction, otherwise it is 0. The transaction has its
 // inputs and outputs sorted according to BIP-69.
 func (m *manager) signSpendTx(ctx context.Context, account *Account,
-	packet *psbt.Packet, lockTime uint32,
-	witnessType witnessType) (*spendPackage, error) {
+	packet *psbt.Packet, lockTime uint32, witnessType witnessType,
+	accountOutputIndex int, modifiers []Modifier) (*wire.MsgTx, error) {
 
 	tx := packet.UnsignedTx
 
@@ -1718,7 +1684,18 @@ func (m *manager) signSpendTx(ctx context.Context, account *Account,
 		)
 
 	default:
-		pIn.FinalScriptWitness, err = serializeWitness([][]byte{ourSig})
+		var auctioneerSig []byte
+		auctioneerSig, err = m.getAuctioneerSig(
+			ctx, account, packet.UnsignedTx, accountInputIdx,
+			accountOutputIndex, modifiers,
+		)
+		if err != nil {
+			return nil, err
+		}
+		witness := poolscript.SpendMultiSig(
+			witnessScript, ourSig, auctioneerSig,
+		)
+		pIn.FinalScriptWitness, err = serializeWitness(witness)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("error serializing witness: %v",
@@ -1754,12 +1731,7 @@ func (m *manager) signSpendTx(ctx context.Context, account *Account,
 		}
 	}
 
-	return &spendPackage{
-		tx:              signedTx,
-		accountInputIdx: accountInputIdx,
-		witnessScript:   witnessScript,
-		ourSig:          ourSig,
-	}, nil
+	return signedTx, nil
 }
 
 // addBaseAccountModificationWeight adds the estimated weight units for a
