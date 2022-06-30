@@ -1885,12 +1885,35 @@ func (m *manager) inputsForDeposit(ctx context.Context, account *Account,
 		}
 	}
 
+	// Due to a bug in lnd 0.14.2 up to 0.15.0 we can't use SignPsbt for
+	// np2wkh inputs. Unfortunately our only choice in the case that we get
+	// such an input selected is to tell the user to upgrade or "migrate"
+	// their coins. We only check for lnd version > 0.15.0 because our
+	// minimum required version is 0.14.3 anyway.
+	lnd151 := &verrpc.Version{
+		AppMajor: 0,
+		AppMinor: 15,
+		AppPatch: 1,
+	}
+	err = lndclient.AssertVersionCompatible(m.cfg.LndVersion, lnd151)
+	isOldLnd := err != nil
+
 	// Unfortunately we can't send an input's sequence to the server, that
 	// field doesn't exist in the RPC. And the server always assumes a
 	// sequence of 0. So we need to overwrite the value that lnd set in the
 	// funding call, otherwise we arrive at a different sighash.
 	for idx := range packet.UnsignedTx.TxIn {
 		packet.UnsignedTx.TxIn[idx].Sequence = 0
+
+		// Abort if we have any np2wkh inputs with an old lnd.
+		if len(packet.Inputs[idx].RedeemScript) > 0 && isOldLnd {
+			releaseInputs()
+			return nil, nil, fmt.Errorf("due to a bug in lnd " +
+				"versions prior to v0.15.1-beta, depositing " +
+				"from np2wkh inputs is not possible; please " +
+				"upgrade your lnd or forward your coins to a " +
+				"native SegWit (p2wkh) address")
+		}
 	}
 
 	// Make sure the previous account is spent into a new output.
