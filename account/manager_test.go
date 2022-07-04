@@ -13,11 +13,13 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightningnetwork/lnd/chainntnfs"
+	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/lntest/wait"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -71,6 +73,12 @@ func newTestHarness(t *testing.T) *testHarness {
 			ChainNotifier:  notifier,
 			TxSource:       wallet,
 			TxFeeEstimator: wallet,
+			ChainParams:    &chaincfg.TestNet3Params,
+			LndVersion: &verrpc.Version{
+				AppMajor: 0,
+				AppMinor: 15,
+				AppPatch: 1,
+			},
 		}),
 	}
 }
@@ -463,6 +471,8 @@ func (h *testHarness) restartManager() {
 		Signer:        mgr.cfg.Signer,
 		ChainNotifier: mgr.cfg.ChainNotifier,
 		TxSource:      mgr.cfg.TxSource,
+		ChainParams:   mgr.cfg.ChainParams,
+		LndVersion:    mgr.cfg.LndVersion,
 	})
 
 	if err := h.manager.Start(); err != nil {
@@ -935,41 +945,57 @@ func TestAccountDeposit(t *testing.T) {
 	// a successful deposit.
 	const initialAccountValue = MinAccountValue
 	const valueAfterDeposit = initialAccountValue * 2
+	const utxoAmount = initialAccountValue * 3
 	const depositAmount = valueAfterDeposit - initialAccountValue
+
+	// We'll use the lowest fee rate possible, which should yield a
+	// transaction fee of 346 satoshis when taking into account the
+	// additional inputs needed to satisfy the deposit.
+	const feeRate = chainfee.FeePerKwFloor
+	const accountInputFees = 110
+	const expectedFee btcutil.Amount = accountInputFees + 236
+
+	const fundedOutputAmount = depositAmount + accountInputFees
 
 	const bestHeight = 100
 	account := h.openAccount(
 		initialAccountValue, bestHeight+maxAccountExpiry, bestHeight,
 	)
 
-	// We'll provide two outputs to the mock wallet that will be consumed by
-	// the deposit and should result in a change output.
-	h.wallet.utxos = []*lnwallet.Utxo{
-		{
-			AddressType: lnwallet.NestedWitnessPubKey,
-			Value:       depositAmount,
-			OutPoint:    wire.OutPoint{Index: 1},
-			PkScript:    np2wpkh,
-		},
-		{
-			AddressType: lnwallet.WitnessPubKey,
-			Value:       depositAmount,
-			// Use an outpoint greater than the current account to
-			// test the filtering of inputs provided to the
-			// auctioneer.
-			OutPoint: wire.OutPoint{
-				Hash:  account.OutPoint.Hash,
-				Index: account.OutPoint.Index + 1,
-			},
-			PkScript: p2wpkh,
-		},
-	}
+	accountOutputScript, _ := account.NextOutputScript()
 
-	// We'll use the lowest fee rate possible, which should yield a
-	// transaction fee of 346 satoshis when taking into account the
-	// additional inputs needed to satisfy the deposit.
-	const feeRate = chainfee.FeePerKwFloor
-	const expectedFee btcutil.Amount = 346
+	// We'll provide a funded PSBT to the manager that has a change output.
+	h.wallet.utxos = []*lnwallet.Utxo{{
+		AddressType: lnwallet.WitnessPubKey,
+		Value:       utxoAmount,
+		PkScript:    p2wpkh,
+		OutPoint:    wire.OutPoint{Index: 1},
+	}}
+	h.wallet.fundPsbt = &psbt.Packet{
+		UnsignedTx: &wire.MsgTx{
+			Version: 2,
+			TxIn: []*wire.TxIn{{
+				PreviousOutPoint: h.wallet.utxos[0].OutPoint,
+			}},
+			TxOut: []*wire.TxOut{{
+				Value:    int64(fundedOutputAmount),
+				PkScript: accountOutputScript,
+			}, {
+				Value: int64(
+					utxoAmount - depositAmount - expectedFee,
+				),
+				PkScript: np2wpkh,
+			}},
+		},
+		Inputs: []psbt.PInput{{
+			WitnessUtxo: &wire.TxOut{
+				Value:    int64(h.wallet.utxos[0].Value),
+				PkScript: h.wallet.utxos[0].PkScript,
+			},
+		}},
+		Outputs: []psbt.POutput{{}, {}},
+	}
+	h.wallet.fundPsbtChangeIdx = 1
 
 	// Attempt the deposit.
 	//
@@ -979,37 +1005,102 @@ func TestAccountDeposit(t *testing.T) {
 		context.Background(), account.TraderKey.PubKey, depositAmount,
 		feeRate, bestHeight, 0,
 	)
-	if err != nil {
-		t.Fatalf("unable to process account deposit: %v", err)
-	}
+	require.NoError(t, err)
 
-	// We should expect to see a change output with the current UTXOs
-	// available, so we'll reconstruct what we expect to see in the deposit
-	// transaction.
-	addr, err := btcutil.NewAddressWitnessPubKeyHash(
-		btcutil.Hash160(testRawTraderKey), &chaincfg.MainNetParams,
-	)
-	if err != nil {
-		t.Fatalf("unable to create address: %v", err)
-	}
-	pkScript, err := txscript.PayToAddrScript(addr)
-	if err != nil {
-		t.Fatalf("unable to create address script: %v", err)
-	}
-	changeOutput := &wire.TxOut{
-		Value:    int64(depositAmount - expectedFee),
-		PkScript: pkScript,
-	}
-
-	// The transaction should have find the expected account input and
+	// The transaction should have found the expected account input and
 	// output at the following indices.
 	const accountInputIdx = 1
 	const accountOutputIdx = 1
 
 	h.assertAccountModification(
-		account, h.wallet.utxos, []*wire.TxOut{changeOutput},
+		account, h.wallet.utxos,
+		[]*wire.TxOut{h.wallet.fundPsbt.UnsignedTx.TxOut[0]},
 		valueAfterDeposit, accountInputIdx, accountOutputIdx,
 		bestHeight,
+	)
+
+	// Finally, close the account to ensure we can process another spend
+	// after the withdrawal.
+	expr := defaultFeeExpr
+	_ = h.closeAccount(account, &expr, bestHeight)
+}
+
+// TestAccountDepositInsufficientFee ensures that we get an error if for some
+// reason we get a funded transaction with insufficient fees.
+func TestAccountDepositInsufficientFee(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHarness(t)
+	h.start()
+	defer h.stop()
+
+	// We'll start by defining our initial account value and its value after
+	// a successful deposit.
+	const initialAccountValue = MinAccountValue
+	const valueAfterDeposit = initialAccountValue * 2
+	const utxoAmount = initialAccountValue * 3
+	const depositAmount = valueAfterDeposit - initialAccountValue
+
+	// We'll use a fee that is lower than the lowest fee rate possible
+	// (346 satoshis), so we should get an error.
+	const feeRate = chainfee.FeePerKwFloor
+	const accountInputFees = 110
+	const expectedFee btcutil.Amount = accountInputFees + 10
+
+	const fundedOutputAmount = depositAmount + accountInputFees
+
+	const bestHeight = 100
+	account := h.openAccount(
+		initialAccountValue, bestHeight+maxAccountExpiry, bestHeight,
+	)
+
+	accountOutputScript, _ := account.NextOutputScript()
+
+	// We'll provide a funded PSBT to the manager that has a change output.
+	h.wallet.utxos = []*lnwallet.Utxo{{
+		AddressType: lnwallet.WitnessPubKey,
+		Value:       utxoAmount,
+		PkScript:    p2wpkh,
+		OutPoint:    wire.OutPoint{Index: 1},
+	}}
+	h.wallet.fundPsbt = &psbt.Packet{
+		UnsignedTx: &wire.MsgTx{
+			Version: 2,
+			TxIn: []*wire.TxIn{{
+				PreviousOutPoint: h.wallet.utxos[0].OutPoint,
+			}},
+			TxOut: []*wire.TxOut{{
+				Value:    int64(fundedOutputAmount),
+				PkScript: accountOutputScript,
+			}, {
+				Value: int64(
+					utxoAmount - depositAmount - expectedFee,
+				),
+				PkScript: np2wpkh,
+			}},
+		},
+		Inputs: []psbt.PInput{{
+			WitnessUtxo: &wire.TxOut{
+				Value:    int64(h.wallet.utxos[0].Value),
+				PkScript: h.wallet.utxos[0].PkScript,
+			},
+		}},
+		Outputs: []psbt.POutput{{}, {}},
+	}
+	h.wallet.fundPsbtChangeIdx = 1
+
+	// Attempt the deposit.
+	//
+	// If successful, we'll follow with a series of assertions to ensure it
+	// was performed correctly.
+	_, _, err := h.manager.DepositAccount(
+		context.Background(), account.TraderKey.PubKey, depositAmount,
+		feeRate, bestHeight, 0,
+	)
+	require.Error(t, err)
+	require.Contains(
+		t, err.Error(), "signed transaction only pays 120 sats in "+
+			"fees while 255 are required for relay",
 	)
 
 	// Finally, close the account to ensure we can process another spend

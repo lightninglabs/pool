@@ -228,9 +228,11 @@ type mockWallet struct {
 	lndclient.WalletKitClient
 	lndclient.SignerClient
 
-	txs         []lndclient.Transaction
-	publishChan chan *wire.MsgTx
-	utxos       []*lnwallet.Utxo
+	txs               []lndclient.Transaction
+	publishChan       chan *wire.MsgTx
+	utxos             []*lnwallet.Utxo
+	fundPsbt          *psbt.Packet
+	fundPsbtChangeIdx int32
 
 	sendOutputs func(context.Context, []*wire.TxOut,
 		chainfee.SatPerKWeight) (*wire.MsgTx, error)
@@ -355,7 +357,7 @@ func (w *mockWallet) FundPsbt(_ context.Context,
 	req *walletrpc.FundPsbtRequest) (*psbt.Packet, int32,
 	[]*walletrpc.UtxoLease, error) {
 
-	return nil, 0, nil, nil
+	return w.fundPsbt, w.fundPsbtChangeIdx, nil, nil
 }
 
 func (w *mockWallet) SignPsbt(_ context.Context,
