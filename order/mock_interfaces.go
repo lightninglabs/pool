@@ -81,17 +81,17 @@ func (mr *MockOrderMockRecorder) Nonce() *gomock.Call {
 }
 
 // ReservedValue mocks base method.
-func (m *MockOrder) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
+func (m *MockOrder) ReservedValue(feeSchedule terms.FeeSchedule, accountVersion account.Version) btcutil.Amount {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReservedValue", feeSchedule)
+	ret := m.ctrl.Call(m, "ReservedValue", feeSchedule, accountVersion)
 	ret0, _ := ret[0].(btcutil.Amount)
 	return ret0
 }
 
 // ReservedValue indicates an expected call of ReservedValue.
-func (mr *MockOrderMockRecorder) ReservedValue(feeSchedule interface{}) *gomock.Call {
+func (mr *MockOrderMockRecorder) ReservedValue(feeSchedule, accountVersion interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReservedValue", reflect.TypeOf((*MockOrder)(nil).ReservedValue), feeSchedule)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReservedValue", reflect.TypeOf((*MockOrder)(nil).ReservedValue), feeSchedule, accountVersion)
 }
 
 // Type mocks base method.

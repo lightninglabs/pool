@@ -317,7 +317,7 @@ func (m *manager) validateOrder(order Order, acct *account.Account,
 	var acctKey [33]byte
 	copy(acctKey[:], acct.TraderKey.PubKey.SerializeCompressed())
 	feeSchedule := terms.FeeSchedule()
-	reserved := order.ReservedValue(feeSchedule)
+	reserved := order.ReservedValue(feeSchedule, acct.Version)
 	for _, o := range dbOrders {
 		// Only tally the reserved balance if this order was submitted
 		// by this account.
@@ -325,7 +325,7 @@ func (m *manager) validateOrder(order Order, acct *account.Account,
 			continue
 		}
 
-		reserved += o.ReservedValue(feeSchedule)
+		reserved += o.ReservedValue(feeSchedule, acct.Version)
 	}
 
 	if acct.Value < reserved {

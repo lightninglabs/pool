@@ -1564,6 +1564,19 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 		feeSchedule = auctioneerTerms.FeeSchedule()
 	}
 
+	// We also need a map of all account versions for the locked value
+	// estimation below.
+	accountVersions := make(map[[33]byte]account.Version)
+	allAccounts, err := s.server.db.Accounts()
+	if err != nil {
+		return nil, fmt.Errorf("error querying accounts: %v", err)
+	}
+	for _, acct := range allAccounts {
+		var rawKey [33]byte
+		copy(rawKey[:], acct.TraderKey.PubKey.SerializeCompressed())
+		accountVersions[rawKey] = acct.Version
+	}
+
 	// The RPC is split by order type so we have to separate them now.
 	asks := make([]*poolrpc.Ask, 0, len(creationEvents))
 	bids := make([]*poolrpc.Bid, 0, len(creationEvents))
@@ -1616,9 +1629,9 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			State:            orderState,
 			Units:            uint32(dbDetails.Units),
 			UnitsUnfulfilled: uint32(dbDetails.UnitsUnfulfilled),
-			ReservedValueSat: uint64(
-				dbOrder.ReservedValue(feeSchedule),
-			),
+			ReservedValueSat: uint64(dbOrder.ReservedValue(
+				feeSchedule, accountVersions[dbDetails.AcctKey],
+			)),
 			CreationTimestampNs: uint64(evt.Timestamp().UnixNano()),
 			Events:              rpcEvents,
 			MinUnitsMatch:       uint32(dbOrder.Details().MinUnitsMatch),
