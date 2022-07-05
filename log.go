@@ -25,11 +25,10 @@ import (
 const Subsystem = "POOL"
 
 var (
-	logWriter   = build.NewRotatingLogWriter()
-	log         = build.NewSubLogger(Subsystem, nil)
-	rpcLog      = build.NewSubLogger("RPCS", nil)
-	sdcrLog     = build.NewSubLogger("SDCR", nil)
-	interceptor signal.Interceptor
+	logWriter = build.NewRotatingLogWriter()
+	log       = build.NewSubLogger(Subsystem, nil)
+	rpcLog    = build.NewSubLogger("RPCS", nil)
+	sdcrLog   = build.NewSubLogger("SDCR", nil)
 )
 
 // SetupLoggers initializes all package-global logger variables.
@@ -40,7 +39,6 @@ func SetupLoggers(root *build.RotatingLogWriter, intercept signal.Interceptor) {
 	log = build.NewSubLogger(Subsystem, genLogger)
 	rpcLog = build.NewSubLogger("RPCS", genLogger)
 	sdcrLog = build.NewSubLogger("SDCR", genLogger)
-	interceptor = intercept
 
 	lnd.SetSubLogger(root, Subsystem, log)
 	lnd.SetSubLogger(root, "RPCS", rpcLog)

@@ -14,6 +14,7 @@ import (
 	"github.com/lightningnetwork/lnd/cert"
 	"github.com/lightningnetwork/lnd/lncfg"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/signal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -164,6 +165,11 @@ type Config struct {
 	// DebugConfig is a set of debug options used for development and
 	// testing only.
 	DebugConfig *DebugConfig `group:"debug" namespace:"debug" hidden:"true"`
+
+	// ShutdownInterceptor is the custom shutdown signal interceptor that
+	// the server is going to use to listen for (and issue) shutdown
+	// commands on.
+	ShutdownInterceptor signal.Interceptor
 }
 
 // DebugConfig is a set of debug options used for development and testing only.

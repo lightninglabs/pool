@@ -29,6 +29,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/macaroons"
+	"github.com/lightningnetwork/lnd/signal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -130,7 +131,9 @@ func (s *Server) Start() error {
 	}()
 
 	var err error
-	s.lndServices, err = getLnd(s.cfg.Network, s.cfg.Lnd)
+	s.lndServices, err = getLnd(
+		s.cfg.Network, s.cfg.Lnd, s.cfg.ShutdownInterceptor,
+	)
 	if err != nil {
 		return err
 	}
@@ -655,7 +658,9 @@ func (s *Server) Stop() error {
 }
 
 // getLnd returns an instance of the lnd services proxy.
-func getLnd(network string, cfg *LndConfig) (*lndclient.GrpcLndServices, error) {
+func getLnd(network string, cfg *LndConfig,
+	interceptor signal.Interceptor) (*lndclient.GrpcLndServices, error) {
+
 	// We'll want to wait for lnd to be fully synced to its chain backend.
 	// The call to NewLndServices will block until the sync is completed.
 	// But we still want to be able to shutdown the daemon if the user
