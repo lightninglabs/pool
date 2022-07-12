@@ -344,8 +344,8 @@ func parseNodePubKeySlice(ctx *cli.Context, key string) ([][]byte, error) {
 var ordersSubmitAskCommand = cli.Command{
 	Name:  "ask",
 	Usage: "offer channel liquidity",
-	ArgsUsage: "amt acct_key [--rate_fixed=R] [--max_batch_fee_rate=F] " +
-		"[--lease_duration_blocks=M]",
+	ArgsUsage: "amt acct_key [--interest_rate_percent=R] " +
+		"[--max_batch_fee_rate=F] [--lease_duration_blocks=M]",
 	Description: `
 	Create an offer to provide inbound liquidity to an auction participant
 	by opening a channel to them for a certain time.`,
@@ -504,8 +504,8 @@ func printOrderDetails(client poolrpc.TraderClient, amt btcutil.Amount,
 var ordersSubmitBidCommand = cli.Command{
 	Name:  "bid",
 	Usage: "obtain channel liquidity",
-	ArgsUsage: "amt acct_key [--rate_fixed=R] [--max_batch_fee_rate=F] " +
-		"[--lease_duration_blocks=M]",
+	ArgsUsage: "amt acct_key [--interest_rate_percent=R]" +
+		"[--max_batch_fee_rate=F] [--lease_duration_blocks=M]",
 	Description: `
 	Place an offer for acquiring inbound liquidity by lending
 	funding capacity from another participant in the order book.`,
