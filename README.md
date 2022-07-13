@@ -47,7 +47,7 @@ Download the latest binaries from the
 ## LND
 
 Note that Pool requires `lnd` to be built with **all of its subservers** and
-requires running at least `v0.12.0`. Download the latest [official release
+requires running at least `v0.14.3`. Download the latest [official release
 binary](https://github.com/lightningnetwork/lnd/releases/latest) or build `lnd`
 from source by following the [installation
 instructions](https://github.com/lightningnetwork/lnd/blob/master/docs/INSTALL.md).
@@ -81,7 +81,7 @@ to help in any way we can. In the meantime please see our
 [FAQs](https://pool.lightning.engineering/faq).
 
 ## Build from source
-If you’d prefer to compile from source code, you’ll need at least `go 1.14` and
+If you’d prefer to compile from source code, you’ll need at least `go 1.17` and
 `make`.
 
 Run the following commands to download the code, compile and install Pool:
@@ -95,5 +95,5 @@ $ make install
 This will install the binaries into your `$GOPATH/bin` directory.
 
 ## Compatibility
-Lightning Pool requires `lnd` version `0.12.0-beta` or higher (`v0.13.3-beta` or
+Lightning Pool requires `lnd` version `0.14.3-beta` or higher (`v0.15.0-beta` or
 later is recommended).
