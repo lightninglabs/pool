@@ -2,10 +2,10 @@ package funding
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -100,8 +100,13 @@ func AbandonCanceledChannels(matchedOrders map[order.Nonce][]*order.MatchedOrder
 				batchTx, wallet, ourOrder, matchedOrder,
 			)
 			if err != nil {
-				return fmt.Errorf("error locating channel "+
-					"outpoint: %v", err)
+				log.Warnf("Could not find channel output for "+
+					"our_order=%v, matched_order=%v in "+
+					"latest batch TX=%v",
+					ourOrderNonce.String(),
+					matchedOrder.Order.Nonce(),
+					spew.Sdump(batchTx))
+				continue
 			}
 
 			channelPoint := &lnrpc.ChannelPoint{
