@@ -21,7 +21,7 @@ env:
   # If you change this value, please change it in the following files as well:
   # /.travis.yml
   # /Dockerfile
-  GO_VERSION: 1.17.2
+  GO_VERSION: 1.17.12
 
 jobs:
   ########################
