@@ -13,84 +13,105 @@ import (
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
+	"github.com/stretchr/testify/require"
 )
+
+var submitOrderTestCases = []struct {
+	name     string
+	getOrder func() order.Order
+}{{
+	name: "submit ask successfully",
+	getOrder: func() order.Order {
+		// Store a dummy order and see if we can retrieve it again.
+		o := &order.Ask{
+			Kit:                     *dummyOrder(500000, 1337),
+			AnnouncementConstraints: order.OnlyUnannounced,
+			ConfirmationConstraints: order.OnlyZeroConf,
+		}
+		o.Details().MinUnitsMatch = 10
+		o.Details().ChannelType = order.ChannelTypeScriptEnforced
+
+		// It is not possible for an order to have AllowedNodeIDs and
+		// NotAllowedNodeIDs at the same time but we want to test
+		// serialization/deserialization here.
+		o.Details().AllowedNodeIDs = [][33]byte{
+			{1, 2, 3}, {2, 3, 4}, {3, 4, 5},
+		}
+		o.Details().NotAllowedNodeIDs = [][33]byte{{4, 5, 6}, {5, 6, 7}}
+		return o
+	},
+}, {
+	name: "submit bid successfully",
+	getOrder: func() order.Order {
+		// Store a dummy order and see if we can retrieve it again.
+		o := &order.Bid{
+			Kit:             *dummyOrder(500000, 1337),
+			MinNodeTier:     2,
+			SelfChanBalance: 123,
+			SidecarTicket: &sidecar.Ticket{
+				ID:    [8]byte{11, 22, 33, 44, 55, 66, 77},
+				State: sidecar.StateRegistered,
+				Offer: sidecar.Offer{
+					Capacity:            1000000,
+					PushAmt:             200000,
+					LeaseDurationBlocks: 2016,
+				},
+				Recipient: &sidecar.Recipient{
+					MultiSigPubKey:   testTraderKey,
+					MultiSigKeyIndex: 7,
+				},
+			},
+			UnannouncedChannel: true,
+			ZeroConfChannel:    true,
+		}
+		o.Details().MinUnitsMatch = 10
+		o.Details().ChannelType = order.ChannelTypeScriptEnforced
+
+		// It is not possible for an order to have AllowedNodeIDs and
+		// NotAllowedNodeIDs at the same time but we want to test
+		// serialization/deserialization here.
+		o.Details().AllowedNodeIDs = [][33]byte{
+			{1, 2, 3}, {2, 3, 4}, {3, 4, 5},
+		}
+		o.Details().NotAllowedNodeIDs = [][33]byte{{4, 5, 6}, {5, 6, 7}}
+		return o
+	},
+}}
 
 // TestSubmitOrder tests that orders can be stored and retrieved correctly.
 func TestSubmitOrder(t *testing.T) {
-	t.Parallel()
+	for _, tc := range submitOrderTestCases {
+		tc := tc
 
-	store, cleanup := newTestDB(t)
-	defer cleanup()
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	// Store a dummy order and see if we can retrieve it again.
-	o := &order.Bid{
-		Kit:             *dummyOrder(500000, 1337),
-		MinNodeTier:     2,
-		SelfChanBalance: 123,
-		SidecarTicket: &sidecar.Ticket{
-			ID:    [8]byte{11, 22, 33, 44, 55, 66, 77},
-			State: sidecar.StateRegistered,
-			Offer: sidecar.Offer{
-				Capacity:            1000000,
-				PushAmt:             200000,
-				LeaseDurationBlocks: 2016,
-			},
-			Recipient: &sidecar.Recipient{
-				MultiSigPubKey:   testTraderKey,
-				MultiSigKeyIndex: 7,
-			},
-		},
-	}
-	o.Details().MinUnitsMatch = 10
-	o.Details().ChannelType = order.ChannelTypeScriptEnforced
+			store, cleanup := newTestDB(t)
+			defer cleanup()
 
-	// It is not possible for a oder to have AllowedNodeIDs and
-	// NotAllowedNodeIDs at the same time but we want to test
-	// serialization/deserialization here.
-	o.Details().AllowedNodeIDs = [][33]byte{{1, 2, 3}, {2, 3, 4}, {3, 4, 5}}
-	o.Details().NotAllowedNodeIDs = [][33]byte{{4, 5, 6}, {5, 6, 7}}
-	err := store.SubmitOrder(o)
-	if err != nil {
-		t.Fatalf("unable to store order: %v", err)
-	}
-	storedOrder, err := store.GetOrder(o.Nonce())
-	if err != nil {
-		t.Fatalf("unable to retrieve order: %v", err)
-	}
-	if !reflect.DeepEqual(o, storedOrder) {
-		t.Fatalf("expected order: %v\ngot: %v", spew.Sdump(o),
-			spew.Sdump(storedOrder))
-	}
+			o := tc.getOrder()
 
-	// Check that we got the correct type back.
-	if storedOrder.Type() != order.TypeBid {
-		t.Fatalf("unexpected order type. got %d expected %d",
-			storedOrder.Type(), order.TypeBid)
-	}
+			err := store.SubmitOrder(o)
+			require.NoError(t, err)
 
-	// Get all orders and check that we get the same as when querying a
-	// specific one.
-	allOrders, err := store.GetOrders()
-	if err != nil {
-		t.Fatalf("unable to get all asks: %v", err)
-	}
-	if len(allOrders) != 1 {
-		t.Fatalf("unexpected number of asks. got %d expected %d",
-			len(allOrders), 1)
-	}
-	if allOrders[0].Type() != order.TypeBid {
-		t.Fatalf("unexpected order type. got %d expected %d",
-			allOrders[0].Type(), order.TypeBid)
-	}
-	if !reflect.DeepEqual(o, allOrders[0]) {
-		t.Fatalf("expected order: %v\ngot: %v", spew.Sdump(o),
-			spew.Sdump(allOrders[0]))
-	}
+			storedOrder, err := store.GetOrder(o.Nonce())
+			require.NoError(t, err)
+			require.Equal(t, o, storedOrder)
 
-	// Check that we got the correct type back.
-	if allOrders[0].Type() != order.TypeBid {
-		t.Fatalf("unexpected order type. got %d expected %d",
-			allOrders[0].Type(), order.TypeBid)
+			// Check that we got the correct type back.
+			require.Equal(t, storedOrder.Type(), o.Type())
+
+			// Get all orders and check that we get the same as when
+			// querying a specific one.
+			allOrders, err := store.GetOrders()
+			require.NoError(t, err)
+			require.Len(t, allOrders, 1)
+			require.True(
+				t, reflect.DeepEqual(o, allOrders[0]),
+				"expected order: %v\ngot: %v", spew.Sdump(o),
+				spew.Sdump(allOrders[0]),
+			)
+		})
 	}
 }
 
