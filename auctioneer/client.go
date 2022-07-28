@@ -464,10 +464,14 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 	// Split into server message which is type specific.
 	switch castOrder := o.(type) {
 	case *order.Ask:
+		constraints := auctioneerrpc.ChannelAnnouncementConstraints(
+			castOrder.AnnouncementConstraints,
+		)
 		serverAsk := &auctioneerrpc.ServerAsk{
-			Details:             details,
-			LeaseDurationBlocks: castOrder.LeaseDuration,
-			Version:             uint32(castOrder.Version),
+			Details:                 details,
+			LeaseDurationBlocks:     castOrder.LeaseDuration,
+			Version:                 uint32(castOrder.Version),
+			AnnouncementConstraints: constraints,
 		}
 		rpcRequest.Details = &auctioneerrpc.ServerSubmitOrderRequest_Ask{
 			Ask: serverAsk,
@@ -486,6 +490,7 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 			MinNodeTier:         nodeTierEnum,
 			SelfChanBalance:     uint64(castOrder.SelfChanBalance),
 			IsSidecarChannel:    castOrder.SidecarTicket != nil,
+			UnannouncedChannel:  castOrder.UnannouncedChannel,
 		}
 		rpcRequest.Details = &auctioneerrpc.ServerSubmitOrderRequest_Bid{
 			Bid: serverBid,
