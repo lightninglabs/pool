@@ -1413,8 +1413,16 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 			return nil, err
 		}
 
+		announcement := order.ChannelAnnouncementConstraints(
+			a.AnnouncementConstraints,
+		)
+		confirmations := order.ChannelConfirmationConstraints(
+			a.ConfirmationConstraints,
+		)
 		o = &order.Ask{
-			Kit: *kit,
+			Kit:                     *kit,
+			AnnouncementConstraints: announcement,
+			ConfirmationConstraints: confirmations,
 		}
 
 	case *poolrpc.SubmitOrderRequest_Bid:
@@ -1436,10 +1444,12 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		}
 
 		o = &order.Bid{
-			Kit:             *kit,
-			MinNodeTier:     nodeTier,
-			SelfChanBalance: btcutil.Amount(b.SelfChanBalance),
-			SidecarTicket:   ticket,
+			Kit:                *kit,
+			MinNodeTier:        nodeTier,
+			SelfChanBalance:    btcutil.Amount(b.SelfChanBalance),
+			SidecarTicket:      ticket,
+			UnannouncedChannel: b.UnannouncedChannel,
+			ZeroConfChannel:    b.ZeroConfChannel,
 		}
 
 	default:
@@ -1645,10 +1655,18 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 
 		switch o := dbOrder.(type) {
 		case *order.Ask:
+			announcement := auctioneerrpc.ChannelAnnouncementConstraints(
+				o.AnnouncementConstraints,
+			)
+			confirmations := auctioneerrpc.ChannelConfirmationConstraints(
+				o.ConfirmationConstraints,
+			)
 			rpcAsk := &poolrpc.Ask{
-				Details:             details,
-				LeaseDurationBlocks: dbDetails.LeaseDuration,
-				Version:             uint32(o.Version),
+				Details:                 details,
+				LeaseDurationBlocks:     dbDetails.LeaseDuration,
+				Version:                 uint32(o.Version),
+				AnnouncementConstraints: announcement,
+				ConfirmationConstraints: confirmations,
 			}
 			asks = append(asks, rpcAsk)
 
@@ -1664,6 +1682,8 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 				Version:             uint32(o.Version),
 				MinNodeTier:         nodeTier,
 				SelfChanBalance:     uint64(o.SelfChanBalance),
+				UnannouncedChannel:  o.UnannouncedChannel,
+				ZeroConfChannel:     o.ZeroConfChannel,
 			}
 
 			// The sidecar ticket was given to the auction server
