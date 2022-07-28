@@ -720,6 +720,16 @@ message Bid {
     the base58 encoded ticket, including the prefix and the checksum.
     */
     string sidecar_ticket = 6;
+
+    /*
+    Signals if this bid is interested in an announced or unannounced channel.
+    */
+    bool unannounced_channel = 7;
+
+    /*
+    Signals if this bid is interested in a zero conf channel or not.
+    */
+    bool zero_conf_channel = 8;
 }
 
 message Ask {
@@ -739,6 +749,17 @@ message Ask {
     features are added.
     */
     uint32 version = 3;
+
+    /*
+    The constraints for selling the liquidity based on channel discoverability.
+    */
+    ChannelAnnouncementConstraints announcement_constraints = 4;
+
+    /*
+    The constraints for selling the liquidity based on the number of
+    blocks before considering the channel confirmed.
+    */
+    ChannelConfirmationConstraints confirmation_constraints = 5;
 }
 
 message QuoteOrderRequest {

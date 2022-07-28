@@ -993,6 +993,20 @@ enum NodeTier {
     TIER_1 = 2;
 }
 
+// Channel announcement constraints for matched channels.
+enum ChannelAnnouncementConstraints {
+    ANNOUNCEMENT_NO_PREFERENCE = 0;
+    ONLY_ANNOUNCED = 1;
+    ONLY_UNANNOUNCED = 2;
+}
+
+// Channel confirmation constraints for matched channels.
+enum ChannelConfirmationConstraints {
+    CONFIRMATION_NO_PREFERENCE = 0;
+    ONLY_CONFIRMED = 1;
+    ONLY_ZEROCONF = 2;
+}
+
 message ServerBid {
     /*
     The common fields shared between both ask and bid order types.
@@ -1038,6 +1052,16 @@ message ServerBid {
     correspond to the recipient node's details.
     */
     bool is_sidecar_channel = 7;
+
+    /*
+    Signals if this bid is interested in an announced or unannounced channel.
+    */
+    bool unannounced_channel = 8;
+
+    /*
+    Signals if this bid is interested in a zero conf channel or not.
+    */
+    bool zero_conf_channel = 9;
 }
 
 message ServerAsk {
@@ -1057,6 +1081,17 @@ message ServerAsk {
     features are added.
     */
     uint32 version = 5;
+
+    /*
+    The constraints for selling the liquidity based on channel discoverability.
+    */
+    ChannelAnnouncementConstraints announcement_constraints = 6;
+
+    /*
+    The constraints for selling the liquidity based on the number of
+    blocks before considering the channel confirmed.
+    */
+    ChannelConfirmationConstraints confirmation_constraints = 7;
 }
 
 message CancelOrder {
