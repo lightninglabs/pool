@@ -6,6 +6,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/terms"
+	"github.com/stretchr/testify/require"
 )
 
 // TestOrderReservedValue checks orders' ReservedValue merhod returning the
@@ -311,6 +312,58 @@ func TestOrderReservedValue(t *testing.T) {
 		})
 		t.Run(tc.name+"/version_1", func(t *testing.T) {
 			runTestCase(t, tc, account.VersionTaprootEnabled)
+		})
+	}
+}
+
+var channelConstrainsTestCases = []struct {
+	name               string
+	askerConstrains    ChannelAnnouncementConstraints
+	unannouncedChannel bool
+	result             bool
+}{{
+	name:               "ask no preference bid announced channel",
+	askerConstrains:    AnnouncementNoPreference,
+	unannouncedChannel: false,
+	result:             true,
+}, {
+	name:               "ask no preference bid unannounced channel",
+	askerConstrains:    AnnouncementNoPreference,
+	unannouncedChannel: true,
+	result:             true,
+}, {
+	name:               "ask only announced bid announced channel",
+	askerConstrains:    OnlyAnnounced,
+	unannouncedChannel: false,
+	result:             true,
+}, {
+	name:               "ask only announced bid unannounced channel",
+	askerConstrains:    OnlyAnnounced,
+	unannouncedChannel: true,
+	result:             false,
+}, {
+	name:               "ask only unannounced bid announced channel",
+	askerConstrains:    OnlyUnannounced,
+	unannouncedChannel: false,
+	result:             false,
+}, {
+	name:               "ask only unannounced bid unannounced channel",
+	askerConstrains:    OnlyUnannounced,
+	unannouncedChannel: true,
+	result:             true,
+}}
+
+func TestChannelConstrainsCompatibility(t *testing.T) {
+	for _, tc := range channelConstrainsTestCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res := MatchAnnouncementConstraints(
+				tc.askerConstrains, tc.unannouncedChannel,
+			)
+
+			require.Equal(t, tc.result, res)
 		})
 	}
 }
