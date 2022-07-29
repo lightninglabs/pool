@@ -51,11 +51,32 @@ const (
 	// are extended after participating in a batch.
 	ExtendAccountBatchVersion BatchVersion = 1
 
+	// UnannouncedChannelsBatchVersion is the first version where orders
+	// can set the flags to only match with announced/unannonced channels.
+	//
+	// NOTE: This feature requires the runtime support:
+	// - The asker needs to open the channel with the right `private` value
+	// - The bidder needs to be able set the channel acceptor for the
+	//   channel with the right `private` value.
+	// For that reason this needs to be a batch version and not only an
+	// order one.
+	UnannouncedChannelsBatchVersion BatchVersion = 2
+
 	// UpgradeAccountTaprootBatchVersion is the batch version where accounts
 	// are automatically upgraded to Taproot accounts. We leave a gap up to
 	// 10 on purpose to allow for in-between versions (that aren't dependent
 	// on a lnd version) to be added.
 	UpgradeAccountTaprootBatchVersion BatchVersion = 10
+
+	// ZeroConfChannelsBatchVersion is the first version where orders can
+	// set the flags to only match with confirmed/zeroconf channels.
+	//
+	// NOTE: This feature requires the runtime to support:
+	// - The asker needs to open the channel with the right `zeroconf` bit.
+	// - The bidder needs to be able to set the channel acceptor for the
+	//   channel with the right  `Zeroconf` bool value && `MinDepth=0`.
+	// The LND node should be running version v0.15.1-beta or newer.
+	ZeroConfChannelsBatchVersion BatchVersion = 11
 )
 
 // SupportsAccountExtension is a helper function to easily check if a version
@@ -64,11 +85,23 @@ func (bv BatchVersion) SupportsAccountExtension() bool {
 	return bv >= ExtendAccountBatchVersion
 }
 
+// SupportsUnannouncedChannels is a helper function to easily check if a version
+// supports orders with unannounced channels or not.
+func (bv BatchVersion) SupportsUnannouncedChannels() bool {
+	return bv >= UnannouncedChannelsBatchVersion
+}
+
 // SupportsAccountTaprootUpgrade is a helper function to easily check if a
 // version supports upgrading SegWit v0 (p2wsh) accounts to Taproot (p2tr) or
 // not.
 func (bv BatchVersion) SupportsAccountTaprootUpgrade() bool {
 	return bv >= UpgradeAccountTaprootBatchVersion
+}
+
+// SupportsZeroConfChannels is the helper function to easily check if a version
+// supports orders with zeroconf channels or not.
+func (bv BatchVersion) SupportsZeroConfChannels() bool {
+	return bv >= ZeroConfChannelsBatchVersion
 }
 
 const (

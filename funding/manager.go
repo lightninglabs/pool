@@ -696,6 +696,7 @@ func (m *Manager) BatchChannelSetup(
 			case matchedOrderBid.Details().ChannelType == order.ChannelTypeScriptEnforced:
 				commitmentType = lnrpc.CommitmentType_SCRIPT_ENFORCED_LEASE
 			}
+			private := matchedOrderBid.UnannouncedChannel
 			fundingReq := &lnrpc.OpenChannelRequest{
 				NodePubkey:         matchedOrder.NodeKey[:],
 				LocalFundingAmount: int64(chanAmt),
@@ -704,6 +705,8 @@ func (m *Manager) BatchChannelSetup(
 					matchedOrderBid.SelfChanBalance,
 				),
 				CommitmentType: commitmentType,
+				Private:        private,
+				ZeroConf:       matchedOrderBid.ZeroConfChannel,
 			}
 			chanStream, err := m.cfg.BaseClient.OpenChannel(
 				setupCtx, fundingReq,
