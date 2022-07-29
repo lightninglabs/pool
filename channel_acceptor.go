@@ -174,5 +174,27 @@ func (s *ChannelAcceptor) acceptChannel(_ context.Context,
 		}, nil
 	}
 
+	fundingFlags := lnwire.FundingFlag(req.ChannelFlags)
+	isPrivateChan := fundingFlags&lnwire.FFAnnounceChannel == 0
+
+	// Check that the new channel is announced/unannounced as expected.
+	if isPrivateChan != expectedChanBid.UnannouncedChannel {
+		var errMsg string
+		errTemplate := "expected an %s channel but received an %s one"
+
+		if expectedChanBid.UnannouncedChannel {
+			errMsg = fmt.Sprintf(errTemplate, "unannounced",
+				"announced")
+		} else {
+			errMsg = fmt.Sprintf(errTemplate, "announced",
+				"unannounced")
+		}
+
+		return &lndclient.AcceptorResponse{
+			Accept: false,
+			Error:  errMsg,
+		}, nil
+	}
+
 	return &lndclient.AcceptorResponse{Accept: true}, nil
 }
