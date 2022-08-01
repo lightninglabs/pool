@@ -106,7 +106,7 @@ func (bv BatchVersion) SupportsZeroConfChannels() bool {
 
 const (
 	// LatestBatchVersion points to the most recent batch version.
-	LatestBatchVersion = ExtendAccountBatchVersion
+	LatestBatchVersion = ZeroConfChannelsBatchVersion
 
 	// LegacyLeaseDurationBucket is the single static duration bucket that
 	// was used for orders before dynamic duration buckets were added.

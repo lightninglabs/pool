@@ -92,9 +92,13 @@ func (s *accountStore) PendingBatch() error {
 // newRPCServer creates a new client-side RPC server that uses the given
 // connection to the trader's lnd node and the auction server. A client side
 // database is created in `serverDir` if it does not yet exist.
-func newRPCServer(server *Server) *rpcServer {
+func newRPCServer(server *Server) (*rpcServer, error) {
 	accountStore := &accountStore{server.db}
 	lndServices := &server.lndServices.LndServices
+	batchVersion, err := server.determineBatchVersion()
+	if err != nil {
+		return nil, err
+	}
 	return &rpcServer{
 		server:      server,
 		lndServices: lndServices,
@@ -118,14 +122,14 @@ func newRPCServer(server *Server) *rpcServer {
 			Lightning:    lndServices.Client,
 			Wallet:       lndServices.WalletKit,
 			Signer:       lndServices.Signer,
-			BatchVersion: server.determineBatchVersion(),
+			BatchVersion: batchVersion,
 		}),
 		marshaler: NewMarshaler(&marshalerConfig{
 			GetOrders: server.db.GetOrders,
 			Terms:     server.AuctioneerClient.Terms,
 		}),
 		quit: make(chan struct{}),
-	}
+	}, nil
 }
 
 // Start starts the rpcServer, making it ready to accept incoming requests.
@@ -2928,35 +2932,19 @@ func (s *rpcServer) setTicketStateForOrder(newState sidecar.State,
 func (s *rpcServer) determineAccountVersion(
 	newVersion poolrpc.AccountVersion) (account.Version, error) {
 
-	isTaprootCompatible := false
-	verErr := lndclient.AssertVersionCompatible(
-		s.server.lndServices.Version, taprootVersion,
-	)
-	if verErr == nil {
-		isTaprootCompatible = true
-	}
-
 	// Now we can do the account version validation.
 	switch newVersion {
 	case poolrpc.AccountVersion_ACCOUNT_VERSION_LND_DEPENDENT:
-		if isTaprootCompatible {
-			return account.VersionTaprootEnabled, nil
-		}
+		return account.VersionTaprootEnabled, nil
+
+	case poolrpc.AccountVersion_ACCOUNT_VERSION_LEGACY:
+		return account.VersionInitialNoVersion, nil
 
 	case poolrpc.AccountVersion_ACCOUNT_VERSION_TAPROOT:
-		if !isTaprootCompatible {
-			return 0, fmt.Errorf("cannot use Taproot enabled "+
-				"account version, the lnd node Pool is "+
-				"connected to is version %v but needs to be "+
-				"at least %v",
-				s.server.lndServices.Version.AppMinor,
-				taprootVersion.AppMinor)
-		}
-
 		return account.VersionTaprootEnabled, nil
 	}
 
-	return account.VersionInitialNoVersion, nil
+	return account.VersionTaprootEnabled, nil
 }
 
 // rpcOrderStateToDBState maps the order state as received over the RPC
