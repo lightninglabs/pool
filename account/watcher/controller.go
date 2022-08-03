@@ -24,7 +24,7 @@ type CtrlConfig struct {
 	Handlers EventHandler
 }
 
-// controller implements the Controller interface
+// controller implements the Controller interface.
 type controller struct {
 	started sync.Once
 	stopped sync.Once

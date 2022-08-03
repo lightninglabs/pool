@@ -576,7 +576,6 @@ func deserializeAccounts(r io.Reader) (map[[33]byte]*account.Account, error) {
 
 	accs := make(map[[33]byte]*account.Account)
 	for i := uint32(0); i < numAccounts; i++ {
-
 		var key [33]byte
 		err := ReadElements(r, &key)
 		if err != nil {

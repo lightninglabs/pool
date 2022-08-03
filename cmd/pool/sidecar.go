@@ -126,7 +126,6 @@ func sidecarOffer(ctx *cli.Context) error {
 			SelfChanBalance:     pushAmt,
 			LeaseDurationBlocks: duration,
 		}
-
 	} else {
 		// We must make sure that the min chan amount is set to the full
 		// order amount, otherwise we'll get an error during the auto
@@ -140,7 +139,6 @@ func sidecarOffer(ctx *cli.Context) error {
 		bid, _, err = parseBaseBid(ctx)
 		if err != nil {
 			return err
-
 		}
 	}
 

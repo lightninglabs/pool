@@ -41,7 +41,7 @@ const (
 	// maxBatchCounter is the maximum number of batches that we consider
 	// worth checking.
 	//
-	// NOTE: currently there are about 1100 batches (Jan 2022) on mainnet
+	// NOTE: currently there are about 1100 batches (Jan 2022) on mainnet.
 	maxBatchCounter = 5000
 )
 
@@ -380,7 +380,6 @@ func findAccounts(cfg RecoveryConfig, possibleAccounts []*Account) []*Account {
 				if len(accounts) == int(target) {
 					return accounts
 				}
-
 			}
 		}
 		helper.NextBatchKey()

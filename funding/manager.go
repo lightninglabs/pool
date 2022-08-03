@@ -572,7 +572,6 @@ func (m *Manager) PrepChannelFunding(batch *order.Batch,
 				return fmt.Errorf("unable to register funding "+
 					"shim: %v", err)
 			}
-
 		}
 	}
 
@@ -735,7 +734,6 @@ func (m *Manager) BatchChannelSetup(
 			eg.Go(func() error {
 				for {
 					select {
-
 					case <-m.quit:
 						return fmt.Errorf("server " +
 							"shutting down")

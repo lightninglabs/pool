@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	_ "net/http/pprof" // nolint:gosec
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,9 +12,6 @@ import (
 
 	"github.com/jessevdk/go-flags"
 	"github.com/lightninglabs/pool"
-
-	// Blank import to set up profiling HTTP handlers.
-	_ "net/http/pprof"
 )
 
 var (

@@ -14,8 +14,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/lightninglabs/pool/perms"
-
 	"github.com/btcsuite/btcd/btcec/v2"
 	proxy "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/lightninglabs/aperture/lsat"
@@ -25,6 +23,7 @@ import (
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/funding"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/perms"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/lnrpc"
