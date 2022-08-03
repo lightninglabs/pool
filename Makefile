@@ -12,6 +12,7 @@ GOIMPORTS_BIN := $(GO_BIN)/gosimports
 GOBUILD := go build -v
 GOINSTALL := go install -v
 GOTEST := go test -v
+GOFUZZ := go test -fuzztime 1m -fuzz
 
 GOFILES_NOVENDOR = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -name "*pb.go" -not -name "*pb.gw.go" -not -name "*.pb.json.go")
 GOLIST := go list -deps $(PKG)/... | grep '$(PKG)'| grep -v '/vendor/'
@@ -99,6 +100,10 @@ unit-cover: $(GOACC_BIN)
 unit-race:
 	@$(call print, "Running unit race tests.")
 	env CGO_ENABLED=1 GORACE="history_size=7 halt_on_errors=1" $(UNIT_RACE)
+
+fuzz:
+	@$(call print, "Running fuzz tests.")
+	$(GOFUZZ) FuzzWitnessSpendDetection ./poolscript
 
 # =============
 # FLAKE HUNTING
