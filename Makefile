@@ -1,24 +1,20 @@
 PKG := github.com/lightninglabs/pool
 ESCPKG := github.com\/lightninglabs\/pool
 
-LINT_PKG := github.com/golangci/golangci-lint/cmd/golangci-lint
 GOACC_PKG := github.com/ory/go-acc
+TOOLS_DIR := tools
+GOIMPORTS_PKG := github.com/rinchsan/gosimports/cmd/gosimports
 
 GO_BIN := ${GOPATH}/bin
-LINT_BIN := $(GO_BIN)/golangci-lint
 GOACC_BIN := $(GO_BIN)/go-acc
+GOIMPORTS_BIN := $(GO_BIN)/gosimports
 
-LINT_COMMIT := v1.18.0
-GOACC_COMMIT := ddc355013f90fea78d83d3a6c71f1d37ac07ecd5
-
-DEPGET := cd /tmp && go get -v
 GOBUILD := go build -v
 GOINSTALL := go install -v
 GOTEST := go test -v
 
-GOFILES_NOVENDOR = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
+GOFILES_NOVENDOR = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -name "*pb.go" -not -name "*pb.gw.go" -not -name "*.pb.json.go")
 GOLIST := go list -deps $(PKG)/... | grep '$(PKG)'| grep -v '/vendor/'
-GOLISTCOVER := $(shell go list -deps -f '{{.ImportPath}}' ./... | grep '$(PKG)' | sed -e 's/^$(ESCPKG)/./')
 
 COMMIT := $(shell git describe --abbrev=40 --dirty)
 LDFLAGS := -X $(PKG).Commit=$(COMMIT)
@@ -41,7 +37,7 @@ ifneq ($(workers),)
 LINT_WORKERS = --concurrency=$(workers)
 endif
 
-LINT = $(LINT_BIN) run -v $(LINT_WORKERS)
+DOCKER_TOOLS = docker run -v $$(pwd):/build pool-tools
 
 GREEN := "\\033[0;32m"
 NC := "\\033[0m"
@@ -57,13 +53,13 @@ all: scratch check install
 # DEPENDENCIES
 # ============
 
-$(LINT_BIN):
-	@$(call print, "Fetching linter")
-	$(DEPGET) $(LINT_PKG)@$(LINT_COMMIT)
+$(GOIMPORTS_BIN):
+	@$(call print, "Installing goimports.")
+	cd $(TOOLS_DIR); go install -trimpath -tags=tools $(GOIMPORTS_PKG)
 
 $(GOACC_BIN):
 	@$(call print, "Fetching go-acc")
-	$(DEPGET) $(GOACC_PKG)@$(GOACC_COMMIT)
+	cd $(TOOLS_DIR); go install -trimpath -tags=tools $(GOACC_PKG)
 
 # ============
 # INSTALLATION
@@ -118,13 +114,20 @@ flake-race:
 # =========
 # UTILITIES
 # =========
-fmt:
+
+docker-tools:
+	@$(call print, "Building tools docker image.")
+	docker build -q -t pool-tools $(TOOLS_DIR)
+
+fmt: $(GOIMPORTS_BIN)
+	@$(call print, "Fixing imports.")
+	gosimports -w $(GOFILES_NOVENDOR)
 	@$(call print, "Formatting source.")
 	gofmt -l -w -s $(GOFILES_NOVENDOR)
 
-lint: $(LINT_BIN)
+lint: docker-tools
 	@$(call print, "Linting source.")
-	$(LINT)
+	$(DOCKER_TOOLS) golangci-lint run -v $(LINT_WORKERS)
 
 list:
 	@$(call print, "Listing commands.")
