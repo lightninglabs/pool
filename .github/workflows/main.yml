@@ -34,8 +34,10 @@ jobs:
       - name: git checkout
         uses: actions/checkout@v2
 
-      - name: docker image cache
-        uses: satackey/action-docker-layer-caching@46d2c640b1d8ef50d185452ad6fb324e6bd1d052
+      - name: setup go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: '~${{ env.GO_VERSION }}'
 
       - name: RPC for JS compilation
         run: make rpc-js-compile
@@ -53,11 +55,10 @@ jobs:
       - name: git checkout
         uses: actions/checkout@v2
 
-      - name: docker image cache
-        uses: satackey/action-docker-layer-caching@v0.0.11
-
-      - name: Generate mocks
-        run: make gen
+      - name: setup go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: '~${{ env.GO_VERSION }}'
 
       - name: run check
         run: make mock-check
