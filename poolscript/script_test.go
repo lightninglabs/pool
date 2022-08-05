@@ -89,3 +89,25 @@ func TestIncrementBatchKey(t *testing.T) {
 
 	require.Equal(t, startBatchKey, currentKey)
 }
+
+// FuzzWitnessSpendDetection fuzz tests the witness spend detection functions.
+func FuzzWitnessSpendDetection(f *testing.F) {
+	f.Fuzz(func(t *testing.T, a, b, c, d []byte, num uint8) {
+		witness := make([][]byte, num)
+
+		if num > 0 {
+			witness[0] = a
+		}
+		if num > 1 {
+			witness[1] = b
+		}
+		if num > 2 {
+			witness[2] = c
+		}
+		if num > 3 {
+			witness[3] = d
+		}
+		_ = IsMultiSigSpend(witness)
+		_ = IsExpirySpend(witness)
+	})
+}

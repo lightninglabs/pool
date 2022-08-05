@@ -87,6 +87,7 @@ func (v *batchVerifier) Verify(batch *Batch, bestHeight uint32) error {
 	// the auctioneer.
 	if bestHeight < batch.HeightHint-heightHintPadding ||
 		bestHeight > batch.HeightHint+heightHintPadding {
+
 		return ErrInvalidBatchHeightHint
 	}
 

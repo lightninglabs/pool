@@ -89,7 +89,6 @@ const (
 // String returns a human read-able string describing the passed order type.
 func (t Type) String() string {
 	switch t {
-
 	case TypeAsk:
 		return "Ask"
 

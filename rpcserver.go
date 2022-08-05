@@ -512,7 +512,6 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 	// Determine the desired expiration value, can be relative or absolute.
 	var expiryHeight uint32
 	switch {
-
 	case req.GetAbsoluteHeight() != 0 && req.GetRelativeHeight() != 0:
 		return nil, fmt.Errorf("you must set only one of the relative " +
 			"and absolute height parameters")
@@ -531,7 +530,6 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 	var feeRate chainfee.SatPerKWeight
 
 	switch {
-
 	case req.GetFeeRateSatPerKw() > 0 && req.GetConfTarget() > 0:
 		return nil, fmt.Errorf("you must set only one of the sats/kw " +
 			"and confirmation target parameters")
@@ -1982,7 +1980,6 @@ func (s *rpcServer) Leases(ctx context.Context,
 	// response.
 	chanLeaseExpiries := make(map[string]uint32)
 	for _, channel := range openChans.Channels {
-
 		switch height := channel.ThawHeight; {
 		case height == 0:
 			continue

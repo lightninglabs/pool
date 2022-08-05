@@ -25,7 +25,7 @@ const (
 	// requires 32 bytes and an additional leading null byte might be
 	// required if the high bit is set in the value.
 	//
-	// 0x30 + <1-byte> + 0x02 + 0x21 + <33 bytes> + 0x2 + 0x21 + <33 bytes>
+	// 0x30 + <1-byte> + 0x02 + 0x21 + <33 bytes> + 0x2 + 0x21 + <33 bytes>.
 	MaxWitnessSigLen = 72 + 1
 
 	// AccountWitnessScriptSize: 79 bytes
@@ -112,6 +112,7 @@ func AccountWitnessScript(expiry uint32, traderKey, auctioneerKey,
 // tweaked and serialized trader and auctioneer key.
 func accountWitnessScript(expiry uint32, tweakedTraderKey,
 	tweakedAuctioneerKey []byte) ([]byte, error) {
+
 	builder := txscript.NewScriptBuilder()
 
 	builder.AddData(tweakedTraderKey)
@@ -232,7 +233,7 @@ func (r *RecoveryHelper) LocateAnyOutput(expiry uint32,
 // <trader_key> OP_CHECKSIGVERIFY
 // <auctioneer_key> OP_CHECKSIG OP_IFDUP OP_NOTIF
 //	<account_expiry> OP_CHECKLOCKTIMEVERIFY
-// OP_ENDIF
+// OP_ENDIF.
 func AccountScript(expiry uint32, traderKey, auctioneerKey,
 	batchKey *btcec.PublicKey, secret [32]byte) ([]byte, error) {
 

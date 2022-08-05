@@ -249,7 +249,6 @@ func TestWatcherControllerWatchAccount(t *testing.T) {
 				t.Error("confirmation not processed on time")
 			}
 		})
-
 	}
 }
 

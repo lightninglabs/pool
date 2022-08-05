@@ -27,15 +27,6 @@ var (
 	testOfferSig      = test.NewSignatureFromInt(44, 22)
 )
 
-func registerSidecarEmptySetter(ticket *sidecar.Ticket,
-	sc *test.MockSignerClient, wc *test.MockWalletKitClient,
-	store *sidecar.MockStore,
-) {
-}
-
-func registerSidecarEmptyCheck(t *testing.T, ticket *sidecar.Ticket) {
-}
-
 func getVerifyParameters(ticket *sidecar.Ticket) ([]byte, []byte, [33]byte) {
 	var offerPubKeyRaw [33]byte
 	copy(offerPubKeyRaw[:], ticket.Offer.SignPubKey.SerializeCompressed())
@@ -60,16 +51,12 @@ var registerSidecarTestCases = []struct {
 		"valid state",
 	ticket:      &sidecar.Ticket{},
 	expectedErr: "ticket is in invalid state",
-	mockSetter:  registerSidecarEmptySetter,
-	check:       registerSidecarEmptyCheck,
 }, {
 	name: "unable to register sidecar if signature is missing",
 	ticket: &sidecar.Ticket{
 		State: sidecar.StateOffered,
 	},
 	expectedErr: "offer in ticket is not signed",
-	mockSetter:  registerSidecarEmptySetter,
-	check:       registerSidecarEmptyCheck,
 }, {
 	name: "unable to register sidecar if signature is invalid",
 	ticket: &sidecar.Ticket{
@@ -93,7 +80,6 @@ var registerSidecarTestCases = []struct {
 			).
 			Return(false, nil)
 	},
-	check: registerSidecarEmptyCheck,
 }, {
 	name: "unable to register sidecar if ticket already exists",
 	ticket: &sidecar.Ticket{
@@ -126,7 +112,6 @@ var registerSidecarTestCases = []struct {
 			).
 			Return(nil, nil)
 	},
-	check: registerSidecarEmptyCheck,
 }, {
 	name: "register sidecar happy path",
 	ticket: &sidecar.Ticket{
@@ -190,7 +175,6 @@ var registerSidecarTestCases = []struct {
 // offer signature contained within, adds the recipient node's information to
 // the ticket and stores it to the local database.
 func TestRegisterSidecar(t *testing.T) {
-
 	for _, tc := range registerSidecarTestCases {
 		tc := tc
 
@@ -202,7 +186,9 @@ func TestRegisterSidecar(t *testing.T) {
 			wallet := test.NewMockWalletKitClient(mockCtrl)
 			store := sidecar.NewMockStore(mockCtrl)
 
-			tc.mockSetter(tc.ticket, signer, wallet, store)
+			if tc.mockSetter != nil {
+				tc.mockSetter(tc.ticket, signer, wallet, store)
+			}
 
 			acceptor := NewSidecarAcceptor(&SidecarAcceptorConfig{
 				SidecarDB:  store,
@@ -227,7 +213,10 @@ func TestRegisterSidecar(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			tc.check(t, ticket)
+
+			if tc.check != nil {
+				tc.check(t, ticket)
+			}
 		})
 	}
 }
@@ -299,6 +288,7 @@ recvMsg:
 
 func (m *mockMailBox) SendSidecarPkt(ctx context.Context, pkt *sidecar.Ticket,
 	provider bool) error {
+
 	var sendChan chan *sidecar.Ticket
 	if provider {
 		sendChan = m.providerChan

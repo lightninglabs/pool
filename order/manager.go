@@ -124,6 +124,8 @@ func (m *manager) Start() error {
 		return fmt.Errorf("manager can only be started once")
 	}
 
+	log.Debugf("Starting order manager")
+
 	var err error
 	m.started.Do(func() {
 		// We'll need our node's identity public key for a bunch of
@@ -160,6 +162,8 @@ func (m *manager) Start() error {
 
 // Stop stops all concurrent tasks the manager is responsible for.
 func (m *manager) Stop() {
+	log.Debugf("Stopping order manager")
+
 	m.stopped.Do(func() {
 		close(m.quit)
 		m.wg.Wait()
@@ -538,7 +542,6 @@ func parseNodeUris(uris []string) ([]net.Addr, error) {
 		}
 
 		result = append(result, addr)
-
 	}
 	return result, nil
 }

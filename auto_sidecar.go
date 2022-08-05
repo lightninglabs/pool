@@ -345,13 +345,11 @@ func (a *SidecarNegotiator) autoSidecarReceiver(ctx context.Context,
 			case <-a.quit:
 				return
 			}
-
 		}
 	}()
 
 	for {
 		select {
-
 		case newTicket := <-packetChan:
 			newPktState, err := a.stateStepRecipient(ctx, &SidecarPacket{
 				CurrentState:   sidecar.State(a.currentState),
@@ -439,7 +437,6 @@ func (a *SidecarNegotiator) stateStepRecipient(ctx context.Context,
 	pkt *SidecarPacket) (*SidecarPacket, error) {
 
 	switch {
-
 	// If the state of the ticket shows up as offered, then this is the
 	// remote party restarting and requesting we re-send our registered
 	// ticket. So we'll fall through to our "starting" state below to
@@ -529,7 +526,6 @@ func (a *SidecarNegotiator) stateStepRecipient(ctx context.Context,
 		if err != nil {
 			return nil, fmt.Errorf("failed to expect "+
 				"channel: %w", err)
-
 		}
 		return &SidecarPacket{
 			CurrentState:   sidecar.StateExpectingChannel,
@@ -634,7 +630,6 @@ func (a *SidecarNegotiator) autoSidecarProvider(ctx context.Context,
 			case <-a.quit:
 				return
 			}
-
 		}
 	}()
 

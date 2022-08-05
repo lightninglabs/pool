@@ -165,7 +165,8 @@ func (e *errorLoggingClientStream) SendMsg(m interface{}) error {
 // errorLogStreamClientInterceptor is a simple StreamClientInterceptor that
 // will log any errors that occur while processing the messages for a server's
 // streaming RPC.
-func errorLogStreamClientInterceptor(logger btclog.Logger) grpc.StreamClientInterceptor {
+func errorLogStreamClientInterceptor(
+	logger btclog.Logger) grpc.StreamClientInterceptor {
 
 	return func(ctx context.Context, desc *grpc.StreamDesc,
 		cc *grpc.ClientConn, method string, streamer grpc.Streamer,

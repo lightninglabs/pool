@@ -1,7 +1,7 @@
-FROM golang:1.17.1-bullseye
+FROM golang:1.18.5-bullseye
 
-RUN go install github.com/golang/mock/mockgen@v1.6.0
+RUN go install github.com/golang/mock/mockgen@73266f9366fcf2ccef0b880618e5a9266e4136f4
 
 WORKDIR /build
 
-CMD ["/bin/bash", "-c", "go generate ./..."]
+CMD ["/bin/bash", "-c", "go generate ./gen.go"]

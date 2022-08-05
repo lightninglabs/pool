@@ -59,7 +59,7 @@ type SidecarAcceptor struct {
 }
 
 // SidecarAcceptorConfig holds all the configuration information that sidecar
-// acceptor needs in order to carry out its duties
+// acceptor needs in order to carry out its duties.
 type SidecarAcceptorConfig struct {
 	SidecarDB sidecar.Store
 
@@ -86,7 +86,6 @@ type SidecarAcceptorConfig struct {
 
 // NewSidecarAcceptor creates a new sidecar acceptor.
 func NewSidecarAcceptor(cfg *SidecarAcceptorConfig) *SidecarAcceptor {
-
 	cfg.ClientCfg.ConnectSidecar = true
 
 	return &SidecarAcceptor{
@@ -421,7 +420,7 @@ func validateOrderedTicket(ctx context.Context, t *sidecar.Ticket,
 // AutoAcceptSidecar signals to the acceptor that the recipient of a potential
 // sidecar channel request automated acceptance of the sidecar channel. We'll
 // use the cipher box of the provider of the ticket (and a new one we'll create
-// for the reply side) to finalize negotiation, resulting in a
+// for the reply side) to finalize negotiation, resulting in a bid order.
 func (a *SidecarAcceptor) AutoAcceptSidecar(ticket *sidecar.Ticket) error {
 	log.Infof("Attempting negotiation to receive sidecar ticket: %x",
 		ticket.ID[:])
@@ -524,7 +523,6 @@ func (a *SidecarAcceptor) handleServerMessage(
 	defer a.Unlock()
 
 	switch msg := serverMsg.Msg.(type) {
-
 	case *auctioneerrpc.ServerAuctionMessage_Prepare:
 		sdcrLog.Tracef("Received prepare msg from server, "+
 			"batch_id=%x: %v", msg.Prepare.BatchId,
@@ -882,7 +880,6 @@ func (a *SidecarAcceptor) InitAcctMailbox(streamID [64]byte,
 	)
 	if err != nil && !isErrAlreadyExists(err) {
 		return fmt.Errorf("unable to init cipher box: %v", err)
-
 	}
 
 	return nil

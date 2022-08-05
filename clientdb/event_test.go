@@ -116,6 +116,7 @@ func assertOrderCreateEvent(t *testing.T, store *DB, o order.Nonce) {
 
 func getOrderEventTimestamps(store *DB, o order.Nonce, evtType event.Type) (
 	map[time.Time]struct{}, error) {
+
 	orderEventTimestamps := make(map[time.Time]struct{})
 	err := store.DB.View(func(tx *bbolt.Tx) error {
 		ordersBucket := tx.Bucket(ordersBucketKey)

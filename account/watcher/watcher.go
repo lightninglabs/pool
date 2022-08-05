@@ -6,7 +6,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 )
 
-// expiryWatcher implements the ExpiryWatcher interface
+// expiryWatcher implements the ExpiryWatcher interface.
 type expiryWatcher struct {
 	handlers EventHandler
 

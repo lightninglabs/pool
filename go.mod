@@ -1,5 +1,7 @@
 module github.com/lightninglabs/pool
 
+go 1.18
+
 require (
 	github.com/btcsuite/btcd v0.23.1
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0
@@ -156,5 +158,3 @@ require (
 )
 
 replace github.com/lightninglabs/pool/auctioneerrpc => ./auctioneerrpc
-
-go 1.17
