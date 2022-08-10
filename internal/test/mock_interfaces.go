@@ -49,18 +49,18 @@ func (m *MockSignerClient) EXPECT() *MockSignerClientMockRecorder {
 }
 
 // ComputeInputScript mocks base method.
-func (m *MockSignerClient) ComputeInputScript(ctx context.Context, tx *wire.MsgTx, signDescriptors []*lndclient.SignDescriptor) ([]*input.Script, error) {
+func (m *MockSignerClient) ComputeInputScript(ctx context.Context, tx *wire.MsgTx, signDescriptors []*lndclient.SignDescriptor, prevOutputs []*wire.TxOut) ([]*input.Script, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ComputeInputScript", ctx, tx, signDescriptors)
+	ret := m.ctrl.Call(m, "ComputeInputScript", ctx, tx, signDescriptors, prevOutputs)
 	ret0, _ := ret[0].([]*input.Script)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ComputeInputScript indicates an expected call of ComputeInputScript.
-func (mr *MockSignerClientMockRecorder) ComputeInputScript(ctx, tx, signDescriptors interface{}) *gomock.Call {
+func (mr *MockSignerClientMockRecorder) ComputeInputScript(ctx, tx, signDescriptors, prevOutputs interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ComputeInputScript", reflect.TypeOf((*MockSignerClient)(nil).ComputeInputScript), ctx, tx, signDescriptors)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ComputeInputScript", reflect.TypeOf((*MockSignerClient)(nil).ComputeInputScript), ctx, tx, signDescriptors, prevOutputs)
 }
 
 // DeriveSharedKey mocks base method.
@@ -316,6 +316,20 @@ func (m *MockWalletKitClient) FundPsbt(ctx context.Context, req *walletrpc.FundP
 func (mr *MockWalletKitClientMockRecorder) FundPsbt(ctx, req interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FundPsbt", reflect.TypeOf((*MockWalletKitClient)(nil).FundPsbt), ctx, req)
+}
+
+// ImportPublicKey mocks base method.
+func (m *MockWalletKitClient) ImportPublicKey(ctx context.Context, pubkey *btcec.PublicKey, addrType lnwallet.AddressType) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ImportPublicKey", ctx, pubkey, addrType)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ImportPublicKey indicates an expected call of ImportPublicKey.
+func (mr *MockWalletKitClientMockRecorder) ImportPublicKey(ctx, pubkey, addrType interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImportPublicKey", reflect.TypeOf((*MockWalletKitClient)(nil).ImportPublicKey), ctx, pubkey, addrType)
 }
 
 // LeaseOutput mocks base method.
