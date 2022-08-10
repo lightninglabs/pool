@@ -13,6 +13,7 @@ import (
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
+	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,9 +31,13 @@ func getAccountKey(acctKey []byte) *btcec.PublicKey {
 }
 
 func genRenewAccountReq(accountKey []byte, absolute, relative uint32,
-	feerate uint64) *poolrpc.RenewAccountRequest {
+	feerate uint64, version uint32) *poolrpc.RenewAccountRequest {
 
-	req := &poolrpc.RenewAccountRequest{}
+	req := &poolrpc.RenewAccountRequest{
+		AccountKey:      accountKey,
+		FeeRateSatPerKw: feerate,
+		NewVersion:      poolrpc.AccountVersion(version),
+	}
 
 	req.AccountKey = accountKey
 	req.FeeRateSatPerKw = feerate
@@ -51,15 +56,21 @@ func genRenewAccountReq(accountKey []byte, absolute, relative uint32,
 
 var renewAccountTestCases = []struct {
 	name          string
+	lndVer        *verrpc.Version
 	getReq        func() *poolrpc.RenewAccountRequest
 	checkResponse func(*poolrpc.RenewAccountResponse) error
 	mockSetter    func(*poolrpc.RenewAccountRequest,
 		*account.MockManager, *MockMarshaler)
 	expectedError string
 }{{
-	name: "we are able to successfully renew an account",
+	name: "we are able to successfully renew an old account using an old " +
+		"lnd that does not support taproot accounts",
+	lndVer: &verrpc.Version{AppMajor: 0,
+		AppMinor: 14,
+		AppPatch: 3,
+	},
 	getReq: func() *poolrpc.RenewAccountRequest {
-		return genRenewAccountReq(traderKeyRaw, 0, 10, 1000)
+		return genRenewAccountReq(traderKeyRaw, 0, 10, 1000, 1)
 	},
 	mockSetter: func(req *poolrpc.RenewAccountRequest,
 		accMgr *account.MockManager, marshalerMock *MockMarshaler) {
@@ -71,7 +82,6 @@ var renewAccountTestCases = []struct {
 			expiryHeight = 100 + req.GetRelativeExpiry()
 		}
 		version := account.VersionInitialNoVersion
-		// RenewAccount returns
 		acc := &account.Account{}
 		tx := &wire.MsgTx{}
 		accMgr.EXPECT().
@@ -92,7 +102,43 @@ var renewAccountTestCases = []struct {
 		return nil
 	},
 }, {
-	name: "account key must be valid",
+	name:   "we are able to successfully renew an account",
+	lndVer: minimalCompatibleVersion,
+	getReq: func() *poolrpc.RenewAccountRequest {
+		return genRenewAccountReq(traderKeyRaw, 0, 10, 1000, 0)
+	},
+	mockSetter: func(req *poolrpc.RenewAccountRequest,
+		accMgr *account.MockManager, marshalerMock *MockMarshaler) {
+		// Renew account params
+		bestHeight := uint32(100)
+		feeRate := chainfee.SatPerKWeight(req.FeeRateSatPerKw)
+		expiryHeight := req.GetAbsoluteExpiry()
+		if expiryHeight == 0 {
+			expiryHeight = 100 + req.GetRelativeExpiry()
+		}
+		version := account.VersionTaprootEnabled
+		acc := &account.Account{}
+		tx := &wire.MsgTx{}
+		accMgr.EXPECT().
+			RenewAccount(
+				gomock.Any(), getAccountKey(req.AccountKey),
+				expiryHeight, feeRate, bestHeight, version,
+			).
+			Return(acc, tx, nil)
+
+		rpcAccount := poolrpc.Account{}
+		marshalerMock.EXPECT().
+			MarshallAccountsWithAvailableBalance(
+				gomock.Any(), gomock.Eq([]*account.Account{acc}),
+			).
+			Return([]*poolrpc.Account{&rpcAccount}, nil)
+	},
+	checkResponse: func(*poolrpc.RenewAccountResponse) error {
+		return nil
+	},
+}, {
+	name:   "account key must be valid",
+	lndVer: minimalCompatibleVersion,
 	getReq: func() *poolrpc.RenewAccountRequest {
 		return &poolrpc.RenewAccountRequest{
 			AccountKey: []byte{3, 5, 8},
@@ -106,9 +152,10 @@ var renewAccountTestCases = []struct {
 		return nil
 	},
 }, {
-	name: "req should specify absolute/relative expiry",
+	name:   "req should specify absolute/relative expiry",
+	lndVer: minimalCompatibleVersion,
 	getReq: func() *poolrpc.RenewAccountRequest {
-		return genRenewAccountReq(traderKeyRaw, 0, 0, 1000)
+		return genRenewAccountReq(traderKeyRaw, 0, 0, 1000, 0)
 	},
 	expectedError: "either relative or absolute height must be specified",
 	mockSetter: func(req *poolrpc.RenewAccountRequest,
@@ -118,9 +165,10 @@ var renewAccountTestCases = []struct {
 		return nil
 	},
 }, {
-	name: "req should specify a valid fee rate",
+	name:   "req should specify a valid fee rate",
+	lndVer: minimalCompatibleVersion,
 	getReq: func() *poolrpc.RenewAccountRequest {
-		return genRenewAccountReq(traderKeyRaw, 0, 100, 0)
+		return genRenewAccountReq(traderKeyRaw, 0, 100, 0, 0)
 	},
 	expectedError: "fee rate of 0 sat/kw is too low, minimum is 253 sat/kw",
 	mockSetter: func(req *poolrpc.RenewAccountRequest,
@@ -147,7 +195,7 @@ func TestRenewAccount(t *testing.T) {
 			orderMgr := order.NewMockManager(mockCtrl)
 			marshaler := NewMockMarshaler(mockCtrl)
 			lndServices := lndclient.LndServices{
-				Version: minimalCompatibleVersion,
+				Version: tc.lndVer,
 			}
 			tc.mockSetter(req, accountMgr, marshaler)
 

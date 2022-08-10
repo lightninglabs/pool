@@ -351,7 +351,8 @@ func (m *MockLightning) DecodePaymentRequest(context.Context,
 }
 
 func (m *MockLightning) OpenChannel(_ context.Context, peer route.Vertex,
-	localSat, pushSat btcutil.Amount, _ bool) (*wire.OutPoint, error) {
+	localSat, pushSat btcutil.Amount, _ bool,
+	opts ...lndclient.OpenChannelOption) (*wire.OutPoint, error) {
 
 	var randomHash chainhash.Hash
 	if _, err := rand.Read(randomHash[:]); err != nil {

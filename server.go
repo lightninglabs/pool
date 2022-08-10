@@ -41,8 +41,8 @@ var (
 	// required in lnd to run pool.
 	minimalCompatibleVersion = &verrpc.Version{
 		AppMajor: 0,
-		AppMinor: 14,
-		AppPatch: 3,
+		AppMinor: 15,
+		AppPatch: 1,
 
 		// We don't actually require the invoicesrpc calls. But if we
 		// try to use lndclient on an lnd that doesn't have it enabled,
@@ -370,8 +370,8 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 	}()
 
 	if withMacaroonService {
-		// Create and start the macaroon service and let it create its default
-		// macaroon in case it doesn't exist yet.
+		// Create and start the macaroon service and let it create its
+		// default macaroon in case it doesn't exist yet.
 		var err error
 		s.macaroonService, err = lndclient.NewMacaroonService(
 			&lndclient.MacaroonServiceConfig{
