@@ -1306,15 +1306,62 @@ func assertAccountReady(acct *account.Account) error {
 // validateOrder validates the order to ensure that all fields are consistent,
 // and the order is likely to be accepted by the auctioneer. If this method
 // returns nil, then the order is safe to submit to the auctioneer.
-func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
+func (s *rpcServer) validateOrder(o order.Order, acct *account.Account,
 	auctionTerms *terms.AuctioneerTerms) error {
+
+	batchVersion, err := s.server.determineBatchVersion()
+	if err != nil {
+		return err
+	}
+
+	var usesAnchors bool
+	switch o.Details().ChannelType {
+	case order.ChannelTypeScriptEnforced:
+		usesAnchors = true
+	default:
+		usesAnchors = false
+	}
+
+	switch castOrder := o.(type) {
+	case *order.Ask:
+		if castOrder.ConfirmationConstraints == order.OnlyZeroConf {
+			if !batchVersion.SupportsZeroConfChannels() {
+				return fmt.Errorf("batch version %v does not "+
+					"support zero conf channels",
+					batchVersion)
+			}
+
+			if !usesAnchors {
+				return fmt.Errorf("zero conf channels need " +
+					"to use anchors. Use the script " +
+					"enforced channel type")
+			}
+		}
+
+	case *order.Bid:
+		if castOrder.ZeroConfChannel {
+			if !batchVersion.SupportsZeroConfChannels() {
+				return fmt.Errorf("batch version %v does not "+
+					"support zero conf channels",
+					batchVersion)
+			}
+
+			if !usesAnchors {
+				return fmt.Errorf("zero conf channels need " +
+					"to use anchors. Use the script " +
+					"enforced channel type")
+			}
+		}
+	}
 
 	// Now that we now how large the order is, ensure that if it's a
 	// wumbo-sized order, then the backing lnd node is advertising wumbo
 	// support.
-	if order.Details().Amt > lndFunding.MaxBtcFundingAmount && !s.wumboSupported {
+	if o.Details().Amt > lndFunding.MaxBtcFundingAmount &&
+		!s.wumboSupported {
+
 		return fmt.Errorf("%v is wumbo sized, but "+
-			"lnd node isn't signalling wumbo", order.Details().Amt)
+			"lnd node isn't signalling wumbo", o.Details().Amt)
 	}
 
 	// Ensure that the account can actually submit orders in its present
@@ -1325,7 +1372,7 @@ func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
 
 	// If the market isn't currently accepting orders for this particular
 	// lease duration, then we'll exit here as the order will be rejected.
-	leaseDuration := order.Details().LeaseDuration
+	leaseDuration := o.Details().LeaseDuration
 	if _, ok := auctionTerms.LeaseDurationBuckets[leaseDuration]; !ok {
 		return fmt.Errorf("invalid channel lease duration %v "+
 			"blocks, active durations are: %v",
@@ -1335,8 +1382,8 @@ func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
 	// If the order does not specify any AllowedNodeIDs/NotAllowedNodeIDs
 	// it means that it can match with any other order. However, both
 	// fields cannot be set at the same time.
-	if len(order.Details().AllowedNodeIDs) > 0 &&
-		len(order.Details().NotAllowedNodeIDs) > 0 {
+	if len(o.Details().AllowedNodeIDs) > 0 &&
+		len(o.Details().NotAllowedNodeIDs) > 0 {
 
 		return fmt.Errorf("allowed and not allowed node ids set at " +
 			"the same time")
@@ -1349,7 +1396,8 @@ func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
 // local database, and returns the params needed to submit it to the
 // auctioneer.
 type orderPreparer func(context.Context, order.Order,
-	*account.Account, *terms.AuctioneerTerms) (*order.ServerOrderParams, error)
+	*account.Account, *terms.AuctioneerTerms) (*order.ServerOrderParams,
+	error)
 
 // prepareAndSubmitOrder performs a series of final checks locally to ensure
 // the order is valid, before submitting it to the auctioneer.
