@@ -1496,10 +1496,17 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 
 		accountOutputIdx = int(idx)
 
+		// Make sure that we use the appropriate tx hash by including
+		// the signature scripts to the inputs that needed it.
+		unsignedTx, err := unsignedTxWithSignatureScripts(packet)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		// The TX is finished now, only the witness is missing. So we
 		// can create the modifier for the new outpoint now already.
 		modifiers = append(modifiers, OutPointModifier(wire.OutPoint{
-			Hash:  packet.UnsignedTx.TxHash(),
+			Hash:  unsignedTx.TxHash(),
 			Index: uint32(accountOutputIdx),
 		}))
 	}
@@ -1686,12 +1693,10 @@ func (m *manager) signSpendTx(ctx context.Context, account *Account,
 	packet *psbt.Packet, lockTime uint32, witnessType witnessType,
 	accountOutputIndex int, modifiers []Modifier) (*wire.MsgTx, error) {
 
-	tx := packet.UnsignedTx
-
 	// lockTime is used as the lock time of the transaction in order to
 	// satisfy the output's CHECKLOCKTIMEVERIFY in case we're using the
 	// expiry witness.
-	tx.LockTime = lockTime
+	packet.UnsignedTx.LockTime = lockTime
 
 	// Ensure the transaction crafted passes some basic sanity checks before
 	// we attempt to sign it.
@@ -1746,9 +1751,17 @@ func (m *manager) addAccountSpendSignature(ctx context.Context, account *Account
 	packet *psbt.Packet, witnessType witnessType, accountOutputIndex int,
 	modifiers []Modifier) (*psbt.Packet, error) {
 
+	// Use a deep copy of the packet.UnsignedTx that includes the
+	// SignatureScripts so the auctioneer can calculate the proper
+	// outpoint for the account.
+	unsignedTx, err := unsignedTxWithSignatureScripts(packet)
+	if err != nil {
+		return nil, err
+	}
+
 	// Determine the new index of the account input now that we know we have
 	// the full transaction.
-	accountInputIdx, err := locateAccountInput(packet.UnsignedTx, account)
+	accountInputIdx, err := locateAccountInput(unsignedTx, account)
 	if err != nil {
 		return nil, err
 	}
@@ -1765,8 +1778,8 @@ func (m *manager) addAccountSpendSignature(ctx context.Context, account *Account
 
 	// Collect all previous outputs that we need to know in case we're
 	// signing a Taproot input.
-	prevOutputs := make([]*wire.TxOut, len(packet.UnsignedTx.TxIn))
-	for idx := range packet.UnsignedTx.TxIn {
+	prevOutputs := make([]*wire.TxOut, len(unsignedTx.TxIn))
+	for idx := range unsignedTx.TxIn {
 		prevOutputs[idx] = packet.Inputs[idx].WitnessUtxo
 	}
 
@@ -1776,7 +1789,7 @@ func (m *manager) addAccountSpendSignature(ctx context.Context, account *Account
 	// sigs is a bit more involved though.
 	if witnessType == muSig2Taproot {
 		combinedSig, err := m.signAccountMuSig2(
-			ctx, account, packet.UnsignedTx, accountOutputIndex,
+			ctx, account, unsignedTx, accountOutputIndex,
 			accountInputIdx, modifiers, prevOutputs,
 		)
 		if err != nil {
@@ -1853,7 +1866,7 @@ func (m *manager) addAccountSpendSignature(ctx context.Context, account *Account
 		// specify any trader nonces.
 		var auctioneerSig []byte
 		auctioneerSig, _, err = m.getAuctioneerSig(
-			ctx, account, packet.UnsignedTx, accountInputIdx,
+			ctx, account, unsignedTx, accountInputIdx,
 			accountOutputIndex, modifiers, nil, prevOutputs,
 		)
 		if err != nil {
@@ -2180,8 +2193,11 @@ func createNewAccountOutput(account *Account, newAccountValue btcutil.Amount,
 func sanityCheckAccountSpendTx(account *Account, packet *psbt.Packet,
 	witnessType witnessType) error {
 
-	tx := packet.UnsignedTx
-	err := blockchain.CheckTransactionSanity(btcutil.NewTx(tx))
+	tx, err := unsignedTxWithSignatureScripts(packet)
+	if err != nil {
+		return err
+	}
+	err = blockchain.CheckTransactionSanity(btcutil.NewTx(tx))
 	if err != nil {
 		return err
 	}
@@ -2223,14 +2239,11 @@ func sanityCheckAccountSpendTx(account *Account, packet *psbt.Packet,
 				witnessSize += input.P2WKHWitnessSize
 
 			case txscript.ScriptHashTy:
+				// The witness of a np2wkh input is the same as
+				// a p2wkh input. The only difference is the
+				// additional scriptSig which will be added to
+				// the TX before calculating its weight.
 				witnessSize += input.P2WKHWitnessSize
-
-				// The redeem script counts 4 times because
-				// that's not include in the witness.
-				witnessSize += int64(
-					blockchain.WitnessScaleFactor *
-						len(pIn.RedeemScript),
-				)
 
 			case txscript.WitnessV1TaprootTy:
 				witnessSize += 1 + 1 + schnorr.SignatureSize
@@ -2254,10 +2267,9 @@ func sanityCheckAccountSpendTx(account *Account, packet *psbt.Packet,
 
 	// The unsigned TX within the package doesn't have any witness set.
 	// We'll add the witness weight manually in the next step. Fortunately
-	// with the PSBT funding
-	txWeightNoWitness := blockchain.GetTransactionWeight(btcutil.NewTx(
-		packet.UnsignedTx,
-	))
+	// with the PSBT funding all the fees should've already been calculated
+	// properly before.
+	txWeightNoWitness := blockchain.GetTransactionWeight(btcutil.NewTx(tx))
 
 	// The witness size can be translated to weight directly, no scale
 	// factor is needed. But we need to add the 2 bytes for the marker and
@@ -2283,6 +2295,29 @@ func locateAccountInput(tx *wire.MsgTx, account *Account) (int, error) {
 		}
 	}
 	return 0, errors.New("account input not found")
+}
+
+// unsignedTxWithSignatureScripts returns a deep copy of the unsigned tx
+// in the packet but includes the SignatureScripts for the inputs that have
+// an associated RedeemScript.
+//
+// Note: an unsigned tx with and without the related SignatureScripts have a
+// different TxHash. However, SignatureScripts are not part of the data signed.
+func unsignedTxWithSignatureScripts(packet *psbt.Packet) (*wire.MsgTx, error) {
+	tx := packet.UnsignedTx.Copy()
+	for idx := range packet.Inputs {
+		if len(packet.Inputs[idx].RedeemScript) > 0 {
+			builder := txscript.NewScriptBuilder()
+			builder.AddData(packet.Inputs[idx].RedeemScript)
+			sigScript, err := builder.Script()
+			if err != nil {
+				return nil, err
+			}
+			tx.TxIn[idx].SignatureScript = sigScript
+		}
+	}
+
+	return tx, nil
 }
 
 // decorateAccountInput signs the account input in the spending transaction of an
