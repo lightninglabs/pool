@@ -40,6 +40,7 @@ type Account struct {
 	ExpirationHeight uint32 `json:"expiration_height"`
 	State            string `json:"state"`
 	LatestTxid       string `json:"latest_txid"`
+	Version          string `json:"version"`
 }
 
 // NewAccountFromProto creates a display Account from its proto.
@@ -56,6 +57,7 @@ func NewAccountFromProto(a *poolrpc.Account) *Account {
 		ExpirationHeight: a.ExpirationHeight,
 		State:            a.State.String(),
 		LatestTxid:       latestTxHash.String(),
+		Version:          a.Version.String(),
 	}
 }
 
