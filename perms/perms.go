@@ -131,3 +131,9 @@ var RequiredPermissions = map[string][]bakery.Op{
 		Action: "write",
 	}},
 }
+
+// AllowList is a map of all pool RPC methods that don't require any macaroon
+// authentication.
+var AllowList = map[string][]bakery.Op{
+	"/poolrpc.ChannelAuctioneer/Terms": {},
+}
