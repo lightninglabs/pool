@@ -13,6 +13,7 @@ import (
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/funding"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightningnetwork/lnd"
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/signal"
@@ -24,11 +25,10 @@ import (
 const Subsystem = "POOL"
 
 var (
-	logWriter   = build.NewRotatingLogWriter()
-	log         = build.NewSubLogger(Subsystem, nil)
-	rpcLog      = build.NewSubLogger("RPCS", nil)
-	sdcrLog     = build.NewSubLogger("SDCR", nil)
-	interceptor signal.Interceptor
+	logWriter = build.NewRotatingLogWriter()
+	log       = build.NewSubLogger(Subsystem, nil)
+	rpcLog    = build.NewSubLogger("RPCS", nil)
+	sdcrLog   = build.NewSubLogger("SDCR", nil)
 )
 
 // SetupLoggers initializes all package-global logger variables.
@@ -39,7 +39,6 @@ func SetupLoggers(root *build.RotatingLogWriter, intercept signal.Interceptor) {
 	log = build.NewSubLogger(Subsystem, genLogger)
 	rpcLog = build.NewSubLogger("RPCS", genLogger)
 	sdcrLog = build.NewSubLogger("SDCR", genLogger)
-	interceptor = intercept
 
 	lnd.SetSubLogger(root, Subsystem, log)
 	lnd.SetSubLogger(root, "RPCS", rpcLog)
@@ -55,6 +54,9 @@ func SetupLoggers(root *build.RotatingLogWriter, intercept signal.Interceptor) {
 	lnd.AddSubLogger(root, lsat.Subsystem, intercept, lsat.UseLogger)
 	lnd.AddSubLogger(
 		root, clientdb.Subsystem, intercept, clientdb.UseLogger,
+	)
+	lnd.AddSubLogger(
+		root, poolscript.Subsystem, intercept, poolscript.UseLogger,
 	)
 }
 

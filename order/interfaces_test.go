@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/terms"
 )
 
@@ -14,10 +15,11 @@ func TestOrderReservedValue(t *testing.T) {
 
 	simpleFeeSchedule := terms.NewLinearFeeSchedule(1, 100)
 
-	testCases := []struct {
+	type testCase struct {
 		name  string
 		order Order
-	}{
+	}
+	testCases := []*testCase{
 		{
 			name: "bid 1 unit",
 			order: &Bid{
@@ -202,9 +204,7 @@ func TestOrderReservedValue(t *testing.T) {
 		},
 	}
 
-	for i, tc := range testCases {
-		tc := tc
-
+	runTestCase := func(t *testing.T, tc *testCase, v account.Version) {
 		// Count the worst case we will expect.
 		var expValue btcutil.Amount
 
@@ -236,7 +236,7 @@ func TestOrderReservedValue(t *testing.T) {
 					LumpSumPremium(amt, o.LeaseDuration)
 				exeFee := executionFee(amt, simpleFeeSchedule)
 				chainFee := EstimateTraderFee(
-					1, o.MaxBatchFeeRate,
+					1, o.MaxBatchFeeRate, v,
 				)
 
 				// For bids the lump sum, chain fee  and the
@@ -274,7 +274,7 @@ func TestOrderReservedValue(t *testing.T) {
 					LumpSumPremium(amt, 144)
 				exeFee := executionFee(amt, simpleFeeSchedule)
 				chainFee := EstimateTraderFee(
-					1, o.MaxBatchFeeRate,
+					1, o.MaxBatchFeeRate, v,
 				)
 
 				// For asks the amount itself, the chain fee
@@ -292,18 +292,25 @@ func TestOrderReservedValue(t *testing.T) {
 			expValue = 0
 		}
 
-		// Check the value returned.
-		i := i
-		t.Run(tc.name, func(t *testing.T) {
-			val := tc.order.ReservedValue(simpleFeeSchedule)
-			if val < 0 {
-				t.Fatalf("reserved value cannot be "+
-					"negative: %v", val)
-			}
-			if val != expValue {
-				t.Fatalf("test #%v: expected reserved value "+
-					"%v, got '%v'", i, expValue, val)
-			}
+		val := tc.order.ReservedValue(simpleFeeSchedule, v)
+		if val < 0 {
+			t.Fatalf("reserved value cannot be "+
+				"negative: %v", val)
+		}
+		if val != expValue {
+			t.Fatalf("%s: expected reserved value "+
+				"%v, got '%v'", tc.name, expValue, val)
+		}
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+
+		t.Run(tc.name+"/version_0", func(t *testing.T) {
+			runTestCase(t, tc, account.VersionInitialNoVersion)
+		})
+		t.Run(tc.name+"/version_1", func(t *testing.T) {
+			runTestCase(t, tc, account.VersionTaprootEnabled)
 		})
 	}
 }

@@ -1011,6 +1011,10 @@
           "type": "string",
           "format": "byte",
           "description": "The hash of the account's latest transaction."
+        },
+        "version": {
+          "$ref": "#/definitions/poolrpcAccountVersion",
+          "description": "The current version of the account."
         }
       }
     },
@@ -1028,6 +1032,16 @@
       ],
       "default": "PENDING_OPEN",
       "description": " - PENDING_OPEN: The state of an account when it is pending its confirmation on-chain.\n - PENDING_UPDATE: The state of an account when it has undergone an update on-chain either as\npart of a matched order or a trader modification and it is pending its\nconfirmation on-chain.\n - OPEN: The state of an account once it has confirmed on-chain.\n - EXPIRED: The state of an account once its expiration has been reached and its closing\ntransaction has confirmed.\n - PENDING_CLOSED: The state of an account when we're waiting for the closing transaction of\nan account to confirm that required cooperation with the auctioneer.\n - CLOSED: The state of an account once its closing transaction has confirmed.\n - RECOVERY_FAILED: The state of an account that indicates that the account was attempted to be\nrecovered but failed because the opening transaction wasn't found by lnd.\nThis could be because it was never published or it never confirmed. Then the\nfunds are SAFU and the account can be considered to never have been opened\nin the first place.\n - PENDING_BATCH: The account has recently participated in a batch and is not yet confirmed."
+    },
+    "poolrpcAccountVersion": {
+      "type": "string",
+      "enum": [
+        "ACCOUNT_VERSION_LND_DEPENDENT",
+        "ACCOUNT_VERSION_LEGACY",
+        "ACCOUNT_VERSION_TAPROOT"
+      ],
+      "default": "ACCOUNT_VERSION_LND_DEPENDENT",
+      "description": " - ACCOUNT_VERSION_LND_DEPENDENT: Let the version of lnd decide. If a version of lnd \u003e= 0.15.0-beta is\ndetected then a Taproot account is created. For earlier versions a legacy\naccount is created.\n - ACCOUNT_VERSION_LEGACY: A legacy SegWit v0 p2wsh account with a single script.\n - ACCOUNT_VERSION_TAPROOT: A Taproot enabled account with MuSig2 combined internal key and the expiry\nscript as a single tap script leaf."
     },
     "poolrpcAsk": {
       "type": "object",
@@ -1350,6 +1364,10 @@
           "type": "integer",
           "format": "int64",
           "description": "The new relative expiration height of the account."
+        },
+        "new_version": {
+          "$ref": "#/definitions/poolrpcAccountVersion",
+          "description": "The new version of the account. If this is set and is a valid version\ngreater than the account's current version, then the account is upgraded to\nthat version during the deposit."
         }
       }
     },
@@ -1511,6 +1529,10 @@
         "initiator": {
           "type": "string",
           "description": "An optional identification string that will be appended to the user agent\nstring sent to the server to give information about the usage of pool. This\ninitiator part is meant for user interfaces to add their name to give the\nfull picture of the binary used (poold, LiT) and the method used for opening\nthe account (pool CLI, LiT UI, other 3rd party UI)."
+        },
+        "version": {
+          "$ref": "#/definitions/poolrpcAccountVersion",
+          "description": "The version of account to create."
         }
       }
     },
@@ -2302,6 +2324,10 @@
           "type": "string",
           "format": "uint64",
           "description": "The fee rate, in satoshis per kw, to use for the renewal transaction."
+        },
+        "new_version": {
+          "$ref": "#/definitions/poolrpcAccountVersion",
+          "description": "The new version of the account. If this is set and is a valid version\ngreater than the account's current version, then the account is upgraded to\nthat version during the renewal."
         }
       }
     },
@@ -2426,6 +2452,10 @@
           "type": "integer",
           "format": "int64",
           "description": "The new relative expiration height of the account."
+        },
+        "new_version": {
+          "$ref": "#/definitions/poolrpcAccountVersion",
+          "description": "The new version of the account. If this is set and is a valid version\ngreater than the account's current version, then the account is upgraded to\nthat version during the withdrawal."
         }
       }
     },

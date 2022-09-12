@@ -113,6 +113,7 @@ func TestFindInitialAccountState(t *testing.T) {
 					tc.config.InitialBatchKey,
 				)
 				script, _ := poolscript.AccountScript(
+					poolscript.VersionWitnessScript,
 					177, acc.TraderKey.PubKey,
 					tc.config.AuctioneerPubKey,
 					batchKey, acc.Secret,
@@ -218,6 +219,7 @@ func TestFindAccountUpdate(t *testing.T) {
 
 			batchKey := poolscript.IncrementKey(acc.BatchKey)
 			script, _ := poolscript.AccountScript(
+				poolscript.VersionWitnessScript,
 				tc.expectedExpiry, acc.TraderKey.PubKey,
 				acc.AuctioneerKey, batchKey, acc.Secret,
 			)

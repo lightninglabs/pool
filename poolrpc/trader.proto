@@ -207,6 +207,26 @@ service Trader {
     rpc CancelSidecar (CancelSidecarRequest) returns (CancelSidecarResponse);
 }
 
+enum AccountVersion {
+    /*
+    Let the version of lnd decide. If a version of lnd >= 0.15.0-beta is
+    detected then a Taproot account is created. For earlier versions a legacy
+    account is created.
+    */
+    ACCOUNT_VERSION_LND_DEPENDENT = 0;
+
+    /*
+    A legacy SegWit v0 p2wsh account with a single script.
+    */
+    ACCOUNT_VERSION_LEGACY = 1;
+
+    /*
+    A Taproot enabled account with MuSig2 combined internal key and the expiry
+    script as a single tap script leaf.
+    */
+    ACCOUNT_VERSION_TAPROOT = 2;
+}
+
 message InitAccountRequest {
     uint64 account_value = 1;
 
@@ -236,6 +256,11 @@ message InitAccountRequest {
     the account (pool CLI, LiT UI, other 3rd party UI).
     */
     string initiator = 5;
+
+    /*
+    The version of account to create.
+    */
+    AccountVersion version = 7;
 }
 
 message QuoteAccountRequest {
@@ -346,6 +371,13 @@ message WithdrawAccountRequest {
         // The new relative expiration height of the account.
         uint32 relative_expiry = 5;
     }
+
+    /*
+    The new version of the account. If this is set and is a valid version
+    greater than the account's current version, then the account is upgraded to
+    that version during the withdrawal.
+    */
+    AccountVersion new_version = 6;
 }
 message WithdrawAccountResponse {
     // The state of the account after processing the withdrawal.
@@ -377,6 +409,13 @@ message DepositAccountRequest {
         // The new relative expiration height of the account.
         uint32 relative_expiry = 5;
     }
+
+    /*
+    The new version of the account. If this is set and is a valid version
+    greater than the account's current version, then the account is upgraded to
+    that version during the deposit.
+    */
+    AccountVersion new_version = 6;
 }
 message DepositAccountResponse {
     // The state of the account after processing the deposit.
@@ -400,6 +439,13 @@ message RenewAccountRequest {
 
     // The fee rate, in satoshis per kw, to use for the renewal transaction.
     uint64 fee_rate_sat_per_kw = 4;
+
+    /*
+    The new version of the account. If this is set and is a valid version
+    greater than the account's current version, then the account is upgraded to
+    that version during the renewal.
+    */
+    AccountVersion new_version = 5;
 }
 message RenewAccountResponse {
     // The state of the account after processing the renewal.
@@ -498,6 +544,9 @@ message Account {
 
     // The hash of the account's latest transaction.
     bytes latest_txid = 7;
+
+    // The current version of the account.
+    AccountVersion version = 8;
 }
 
 message SubmitOrderRequest {

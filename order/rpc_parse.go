@@ -9,8 +9,10 @@ import (
 	"net"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
@@ -386,6 +388,7 @@ func ParseRPCBatch(prepareMsg *auctioneerrpc.OrderMatchPrepare) (*Batch,
 				EndingBalance: btcutil.Amount(diff.EndingBalance),
 				OutpointIndex: diff.OutpointIndex,
 				NewExpiry:     diff.NewExpiry,
+				NewVersion:    account.Version(diff.NewVersion),
 			},
 		)
 	}
@@ -461,6 +464,48 @@ func ParseRPCMatchedOrders(orders *auctioneerrpc.MatchedOrder) ([]*MatchedOrder,
 	}
 
 	return result, nil
+}
+
+// ParseRPCSign parses the incoming raw OrderMatchSignBegin into the go native
+// structs used by the order manager.
+func ParseRPCSign(signMsg *auctioneerrpc.OrderMatchSignBegin) (AccountNonces,
+	[]*wire.TxOut, error) {
+
+	nonces := make(AccountNonces, len(signMsg.ServerNonces))
+	for acctKeyHex, nonceBytes := range signMsg.ServerNonces {
+		var acctKey [btcec.PubKeyBytesLenCompressed]byte
+
+		if len(acctKeyHex) != hex.EncodedLen(len(acctKey)) {
+			return nil, nil, fmt.Errorf("invalid account key " +
+				"length in server nonces")
+		}
+		if len(nonceBytes) != musig2.PubNonceSize {
+			return nil, nil, fmt.Errorf("invalid pub nonce " +
+				"length in server nonces")
+		}
+
+		acctKeyBytes, err := hex.DecodeString(acctKeyHex)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error hex decoding "+
+				"account key: %v", err)
+		}
+		copy(acctKey[:], acctKeyBytes)
+
+		var pubNonces [musig2.PubNonceSize]byte
+		copy(pubNonces[:], nonceBytes)
+
+		nonces[acctKey] = pubNonces
+	}
+
+	prevOutputs := make([]*wire.TxOut, len(signMsg.PrevOutputs))
+	for idx, rpcPrevOut := range signMsg.PrevOutputs {
+		prevOutputs[idx] = &wire.TxOut{
+			Value:    int64(rpcPrevOut.Value),
+			PkScript: rpcPrevOut.PkScript,
+		}
+	}
+
+	return nonces, prevOutputs, nil
 }
 
 // randomPreimage creates a new preimage from a random number generator.

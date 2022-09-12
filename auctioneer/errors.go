@@ -47,6 +47,9 @@ type AcctResNotCompletedError struct {
 	// point, the trader is able to withdraw the funds from their account
 	// without cooperation of the auctioneer.
 	Expiry uint32
+
+	// Version is the version of the account.
+	Version uint32
 }
 
 // Error implements the error interface.
@@ -68,6 +71,7 @@ func AcctResNotCompletedErrFromRPC(
 		Value:      btcutil.Amount(rpcAcc.Value),
 		Expiry:     rpcAcc.Expiry,
 		HeightHint: rpcAcc.HeightHint,
+		Version:    rpcAcc.Version,
 	}
 	copy(result.AcctKey[:], rpcAcc.TraderKey)
 	copy(result.AuctioneerKey[:], rpcAcc.AuctioneerKey)
@@ -75,7 +79,7 @@ func AcctResNotCompletedErrFromRPC(
 	return result
 }
 
-// IsNotFoundErr tries to match the given error with ErrNoOrder. Useful to
+// IsOrderNotFoundErr tries to match the given error with ErrNoOrder. Useful to
 // check rpc errors from the server.
 func IsOrderNotFoundErr(err error) bool {
 	// The rpc error will look like

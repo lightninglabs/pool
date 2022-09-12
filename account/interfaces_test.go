@@ -23,6 +23,7 @@ func TestAccountCopy(t *testing.T) {
 		HeightHint:    1,
 		OutPoint:      wire.OutPoint{Index: 1},
 		LatestTx:      wire.NewMsgTx(2),
+		Version:       VersionTaprootEnabled,
 	}
 
 	a.Value = 2

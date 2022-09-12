@@ -85,7 +85,9 @@ func (m *marshaler) MarshallAccountsWithAvailableBalance(ctx context.Context,
 				continue
 			}
 
-			debitAmt += o.ReservedValue(auctionFeeSchedule)
+			debitAmt += o.ReservedValue(
+				auctionFeeSchedule, acct.Version,
+			)
 		}
 
 		accountDebits[acctKey] = debitAmt

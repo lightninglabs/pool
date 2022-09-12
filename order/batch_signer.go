@@ -23,8 +23,9 @@ type batchSigner struct {
 // belong to the trader.
 //
 // NOTE: This method is part of the BatchSigner interface.
-func (s *batchSigner) Sign(batch *Batch) (BatchSignature, error) {
-	ourSigs := make(BatchSignature)
+func (s *batchSigner) Sign(batch *Batch) (BatchSignature, AccountNonces, error) {
+	ourSigs := make(BatchSignature, len(batch.AccountDiffs))
+	ourNonces := make(AccountNonces, len(batch.AccountDiffs))
 
 	// At this point we know that the accounts charged are correct. So we
 	// can just go through them, find the corresponding input in the batch
@@ -33,12 +34,13 @@ func (s *batchSigner) Sign(batch *Batch) (BatchSignature, error) {
 		// Get account from DB and make sure we can create the output.
 		acct, err := s.getAccount(acctDiff.AccountKey)
 		if err != nil {
-			return nil, fmt.Errorf("account not found: %v", err)
+			return nil, nil, fmt.Errorf("account not found: %v",
+				err)
 		}
 		acctOut, err := acct.Output()
 		if err != nil {
-			return nil, fmt.Errorf("could not get account output: "+
-				"%v", err)
+			return nil, nil, fmt.Errorf("could not get account "+
+				"output: %v", err)
 		}
 		var acctKey [33]byte
 		copy(acctKey[:], acct.TraderKey.PubKey.SerializeCompressed())
@@ -51,7 +53,24 @@ func (s *batchSigner) Sign(batch *Batch) (BatchSignature, error) {
 			}
 		}
 		if inputIndex == -1 {
-			return nil, fmt.Errorf("account input not found")
+			return nil, nil, fmt.Errorf("account input not found")
+		}
+
+		// MuSig2 signing works differently!
+		if acct.Version >= account.VersionTaprootEnabled {
+			partialSig, nonces, err := s.signInputMuSig2(
+				acctKey, acct, inputIndex, batch,
+			)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error MuSig2 "+
+					"signing input %d: %v", inputIndex, err)
+			}
+
+			ourSigs[acctKey] = partialSig
+			ourNonces[acctKey] = nonces
+
+			// We're done signing for this account input.
+			continue
 		}
 
 		// Gather the remaining components required to sign the
@@ -64,7 +83,7 @@ func (s *batchSigner) Sign(batch *Batch) (BatchSignature, error) {
 			acct.BatchKey, acct.Secret,
 		)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		signDesc := &lndclient.SignDescriptor{
 			KeyDesc:       *acct.TraderKey,
@@ -79,15 +98,58 @@ func (s *batchSigner) Sign(batch *Batch) (BatchSignature, error) {
 			[]*lndclient.SignDescriptor{signDesc}, nil,
 		)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		ourSigs[acctKey], err = ecdsa.ParseDERSignature(sigs[0])
+
+		// Make sure the signature is in the expected format (mostly a
+		// precaution).
+		_, err = ecdsa.ParseDERSignature(sigs[0])
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+
+		ourSigs[acctKey] = sigs[0]
 	}
 
-	return ourSigs, nil
+	return ourSigs, ourNonces, nil
+}
+
+// signInputMuSig2 creates a MuSig2 partial signature for the given account's
+// input.
+func (s *batchSigner) signInputMuSig2(acctKey [33]byte,
+	account *account.Account, accountInputIdx int, batch *Batch) ([]byte,
+	poolscript.MuSig2Nonces, error) {
+
+	ctx := context.Background()
+	var emptyNonces poolscript.MuSig2Nonces
+
+	serverNonces, ok := batch.ServerNonces[acctKey]
+	if !ok {
+		return nil, emptyNonces, fmt.Errorf("server didn't include "+
+			"nonces for account %x", acctKey[:])
+	}
+
+	sessionInfo, cleanup, err := poolscript.TaprootMuSig2SigningSession(
+		ctx, account.Expiry, account.TraderKey.PubKey, account.BatchKey,
+		account.Secret, account.AuctioneerKey, s.signer,
+		&account.TraderKey.KeyLocator, &serverNonces,
+	)
+	if err != nil {
+		return nil, emptyNonces, fmt.Errorf("error creating MuSig2 "+
+			"session: %v", err)
+	}
+
+	partialSig, err := poolscript.TaprootMuSig2Sign(
+		ctx, accountInputIdx, sessionInfo, s.signer, batch.BatchTX,
+		batch.PreviousOutputs, nil, nil,
+	)
+	if err != nil {
+		cleanup()
+		return nil, emptyNonces, fmt.Errorf("error signing batch TX: "+
+			"%v", err)
+	}
+
+	return partialSig, sessionInfo.PublicNonce, nil
 }
 
 // A compile-time constraint to ensure batchSigner implements BatchSigner.

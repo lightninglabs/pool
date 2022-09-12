@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/lightninglabs/pool"
+	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/order"
@@ -123,6 +124,7 @@ func dumpOrders(ctx *cli.Context) error {
 			UnitsUnfulfilled: uint32(dbDetails.UnitsUnfulfilled),
 			ReservedValueSat: uint64(dbOrder.ReservedValue(
 				terms.NewLinearFeeSchedule(0, 0),
+				account.VersionInitialNoVersion,
 			)),
 			CreationTimestampNs: uint64(0),
 			MinUnitsMatch: uint32(

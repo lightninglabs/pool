@@ -187,33 +187,34 @@ func (mr *MockAuctioneerMockRecorder) InitAccount(arg0, arg1 interface{}) *gomoc
 }
 
 // ModifyAccount mocks base method.
-func (m *MockAuctioneer) ModifyAccount(arg0 context.Context, arg1 *Account, arg2 []*wire.TxIn, arg3 []*wire.TxOut, arg4 []Modifier) ([]byte, error) {
+func (m *MockAuctioneer) ModifyAccount(ctx context.Context, acct *Account, inputs []*wire.TxIn, outputs []*wire.TxOut, modifiers []Modifier, traderNonces []byte, previousOutputs []*wire.TxOut) ([]byte, []byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ModifyAccount", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "ModifyAccount", ctx, acct, inputs, outputs, modifiers, traderNonces, previousOutputs)
 	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].([]byte)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // ModifyAccount indicates an expected call of ModifyAccount.
-func (mr *MockAuctioneerMockRecorder) ModifyAccount(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+func (mr *MockAuctioneerMockRecorder) ModifyAccount(ctx, acct, inputs, outputs, modifiers, traderNonces, previousOutputs interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyAccount", reflect.TypeOf((*MockAuctioneer)(nil).ModifyAccount), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyAccount", reflect.TypeOf((*MockAuctioneer)(nil).ModifyAccount), ctx, acct, inputs, outputs, modifiers, traderNonces, previousOutputs)
 }
 
 // ReserveAccount mocks base method.
-func (m *MockAuctioneer) ReserveAccount(arg0 context.Context, arg1 btcutil.Amount, arg2 uint32, arg3 *v2.PublicKey) (*Reservation, error) {
+func (m *MockAuctioneer) ReserveAccount(arg0 context.Context, arg1 btcutil.Amount, arg2 uint32, arg3 *v2.PublicKey, arg4 Version) (*Reservation, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReserveAccount", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "ReserveAccount", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(*Reservation)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ReserveAccount indicates an expected call of ReserveAccount.
-func (mr *MockAuctioneerMockRecorder) ReserveAccount(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockAuctioneerMockRecorder) ReserveAccount(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReserveAccount", reflect.TypeOf((*MockAuctioneer)(nil).ReserveAccount), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReserveAccount", reflect.TypeOf((*MockAuctioneer)(nil).ReserveAccount), arg0, arg1, arg2, arg3, arg4)
 }
 
 // StartAccountSubscription mocks base method.
@@ -412,9 +413,9 @@ func (mr *MockManagerMockRecorder) CloseAccount(ctx, traderKey, feeExpr, bestHei
 }
 
 // DepositAccount mocks base method.
-func (m *MockManager) DepositAccount(ctx context.Context, traderKey *v2.PublicKey, depositAmount btcutil.Amount, feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error) {
+func (m *MockManager) DepositAccount(ctx context.Context, traderKey *v2.PublicKey, depositAmount btcutil.Amount, feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32, newVersion Version) (*Account, *wire.MsgTx, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DepositAccount", ctx, traderKey, depositAmount, feeRate, bestHeight, expiryHeight)
+	ret := m.ctrl.Call(m, "DepositAccount", ctx, traderKey, depositAmount, feeRate, bestHeight, expiryHeight, newVersion)
 	ret0, _ := ret[0].(*Account)
 	ret1, _ := ret[1].(*wire.MsgTx)
 	ret2, _ := ret[2].(error)
@@ -422,9 +423,9 @@ func (m *MockManager) DepositAccount(ctx context.Context, traderKey *v2.PublicKe
 }
 
 // DepositAccount indicates an expected call of DepositAccount.
-func (mr *MockManagerMockRecorder) DepositAccount(ctx, traderKey, depositAmount, feeRate, bestHeight, expiryHeight interface{}) *gomock.Call {
+func (mr *MockManagerMockRecorder) DepositAccount(ctx, traderKey, depositAmount, feeRate, bestHeight, expiryHeight, newVersion interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DepositAccount", reflect.TypeOf((*MockManager)(nil).DepositAccount), ctx, traderKey, depositAmount, feeRate, bestHeight, expiryHeight)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DepositAccount", reflect.TypeOf((*MockManager)(nil).DepositAccount), ctx, traderKey, depositAmount, feeRate, bestHeight, expiryHeight, newVersion)
 }
 
 // HandleAccountConf mocks base method.
@@ -470,18 +471,18 @@ func (mr *MockManagerMockRecorder) HandleAccountSpend(traderKey, spendDetails in
 }
 
 // InitAccount mocks base method.
-func (m *MockManager) InitAccount(ctx context.Context, value btcutil.Amount, feeRate chainfee.SatPerKWeight, expiry, bestHeight uint32) (*Account, error) {
+func (m *MockManager) InitAccount(ctx context.Context, value btcutil.Amount, version Version, feeRate chainfee.SatPerKWeight, expiry, bestHeight uint32) (*Account, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InitAccount", ctx, value, feeRate, expiry, bestHeight)
+	ret := m.ctrl.Call(m, "InitAccount", ctx, value, version, feeRate, expiry, bestHeight)
 	ret0, _ := ret[0].(*Account)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // InitAccount indicates an expected call of InitAccount.
-func (mr *MockManagerMockRecorder) InitAccount(ctx, value, feeRate, expiry, bestHeight interface{}) *gomock.Call {
+func (mr *MockManagerMockRecorder) InitAccount(ctx, value, version, feeRate, expiry, bestHeight interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitAccount", reflect.TypeOf((*MockManager)(nil).InitAccount), ctx, value, feeRate, expiry, bestHeight)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitAccount", reflect.TypeOf((*MockManager)(nil).InitAccount), ctx, value, version, feeRate, expiry, bestHeight)
 }
 
 // QuoteAccount mocks base method.
@@ -515,9 +516,9 @@ func (mr *MockManagerMockRecorder) RecoverAccount(ctx, account interface{}) *gom
 }
 
 // RenewAccount mocks base method.
-func (m *MockManager) RenewAccount(ctx context.Context, traderKey *v2.PublicKey, newExpiry uint32, feeRate chainfee.SatPerKWeight, bestHeight uint32) (*Account, *wire.MsgTx, error) {
+func (m *MockManager) RenewAccount(ctx context.Context, traderKey *v2.PublicKey, newExpiry uint32, feeRate chainfee.SatPerKWeight, bestHeight uint32, newVersion Version) (*Account, *wire.MsgTx, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RenewAccount", ctx, traderKey, newExpiry, feeRate, bestHeight)
+	ret := m.ctrl.Call(m, "RenewAccount", ctx, traderKey, newExpiry, feeRate, bestHeight, newVersion)
 	ret0, _ := ret[0].(*Account)
 	ret1, _ := ret[1].(*wire.MsgTx)
 	ret2, _ := ret[2].(error)
@@ -525,9 +526,9 @@ func (m *MockManager) RenewAccount(ctx context.Context, traderKey *v2.PublicKey,
 }
 
 // RenewAccount indicates an expected call of RenewAccount.
-func (mr *MockManagerMockRecorder) RenewAccount(ctx, traderKey, newExpiry, feeRate, bestHeight interface{}) *gomock.Call {
+func (mr *MockManagerMockRecorder) RenewAccount(ctx, traderKey, newExpiry, feeRate, bestHeight, newVersion interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenewAccount", reflect.TypeOf((*MockManager)(nil).RenewAccount), ctx, traderKey, newExpiry, feeRate, bestHeight)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenewAccount", reflect.TypeOf((*MockManager)(nil).RenewAccount), ctx, traderKey, newExpiry, feeRate, bestHeight, newVersion)
 }
 
 // Start mocks base method.
@@ -571,9 +572,9 @@ func (mr *MockManagerMockRecorder) WatchMatchedAccounts(ctx, matchedAccounts int
 }
 
 // WithdrawAccount mocks base method.
-func (m *MockManager) WithdrawAccount(ctx context.Context, traderKey *v2.PublicKey, outputs []*wire.TxOut, feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error) {
+func (m *MockManager) WithdrawAccount(ctx context.Context, traderKey *v2.PublicKey, outputs []*wire.TxOut, feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32, newVersion Version) (*Account, *wire.MsgTx, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithdrawAccount", ctx, traderKey, outputs, feeRate, bestHeight, expiryHeight)
+	ret := m.ctrl.Call(m, "WithdrawAccount", ctx, traderKey, outputs, feeRate, bestHeight, expiryHeight, newVersion)
 	ret0, _ := ret[0].(*Account)
 	ret1, _ := ret[1].(*wire.MsgTx)
 	ret2, _ := ret[2].(error)
@@ -581,7 +582,7 @@ func (m *MockManager) WithdrawAccount(ctx context.Context, traderKey *v2.PublicK
 }
 
 // WithdrawAccount indicates an expected call of WithdrawAccount.
-func (mr *MockManagerMockRecorder) WithdrawAccount(ctx, traderKey, outputs, feeRate, bestHeight, expiryHeight interface{}) *gomock.Call {
+func (mr *MockManagerMockRecorder) WithdrawAccount(ctx, traderKey, outputs, feeRate, bestHeight, expiryHeight, newVersion interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithdrawAccount", reflect.TypeOf((*MockManager)(nil).WithdrawAccount), ctx, traderKey, outputs, feeRate, bestHeight, expiryHeight)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithdrawAccount", reflect.TypeOf((*MockManager)(nil).WithdrawAccount), ctx, traderKey, outputs, feeRate, bestHeight, expiryHeight, newVersion)
 }

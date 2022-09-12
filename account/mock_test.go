@@ -1,13 +1,17 @@
 package account
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -21,6 +25,7 @@ import (
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnrpc/signrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -157,11 +162,15 @@ func (s *mockStore) LockID() (wtxmgr.LockID, error) {
 type mockAuctioneer struct {
 	Auctioneer
 
-	mu              sync.Mutex
-	subscribed      map[[33]byte]struct{}
-	inputsReceived  []wire.TxIn
-	outputsReceived []wire.TxOut
+	mu                  sync.Mutex
+	subscribed          map[[33]byte]struct{}
+	inputsReceived      []wire.TxIn
+	outputsReceived     []wire.TxOut
+	noncesReceived      []byte
+	prevOutputsReceived []*wire.TxOut
 }
+
+var _ Auctioneer = (*mockAuctioneer)(nil)
 
 func newMockAuctioneer() *mockAuctioneer {
 	return &mockAuctioneer{
@@ -170,7 +179,8 @@ func newMockAuctioneer() *mockAuctioneer {
 }
 
 func (a *mockAuctioneer) ReserveAccount(context.Context,
-	btcutil.Amount, uint32, *btcec.PublicKey) (*Reservation, error) {
+	btcutil.Amount, uint32, *btcec.PublicKey, Version) (*Reservation,
+	error) {
 
 	return &Reservation{
 		AuctioneerKey:   testAuctioneerKey,
@@ -183,7 +193,8 @@ func (a *mockAuctioneer) InitAccount(context.Context, *Account) error {
 }
 
 func (a *mockAuctioneer) ModifyAccount(_ context.Context, _ *Account,
-	inputs []*wire.TxIn, outputs []*wire.TxOut, _ []Modifier) ([]byte, error) {
+	inputs []*wire.TxIn, outputs []*wire.TxOut, _ []Modifier, nonces []byte,
+	prevOutputs []*wire.TxOut) ([]byte, []byte, error) {
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -194,8 +205,10 @@ func (a *mockAuctioneer) ModifyAccount(_ context.Context, _ *Account,
 	for _, output := range outputs {
 		a.outputsReceived = append(a.outputsReceived, *output)
 	}
+	a.noncesReceived = nonces
+	a.prevOutputsReceived = prevOutputs
 
-	return []byte("auctioneer sig"), nil
+	return []byte("auctioneer sig"), nil, nil
 }
 
 func (a *mockAuctioneer) StartAccountSubscription(_ context.Context,
@@ -227,12 +240,15 @@ type mockWallet struct {
 	TxSource
 	lndclient.WalletKitClient
 	lndclient.SignerClient
+	sync.Mutex
 
-	txs               []lndclient.Transaction
-	publishChan       chan *wire.MsgTx
-	utxos             []*lnwallet.Utxo
-	fundPsbt          *psbt.Packet
-	fundPsbtChangeIdx int32
+	txs                   []lndclient.Transaction
+	publishChan           chan *wire.MsgTx
+	muSig2Sessions        map[input.MuSig2SessionID]*input.MuSig2SessionInfo
+	muSig2RemovedSessions map[input.MuSig2SessionID]*input.MuSig2SessionInfo
+	utxos                 []*lnwallet.Utxo
+	fundPsbt              *psbt.Packet
+	fundPsbtChangeIdx     int32
 
 	sendOutputs func(context.Context, []*wire.TxOut,
 		chainfee.SatPerKWeight) (*wire.MsgTx, error)
@@ -241,6 +257,12 @@ type mockWallet struct {
 func newMockWallet() *mockWallet {
 	return &mockWallet{
 		publishChan: make(chan *wire.MsgTx, 1),
+		muSig2Sessions: make(
+			map[input.MuSig2SessionID]*input.MuSig2SessionInfo,
+		),
+		muSig2RemovedSessions: make(
+			map[input.MuSig2SessionID]*input.MuSig2SessionInfo,
+		),
 	}
 }
 
@@ -379,15 +401,159 @@ func (w *mockWallet) SignPsbt(_ context.Context,
 func (w *mockWallet) FinalizePsbt(_ context.Context, packet *psbt.Packet,
 	account string) (*psbt.Packet, *wire.MsgTx, error) {
 
-	for idx := range packet.UnsignedTx.TxIn {
-		packet.UnsignedTx.TxIn[idx].Witness = [][]byte{{
-			// A dummy signature must still have the sighash flag
-			// appended correctly.
-			33, 44, 55, 66, byte(txscript.SigHashAll),
-		}}
+	// Just copy over any sigs we might have. This is copy/paste code from
+	// the psbt Finalizer, minus the IsComplete() check.
+	tx := packet.UnsignedTx
+	for idx := range tx.TxIn {
+		pIn := &packet.Inputs[idx]
+
+		switch {
+		case len(pIn.FinalScriptSig) > 0:
+			tx.TxIn[idx].SignatureScript = pIn.FinalScriptSig
+
+		case len(pIn.FinalScriptWitness) > 0:
+			witnessReader := bytes.NewReader(
+				pIn.FinalScriptWitness,
+			)
+
+			witCount, err := wire.ReadVarInt(witnessReader, 0)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			tx.TxIn[idx].Witness = make(wire.TxWitness, witCount)
+			for j := uint64(0); j < witCount; j++ {
+				wit, err := wire.ReadVarBytes(
+					witnessReader, 0,
+					txscript.MaxScriptSize, "witness",
+				)
+				if err != nil {
+					return nil, nil, err
+				}
+				tx.TxIn[idx].Witness[j] = wit
+			}
+
+		case len(pIn.PartialSigs) > 0:
+			tx.TxIn[idx].Witness = [][]byte{
+				pIn.PartialSigs[0].Signature,
+			}
+		}
 	}
 
 	return packet, packet.UnsignedTx, nil
+}
+
+// MuSig2CreateSession creates a new musig session with the key and signers
+// provided.
+func (w *mockWallet) MuSig2CreateSession(_ context.Context,
+	_ *keychain.KeyLocator, _ [][32]byte,
+	opts ...lndclient.MuSig2SessionOpts) (*input.MuSig2SessionInfo, error) {
+
+	var (
+		sessionID   [32]byte
+		publicNonce [66]byte
+	)
+	_, _ = rand.Read(sessionID[:])
+	_, _ = rand.Read(publicNonce[:])
+
+	req := &signrpc.MuSig2SessionRequest{}
+	for _, opt := range opts {
+		opt(req)
+	}
+
+	session := &input.MuSig2SessionInfo{
+		SessionID:          sessionID,
+		PublicNonce:        publicNonce,
+		CombinedKey:        testBatchKey,
+		TaprootTweak:       req.TaprootTweak != nil,
+		TaprootInternalKey: nil,
+		HaveAllNonces:      false,
+		HaveAllSigs:        false,
+	}
+
+	w.Lock()
+	defer w.Unlock()
+
+	w.muSig2Sessions[sessionID] = session
+
+	return session, nil
+}
+
+// MuSig2RegisterNonces registers additional public nonces for a musig2 session.
+// It returns a boolean indicating whether we have all of our nonces present.
+func (w *mockWallet) MuSig2RegisterNonces(_ context.Context, sessionID [32]byte,
+	nonces [][66]byte) (bool, error) {
+
+	return true, nil
+}
+
+// MuSig2Sign creates a partial signature for the 32 byte SHA256 digest of a
+// message. This can only be called once all public nonces have been created. If
+// the caller will not be responsible for combining the signatures, the cleanup
+// bool should be set.
+func (w *mockWallet) MuSig2Sign(_ context.Context, sessionID [32]byte,
+	_ [32]byte, cleanup bool) ([]byte, error) {
+
+	var (
+		partialSig [input.MuSig2PartialSigSize]byte
+	)
+	_, _ = rand.Read(partialSig[:])
+
+	w.Lock()
+	defer w.Unlock()
+
+	if _, ok := w.muSig2Sessions[sessionID]; !ok {
+		return nil, fmt.Errorf("session %x not found", sessionID[:])
+	}
+
+	if cleanup {
+		w.muSig2RemovedSessions[sessionID] = w.muSig2Sessions[sessionID]
+		delete(w.muSig2Sessions, sessionID)
+	}
+
+	return partialSig[:], nil
+}
+
+// MuSig2CombineSig combines the given partial signature(s) with the local one,
+// if it already exists. Once a partial signature of all participants are
+// registered, the final signature will be combined and returned.
+func (w *mockWallet) MuSig2CombineSig(_ context.Context, sessionID [32]byte,
+	_ [][]byte) (bool, []byte, error) {
+
+	var (
+		sig [schnorr.SignatureSize]byte
+	)
+	_, _ = rand.Read(sig[:])
+
+	w.Lock()
+	defer w.Unlock()
+
+	if _, ok := w.muSig2Sessions[sessionID]; !ok {
+		return false, nil, fmt.Errorf("session %x not found",
+			sessionID[:])
+	}
+
+	w.muSig2RemovedSessions[sessionID] = w.muSig2Sessions[sessionID]
+	delete(w.muSig2Sessions, sessionID)
+
+	return true, sig[:], nil
+}
+
+// MuSig2Cleanup removes a session from memory to free up resources.
+func (w *mockWallet) MuSig2Cleanup(_ context.Context,
+	sessionID [32]byte) error {
+
+	w.Lock()
+	defer w.Unlock()
+
+	if _, ok := w.muSig2Sessions[sessionID]; !ok {
+		return fmt.Errorf("session %x not found", sessionID[:])
+	}
+
+	w.muSig2RemovedSessions[sessionID] = w.muSig2Sessions[sessionID]
+	delete(w.muSig2Sessions, sessionID)
+
+	return nil
 }
 
 type mockChainNotifier struct {

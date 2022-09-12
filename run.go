@@ -12,13 +12,14 @@ import (
 // Run starts the trader daemon and blocks until it's shut down again.
 func Run(cfg *Config) error {
 	// Hook interceptor for os signals.
-	shutdownInterceptor, err := signal.Intercept()
+	var err error
+	cfg.ShutdownInterceptor, err = signal.Intercept()
 	if err != nil {
 		return err
 	}
 
-	logWriter := build.NewRotatingLogWriter()
-	SetupLoggers(logWriter, shutdownInterceptor)
+	logWriter = build.NewRotatingLogWriter()
+	SetupLoggers(logWriter, cfg.ShutdownInterceptor)
 
 	// Special show command to list supported subsystems and exit.
 	if cfg.DebugLevel == "show" {
@@ -45,6 +46,6 @@ func Run(cfg *Config) error {
 	if err != nil {
 		return fmt.Errorf("unable to start server: %v", err)
 	}
-	<-shutdownInterceptor.ShutdownChannel()
+	<-cfg.ShutdownInterceptor.ShutdownChannel()
 	return trader.Stop()
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
 	gomock "github.com/golang/mock/gomock"
+	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
@@ -69,13 +70,14 @@ var renewAccountTestCases = []struct {
 		if expiryHeight == 0 {
 			expiryHeight = 100 + req.GetRelativeExpiry()
 		}
+		version := account.VersionInitialNoVersion
 		// RenewAccount returns
 		acc := &account.Account{}
 		tx := &wire.MsgTx{}
 		accMgr.EXPECT().
 			RenewAccount(
 				gomock.Any(), getAccountKey(req.AccountKey),
-				expiryHeight, feeRate, bestHeight,
+				expiryHeight, feeRate, bestHeight, version,
 			).
 			Return(acc, tx, nil)
 
@@ -144,12 +146,20 @@ func TestRenewAccount(t *testing.T) {
 			accountMgr := account.NewMockManager(mockCtrl)
 			orderMgr := order.NewMockManager(mockCtrl)
 			marshaler := NewMockMarshaler(mockCtrl)
+			lndServices := lndclient.LndServices{
+				Version: minimalCompatibleVersion,
+			}
 			tc.mockSetter(req, accountMgr, marshaler)
 
 			srv := rpcServer{
 				accountManager: accountMgr,
 				orderManager:   orderMgr,
 				marshaler:      marshaler,
+				server: &Server{
+					lndServices: &lndclient.GrpcLndServices{
+						LndServices: lndServices,
+					},
+				},
 			}
 			srv.bestHeight = 100
 

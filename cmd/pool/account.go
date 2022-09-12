@@ -40,6 +40,7 @@ type Account struct {
 	ExpirationHeight uint32 `json:"expiration_height"`
 	State            string `json:"state"`
 	LatestTxid       string `json:"latest_txid"`
+	Version          string `json:"version"`
 }
 
 // NewAccountFromProto creates a display Account from its proto.
@@ -56,6 +57,7 @@ func NewAccountFromProto(a *poolrpc.Account) *Account {
 		ExpirationHeight: a.ExpirationHeight,
 		State:            a.State.String(),
 		LatestTxid:       latestTxHash.String(),
+		Version:          a.Version.String(),
 	}
 }
 
@@ -113,11 +115,20 @@ var newAccountCommand = cli.Command{
 		cli.Uint64Flag{
 			Name: "sat_per_vbyte",
 			Usage: "the fee rate expressed in sat/vbyte that " +
-				"should be used for the account creation transaction",
+				"should be used for the account creation " +
+				"transaction",
 		},
 		cli.BoolFlag{
 			Name:  "force",
 			Usage: "skip account fee confirmation",
+		},
+		cli.Uint64Flag{
+			Name: "version",
+			Usage: "the account version to use; version 0 means " +
+				"auto-decide dependent on lnd version; " +
+				"version 1 is a p2wsh account while version " +
+				"2 is a p2tr account; version 2 requires lnd " +
+				"0.15 or later",
 		},
 	},
 	Action: newAccount,
@@ -134,6 +145,7 @@ func newAccount(ctx *cli.Context) error {
 	req := &poolrpc.InitAccountRequest{
 		AccountValue: amt,
 		Initiator:    defaultInitiator,
+		Version:      poolrpc.AccountVersion(ctx.Uint64("version")),
 	}
 
 	satPerVByte := ctx.Uint64("sat_per_vbyte")
@@ -335,6 +347,14 @@ var renewAccountCommand = cli.Command{
 				"at (default of 30 days equivalent in blocks)",
 			Value: defaultExpiryRelative,
 		},
+		cli.Uint64Flag{
+			Name: "new_version",
+			Usage: "the new account version to use; version 0 " +
+				"means auto-decide dependent on lnd version; " +
+				"version 1 is a p2wsh account while version " +
+				"2 is a p2tr account; version 2 requires lnd " +
+				"0.15 or later",
+		},
 	},
 	Action: renewAccount,
 }
@@ -363,6 +383,9 @@ func renewAccount(ctx *cli.Context) error {
 	req := &poolrpc.RenewAccountRequest{
 		AccountKey:      traderKey,
 		FeeRateSatPerKw: uint64(feeRate),
+		NewVersion: poolrpc.AccountVersion(
+			ctx.Int64("new_version"),
+		),
 	}
 	switch {
 	case ctx.Uint64(accountExpiryAbsolute) != 0:
@@ -433,6 +456,14 @@ var depositAccountCommand = cli.Command{
 				"chain height) that the account should expire " +
 				"at",
 		},
+		cli.Uint64Flag{
+			Name: "new_version",
+			Usage: "the new account version to use; version 0 " +
+				"means auto-decide dependent on lnd version; " +
+				"version 1 is a p2wsh account while version " +
+				"2 is a p2tr account; version 2 requires lnd " +
+				"0.15 or later",
+		},
 	},
 	Action: depositAccount,
 }
@@ -463,6 +494,9 @@ func depositAccount(ctx *cli.Context) error {
 		TraderKey:       traderKey,
 		AmountSat:       amt,
 		FeeRateSatPerKw: uint64(feeRate),
+		NewVersion: poolrpc.AccountVersion(
+			ctx.Int64("new_version"),
+		),
 	}
 
 	absoluteExpiry := ctx.Uint64(accountExpiryAbsolute)
@@ -545,6 +579,14 @@ var withdrawAccountCommand = cli.Command{
 				"chain height) that the account should expire " +
 				"at",
 		},
+		cli.Uint64Flag{
+			Name: "new_version",
+			Usage: "the new account version to use; version 0 " +
+				"means auto-decide dependent on lnd version; " +
+				"version 1 is a p2wsh account while version " +
+				"2 is a p2tr account; version 2 requires lnd " +
+				"0.15 or later",
+		},
 	},
 	Action: withdrawAccount,
 }
@@ -584,6 +626,9 @@ func withdrawAccount(ctx *cli.Context) error {
 			},
 		},
 		FeeRateSatPerKw: uint64(feeRate),
+		NewVersion: poolrpc.AccountVersion(
+			ctx.Int64("new_version"),
+		),
 	}
 
 	absoluteExpiry := ctx.Uint64(accountExpiryAbsolute)

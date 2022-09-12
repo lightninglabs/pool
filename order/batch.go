@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/lndclient"
@@ -51,7 +50,26 @@ const (
 	// ExtendAccountBatchVersion is the first version where accounts expiry
 	// are extended after participating in a batch.
 	ExtendAccountBatchVersion BatchVersion = 1
+
+	// UpgradeAccountTaprootBatchVersion is the batch version where accounts
+	// are automatically upgraded to Taproot accounts. We leave a gap up to
+	// 10 on purpose to allow for in-between versions (that aren't dependent
+	// on a lnd version) to be added.
+	UpgradeAccountTaprootBatchVersion BatchVersion = 10
 )
+
+// SupportsAccountExtension is a helper function to easily check if a version
+// supports account extension after participating in a batch or not.
+func (bv BatchVersion) SupportsAccountExtension() bool {
+	return bv >= ExtendAccountBatchVersion
+}
+
+// SupportsAccountTaprootUpgrade is a helper function to easily check if a
+// version supports upgrading SegWit v0 (p2wsh) accounts to Taproot (p2tr) or
+// not.
+func (bv BatchVersion) SupportsAccountTaprootUpgrade() bool {
+	return bv >= UpgradeAccountTaprootBatchVersion
+}
 
 const (
 	// LatestBatchVersion points to the most recent batch version.
@@ -61,12 +79,6 @@ const (
 	// was used for orders before dynamic duration buckets were added.
 	LegacyLeaseDurationBucket uint32 = 2016
 )
-
-// SupportsAccountExtension is a helper function to easily check if a version
-// supports or not account extension after participating in a batch.
-func (bv BatchVersion) SupportsAccountExtension() bool {
-	return bv >= ExtendAccountBatchVersion
-}
 
 // BatchID is a 33-byte point that uniquely identifies this batch. This ID
 // will be used later for account key derivation when constructing the batch
@@ -106,6 +118,12 @@ type AccountDiff struct {
 	// NewExpiry is the new expiry height for this account. This field
 	// can be safely ignored if its value is 0.
 	NewExpiry uint32
+
+	// NewVersion is the version of the account that should be used after
+	// the batch went through. This field influences the type of account
+	// output that is created by this batch. If this differs from the
+	// CurrentVersion, then the account was upgraded in this batch.
+	NewVersion account.Version
 }
 
 // validateEndingState validates that the ending state of an account as
@@ -220,6 +238,18 @@ type Batch struct {
 	// which the batch transaction can be found within. This will be used by
 	// traders to base off their absolute channel lease maturity height.
 	HeightHint uint32
+
+	// ServerNonces is the map of all the auctioneer's public nonces for
+	// each of the (Taproot enabled) accounts in the batch, keyed by the
+	// account's trader key. This is volatile (in-memory only) information
+	// that is _not_ persisted as part of the batch snapshot.
+	ServerNonces AccountNonces
+
+	// PreviousOutputs is the list of previous output scripts and amounts
+	// (UTXO information) for all the inputs being spent by the batch
+	// transaction. This is volatile (in-memory only) information that is
+	// _not_ persisted as part of the batch snapshot.
+	PreviousOutputs []*wire.TxOut
 }
 
 // Fetcher describes a function that's able to fetch the latest version of an
@@ -313,9 +343,13 @@ type MatchedOrder struct {
 }
 
 // BatchSignature is a map type that is keyed by a trader's account key and
-// contains the multi-sig signature for the input that
-// spends from the current account in a batch.
-type BatchSignature map[[33]byte]*ecdsa.Signature
+// contains the multi-sig signature for the input that spends from the current
+// account in a batch.
+type BatchSignature map[[33]byte][]byte
+
+// AccountNonces is a map of all server or client nonces for a batch signing
+// session, keyed by the account key.
+type AccountNonces map[[33]byte]poolscript.MuSig2Nonces
 
 // BatchVerifier is an interface that can verify a batch from the point of view
 // of the trader.
@@ -330,7 +364,7 @@ type BatchVerifier interface {
 type BatchSigner interface {
 	// Sign returns the witness stack of all account inputs in a batch that
 	// belong to the trader.
-	Sign(*Batch) (BatchSignature, error)
+	Sign(*Batch) (BatchSignature, AccountNonces, error)
 }
 
 // BatchStorer is an interface that can store a batch to the local database by

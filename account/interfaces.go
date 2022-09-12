@@ -41,6 +41,57 @@ type Reservation struct {
 	InitialBatchKey *btcec.PublicKey
 }
 
+// Version represents the version of an account.
+type Version uint8
+
+const (
+	// VersionInitialNoVersion is the initial version any legacy account has
+	// that technically wasn't versioned at all. The version field isn't
+	// even serialized for those accounts.
+	VersionInitialNoVersion Version = 0
+
+	// VersionTaprootEnabled is the version that introduced account
+	// versioning and the upgrade to Taproot (with MuSig2 multi-sig).
+	VersionTaprootEnabled Version = 1
+)
+
+// String returns the string representation of the version.
+func (v Version) String() string {
+	switch v {
+	case VersionInitialNoVersion:
+		return "account_p2wsh"
+
+	case VersionTaprootEnabled:
+		return "account_p2tr"
+
+	default:
+		return fmt.Sprintf("unknown <%d>", v)
+	}
+}
+
+// ScriptVersion returns the version of the pool script used by this account
+// version.
+func (v Version) ScriptVersion() poolscript.Version {
+	switch v {
+	case VersionTaprootEnabled:
+		return poolscript.VersionTaprootMuSig2
+
+	default:
+		return poolscript.VersionWitnessScript
+	}
+}
+
+// ValidateVersion ensures that a given version is a valid and known version.
+func ValidateVersion(version Version) error {
+	switch version {
+	case VersionInitialNoVersion, VersionTaprootEnabled:
+		return nil
+
+	default:
+		return fmt.Errorf("unknown version <%d>", version)
+	}
+}
+
 // State describes the different possible states of an account.
 type State uint8
 
@@ -192,6 +243,9 @@ type Account struct {
 	// NOTE: This is only nil within the StateInitiated phase. There are no
 	// guarantees as to whether the transaction has its witness populated.
 	LatestTx *wire.MsgTx
+
+	// Version is the version of the account.
+	Version Version
 }
 
 const (
@@ -205,8 +259,8 @@ const (
 // Output returns the current on-chain output associated with the account.
 func (a *Account) Output() (*wire.TxOut, error) {
 	script, err := poolscript.AccountScript(
-		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey, a.BatchKey,
-		a.Secret,
+		a.Version.ScriptVersion(), a.Expiry, a.TraderKey.PubKey,
+		a.AuctioneerKey, a.BatchKey, a.Secret,
 	)
 	if err != nil {
 		return nil, err
@@ -224,8 +278,8 @@ func (a *Account) Output() (*wire.TxOut, error) {
 func (a *Account) NextOutputScript() ([]byte, error) {
 	nextBatchKey := poolscript.IncrementKey(a.BatchKey)
 	return poolscript.AccountScript(
-		a.Expiry, a.TraderKey.PubKey, a.AuctioneerKey, nextBatchKey,
-		a.Secret,
+		a.Version.ScriptVersion(), a.Expiry, a.TraderKey.PubKey,
+		a.AuctioneerKey, nextBatchKey, a.Secret,
 	)
 }
 
@@ -250,6 +304,7 @@ func (a *Account) Copy(modifiers ...Modifier) *Account {
 		State:         a.State,
 		HeightHint:    a.HeightHint,
 		OutPoint:      a.OutPoint,
+		Version:       a.Version,
 	}
 	if a.State != StateInitiated {
 		accountCopy.LatestTx = a.LatestTx.Copy()
@@ -318,6 +373,14 @@ func LatestTxModifier(tx *wire.MsgTx) Modifier {
 	}
 }
 
+// VersionModifier is a functional option that modifies the version of an
+// account.
+func VersionModifier(version Version) Modifier {
+	return func(account *Account) {
+		account.Version = version
+	}
+}
+
 // Store is responsible for storing and retrieving account information reliably.
 type Store interface {
 	// AddAccount adds a record for the account to the database.
@@ -358,7 +421,7 @@ type Auctioneer interface {
 	// the trader crashes before confirming the account with the auctioneer,
 	// we also send the trader key and expiry along with the reservation.
 	ReserveAccount(context.Context, btcutil.Amount, uint32,
-		*btcec.PublicKey) (*Reservation, error)
+		*btcec.PublicKey, Version) (*Reservation, error)
 
 	// InitAccount initializes an account with the auctioneer such that it
 	// can be used once fully confirmed.
@@ -368,11 +431,18 @@ type Auctioneer interface {
 	// modify the account with the associated trader key. The auctioneer's
 	// signature is returned, allowing us to broadcast a transaction
 	// spending from the account allowing our modifications to take place.
-	// The inputs and outputs provided should exclude the account input
-	// being spent and the account output potentially being recreated, since
-	// the auctioneer can construct those themselves.
-	ModifyAccount(context.Context, *Account, []*wire.TxIn,
-		[]*wire.TxOut, []Modifier) ([]byte, error)
+	// If the account spend is a MuSig2 spend, then the trader's nonces must
+	// be sent and the server's nonces are returned upon success. The inputs
+	// and outputs provided should exclude the account input being spent and
+	// the account output potentially being recreated, since the auctioneer
+	// can construct those themselves. If no modifiers are present, then the
+	// auctioneer will interpret the request as an account closure. The
+	// previous outputs must always contain the UTXO information for _every_
+	// input of the transaction, so inputs+account_input.
+	ModifyAccount(ctx context.Context, acct *Account, inputs []*wire.TxIn,
+		outputs []*wire.TxOut, modifiers []Modifier,
+		traderNonces []byte, previousOutputs []*wire.TxOut) ([]byte,
+		[]byte, error)
 
 	// StartAccountSubscription opens a stream to the server and subscribes
 	// to all updates that concern the given account, including all orders
@@ -443,14 +513,11 @@ func (o *OutputWithFee) CloseOutputs(accountValue btcutil.Amount,
 
 	// Determine the appropriate witness size based on the input and output
 	// type.
-	switch witnessType {
-	case expiryWitness:
-		weightEstimator.AddWitnessInput(poolscript.ExpiryWitnessSize)
-	case multiSigWitness:
-		weightEstimator.AddWitnessInput(poolscript.MultiSigWitnessSize)
-	default:
-		return nil, fmt.Errorf("unhandled witness type %v", witnessType)
+	witnessSize, err := witnessType.witnessSize()
+	if err != nil {
+		return nil, err
 	}
+	weightEstimator.AddWitnessInput(witnessSize)
 
 	pkScript, err := txscript.ParsePkScript(o.PkScript)
 	if err != nil {
@@ -478,6 +545,12 @@ func (o *OutputWithFee) CloseOutputs(accountValue btcutil.Amount,
 		dustLimit = lnwallet.DustLimitForSize(
 			input.P2WSHSize,
 		)
+
+	case txscript.WitnessV1TaprootTy:
+		weightEstimator.AddP2TROutput()
+		dustLimit = lnwallet.DustLimitForSize(
+			input.P2TRSize,
+		)
 	}
 
 	fee := o.FeeRate.FeeForWeight(int64(weightEstimator.Weight()))
@@ -487,12 +560,10 @@ func (o *OutputWithFee) CloseOutputs(accountValue btcutil.Amount,
 			"in dust", pkScript, o.FeeRate)
 	}
 
-	return []*wire.TxOut{
-		{
-			Value:    int64(outputValue),
-			PkScript: pkScript.Script(),
-		},
-	}, nil
+	return []*wire.TxOut{{
+		Value:    int64(outputValue),
+		PkScript: pkScript.Script(),
+	}}, nil
 }
 
 // OutputsWithImplicitFee signals that the transaction fee is implicitly defined
@@ -528,7 +599,7 @@ type Manager interface {
 
 	// InitAccount handles a request to create a new account with the provided
 	// parameters.
-	InitAccount(ctx context.Context, value btcutil.Amount,
+	InitAccount(ctx context.Context, value btcutil.Amount, version Version,
 		feeRate chainfee.SatPerKWeight, expiry,
 		bestHeight uint32) (*Account, error)
 
@@ -566,20 +637,23 @@ type Manager interface {
 	// to lnd may be added to the deposit transaction.
 	DepositAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		depositAmount btcutil.Amount, feeRate chainfee.SatPerKWeight,
-		bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error)
+		bestHeight, expiryHeight uint32, newVersion Version) (*Account,
+		*wire.MsgTx, error)
 
 	// WithdrawAccount attempts to withdraw funds from the account associated with
 	// the given trader key into the provided outputs.
 	WithdrawAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		outputs []*wire.TxOut, feeRate chainfee.SatPerKWeight,
-		bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error)
+		bestHeight, expiryHeight uint32, newVersion Version) (*Account,
+		*wire.MsgTx, error)
 
 	// RenewAccount updates the expiration of an open/expired account. This will
 	// always require a signature from the auctioneer, even after the account has
 	// expired, to ensure the auctioneer is aware the account is being renewed.
 	RenewAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		newExpiry uint32, feeRate chainfee.SatPerKWeight,
-		bestHeight uint32) (*Account, *wire.MsgTx, error)
+		bestHeight uint32, newVersion Version) (*Account, *wire.MsgTx,
+		error)
 
 	// BumpAccountFee attempts to bump the fee of an account's most recent
 	// transaction. This is done by locating an eligible output for lnd to CPFP,

@@ -29,6 +29,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/macaroons"
+	"github.com/lightningnetwork/lnd/signal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -48,6 +49,18 @@ var (
 		// the library will try to load the invoices.macaroon anyway and
 		// fail. So until that bug is fixed in lndclient, we require the
 		// build tag to be active.
+		BuildTags: []string{
+			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
+		},
+	}
+
+	// taprootVersion is the version of lnd that enabled Taproot
+	// functionality in its wallet. We'll use this to decide what account
+	// version to default to.
+	taprootVersion = &verrpc.Version{
+		AppMajor: 0,
+		AppMinor: 15,
+		AppPatch: 1,
 		BuildTags: []string{
 			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
 		},
@@ -118,7 +131,9 @@ func (s *Server) Start() error {
 	}()
 
 	var err error
-	s.lndServices, err = getLnd(s.cfg.Network, s.cfg.Lnd)
+	s.lndServices, err = getLnd(
+		s.cfg.Network, s.cfg.Lnd, s.cfg.ShutdownInterceptor,
+	)
 	if err != nil {
 		return err
 	}
@@ -548,9 +563,7 @@ func (s *Server) setupClient() error {
 		MaxBackoff:    s.cfg.MaxBackoff,
 		BatchSource:   s.db,
 		BatchCleaner:  s.fundingManager,
-		BatchVersion: order.BatchVersion(
-			s.cfg.DebugConfig.BatchVersion,
-		),
+		BatchVersion:  s.determineBatchVersion(),
 		GenUserAgent: func(ctx context.Context) string {
 			return UserAgent(InitiatorFromContext(ctx))
 		},
@@ -645,7 +658,9 @@ func (s *Server) Stop() error {
 }
 
 // getLnd returns an instance of the lnd services proxy.
-func getLnd(network string, cfg *LndConfig) (*lndclient.GrpcLndServices, error) {
+func getLnd(network string, cfg *LndConfig,
+	interceptor signal.Interceptor) (*lndclient.GrpcLndServices, error) {
+
 	// We'll want to wait for lnd to be fully synced to its chain backend.
 	// The call to NewLndServices will block until the sync is completed.
 	// But we still want to be able to shutdown the daemon if the user
@@ -712,7 +727,7 @@ func (i *regtestInterceptor) UnaryInterceptor(ctx context.Context, method string
 	return invoker(idCtx, method, req, reply, cc, opts...)
 }
 
-// StreamingInterceptor intercepts streaming requests and appends the dummy LSAT
+// StreamInterceptor intercepts streaming requests and appends the dummy LSAT
 // ID.
 func (i *regtestInterceptor) StreamInterceptor(ctx context.Context,
 	desc *grpc.StreamDesc, cc *grpc.ClientConn, method string,
@@ -818,4 +833,34 @@ func (s *Server) syncLocalOrderState() error {
 	// Now that we know the set of orders we need to update, we'll update
 	// them all in an atomic batch.
 	return s.db.UpdateOrders(noncesToUpdate, ordersToUpdate)
+}
+
+// determineBatchVersion determines the batch version that will be sent to the
+// auctioneer to signal compatibility with the different features the trader
+// client can support.
+func (s *Server) determineBatchVersion() order.BatchVersion {
+	configVersion := s.cfg.DebugConfig.BatchVersion
+
+	// We set the default value of the config flag to -1, so we can
+	// differentiate between no value set and the first version (0).
+	if configVersion >= 0 {
+		return order.BatchVersion(configVersion)
+	}
+
+	isTaprootCompatible := false
+	verErr := lndclient.AssertVersionCompatible(
+		s.lndServices.Version, taprootVersion,
+	)
+	if verErr == nil {
+		isTaprootCompatible = true
+	}
+
+	// We can only auto-upgrade accounts to Taproot if the underlying node
+	// has the required capabilities.
+	if isTaprootCompatible {
+		return order.UpgradeAccountTaprootBatchVersion
+	}
+
+	// Fall back to the previous default version.
+	return order.LatestBatchVersion
 }

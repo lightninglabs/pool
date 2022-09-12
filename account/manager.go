@@ -70,7 +70,26 @@ const (
 	// multiSigWitness is the type used for a witness taking the multi-sig
 	// path of an account.
 	multiSigWitness
+
+	// expiryTaproot is the type used for a witness taking the expiration
+	// path of a Taproot account.
+	expiryTaproot
+
+	// muSig2Taproot is the type used for a witness taking the MuSig2
+	// combined signature key spend path of a Taproot account.
+	muSig2Taproot
 )
+
+// scriptVersion returns the Pool script version the witness type uses.
+func (wt witnessType) scriptVersion() poolscript.Version {
+	switch wt {
+	case expiryTaproot, muSig2Taproot:
+		return poolscript.VersionTaprootMuSig2
+
+	default:
+		return poolscript.VersionWitnessScript
+	}
+}
 
 // witnessSize returns the estimated weight units for an account input witness.
 func (wt witnessType) witnessSize() (int, error) {
@@ -79,27 +98,13 @@ func (wt witnessType) witnessSize() (int, error) {
 		return poolscript.ExpiryWitnessSize, nil
 	case multiSigWitness:
 		return poolscript.MultiSigWitnessSize, nil
+	case expiryTaproot:
+		return poolscript.TaprootExpiryWitnessSize, nil
+	case muSig2Taproot:
+		return poolscript.TaprootMultiSigWitnessSize, nil
 	default:
 		return 0, fmt.Errorf("unknown witness type %v", wt)
 	}
-}
-
-// spendPackage tracks useful information regarding an account spend.
-type spendPackage struct {
-	// tx is the spending transaction of the account.
-	tx *wire.MsgTx
-
-	// accountInputIdx is the index of the account input in the spending
-	// transaction.
-	accountInputIdx int
-
-	// witnessScript is the witness script of the account input being spent.
-	witnessScript []byte
-
-	// ourSig is our signature of the spending transaction above. If the
-	// spend is taking the multi-sig path, then the auctioneer's signature
-	// will be required as well for a valid spend.
-	ourSig []byte
 }
 
 // ManagerConfig contains all of the required dependencies for the Manager to
@@ -182,7 +187,8 @@ func NewManager(cfg *ManagerConfig) *manager { // nolint:golint
 
 	m.watcherCtrl = watcher.NewController(&watcher.CtrlConfig{
 		ChainNotifier: cfg.ChainNotifier,
-		// The manager implements the EventHandler interface
+
+		// The manager implements the EventHandler interface.
 		Handlers: m,
 	})
 
@@ -303,7 +309,7 @@ func (m *manager) QuoteAccount(ctx context.Context, value btcutil.Amount,
 // InitAccount handles a request to create a new account with the provided
 // parameters.
 func (m *manager) InitAccount(ctx context.Context, value btcutil.Amount,
-	feeRate chainfee.SatPerKWeight, expiry,
+	version Version, feeRate chainfee.SatPerKWeight, expiry,
 	bestHeight uint32) (*Account, error) {
 
 	// We'll make sure to acquire the reservation lock throughout the
@@ -321,7 +327,7 @@ func (m *manager) InitAccount(ctx context.Context, value btcutil.Amount,
 			err)
 	}
 	err = validateAccountParams(
-		value, terms.MaxAccountValue, expiry, bestHeight,
+		value, terms.MaxAccountValue, expiry, bestHeight, version,
 	)
 	if err != nil {
 		return nil, err
@@ -340,7 +346,7 @@ func (m *manager) InitAccount(ctx context.Context, value btcutil.Amount,
 	// who will provide us with their base key and our initial per-batch
 	// key.
 	reservation, err := m.cfg.Auctioneer.ReserveAccount(
-		ctx, value, expiry, keyDesc.PubKey,
+		ctx, value, expiry, keyDesc.PubKey, version,
 	)
 	if err != nil {
 		return nil, err
@@ -368,6 +374,7 @@ func (m *manager) InitAccount(ctx context.Context, value btcutil.Amount,
 		Secret:        secret,
 		State:         StateInitiated,
 		HeightHint:    bestHeight,
+		Version:       version,
 	}
 	if err := m.cfg.Store.AddAccount(account); err != nil {
 		return nil, err
@@ -959,13 +966,18 @@ func (m *manager) HandleAccountSpend(traderKey *btcec.PublicKey,
 	// If the witness is for a spend of the account expiration path, then
 	// we'll mark the account as closed as the account has expired and all
 	// the funds have been withdrawn.
-	case poolscript.IsExpirySpend(spendWitness):
+	case poolscript.IsExpirySpend(spendWitness) ||
+		poolscript.IsTaprootExpirySpend(spendWitness):
+
 		break
 
 	// If the witness is for a multi-sig spend, then either an order by the
-	// trader was matched, or the account was closed. If it was closed, then
-	// the account output shouldn't have been recreated.
-	case poolscript.IsMultiSigSpend(spendWitness):
+	// trader was matched, the account was modified or the account was
+	// closed. If it was closed, then the account output shouldn't have been
+	// recreated.
+	case poolscript.IsMultiSigSpend(spendWitness) ||
+		poolscript.IsTaprootMultiSigSpend(spendWitness):
+
 		// If there's a pending batch which has yet to be completed,
 		// we'll mark it as so now. This can happen if the trader is not
 		// connected to the auctioneer when the auctioneer sends them
@@ -1080,8 +1092,8 @@ func (m *manager) HandleAccountExpiry(traderKey *btcec.PublicKey,
 // to lnd may be added to the deposit transaction.
 func (m *manager) DepositAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, depositAmount btcutil.Amount,
-	feeRate chainfee.SatPerKWeight, bestHeight,
-	expiryHeight uint32) (*Account, *wire.MsgTx, error) {
+	feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32,
+	newVersion Version) (*Account, *wire.MsgTx, error) {
 
 	// The account can only be modified in `StateOpen` and its new value
 	// should not exceed the maximum allowed.
@@ -1092,6 +1104,12 @@ func (m *manager) DepositAccount(ctx context.Context,
 	if account.State != StateOpen {
 		return nil, nil, fmt.Errorf("account must be in %v to be "+
 			"modified", StateOpen)
+	}
+
+	// Can't downgrade an account.
+	if newVersion < account.Version {
+		return nil, nil, fmt.Errorf("cannot downgrade account "+
+			"version to %s", newVersion)
 	}
 
 	// The auctioneer defines the maximum account size.
@@ -1120,7 +1138,7 @@ func (m *manager) DepositAccount(ctx context.Context,
 	// TODO(wilmer): Reject if account has pending orders.
 
 	newAccountOutput, modifiers, err := createNewAccountOutput(
-		account, newAccountValue, newExpiry,
+		account, newAccountValue, newExpiry, &newVersion,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1130,8 +1148,9 @@ func (m *manager) DepositAccount(ctx context.Context,
 	// required new value of the account as part of the deposit. The
 	// selected inputs, along with a change output if needed, will then be
 	// included in the deposit transaction we'll broadcast.
+	spendWitnessType := determineWitnessType(account, bestHeight)
 	packet, releaseInputs, err := m.inputsForDeposit(
-		ctx, account, newAccountOutput, depositAmount, multiSigWitness,
+		ctx, account, newAccountOutput, depositAmount, spendWitnessType,
 		feeRate,
 	)
 	if err != nil {
@@ -1145,8 +1164,8 @@ func (m *manager) DepositAccount(ctx context.Context,
 	// rest of the flow. This should request a signature from the auctioneer
 	// and assuming it's valid, broadcast the deposit transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
-	modifiedAccount, spendPkg, err := m.spendAccount(
-		ctx, account, packet, multiSigWitness, modifiers, false,
+	modifiedAccount, spendTx, err := m.spendAccount(
+		ctx, account, packet, spendWitnessType, modifiers, false,
 		bestHeight,
 	)
 	if err != nil {
@@ -1154,15 +1173,15 @@ func (m *manager) DepositAccount(ctx context.Context,
 		return nil, nil, err
 	}
 
-	return modifiedAccount, spendPkg.tx, nil
+	return modifiedAccount, spendTx, nil
 }
 
 // WithdrawAccount attempts to withdraw funds from the account associated with
 // the given trader key into the provided outputs.
 func (m *manager) WithdrawAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, outputs []*wire.TxOut,
-	feeRate chainfee.SatPerKWeight,
-	bestHeight, expiryHeight uint32) (*Account, *wire.MsgTx, error) {
+	feeRate chainfee.SatPerKWeight, bestHeight, expiryHeight uint32,
+	newVersion Version) (*Account, *wire.MsgTx, error) {
 
 	// The account can only be modified in `StateOpen`.
 	account, err := m.cfg.Store.Account(traderKey)
@@ -1172,6 +1191,12 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 	if account.State != StateOpen {
 		return nil, nil, fmt.Errorf("account must be in %v to be "+
 			"modified", StateOpen)
+	}
+
+	// Can't downgrade an account.
+	if newVersion < account.Version {
+		return nil, nil, fmt.Errorf("cannot downgrade account "+
+			"version to %s", newVersion)
 	}
 
 	var newExpiry *uint32
@@ -1189,14 +1214,15 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 	// To start, we'll need to determine the new value of the account after
 	// creating the outputs specified as part of the withdrawal, which we'll
 	// then use to create the new account output.
+	spendWitnessType := determineWitnessType(account, bestHeight)
 	newAccountValue, err := valueAfterAccountUpdate(
-		account, outputs, multiSigWitness, feeRate,
+		account, outputs, spendWitnessType, feeRate,
 	)
 	if err != nil {
 		return nil, nil, err
 	}
 	newAccountOutput, modifiers, err := createNewAccountOutput(
-		account, newAccountValue, newExpiry,
+		account, newAccountValue, newExpiry, &newVersion,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1214,15 +1240,15 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 	// rest of the flow. This should request a signature from the auctioneer
 	// and assuming it's valid, broadcast the withdrawal transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
-	modifiedAccount, spendPkg, err := m.spendAccount(
-		ctx, account, packet, multiSigWitness, modifiers, false,
+	modifiedAccount, spendTx, err := m.spendAccount(
+		ctx, account, packet, spendWitnessType, modifiers, false,
 		bestHeight,
 	)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return modifiedAccount, spendPkg.tx, nil
+	return modifiedAccount, spendTx, nil
 }
 
 // RenewAccount updates the expiration of an open/expired account. This will
@@ -1230,8 +1256,8 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 // expired, to ensure the auctioneer is aware the account is being renewed.
 func (m *manager) RenewAccount(ctx context.Context,
 	traderKey *btcec.PublicKey, newExpiry uint32,
-	feeRate chainfee.SatPerKWeight, bestHeight uint32) (*Account,
-	*wire.MsgTx, error) {
+	feeRate chainfee.SatPerKWeight, bestHeight uint32,
+	newVersion Version) (*Account, *wire.MsgTx, error) {
 
 	// The account can only have its expiry updated if it has confirmed
 	// and/or has expired.
@@ -1252,15 +1278,29 @@ func (m *manager) RenewAccount(ctx context.Context,
 		return nil, nil, err
 	}
 
+	// Can't downgrade an account.
+	if newVersion < account.Version {
+		return nil, nil, fmt.Errorf("cannot downgrade account "+
+			"version to %s", newVersion)
+	}
+
 	// Determine the new account output after attempting the expiry update.
+	// We'll always use the multisig spend path, even if the account is
+	// expired, to make sure the auctioneer is aware of the change. We
+	// achieve this by setting the best height to 0 which means our account
+	// is never seen as expired.
+	spendWitnessType := multiSigWitness
+	if account.Version >= VersionTaprootEnabled {
+		spendWitnessType = muSig2Taproot
+	}
 	newAccountValue, err := valueAfterAccountUpdate(
-		account, nil, multiSigWitness, feeRate,
+		account, nil, spendWitnessType, feeRate,
 	)
 	if err != nil {
 		return nil, nil, err
 	}
 	newAccountOutput, modifiers, err := createNewAccountOutput(
-		account, newAccountValue, &newExpiry,
+		account, newAccountValue, &newExpiry, &newVersion,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1276,8 +1316,8 @@ func (m *manager) RenewAccount(ctx context.Context,
 	// rest of the flow. This should request a signature from the auctioneer
 	// and assuming it's valid, broadcast the update transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
-	modifiedAccount, spendPkg, err := m.spendAccount(
-		ctx, account, packet, multiSigWitness, modifiers, false,
+	modifiedAccount, spendTx, err := m.spendAccount(
+		ctx, account, packet, spendWitnessType, modifiers, false,
 		bestHeight,
 	)
 	if err != nil {
@@ -1288,7 +1328,7 @@ func (m *manager) RenewAccount(ctx context.Context,
 	// existing expiration request.
 	m.watcherCtrl.WatchAccountExpiration(traderKey, modifiedAccount.Expiry)
 
-	return modifiedAccount, spendPkg.tx, nil
+	return modifiedAccount, spendTx, nil
 }
 
 // BumpAccountFee attempts to bump the fee of an account's most recent
@@ -1370,7 +1410,8 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 
 	// Determine the appropriate witness type for the account input based on
 	// whether it's expired or not.
-	witnessType := determineWitnessType(account, bestHeight)
+	spendWitnessType := determineWitnessType(account, bestHeight)
+	scriptVersion := spendWitnessType.scriptVersion()
 
 	// We'll then use the fee expression to determine the closing
 	// transaction of the account.
@@ -1379,7 +1420,13 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 	// script was not populated, we'll generate one from the backing lnd
 	// node's wallet.
 	if feeExpr, ok := feeExpr.(*OutputWithFee); ok && feeExpr.PkScript == nil {
+		// If the account is P2TR the wallet supports P2TR change
+		// outputs as well.
 		changeType := walletrpc.AddressType_WITNESS_PUBKEY_HASH
+		if scriptVersion == poolscript.VersionTaprootMuSig2 {
+			changeType = walletrpc.AddressType_TAPROOT_PUBKEY
+		}
+
 		addr, err := m.cfg.Wallet.NextAddr(ctx, "", changeType, false)
 		if err != nil {
 			return nil, err
@@ -1389,7 +1436,9 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 			return nil, err
 		}
 	}
-	closeOutputs, err := feeExpr.CloseOutputs(account.Value, witnessType)
+	closeOutputs, err := feeExpr.CloseOutputs(
+		account.Value, spendWitnessType,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1404,15 +1453,15 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 	modifiers := []Modifier{
 		ValueModifier(0), StateModifier(StatePendingClosed),
 	}
-	_, spendPkg, err := m.spendAccount(
-		ctx, account, packet, witnessType, modifiers, true,
+	_, spendTx, err := m.spendAccount(
+		ctx, account, packet, spendWitnessType, modifiers, true,
 		bestHeight,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return spendPkg.tx, nil
+	return spendTx, nil
 }
 
 // spendAccount houses most of the logic required to properly spend an account
@@ -1424,11 +1473,47 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 // shutdown mid-process.
 func (m *manager) spendAccount(ctx context.Context, account *Account,
 	packet *psbt.Packet, witnessType witnessType, modifiers []Modifier,
-	isClose bool, bestHeight uint32) (*Account, *spendPackage, error) {
+	isClose bool, bestHeight uint32) (*Account, *wire.MsgTx, error) {
+
+	// In case we're not closing the account, let's now locate our
+	// re-created account output.
+	accountOutputIdx := -1
+	if !isClose {
+		// The account output should be recreated, so we need to locate
+		// the new account outpoint.
+		newAccountOutput, err := account.Copy(modifiers...).Output()
+		if err != nil {
+			return nil, nil, err
+		}
+		idx, ok := poolscript.LocateOutputScript(
+			packet.UnsignedTx, newAccountOutput.PkScript,
+		)
+		if !ok {
+			return nil, nil, fmt.Errorf("new account output "+
+				"script %x not found in spending transaction",
+				newAccountOutput.PkScript)
+		}
+
+		accountOutputIdx = int(idx)
+
+		// Make sure that we use the appropriate tx hash by including
+		// the signature scripts to the inputs that needed it.
+		unsignedTx, err := unsignedTxWithSignatureScripts(packet)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// The TX is finished now, only the witness is missing. So we
+		// can create the modifier for the new outpoint now already.
+		modifiers = append(modifiers, OutPointModifier(wire.OutPoint{
+			Hash:  unsignedTx.TxHash(),
+			Index: uint32(accountOutputIdx),
+		}))
+	}
 
 	var lockTime uint32
 	switch witnessType {
-	case expiryWitness:
+	case expiryWitness, expiryTaproot:
 		if !isClose {
 			return nil, nil, errors.New("modifications for " +
 				"expired accounts are not currently supported")
@@ -1436,7 +1521,7 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 
 		lockTime = bestHeight
 
-	case multiSigWitness:
+	case multiSigWitness, muSig2Taproot:
 		lockTime = 0
 
 	default:
@@ -1446,8 +1531,9 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 
 	// Create the spending transaction of an account based on the provided
 	// witness type.
-	spendPkg, err := m.signSpendTx(
-		ctx, account, packet, lockTime, witnessType,
+	spendTx, err := m.signSpendTx(
+		ctx, account, packet, lockTime, witnessType, accountOutputIdx,
+		modifiers,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1455,44 +1541,11 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 
 	// Update the account's height hint and latest transaction.
 	modifiers = append(modifiers, HeightHintModifier(bestHeight))
-	modifiers = append(modifiers, LatestTxModifier(spendPkg.tx))
+	modifiers = append(modifiers, LatestTxModifier(spendTx))
 
 	// With the transaction crafted, update our on-disk state and broadcast
 	// the transaction. We'll need some additional modifiers if the account
 	// is being modified.
-	if !isClose {
-		// The account output should be recreated, so we need to locate
-		// the new account outpoint.
-		newAccountOutput, err := account.Copy(modifiers...).Output()
-		if err != nil {
-			return nil, nil, err
-		}
-		idx, ok := poolscript.LocateOutputScript(
-			spendPkg.tx, newAccountOutput.PkScript,
-		)
-		if !ok {
-			return nil, nil, fmt.Errorf("new account output "+
-				"script %x not found in spending transaction",
-				newAccountOutput.PkScript)
-		}
-		modifiers = append(modifiers, OutPointModifier(wire.OutPoint{
-			Hash:  spendPkg.tx.TxHash(),
-			Index: idx,
-		}))
-	}
-
-	// If we require the auctioneer's signature, request it now before
-	// updating the account on disk.
-	if witnessType == multiSigWitness {
-		witness, err := m.constructMultiSigWitness(
-			ctx, account, spendPkg, modifiers, isClose,
-		)
-		if err != nil {
-			return nil, nil, err
-		}
-		spendPkg.tx.TxIn[spendPkg.accountInputIdx].Witness = witness
-	}
-
 	prevAccountState := account.Copy()
 	if err := m.cfg.Store.UpdateAccount(account, modifiers...); err != nil {
 		return nil, nil, err
@@ -1508,11 +1561,11 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 
 	label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
 
-	if err := m.maybeBroadcastTx(ctx, spendPkg.tx, label); err != nil {
+	if err := m.maybeBroadcastTx(ctx, spendTx, label); err != nil {
 		return nil, nil, err
 	}
 
-	return account, spendPkg, nil
+	return account, spendTx, nil
 }
 
 // RecoverAccount re-introduces a recovered account into the database and starts
@@ -1548,58 +1601,62 @@ func (m *manager) RecoverAccount(ctx context.Context, account *Account) error {
 }
 
 // determineWitnessType determines the appropriate witness type to use for the
-// spending transaction for an account based on whether it has expired or not.
+// spending transaction for an account based on its version and whether it has
+// expired or not.
 func determineWitnessType(account *Account, bestHeight uint32) witnessType {
-	if account.State == StateExpired || bestHeight >= account.Expiry {
-		return expiryWitness
+	switch account.Version {
+	case VersionTaprootEnabled:
+		if account.State == StateExpired ||
+			bestHeight >= account.Expiry {
+
+			return expiryTaproot
+		}
+
+		return muSig2Taproot
+	default:
+		if account.State == StateExpired ||
+			bestHeight >= account.Expiry {
+
+			return expiryWitness
+		}
+
+		return multiSigWitness
 	}
-	return multiSigWitness
 }
 
-// constructMultiSigWitness requests a signature from the auctioneer for the
+// getAuctioneerSig requests a signature from the auctioneer for the
 // given spending transaction of an account and returns the fully constructed
 // witness to spend the account input.
-func (m *manager) constructMultiSigWitness(ctx context.Context,
-	account *Account, spendPkg *spendPackage, modifiers []Modifier,
-	isClose bool) (wire.TxWitness, error) {
+func (m *manager) getAuctioneerSig(ctx context.Context,
+	account *Account, spendTx *wire.MsgTx, accountInputIdx,
+	accountOutputIdx int, modifiers []Modifier, traderNonces []byte,
+	prevOutputs []*wire.TxOut) ([]byte, []byte, error) {
 
-	var (
-		auctioneerSig []byte
-		err           error
-	)
-
-	if isClose {
+	if accountOutputIdx < 0 {
 		// If the account is being closed, we shouldn't provide any
 		// modifiers.
-		auctioneerSig, err = m.cfg.Auctioneer.ModifyAccount(
-			ctx, account, nil, spendPkg.tx.TxOut, nil,
-		)
-	} else {
-		// Otherwise, the account output is being re-created due to a
-		// modification, so we need to filter out its spent input and
-		// re-created output from the spending transaction as the
-		// auctioneer can reconstruct those themselves.
-		inputIdx := spendPkg.accountInputIdx
-		inputs := make([]*wire.TxIn, 0, len(spendPkg.tx.TxIn)-1)
-		inputs = append(inputs, spendPkg.tx.TxIn[:inputIdx]...)
-		inputs = append(inputs, spendPkg.tx.TxIn[inputIdx+1:]...)
-
-		outputIdx := account.Copy(modifiers...).OutPoint.Index
-		outputs := make([]*wire.TxOut, 0, len(spendPkg.tx.TxOut)-1)
-		outputs = append(outputs, spendPkg.tx.TxOut[:outputIdx]...)
-		outputs = append(outputs, spendPkg.tx.TxOut[outputIdx+1:]...)
-
-		auctioneerSig, err = m.cfg.Auctioneer.ModifyAccount(
-			ctx, account, inputs, outputs, modifiers,
+		return m.cfg.Auctioneer.ModifyAccount(
+			ctx, account, nil, spendTx.TxOut, nil, traderNonces,
+			prevOutputs,
 		)
 	}
-	if err != nil {
-		return nil, err
-	}
 
-	return poolscript.SpendMultiSig(
-		spendPkg.witnessScript, spendPkg.ourSig, auctioneerSig,
-	), nil
+	// Otherwise, the account output is being re-created due to a
+	// modification, so we need to filter out its spent input and re-created
+	// output from the spending transaction as the auctioneer can
+	// reconstruct those themselves.
+	inputs := make([]*wire.TxIn, 0, len(spendTx.TxIn)-1)
+	inputs = append(inputs, spendTx.TxIn[:accountInputIdx]...)
+	inputs = append(inputs, spendTx.TxIn[accountInputIdx+1:]...)
+
+	outputs := make([]*wire.TxOut, 0, len(spendTx.TxOut)-1)
+	outputs = append(outputs, spendTx.TxOut[:accountOutputIdx]...)
+	outputs = append(outputs, spendTx.TxOut[accountOutputIdx+1:]...)
+
+	return m.cfg.Auctioneer.ModifyAccount(
+		ctx, account, inputs, outputs, modifiers, traderNonces,
+		prevOutputs,
+	)
 }
 
 // createSpendTx creates a PSBT that spends the current account output.
@@ -1633,15 +1690,13 @@ func (m *manager) createSpendTx(account *Account,
 // the lock time of the transaction, otherwise it is 0. The transaction has its
 // inputs and outputs sorted according to BIP-69.
 func (m *manager) signSpendTx(ctx context.Context, account *Account,
-	packet *psbt.Packet, lockTime uint32,
-	witnessType witnessType) (*spendPackage, error) {
-
-	tx := packet.UnsignedTx
+	packet *psbt.Packet, lockTime uint32, witnessType witnessType,
+	accountOutputIndex int, modifiers []Modifier) (*wire.MsgTx, error) {
 
 	// lockTime is used as the lock time of the transaction in order to
 	// satisfy the output's CHECKLOCKTIMEVERIFY in case we're using the
 	// expiry witness.
-	tx.LockTime = lockTime
+	packet.UnsignedTx.LockTime = lockTime
 
 	// Ensure the transaction crafted passes some basic sanity checks before
 	// we attempt to sign it.
@@ -1650,62 +1705,21 @@ func (m *manager) signSpendTx(ctx context.Context, account *Account,
 		return nil, err
 	}
 
-	// Determine the new index of the account input now that we know we have
-	// the full transaction.
-	accountInputIdx, err := locateAccountInput(tx, account)
+	// Now let's try and add the signature for the account input that's
+	// being spent. Depending on the expiry of the account, this might need
+	// the cooperation of the auctioneer to get a second signature.
+	signedPacket, err := m.addAccountSpendSignature(
+		ctx, account, packet, witnessType, accountOutputIndex, modifiers,
+	)
 	if err != nil {
 		return nil, err
-	}
-
-	// Our account input signature isn't always all that's required to spend
-	// it, so we'll take care of forming a proper signature later.
-	err = m.decorateAccountInput(account, packet, accountInputIdx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Let the wallet sign each input. This will add a partial signature for
-	// the account input which we'll later turn into the correct witness
-	// depending on the spend path.
-	signedPacket, err := m.cfg.Wallet.SignPsbt(ctx, packet)
-	if err != nil {
-		return nil, err
-	}
-
-	pIn := &signedPacket.Inputs[accountInputIdx]
-	witnessScript := pIn.WitnessScript
-
-	if len(pIn.PartialSigs) != 1 {
-		return nil, fmt.Errorf("unexpected number of signatures in "+
-			"signed PSBT, got %d wanted 1", len(pIn.PartialSigs))
-	}
-
-	ourSig := pIn.PartialSigs[0].Signature
-
-	// We temporarily set the final witness to the partial sig to allow the
-	// extraction of the final TX. Unless we're using the expiry path in
-	// which case we _can_ create the full and final witness.
-	switch witnessType {
-	case expiryWitness:
-		pIn.FinalScriptWitness, err = serializeWitness(
-			poolscript.SpendExpiry(witnessScript, ourSig),
-		)
-
-	default:
-		pIn.FinalScriptWitness, err = serializeWitness([][]byte{ourSig})
-	}
-	if err != nil {
-		return nil, fmt.Errorf("error serializing witness: %v",
-			err)
 	}
 
 	// We either have a single account input (renew, withdraw, close) that
-	// has a final script witness set (meaning that the PSBT lib sees it as
-	// complete, even if we need to fix the witness later on) or we have
-	// additional inputs (deposit) that we need to sign for now. We use the
-	// FinalizePsbt method for the additional inputs as they belong to the
-	// normal wallet and can be signed for without additional PSBT metadata
-	// fields.
+	// has a final script witness set or we have additional inputs (deposit)
+	// that we need to sign for now. We use the FinalizePsbt method for the
+	// additional inputs as they belong to the normal wallet and can be
+	// signed for without additional PSBT metadata fields.
 	var signedTx *wire.MsgTx
 	if signedPacket.IsComplete() {
 		err = psbt.MaybeFinalizeAll(signedPacket)
@@ -1728,12 +1742,196 @@ func (m *manager) signSpendTx(ctx context.Context, account *Account,
 		}
 	}
 
-	return &spendPackage{
-		tx:              signedTx,
-		accountInputIdx: accountInputIdx,
-		witnessScript:   witnessScript,
-		ourSig:          ourSig,
-	}, nil
+	return signedTx, nil
+}
+
+// addAccountSpendSignature returns a new PSBT packet with the final witness of
+// the account input to spend fully populated.
+func (m *manager) addAccountSpendSignature(ctx context.Context, account *Account,
+	packet *psbt.Packet, witnessType witnessType, accountOutputIndex int,
+	modifiers []Modifier) (*psbt.Packet, error) {
+
+	// Use a deep copy of the packet.UnsignedTx that includes the
+	// SignatureScripts so the auctioneer can calculate the proper
+	// outpoint for the account.
+	unsignedTx, err := unsignedTxWithSignatureScripts(packet)
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine the new index of the account input now that we know we have
+	// the full transaction.
+	accountInputIdx, err := locateAccountInput(unsignedTx, account)
+	if err != nil {
+		return nil, err
+	}
+
+	// We now need to add all the PSBT meta information about our account
+	// input to the packet, even if we're going to sign the input using
+	// MuSig2.
+	controlBlock, err := m.decorateAccountInput(
+		account, packet, accountInputIdx,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Collect all previous outputs that we need to know in case we're
+	// signing a Taproot input.
+	prevOutputs := make([]*wire.TxOut, len(unsignedTx.TxIn))
+	for idx := range unsignedTx.TxIn {
+		prevOutputs[idx] = packet.Inputs[idx].WitnessUtxo
+	}
+
+	// The collaborative MuSig2 case is fairly simple when it comes to the
+	// witness. It's a single signature put on the stack. To get the
+	// final signature by combining the trader's and auctioneer's partial
+	// sigs is a bit more involved though.
+	if witnessType == muSig2Taproot {
+		combinedSig, err := m.signAccountMuSig2(
+			ctx, account, unsignedTx, accountOutputIndex,
+			accountInputIdx, modifiers, prevOutputs,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error creating account "+
+				"MuSig2 combined signature: %v", err)
+		}
+
+		pIn := &packet.Inputs[accountInputIdx]
+		witness := poolscript.SpendMuSig2Taproot(combinedSig)
+		pIn.FinalScriptWitness, err = serializeWitness(witness)
+		if err != nil {
+			return nil, fmt.Errorf("error serializing witness: %v",
+				err)
+		}
+
+		return packet, nil
+	}
+
+	// Let the wallet sign each input. This will add a partial signature for
+	// the account input which we'll later turn into the correct witness
+	// depending on the spend path.
+	signedPacket, err := m.cfg.Wallet.SignPsbt(ctx, packet)
+	if err != nil {
+		return nil, err
+	}
+
+	pIn := &signedPacket.Inputs[accountInputIdx]
+	witnessScript := pIn.WitnessScript
+	var ourSig []byte
+
+	switch witnessType {
+	case expiryTaproot:
+		if len(pIn.TaprootScriptSpendSig) != 1 {
+			return nil, fmt.Errorf("unexpected number of "+
+				"signatures in signed PSBT, got %d wanted 1",
+				len(pIn.PartialSigs))
+		}
+
+		ourSig = pIn.TaprootScriptSpendSig[0].Signature
+		if pIn.TaprootScriptSpendSig[0].SigHash != txscript.SigHashDefault {
+			ourSig = append(ourSig, byte(
+				pIn.TaprootScriptSpendSig[0].SigHash,
+			))
+		}
+
+	default:
+		if len(pIn.PartialSigs) != 1 {
+			return nil, fmt.Errorf("unexpected number of "+
+				"signatures in signed PSBT, got %d wanted 1",
+				len(pIn.PartialSigs))
+		}
+
+		ourSig = pIn.PartialSigs[0].Signature
+	}
+
+	// We temporarily set the final witness to the partial sig to allow the
+	// extraction of the final TX. Unless we're using the expiry path in
+	// which case we _can_ create the full and final witness.
+	switch witnessType {
+	case expiryTaproot:
+		pIn.FinalScriptWitness, err = serializeWitness(
+			poolscript.SpendExpiryTaproot(
+				witnessScript, ourSig, controlBlock,
+			),
+		)
+
+	case expiryWitness:
+		pIn.FinalScriptWitness, err = serializeWitness(
+			poolscript.SpendExpiry(witnessScript, ourSig),
+		)
+
+	case multiSigWitness:
+		// We're not signing a Taproot input, so we don't need to
+		// specify any trader nonces.
+		var auctioneerSig []byte
+		auctioneerSig, _, err = m.getAuctioneerSig(
+			ctx, account, unsignedTx, accountInputIdx,
+			accountOutputIndex, modifiers, nil, prevOutputs,
+		)
+		if err != nil {
+			return nil, err
+		}
+		witness := poolscript.SpendMultiSig(
+			witnessScript, ourSig, auctioneerSig,
+		)
+		pIn.FinalScriptWitness, err = serializeWitness(witness)
+
+	default:
+		return nil, fmt.Errorf("invalid state, should never get here")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("error serializing witness: %v",
+			err)
+	}
+
+	return signedPacket, nil
+}
+
+// signAccountMuSig2 creates the combined MuSig2 signature to spend a Taproot
+// account output through the collaborative key spend path. This sets up a
+// MuSig2 signing session on the local signer instance and then asks the
+// auctioneer to also send its partial signature.
+func (m *manager) signAccountMuSig2(ctx context.Context, account *Account,
+	spendTx *wire.MsgTx, accountOutputIndex, accountInputIdx int,
+	modifiers []Modifier, previousOutputs []*wire.TxOut) ([]byte, error) {
+
+	sessionInfo, cleanup, err := poolscript.TaprootMuSig2SigningSession(
+		ctx, account.Expiry, account.TraderKey.PubKey, account.BatchKey,
+		account.Secret, account.AuctioneerKey, m.cfg.Signer,
+		&account.TraderKey.KeyLocator, nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	auctioneerSigBytes, auctioneerNonceBytes, err := m.getAuctioneerSig(
+		ctx, account, spendTx, accountInputIdx, accountOutputIndex,
+		modifiers, sessionInfo.PublicNonce[:], previousOutputs,
+	)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("error getting auctioneer MuSig2 "+
+			"partial signature: %v", err)
+	}
+
+	var (
+		remoteNonces     poolscript.MuSig2Nonces
+		remotePartialSig [input.MuSig2PartialSigSize]byte
+	)
+	copy(remoteNonces[:], auctioneerNonceBytes)
+	copy(remotePartialSig[:], auctioneerSigBytes)
+
+	finalSig, err := poolscript.TaprootMuSig2Sign(
+		ctx, accountInputIdx, sessionInfo, m.cfg.Signer, spendTx,
+		previousOutputs, &remoteNonces, &remotePartialSig,
+	)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("error signing batch TX: %v", err)
+	}
+
+	return finalSig, nil
 }
 
 // addBaseAccountModificationWeight adds the estimated weight units for a
@@ -1757,8 +1955,8 @@ func addBaseAccountModificationWeight(weightEstimator *input.TxWeightEstimator,
 // valueAfterAccountUpdate determines the new value of an account after
 // processing a withdrawal to the specified outputs at the provided fee rate.
 func valueAfterAccountUpdate(account *Account, outputs []*wire.TxOut,
-	witnessType witnessType, feeRate chainfee.SatPerKWeight) (
-	btcutil.Amount, error) {
+	witnessType witnessType,
+	feeRate chainfee.SatPerKWeight) (btcutil.Amount, error) {
 
 	// To determine the new value of the account, we'll need to subtract the
 	// values of all additional outputs and the resulting fee of the
@@ -1792,6 +1990,8 @@ func valueAfterAccountUpdate(account *Account, outputs []*wire.TxOut,
 			weightEstimator.AddP2WKHOutput()
 		case txscript.WitnessV0ScriptHashTy:
 			weightEstimator.AddP2WSHOutput()
+		case txscript.WitnessV1TaprootTy:
+			weightEstimator.AddP2TROutput()
 		default:
 			return 0, fmt.Errorf("unsupported output script %x",
 				out.PkScript)
@@ -1965,7 +2165,8 @@ func (m *manager) inputsForDeposit(ctx context.Context, account *Account,
 // createNewAccountOutput creates the next account output in the sequence using
 // the new account value and optional new account expiry.
 func createNewAccountOutput(account *Account, newAccountValue btcutil.Amount,
-	newAccountExpiry *uint32) (*wire.TxOut, []Modifier, error) {
+	newAccountExpiry *uint32, newVersion *Version) (*wire.TxOut, []Modifier,
+	error) {
 
 	modifiers := []Modifier{
 		ValueModifier(newAccountValue),
@@ -1973,6 +2174,9 @@ func createNewAccountOutput(account *Account, newAccountValue btcutil.Amount,
 	}
 	if newAccountExpiry != nil {
 		modifiers = append(modifiers, ExpiryModifier(*newAccountExpiry))
+	}
+	if newVersion != nil && *newVersion > account.Version {
+		modifiers = append(modifiers, VersionModifier(*newVersion))
 	}
 
 	newAccountOutput, err := account.Copy(modifiers...).Output()
@@ -1989,8 +2193,11 @@ func createNewAccountOutput(account *Account, newAccountValue btcutil.Amount,
 func sanityCheckAccountSpendTx(account *Account, packet *psbt.Packet,
 	witnessType witnessType) error {
 
-	tx := packet.UnsignedTx
-	err := blockchain.CheckTransactionSanity(btcutil.NewTx(tx))
+	tx, err := unsignedTxWithSignatureScripts(packet)
+	if err != nil {
+		return err
+	}
+	err = blockchain.CheckTransactionSanity(btcutil.NewTx(tx))
 	if err != nil {
 		return err
 	}
@@ -2032,14 +2239,11 @@ func sanityCheckAccountSpendTx(account *Account, packet *psbt.Packet,
 				witnessSize += input.P2WKHWitnessSize
 
 			case txscript.ScriptHashTy:
+				// The witness of a np2wkh input is the same as
+				// a p2wkh input. The only difference is the
+				// additional scriptSig which will be added to
+				// the TX before calculating its weight.
 				witnessSize += input.P2WKHWitnessSize
-
-				// The redeem script counts 4 times because
-				// that's not include in the witness.
-				witnessSize += int64(
-					blockchain.WitnessScaleFactor *
-						len(pIn.RedeemScript),
-				)
 
 			case txscript.WitnessV1TaprootTy:
 				witnessSize += 1 + 1 + schnorr.SignatureSize
@@ -2063,10 +2267,9 @@ func sanityCheckAccountSpendTx(account *Account, packet *psbt.Packet,
 
 	// The unsigned TX within the package doesn't have any witness set.
 	// We'll add the witness weight manually in the next step. Fortunately
-	// with the PSBT funding
-	txWeightNoWitness := blockchain.GetTransactionWeight(btcutil.NewTx(
-		packet.UnsignedTx,
-	))
+	// with the PSBT funding all the fees should've already been calculated
+	// properly before.
+	txWeightNoWitness := blockchain.GetTransactionWeight(btcutil.NewTx(tx))
 
 	// The witness size can be translated to weight directly, no scale
 	// factor is needed. But we need to add the 2 bytes for the marker and
@@ -2094,11 +2297,34 @@ func locateAccountInput(tx *wire.MsgTx, account *Account) (int, error) {
 	return 0, errors.New("account input not found")
 }
 
+// unsignedTxWithSignatureScripts returns a deep copy of the unsigned tx
+// in the packet but includes the SignatureScripts for the inputs that have
+// an associated RedeemScript.
+//
+// Note: an unsigned tx with and without the related SignatureScripts have a
+// different TxHash. However, SignatureScripts are not part of the data signed.
+func unsignedTxWithSignatureScripts(packet *psbt.Packet) (*wire.MsgTx, error) {
+	tx := packet.UnsignedTx.Copy()
+	for idx := range packet.Inputs {
+		if len(packet.Inputs[idx].RedeemScript) > 0 {
+			builder := txscript.NewScriptBuilder()
+			builder.AddData(packet.Inputs[idx].RedeemScript)
+			sigScript, err := builder.Script()
+			if err != nil {
+				return nil, err
+			}
+			tx.TxIn[idx].SignatureScript = sigScript
+		}
+	}
+
+	return tx, nil
+}
+
 // decorateAccountInput signs the account input in the spending transaction of an
 // account. If the account is being spent with cooperation of the auctioneer,
 // their signature will be required as well.
 func (m *manager) decorateAccountInput(account *Account, packet *psbt.Packet,
-	idx int) error {
+	idx int) ([]byte, error) {
 
 	traderKeyTweak := poolscript.TraderKeyTweak(
 		account.BatchKey, account.Secret, account.TraderKey.PubKey,
@@ -2108,37 +2334,72 @@ func (m *manager) decorateAccountInput(account *Account, packet *psbt.Packet,
 		account.BatchKey, account.Secret,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	accountOutput, err := account.Output()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	pIn := &packet.Inputs[idx]
 	pIn.WitnessUtxo = accountOutput
 	pIn.SighashType = sigHashForScript(accountOutput.PkScript)
 	pIn.WitnessScript = witnessScript
+
+	bip32Path := []uint32{
+		keychain.BIP0043Purpose + hdkeychain.HardenedKeyStart,
+		m.cfg.ChainParams.HDCoinType + hdkeychain.HardenedKeyStart,
+		uint32(account.TraderKey.Family) + hdkeychain.HardenedKeyStart,
+		0,
+		account.TraderKey.Index,
+	}
 	pIn.Bip32Derivation = []*psbt.Bip32Derivation{{
-		Bip32Path: []uint32{
-			keychain.BIP0043Purpose +
-				hdkeychain.HardenedKeyStart,
-			m.cfg.ChainParams.HDCoinType +
-				hdkeychain.HardenedKeyStart,
-			uint32(account.TraderKey.Family) +
-				hdkeychain.HardenedKeyStart,
-			0,
-			account.TraderKey.Index,
-		},
-		PubKey: account.TraderKey.PubKey.SerializeCompressed(),
+		Bip32Path: bip32Path,
+		PubKey:    account.TraderKey.PubKey.SerializeCompressed(),
 	}}
 	pIn.Unknowns = append(pIn.Unknowns, &psbt.Unknown{
 		Key:   btcwallet.PsbtKeyTypeInputSignatureTweakSingle,
 		Value: traderKeyTweak,
 	})
 
-	return nil
+	var controlBlockBytes []byte
+	if account.Version >= VersionTaprootEnabled {
+		aggregateKey, expiryScript, err := poolscript.TaprootKey(
+			account.Expiry, account.TraderKey.PubKey,
+			account.AuctioneerKey, account.BatchKey, account.Secret,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error creating taproot key: %v",
+				err)
+		}
+		pIn.WitnessScript = expiryScript.Script
+
+		tapscript := input.TapscriptFullTree(
+			aggregateKey.PreTweakedKey, *expiryScript,
+		)
+		controlBlockBytes, err = tapscript.ControlBlock.ToBytes()
+		if err != nil {
+			return nil, fmt.Errorf("error serializing control "+
+				"block: %v", err)
+		}
+
+		expiryScriptLeafHash := expiryScript.TapHash()
+		pIn.TaprootBip32Derivation = []*psbt.TaprootBip32Derivation{{
+			XOnlyPubKey: schnorr.SerializePubKey(
+				account.TraderKey.PubKey,
+			),
+			LeafHashes: [][]byte{expiryScriptLeafHash[:]},
+			Bip32Path:  bip32Path,
+		}}
+		pIn.TaprootLeafScript = []*psbt.TaprootTapLeafScript{{
+			ControlBlock: controlBlockBytes,
+			Script:       expiryScript.Script,
+			LeafVersion:  expiryScript.LeafVersion,
+		}}
+	}
+
+	return controlBlockBytes, nil
 }
 
 // validateAccountValue ensures that a trader has provided a sane account value
@@ -2174,13 +2435,17 @@ func validateAccountExpiry(expiry, bestHeight uint32) error {
 // validateAccountParams ensures that a trader has provided sane parameters for
 // the creation of a new account.
 func validateAccountParams(value, maxValue btcutil.Amount, expiry,
-	bestHeight uint32) error {
+	bestHeight uint32, version Version) error {
 
 	err := validateAccountValue(value, maxValue)
 	if err != nil {
 		return err
 	}
-	return validateAccountExpiry(expiry, bestHeight)
+	err = validateAccountExpiry(expiry, bestHeight)
+	if err != nil {
+		return err
+	}
+	return ValidateVersion(version)
 }
 
 // NumConfsForValue chooses an appropriate number of confirmations to wait for

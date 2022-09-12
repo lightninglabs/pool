@@ -27,6 +27,17 @@ var (
 		State:         account.StateInitiated,
 		HeightHint:    1,
 	}
+	testAccountTaproot = &account.Account{
+		Value:         btcutil.SatoshiPerBitcoin,
+		Expiry:        1337,
+		TraderKey:     testTraderKeyDesc,
+		AuctioneerKey: testAuctioneerKey,
+		BatchKey:      testBatchKey,
+		Secret:        sharedSecret,
+		State:         account.StateInitiated,
+		HeightHint:    1,
+		Version:       account.VersionTaprootEnabled,
+	}
 
 	testNonce1 = order.Nonce([32]byte{1, 1, 1})
 	testNonce2 = order.Nonce([32]byte{2, 2, 2})
@@ -35,6 +46,7 @@ var (
 
 	testAccounts = map[[33]byte]*account.Account{
 		testRawTraderKeyArr: testAccount,
+		{1, 2, 3}:           testAccountTaproot,
 	}
 
 	testOrders = map[order.Nonce]order.Order{

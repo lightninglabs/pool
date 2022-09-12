@@ -113,14 +113,12 @@ func newRPCServer(server *Server) *rpcServer {
 			LndVersion:     lndServices.Version,
 		}),
 		orderManager: order.NewManager(&order.ManagerConfig{
-			Store:     server.db,
-			AcctStore: accountStore,
-			Lightning: lndServices.Client,
-			Wallet:    lndServices.WalletKit,
-			Signer:    lndServices.Signer,
-			BatchVersion: order.BatchVersion(
-				server.cfg.DebugConfig.BatchVersion,
-			),
+			Store:        server.db,
+			AcctStore:    accountStore,
+			Lightning:    lndServices.Client,
+			Wallet:       lndServices.WalletKit,
+			Signer:       lndServices.Signer,
+			BatchVersion: server.determineBatchVersion(),
 		}),
 		marshaler: NewMarshaler(&marshalerConfig{
 			GetOrders: server.db.GetOrders,
@@ -257,7 +255,7 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 			if err != nil && !errors.Is(err, order.ErrMismatchErr) {
 				rpcLog.Errorf("Error handling server message: "+
 					"%v", err)
-				interceptor.RequestShutdown()
+				s.server.cfg.ShutdownInterceptor.RequestShutdown()
 			}
 
 		case err := <-s.auctioneer.StreamErrChan:
@@ -284,7 +282,7 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 			if err != nil {
 				rpcLog.Errorf("Unable to receive block "+
 					"notification: %v", err)
-				interceptor.RequestShutdown()
+				s.server.cfg.ShutdownInterceptor.RequestShutdown()
 			}
 
 		// In case the server is shutting down.
@@ -389,10 +387,22 @@ func (s *rpcServer) handleServerMessage(
 		}
 
 	case *auctioneerrpc.ServerAuctionMessage_Sign:
+		batch := s.orderManager.PendingBatch()
+
+		// There is some auxiliary information in the "sign" message
+		// that we need for the MuSig2/Taproot signing, let's try to
+		// parse that first.
+		serverNonces, prevOutputs, err := order.ParseRPCSign(msg.Sign)
+		if err != nil {
+			rpcLog.Errorf("Error parsing sign aux info: %v", err)
+			return s.sendRejectBatch(batch, err)
+		}
+		batch.ServerNonces = serverNonces
+		batch.PreviousOutputs = prevOutputs
+
 		// We were able to accept the batch. Inform the auctioneer,
 		// then start negotiating with the remote peers. We'll sign
 		// once all channel partners have responded.
-		batch := s.orderManager.PendingBatch()
 		channelKeys, err := s.server.fundingManager.BatchChannelSetup(
 			batch,
 		)
@@ -405,12 +415,12 @@ func (s *rpcServer) handleServerMessage(
 			"num_orders=%v", batch.ID[:], len(batch.MatchedOrders))
 
 		// Sign for the accounts in the batch.
-		sigs, err := s.orderManager.BatchSign()
+		sigs, nonces, err := s.orderManager.BatchSign()
 		if err != nil {
 			rpcLog.Errorf("Error signing batch: %v", err)
 			return s.sendRejectBatch(batch, err)
 		}
-		err = s.sendSignBatch(batch, sigs, channelKeys)
+		err = s.sendSignBatch(batch, sigs, nonces, channelKeys)
 		if err != nil {
 			rpcLog.Errorf("Error sending sign msg: %v", err)
 			return s.sendRejectBatch(batch, err)
@@ -565,6 +575,14 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 			"must be specified")
 	}
 
+	// In order to be able to choose a default value (or to validate the
+	// account version), we need to know if the version of the connected lnd
+	// supports Taproot.
+	version, err := s.determineAccountVersion(req.Version)
+	if err != nil {
+		return nil, err
+	}
+
 	if feeRate < chainfee.FeePerKwFloor {
 		return nil, fmt.Errorf("fee rate of %d sat/kw is too low, "+
 			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
@@ -572,7 +590,7 @@ func (s *rpcServer) InitAccount(ctx context.Context,
 
 	acct, err := s.accountManager.InitAccount(
 		ContextWithInitiator(ctx, req.Initiator),
-		btcutil.Amount(req.AccountValue), feeRate,
+		btcutil.Amount(req.AccountValue), version, feeRate,
 		expiryHeight, bestHeight,
 	)
 	if err != nil {
@@ -645,6 +663,18 @@ func MarshallAccount(a *account.Account) (*poolrpc.Account, error) {
 		return nil, fmt.Errorf("unknown state %v", a.State)
 	}
 
+	var rpcVersion poolrpc.AccountVersion
+	switch a.Version {
+	case account.VersionInitialNoVersion:
+		rpcVersion = poolrpc.AccountVersion_ACCOUNT_VERSION_LEGACY
+
+	case account.VersionTaprootEnabled:
+		rpcVersion = poolrpc.AccountVersion_ACCOUNT_VERSION_TAPROOT
+
+	default:
+		return nil, fmt.Errorf("unknown version <%d>", a.Version)
+	}
+
 	// The latest transaction is only known after the account has been
 	// funded.
 	var latestTxHash chainhash.Hash
@@ -662,13 +692,15 @@ func MarshallAccount(a *account.Account) (*poolrpc.Account, error) {
 		ExpirationHeight: a.Expiry,
 		State:            rpcState,
 		LatestTxid:       latestTxHash[:],
+		Version:          rpcVersion,
 	}, nil
 }
 
 // DepositAccount handles a trader's request to deposit funds into the specified
 // account by spending the specified inputs.
 func (s *rpcServer) DepositAccount(ctx context.Context,
-	req *poolrpc.DepositAccountRequest) (*poolrpc.DepositAccountResponse, error) {
+	req *poolrpc.DepositAccountRequest) (*poolrpc.DepositAccountResponse,
+	error) {
 
 	rpcLog.Infof("Depositing %v into acct=%x",
 		btcutil.Amount(req.AmountSat), req.TraderKey)
@@ -700,11 +732,19 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 		expiryHeight = req.GetRelativeExpiry() + bestHeight
 	}
 
+	// In order to be able to choose a default value (or to validate the
+	// account version), we need to know if the version of the connected lnd
+	// supports Taproot.
+	version, err := s.determineAccountVersion(req.NewVersion)
+	if err != nil {
+		return nil, err
+	}
+
 	// Proceed to process the deposit and map its response to the RPC's
 	// response.
 	modifiedAccount, tx, err := s.accountManager.DepositAccount(
 		ctx, traderKey, btcutil.Amount(req.AmountSat), feeRate,
-		bestHeight, expiryHeight,
+		bestHeight, expiryHeight, version,
 	)
 	if err != nil {
 		return nil, err
@@ -728,7 +768,8 @@ func (s *rpcServer) DepositAccount(ctx context.Context,
 // specified account by spending the current account output to the specified
 // outputs.
 func (s *rpcServer) WithdrawAccount(ctx context.Context,
-	req *poolrpc.WithdrawAccountRequest) (*poolrpc.WithdrawAccountResponse, error) {
+	req *poolrpc.WithdrawAccountRequest) (*poolrpc.WithdrawAccountResponse,
+	error) {
 
 	rpcLog.Infof("Withdrawing from acct=%x", req.TraderKey)
 
@@ -768,10 +809,19 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 		expiryHeight = req.GetRelativeExpiry() + bestHeight
 	}
 
+	// In order to be able to choose a default value (or to validate the
+	// account version), we need to know if the version of the connected lnd
+	// supports Taproot.
+	version, err := s.determineAccountVersion(req.NewVersion)
+	if err != nil {
+		return nil, err
+	}
+
 	// Proceed to process the withdrawal and map its response to the RPC's
 	// response.
 	modifiedAccount, tx, err := s.accountManager.WithdrawAccount(
 		ctx, traderKey, outputs, feeRate, bestHeight, expiryHeight,
+		version,
 	)
 	if err != nil {
 		return nil, err
@@ -795,8 +845,8 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 // will always require a signature from the auctioneer, even after the account
 // has expired, to ensure the auctioneer is aware the account is being renewed.
 func (s *rpcServer) RenewAccount(ctx context.Context,
-	req *poolrpc.RenewAccountRequest) (
-	*poolrpc.RenewAccountResponse, error) {
+	req *poolrpc.RenewAccountRequest) (*poolrpc.RenewAccountResponse,
+	error) {
 
 	rpcLog.Infof("Updating account expiration for account %x", req.AccountKey)
 
@@ -826,10 +876,18 @@ func (s *rpcServer) RenewAccount(ctx context.Context,
 			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
 	}
 
+	// In order to be able to choose a default value (or to validate the
+	// account version), we need to know if the version of the connected lnd
+	// supports Taproot.
+	version, err := s.determineAccountVersion(req.NewVersion)
+	if err != nil {
+		return nil, err
+	}
+
 	// Proceed to process the expiration update and map its response to the
 	// RPC's response.
 	modifiedAccount, tx, err := s.accountManager.RenewAccount(
-		ctx, accountKey, expiryHeight, feeRate, bestHeight,
+		ctx, accountKey, expiryHeight, feeRate, bestHeight, version,
 	)
 	if err != nil {
 		return nil, err
@@ -856,7 +914,8 @@ func (s *rpcServer) RenewAccount(ctx context.Context,
 // and this RPC is invoked again, then a replacing transaction (RBF) of the
 // child will be broadcast.
 func (s *rpcServer) BumpAccountFee(ctx context.Context,
-	req *poolrpc.BumpAccountFeeRequest) (*poolrpc.BumpAccountFeeResponse, error) {
+	req *poolrpc.BumpAccountFeeRequest) (*poolrpc.BumpAccountFeeResponse,
+	error) {
 
 	traderKey, err := btcec.ParsePubKey(req.TraderKey)
 	if err != nil {
@@ -1505,6 +1564,19 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 		feeSchedule = auctioneerTerms.FeeSchedule()
 	}
 
+	// We also need a map of all account versions for the locked value
+	// estimation below.
+	accountVersions := make(map[[33]byte]account.Version)
+	allAccounts, err := s.server.db.Accounts()
+	if err != nil {
+		return nil, fmt.Errorf("error querying accounts: %v", err)
+	}
+	for _, acct := range allAccounts {
+		var rawKey [33]byte
+		copy(rawKey[:], acct.TraderKey.PubKey.SerializeCompressed())
+		accountVersions[rawKey] = acct.Version
+	}
+
 	// The RPC is split by order type so we have to separate them now.
 	asks := make([]*poolrpc.Ask, 0, len(creationEvents))
 	bids := make([]*poolrpc.Bid, 0, len(creationEvents))
@@ -1557,9 +1629,9 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			State:            orderState,
 			Units:            uint32(dbDetails.Units),
 			UnitsUnfulfilled: uint32(dbDetails.UnitsUnfulfilled),
-			ReservedValueSat: uint64(
-				dbOrder.ReservedValue(feeSchedule),
-			),
+			ReservedValueSat: uint64(dbOrder.ReservedValue(
+				feeSchedule, accountVersions[dbDetails.AcctKey],
+			)),
 			CreationTimestampNs: uint64(evt.Timestamp().UnixNano()),
 			Events:              rpcEvents,
 			MinUnitsMatch:       uint32(dbOrder.Details().MinUnitsMatch),
@@ -1864,6 +1936,7 @@ func (s *rpcServer) GetLsatTokens(_ context.Context,
 // sendSignBatch sends a sign message to the server with the witness stacks of
 // all accounts that are involved in the batch.
 func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
+	nonces order.AccountNonces,
 	chanInfos map[wire.OutPoint]*chaninfo.ChannelInfo) error {
 
 	// Prepare the list of witness stacks and channel infos and send them to
@@ -1871,7 +1944,17 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 	rpcSigs := make(map[string][]byte, len(sigs))
 	for acctKey, sig := range sigs {
 		key := hex.EncodeToString(acctKey[:])
-		rpcSigs[key] = sig.Serialize()
+		rpcSigs[key] = make([]byte, len(sig))
+		copy(rpcSigs[key], sig)
+	}
+
+	// Prepare the trader's nonces too (if there are any Taproot/MuSig2
+	// accounts in the batch).
+	rpcNonces := make(map[string][]byte, len(nonces))
+	for acctKey, nonce := range nonces {
+		key := hex.EncodeToString(acctKey[:])
+		rpcNonces[key] = make([]byte, 66)
+		copy(rpcNonces[key], nonce[:])
 	}
 
 	rpcChannelInfos, err := marshallChannelInfo(chanInfos)
@@ -1894,6 +1977,7 @@ func (s *rpcServer) sendSignBatch(batch *order.Batch, sigs order.BatchSignature,
 			Sign: &auctioneerrpc.OrderMatchSign{
 				BatchId:      batch.ID[:],
 				AccountSigs:  rpcSigs,
+				TraderNonces: rpcNonces,
 				ChannelInfos: rpcChannelInfos,
 			},
 		},
@@ -2223,8 +2307,15 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 
 			// Estimate the chain fees paid for the number of
 			// channels created in this batch and tally them.
+			//
+			// TODO(guggero): This is just an approximation! We
+			// should properly calculate the fees _per account_ as
+			// that's what we do on the server side. Then we can
+			// also take a look at the actual account version at the
+			// time of the batch.
 			chainFee := order.EstimateTraderFee(
 				uint32(numChans), batch.BatchTxFeeRate,
+				account.VersionInitialNoVersion,
 			)
 
 			// We'll need to compute the chain fee paid for each
@@ -2455,7 +2546,7 @@ func (s *rpcServer) StopDaemon(_ context.Context,
 	_ *poolrpc.StopDaemonRequest) (*poolrpc.StopDaemonResponse, error) {
 
 	rpcLog.Infof("Stop requested through RPC, gracefully shutting down")
-	interceptor.RequestShutdown()
+	s.server.cfg.ShutdownInterceptor.RequestShutdown()
 
 	return &poolrpc.StopDaemonResponse{}, nil
 }
@@ -2807,6 +2898,42 @@ func (s *rpcServer) setTicketStateForOrder(newState sidecar.State,
 	}
 
 	return nil
+}
+
+// determineAccountVersion parses the RPC version and makes sure it can actually
+// be used.
+func (s *rpcServer) determineAccountVersion(
+	newVersion poolrpc.AccountVersion) (account.Version, error) {
+
+	isTaprootCompatible := false
+	verErr := lndclient.AssertVersionCompatible(
+		s.server.lndServices.Version, taprootVersion,
+	)
+	if verErr == nil {
+		isTaprootCompatible = true
+	}
+
+	// Now we can do the account version validation.
+	switch newVersion {
+	case poolrpc.AccountVersion_ACCOUNT_VERSION_LND_DEPENDENT:
+		if isTaprootCompatible {
+			return account.VersionTaprootEnabled, nil
+		}
+
+	case poolrpc.AccountVersion_ACCOUNT_VERSION_TAPROOT:
+		if !isTaprootCompatible {
+			return 0, fmt.Errorf("cannot use Taproot enabled "+
+				"account version, the lnd node Pool is "+
+				"connected to is version %v but needs to be "+
+				"at least %v",
+				s.server.lndServices.Version.AppMinor,
+				taprootVersion.AppMinor)
+		}
+
+		return account.VersionTaprootEnabled, nil
+	}
+
+	return account.VersionInitialNoVersion, nil
 }
 
 // rpcOrderStateToDBState maps the order state as received over the RPC

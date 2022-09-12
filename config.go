@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/lightninglabs/pool/order"
 	"github.com/lightningnetwork/lnd/cert"
 	"github.com/lightningnetwork/lnd/lncfg"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/signal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -165,11 +165,16 @@ type Config struct {
 	// DebugConfig is a set of debug options used for development and
 	// testing only.
 	DebugConfig *DebugConfig `group:"debug" namespace:"debug" hidden:"true"`
+
+	// ShutdownInterceptor is the custom shutdown signal interceptor that
+	// the server is going to use to listen for (and issue) shutdown
+	// commands on.
+	ShutdownInterceptor signal.Interceptor
 }
 
 // DebugConfig is a set of debug options used for development and testing only.
 type DebugConfig struct {
-	BatchVersion uint32 `long:"batchversion" description:"The batch version to use -- NOTE: for testing purposes only, don't use on mainnet"`
+	BatchVersion int32 `long:"batchversion" description:"The batch version to use -- NOTE: for testing purposes only, don't use on mainnet"`
 }
 
 const (
@@ -206,7 +211,10 @@ func DefaultConfig() Config {
 			MacaroonPath: DefaultLndMacaroonPath,
 		},
 		DebugConfig: &DebugConfig{
-			BatchVersion: uint32(order.ExtendAccountBatchVersion),
+			// The default value is dynamic depending on the lnd
+			// version. So we set an invalid value here to signal
+			// "no value set".
+			BatchVersion: -1,
 		},
 	}
 }

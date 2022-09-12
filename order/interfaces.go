@@ -275,9 +275,10 @@ type Order interface {
 	Digest() ([hashSize]byte, error)
 
 	// ReservedValue returns the maximum value that could be deducted from
-	// the account if the order is is matched, and therefore has to be
+	// the account if the order is matched, and therefore has to be
 	// reserved to ensure the trader can afford it.
-	ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount
+	ReservedValue(feeSchedule terms.FeeSchedule,
+		accountVersion account.Version) btcutil.Amount
 }
 
 // Kit stores all the common fields that are used to express the decision to
@@ -457,8 +458,8 @@ func (a *Ask) Digest() ([hashSize]byte, error) {
 //
 // The passed function should be set to either calculate the maker or taker
 // balance delta for a single match of the given amount.
-func reservedValue(o Order,
-	perMatchDelta func(btcutil.Amount) btcutil.Amount) btcutil.Amount {
+func reservedValue(o Order, perMatchDelta func(btcutil.Amount) btcutil.Amount,
+	accountVersion account.Version) btcutil.Amount {
 
 	// If this order is in a state where it cannot be matched, return 0.
 	if o.Details().State.Archived() {
@@ -490,9 +491,11 @@ func reservedValue(o Order,
 
 	// Subtract the worst case chain fee from the balance.
 	maxFeeRate := o.Details().MaxBatchFeeRate
-	balanceDelta -= maxNumMatches * EstimateTraderFee(1, maxFeeRate)
+	balanceDelta -= maxNumMatches * EstimateTraderFee(
+		1, maxFeeRate, accountVersion,
+	)
 	if rem > 0 {
-		balanceDelta -= EstimateTraderFee(1, maxFeeRate)
+		balanceDelta -= EstimateTraderFee(1, maxFeeRate, accountVersion)
 	}
 
 	// If the balance delta is negative, meaning this order will decrease
@@ -507,8 +510,10 @@ func reservedValue(o Order,
 }
 
 // ReservedValue returns the maximum value that could be deducted from a single
-// account if the ask is is matched under the worst case fee conditions.
-func (a *Ask) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
+// account if the ask is matched under the worst case fee conditions.
+func (a *Ask) ReservedValue(feeSchedule terms.FeeSchedule,
+	accountVersion account.Version) btcutil.Amount {
+
 	// For an ask the clearing price will be no lower than the ask's fixed
 	// rate, resulting in the smallest gain for the asker.
 	clearingPrice := FixedRatePremium(a.FixedRate)
@@ -518,7 +523,7 @@ func (a *Ask) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
 			feeSchedule, clearingPrice, amt, a.LeaseDuration,
 		)
 		return delta
-	})
+	}, accountVersion)
 }
 
 // NodeTier an enum-like variable that presents which "tier" a node is in. A
@@ -681,8 +686,10 @@ func (b *Bid) Digest() ([hashSize]byte, error) {
 }
 
 // ReservedValue returns the maximum value that could be deducted from a single
-// account if the bid is is matched under the worst case fee conditions.
-func (b *Bid) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
+// account if the bid is matched under the worst case fee conditions.
+func (b *Bid) ReservedValue(feeSchedule terms.FeeSchedule,
+	accountVersion account.Version) btcutil.Amount {
+
 	// For a bid, the final clearing price is never higher that the bid's
 	// fixed rate, resulting in the highest possible premium paid by the
 	// bidder.
@@ -694,7 +701,7 @@ func (b *Bid) ReservedValue(feeSchedule terms.FeeSchedule) btcutil.Amount {
 			b.LeaseDuration,
 		)
 		return delta
-	})
+	}, accountVersion)
 }
 
 // ValidateSelfChanBalance makes sure that all conditions to use the
@@ -850,24 +857,26 @@ type Manager interface {
 	PrepareOrder(ctx context.Context, order Order, acct *account.Account,
 		terms *terms.AuctioneerTerms) (*ServerOrderParams, error)
 
-	// OrderMatchValidate verifies an incoming batch is sane before accepting it.
+	// OrderMatchValidate verifies an incoming batch is sane before
+	// accepting it.
 	OrderMatchValidate(batch *Batch, bestHeight uint32) error
 
-	// HasPendingBatch returns whether a pending batch is currently being processed.
+	// HasPendingBatch returns whether a pending batch is currently being
+	// processed.
 	HasPendingBatch() bool
 
 	// PendingBatch returns the current pending batch being validated.
 	PendingBatch() *Batch
 
-	// BatchSign returns the witness stack of all account inputs in a batch that
-	// belong to the trader.
-	BatchSign() (BatchSignature, error)
+	// BatchSign returns the witness stack of all account inputs in a batch
+	// that belong to the trader.
+	BatchSign() (BatchSignature, AccountNonces, error)
 
-	// BatchFinalize marks a batch as complete upon receiving the finalize message
-	// from the auctioneer.
+	// BatchFinalize marks a batch as complete upon receiving the finalize
+	// message from the auctioneer.
 	BatchFinalize(batchID BatchID) error
 
-	// OurNodePubkey returns our lnd node's public identity key or an error if the
-	// manager wasn't fully started yet.
+	// OurNodePubkey returns our lnd node's public identity key or an error
+	// if the manager wasn't fully started yet.
 	OurNodePubkey() ([33]byte, error)
 }
