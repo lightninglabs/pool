@@ -60,7 +60,7 @@ var (
 	taprootVersion = &verrpc.Version{
 		AppMajor: 0,
 		AppMinor: 15,
-		AppPatch: 0,
+		AppPatch: 1,
 		BuildTags: []string{
 			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
 		},
