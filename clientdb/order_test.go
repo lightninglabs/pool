@@ -30,6 +30,7 @@ var submitOrderTestCases = []struct {
 		}
 		o.Details().MinUnitsMatch = 10
 		o.Details().ChannelType = order.ChannelTypeScriptEnforced
+		o.Details().AuctionType = order.BTCOutboundLiquidity
 
 		// It is not possible for an order to have AllowedNodeIDs and
 		// NotAllowedNodeIDs at the same time but we want to test
@@ -192,6 +193,7 @@ func dummyOrder(amt btcutil.Amount, leaseDuration uint32) *order.Kit {
 		panic(fmt.Sprintf("could not create private key: %v", err))
 	}
 	kit := order.NewKitWithPreimage(testPreimage)
+	kit.AuctionType = order.BTCInboundLiquidity
 	kit.Version = order.VersionLeaseDurationBuckets
 	kit.State = order.StateExecuted
 	kit.FixedRate = 21

@@ -282,6 +282,34 @@ const (
 	OnlyZeroConf ChannelConfirmationConstraints = 2
 )
 
+// AuctionType is a numerical type used to denote in what auction market should
+// this order be considered in.
+type AuctionType uint32
+
+const (
+	// BTCInboundLiquidity is an auction type where the bidder pays the
+	// asker a premium to get btc inbound liquidity from him.
+	BTCInboundLiquidity AuctionType = 0
+
+	// BTCOutboundLiquidity is an auction type where the bidder pays the
+	// asker a premium to accept a btc channel from the bidder.
+	BTCOutboundLiquidity AuctionType = 1
+)
+
+// String returns a human readable string representation of the auction type.
+func (a AuctionType) String() string {
+	switch a {
+	case BTCInboundLiquidity:
+		return "btc_inbound_liquidity"
+
+	case BTCOutboundLiquidity:
+		return "btc_outbound_liquidity"
+
+	default:
+		return fmt.Sprintf("unknown<%d>", a)
+	}
+}
+
 var (
 	// ErrInsufficientBalance is the error that is returned if an account
 	// has insufficient balance to perform a requested action.
@@ -368,6 +396,9 @@ type Kit struct {
 	// Preimage is the randomly generated preimage to the nonce hash. It is
 	// only known to the trader client.
 	Preimage lntypes.Preimage
+
+	// AuctionType is the market where this offer should be considered in.
+	AuctionType AuctionType
 
 	// Version is the feature version of this order. Can be used to
 	// distinguish between certain feature sets or to signal feature flags.
