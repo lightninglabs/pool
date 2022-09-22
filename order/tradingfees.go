@@ -174,23 +174,23 @@ type AccountTally struct {
 // order where the account is involved on the maker side. It returns the
 // balance delta, fees accrued, and execution fee paid.
 func makerDelta(feeSchedule terms.FeeSchedule, price FixedRatePremium,
-	totalSats btcutil.Amount, duration uint32) (btcutil.Amount,
+	makerAmt, baseAmt btcutil.Amount, duration uint32) (btcutil.Amount,
 	btcutil.Amount, btcutil.Amount) {
 
-	// First, we'll need to subtract the total amount of sats cleared (the
+	// First, we'll need to subtract the total matched amount (the
 	// channel size), from the balance of the maker.
-	balanceDelta := -totalSats
+	balanceDelta := -makerAmt
 
 	// Calculate the premium based on the duration the capital will be
 	// locked for.
-	satsPremium := price.LumpSumPremium(totalSats, duration)
+	satsPremium := price.LumpSumPremium(baseAmt, duration)
 
 	// The premium is paid to the maker.
 	balanceDelta += satsPremium
 	makerFeesAccrued := satsPremium
 
 	// Finally, we'll subtract the paid execution fees from the balance.
-	executionFee := executionFee(totalSats, feeSchedule)
+	executionFee := executionFee(makerAmt, feeSchedule)
 	balanceDelta -= executionFee
 
 	return balanceDelta, makerFeesAccrued, executionFee
@@ -200,12 +200,12 @@ func makerDelta(feeSchedule terms.FeeSchedule, price FixedRatePremium,
 // single order where the account is involved on the maker side. It returns the
 // execution fee that is collected by the auctioneer.
 func (t *AccountTally) CalcMakerDelta(feeSchedule terms.FeeSchedule,
-	price FixedRatePremium, totalSats btcutil.Amount,
+	price FixedRatePremium, makerAmt, premiumAmt btcutil.Amount,
 	duration uint32) btcutil.Amount {
 
 	// Calculate the deltas and update the tally.
 	balanceDelta, makerFeesAccrued, executionFee := makerDelta(
-		feeSchedule, price, totalSats, duration,
+		feeSchedule, price, makerAmt, premiumAmt, duration,
 	)
 
 	t.EndingBalance += balanceDelta
@@ -219,12 +219,12 @@ func (t *AccountTally) CalcMakerDelta(feeSchedule terms.FeeSchedule,
 // order where the account is involved on the taker side. It returns the
 // balance delta, taker fees paid, and execution fee paid.
 func takerDelta(feeSchedule terms.FeeSchedule,
-	price FixedRatePremium, totalSats, selfChanBalance btcutil.Amount,
+	price FixedRatePremium, baseAmt, takerAmt btcutil.Amount,
 	duration uint32) (btcutil.Amount, btcutil.Amount, btcutil.Amount) {
 
 	// Calculate the premium based on the duration the capital will be
 	// locked for.
-	satsPremium := price.LumpSumPremium(totalSats, duration)
+	satsPremium := price.LumpSumPremium(baseAmt, duration)
 
 	// The premium must be paid by the taker.
 	balanceDelta := -satsPremium
@@ -232,10 +232,10 @@ func takerDelta(feeSchedule terms.FeeSchedule,
 
 	// If there is a self channel balance, it must also be paid out of the
 	// taker account.
-	balanceDelta -= selfChanBalance
+	balanceDelta -= takerAmt
 
 	// Finally, we'll subtract the paid execution fees from the balance.
-	executionFee := executionFee(totalSats, feeSchedule)
+	executionFee := executionFee(baseAmt, feeSchedule)
 	balanceDelta -= executionFee
 
 	return balanceDelta, takerFeesPaid, executionFee
@@ -245,12 +245,12 @@ func takerDelta(feeSchedule terms.FeeSchedule,
 // single order where the account is involved on the taker side. It returns the
 // execution fee that is collected by the auctioneer.
 func (t *AccountTally) CalcTakerDelta(feeSchedule terms.FeeSchedule,
-	price FixedRatePremium, totalSats, selfChanBalance btcutil.Amount,
+	price FixedRatePremium, takerAmt, premiumAmt btcutil.Amount,
 	duration uint32) btcutil.Amount {
 
 	// Calculate the deltas and update the tally.
 	balanceDelta, takerFeesPaid, executionFee := takerDelta(
-		feeSchedule, price, totalSats, selfChanBalance, duration,
+		feeSchedule, price, premiumAmt, takerAmt, duration,
 	)
 
 	t.EndingBalance += balanceDelta

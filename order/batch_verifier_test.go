@@ -358,6 +358,40 @@ func TestBatchVerifier(t *testing.T) {
 				return v.Verify(b, bestHeight)
 			},
 		},
+		{
+			name:        "auction type mismatch",
+			expectedErr: "did not match the same auction type",
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
+				a.Details().AuctionType = BTCInboundLiquidity
+				b1.Details().AuctionType = BTCOutboundLiquidity
+				return v.Verify(b, bestHeight)
+			},
+		},
+		{
+			// TODO(positiveblue): make a more specific test for
+			// btc outbound liquidity market.
+			name:        "premiums are based on aucton type",
+			expectedErr: "ending balance 934",
+			doVerify: func(v BatchVerifier, a *Ask, b1, b2 *Bid,
+				b *Batch) error {
+
+				a.Details().AuctionType = BTCOutboundLiquidity
+				b1.Details().AuctionType = BTCOutboundLiquidity
+				b2.Details().AuctionType = BTCOutboundLiquidity
+				b.AccountDiffs[0].EndingBalance = 395_089
+				b.BatchTX.TxOut[2].Value = 395_089
+
+				// NOTE: the ask and bids would not be valid
+				// orders for the outbound liquidity market
+				// because they bigger than one unit but we are
+				// testing that premiums are calculated
+				// properly here.
+				b.AccountDiffs[1].EndingBalance = 934
+				return v.Verify(b, bestHeight)
+			},
+		},
 	}
 
 	// Run through all the test cases, creating a new, valid batch each
@@ -430,7 +464,7 @@ func TestBatchVerifier(t *testing.T) {
 				// 2000 * (200_000 * 5000 / 1_000_000_000) = 1000 sats premium
 				LeaseDuration: leaseDuration,
 			}),
-			SelfChanBalance: 50,
+			SelfChanBalance: 100_000,
 		}
 		pkScript := scriptForAcct(t, bigAcct)
 		// If account extension is supported we create the pkScript with
@@ -456,7 +490,7 @@ func TestBatchVerifier(t *testing.T) {
 				// Channel output for channel between ask and
 				// bid2.
 				{
-					Value: 200_050,
+					Value: 300_000,
 					PkScript: scriptForChan(
 						t, walletKit,
 						ask.MultiSigKeyLocator,
@@ -469,8 +503,8 @@ func TestBatchVerifier(t *testing.T) {
 					// bid1ExecFee - bid2ExecFee - chainFees
 					// - bid2SelfChanBalance
 					// 500_000 - 1000 - 1000 -
-					// 1_110 - 1_110 - 186 - 50
-					Value:    495_544,
+					// 1_110 - 1_110 - 186 - 100_000
+					Value:    395_594,
 					PkScript: pkScript,
 				},
 			},
@@ -485,7 +519,7 @@ func TestBatchVerifier(t *testing.T) {
 				AccountKey:    acctKeyBig,
 				EndingState:   stateRecreated,
 				OutpointIndex: 2,
-				EndingBalance: 495_544,
+				EndingBalance: 395_594,
 			},
 			{
 				AccountKeyRaw: acctIDSmall,

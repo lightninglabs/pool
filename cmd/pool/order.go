@@ -721,8 +721,9 @@ func parseBaseBid(ctx *cli.Context) (*poolrpc.Bid, *sidecar.Ticket, error) {
 	if ctx.IsSet("self_chan_balance") {
 		bid.SelfChanBalance = ctx.Uint64("self_chan_balance")
 		bidAmt := btcutil.Amount(bid.Details.Amt)
-		err := sidecar.CheckOfferParams(
-			bidAmt, btcutil.Amount(bid.SelfChanBalance),
+		err := order.CheckOfferParams(
+			order.AuctionType(bid.Details.AuctionType), bidAmt,
+			btcutil.Amount(bid.SelfChanBalance),
 			order.BaseSupplyUnit,
 		)
 		if err != nil {

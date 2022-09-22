@@ -90,7 +90,9 @@ func ParseRPCOrder(version, leaseDuration uint32,
 		return nil, errors.New("min units match must be greater than 0")
 
 	// The min units match must not exceed the total order units.
-	case details.MinUnitsMatch > uint32(kit.Units):
+	case kit.AuctionType != BTCOutboundLiquidity &&
+		details.MinUnitsMatch > uint32(kit.Units):
+
 		return nil, errors.New("min units match must not exceed " +
 			"total order units")
 	}

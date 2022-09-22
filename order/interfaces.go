@@ -639,7 +639,7 @@ func (a *Ask) ReservedValue(feeSchedule terms.FeeSchedule,
 
 	return reservedValue(a, func(amt btcutil.Amount) btcutil.Amount {
 		delta, _, _ := makerDelta(
-			feeSchedule, clearingPrice, amt, a.LeaseDuration,
+			feeSchedule, clearingPrice, amt, amt, a.LeaseDuration,
 		)
 		return delta
 	}, accountVersion)
@@ -823,12 +823,75 @@ func (b *Bid) ReservedValue(feeSchedule terms.FeeSchedule,
 	clearingPrice := FixedRatePremium(b.FixedRate)
 
 	return reservedValue(b, func(amt btcutil.Amount) btcutil.Amount {
+		premiumAmt := amt
+		if b.Details().AuctionType == BTCOutboundLiquidity {
+			premiumAmt += b.SelfChanBalance
+		}
+
 		delta, _, _ := takerDelta(
-			feeSchedule, clearingPrice, amt, b.SelfChanBalance,
-			b.LeaseDuration,
+			feeSchedule, clearingPrice, premiumAmt,
+			b.SelfChanBalance, b.LeaseDuration,
 		)
 		return delta
 	}, accountVersion)
+}
+
+// CheckOfferParams makes sure the offer parameters of an offer are valid and
+// sane.
+func CheckOfferParams(auctionType AuctionType, capacity, pushAmt,
+	baseSupplyUnit btcutil.Amount) error {
+
+	if capacity == 0 || capacity%baseSupplyUnit != 0 {
+		return fmt.Errorf("channel capacity must be positive multiple "+
+			"of %d", baseSupplyUnit)
+	}
+
+	if auctionType == BTCInboundLiquidity && pushAmt > capacity {
+		return fmt.Errorf("self channel balance must be smaller than " +
+			"or equal to capacity")
+	}
+
+	if auctionType == BTCOutboundLiquidity {
+		// Only multiples of 100k sats are allowed in the outbound
+		// market.
+		if pushAmt == 0 || pushAmt%baseSupplyUnit != 0 {
+			return fmt.Errorf("self balance must be a positive "+
+				"multiple of %d", baseSupplyUnit)
+		}
+	}
+
+	return nil
+}
+
+// CheckOfferParamsForOrder makes sure that the order parameters in a
+// sidecar offer are formally valid, sane and match the order parameters.
+func CheckOfferParamsForOrder(auctionType AuctionType, offer sidecar.Offer,
+	bidAmt, bidMinUnitsMatch, baseSupplyUnit btcutil.Amount) error {
+
+	if auctionType != BTCInboundLiquidity {
+		return fmt.Errorf("%s market does not support sidecar tickets",
+			auctionType)
+	}
+
+	err := CheckOfferParams(
+		auctionType, offer.Capacity, offer.PushAmt, baseSupplyUnit,
+	)
+	if err != nil {
+		return err
+	}
+
+	if offer.Capacity != bidAmt {
+		return fmt.Errorf("invalid bid amount %v, must match sidecar "+
+			"ticket's capacity %v", bidAmt, offer.Capacity)
+	}
+
+	if offer.Capacity != bidMinUnitsMatch*baseSupplyUnit {
+		return fmt.Errorf("invalid min units match %v, must match "+
+			"sidecar ticket's capacity %v",
+			bidMinUnitsMatch*baseSupplyUnit, offer.Capacity)
+	}
+
+	return nil
 }
 
 // ValidateSelfChanBalance makes sure that all conditions to use the
@@ -839,8 +902,8 @@ func (b *Bid) ValidateSelfChanBalance() error {
 			"order version")
 	}
 
-	if err := sidecar.CheckOfferParams(
-		b.Amt, b.SelfChanBalance, BaseSupplyUnit,
+	if err := CheckOfferParams(
+		b.AuctionType, b.Amt, b.SelfChanBalance, BaseSupplyUnit,
 	); err != nil {
 		return fmt.Errorf("invalid self chan balance: %v", err)
 	}
