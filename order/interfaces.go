@@ -850,6 +850,14 @@ func (b *Bid) ValidateSelfChanBalance() error {
 			"match must be equal to the order amount in units")
 	}
 
+	if b.AuctionType == BTCOutboundLiquidity &&
+		b.SelfChanBalance < BaseSupplyUnit {
+
+		return fmt.Errorf("to participate in the outbound liquidity " +
+			"market the self chan balance should be at least " +
+			"100k sats")
+	}
+
 	return nil
 }
 
