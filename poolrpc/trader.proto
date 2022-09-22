@@ -678,6 +678,9 @@ message Order {
     // with the `allowed_node_ids` field.
     repeated bytes not_allowed_node_ids = 15;
 
+    // Auction type where this order must be considered during the matching.
+    AuctionType auction_type = 16;
+
     // Flag used to signal that this order can be shared in public market
     // places.
     bool is_public = 17;

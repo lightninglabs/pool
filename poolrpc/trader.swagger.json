@@ -1103,6 +1103,15 @@
         }
       }
     },
+    "poolrpcAuctionType": {
+      "type": "string",
+      "enum": [
+        "AUCTION_TYPE_BTC_INBOUND_LIQUIDITY",
+        "AUCTION_TYPE_BTC_OUTBOUND_LIQUIDITY"
+      ],
+      "default": "AUCTION_TYPE_BTC_INBOUND_LIQUIDITY",
+      "description": " - AUCTION_TYPE_BTC_INBOUND_LIQUIDITY: Default auction type where the bidder is paying for getting bitcoin inbound\nliqiudity from the asker.\n - AUCTION_TYPE_BTC_OUTBOUND_LIQUIDITY: Auction type where the bidder is paying the asker to accept a channel\n(bitcoin outbound liquidity) from the bidder."
+    },
     "poolrpcBatchSnapshotResponse": {
       "type": "object",
       "properties": {
@@ -2082,6 +2091,10 @@
             "format": "byte"
           },
           "description": "List of nodes that won't be allowed to match with our order. Incompatible\nwith the `allowed_node_ids` field."
+        },
+        "auction_type": {
+          "$ref": "#/definitions/poolrpcAuctionType",
+          "description": "Auction type where this order must be considered during the matching."
         },
         "is_public": {
           "type": "boolean",

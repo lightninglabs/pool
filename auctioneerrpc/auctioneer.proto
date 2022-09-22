@@ -899,6 +899,20 @@ enum OrderChannelType {
     ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED = 2;
 }
 
+enum AuctionType {
+    /*
+    Default auction type where the bidder is paying for getting bitcoin inbound
+    liqiudity from the asker.
+    */
+    AUCTION_TYPE_BTC_INBOUND_LIQUIDITY = 0;
+
+    /*
+    Auction type where the bidder is paying the asker to accept a channel
+    (bitcoin outbound liquidity) from the bidder.
+    */
+    AUCTION_TYPE_BTC_OUTBOUND_LIQUIDITY = 1;
+}
+
 message ServerOrder {
     /*
     The trader's account key of the account to use for the order.
@@ -974,6 +988,9 @@ message ServerOrder {
     // List of nodes that won't be allowed to match with our order. Incompatible
     // with the `allowed_node_ids` field.
     repeated bytes not_allowed_node_ids = 15;
+
+    // Auction type where this order must be considered during the matching.
+    AuctionType auction_type = 16;
 
     // Flag used to signal that this order can be shared in public market
     // places.
