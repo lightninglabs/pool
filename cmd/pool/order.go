@@ -25,9 +25,14 @@ const (
 	channelTypePeerDependent  = "legacy"
 	channelTypeScriptEnforced = "script-enforced"
 
+	auctionTypeInboundLiquidity  = "inbound"
+	auctionTypeOutboundLiquidity = "outbound"
+
 	defaultMaxBatchFeeRateSatPerVByte = 100
 
 	defaultConfirmationConstraints = 1
+
+	defaultAuctionType = auctionTypeInboundLiquidity
 )
 
 var ordersCommands = []cli.Command{
@@ -128,6 +133,14 @@ var sharedFlags = []cli.Flag{
 			"order being matched (%q, %q)",
 			channelTypePeerDependent,
 			channelTypeScriptEnforced),
+	},
+	cli.StringFlag{
+		Name: "auction_type",
+		Usage: fmt.Sprintf("the auction market where this offer "+
+			"must be considered in during matching (%q, %q)",
+			auctionTypeInboundLiquidity,
+			auctionTypeOutboundLiquidity),
+		Value: defaultAuctionType,
 	},
 	cli.StringSliceFlag{
 		Name: "allowed_node_id",
@@ -287,10 +300,24 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order,
 		break
 	case channelTypePeerDependent:
 		params.ChannelType = auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_PEER_DEPENDENT
+
 	case channelTypeScriptEnforced:
 		params.ChannelType = auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED
+
 	default:
 		return nil, fmt.Errorf("unknown channel type %q", channelType)
+	}
+
+	auctionType := ctx.String("auction_type")
+	switch auctionType {
+	case auctionTypeInboundLiquidity:
+		params.AuctionType = auctioneerrpc.AuctionType_AUCTION_TYPE_BTC_INBOUND_LIQUIDITY
+
+	case auctionTypeOutboundLiquidity:
+		params.AuctionType = auctioneerrpc.AuctionType_AUCTION_TYPE_BTC_OUTBOUND_LIQUIDITY
+
+	default:
+		return nil, fmt.Errorf("unknown auction type %q", channelType)
 	}
 
 	// Get the list of node ids this order is allowed/not allowed to match
@@ -456,6 +483,28 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 	}
 
 	ask.Details = params
+
+	// Checks for the outbound liquidity market.
+	if ask.Details.AuctionType == auctioneerrpc.AuctionType_AUCTION_TYPE_BTC_OUTBOUND_LIQUIDITY {
+		var err error
+		baseSupply := uint64(order.BaseSupplyUnit)
+		switch {
+		case ask.Details.Amt != baseSupply:
+			err = fmt.Errorf("The order amount be exactly the "+
+				"base supply amount (%v sats)", baseSupply)
+
+		case !ctx.IsSet("min_chan_amt") ||
+			ctx.Uint64("min_chan_amt") == 0:
+
+			err = fmt.Errorf("The `min_chan_amt` parameter must "+
+				"be set to at least %v sats", baseSupply)
+		}
+
+		if err != nil {
+			return fmt.Errorf("unable to participate in the "+
+				"outbound liquidity market. %v", err)
+		}
+	}
 
 	client, cleanup, err := getClient(ctx)
 	if err != nil {
@@ -685,6 +734,26 @@ func parseBaseBid(ctx *cli.Context) (*poolrpc.Bid, *sidecar.Ticket, error) {
 			return nil, nil, fmt.Errorf("when using " +
 				"self_chan_balance the min_chan_amt must be " +
 				"set to the same value as amt")
+		}
+	}
+
+	// Checks for the outbound liquidity market.
+	if bid.Details.AuctionType == auctioneerrpc.AuctionType_AUCTION_TYPE_BTC_OUTBOUND_LIQUIDITY {
+		var err error
+		baseSupply := uint64(order.BaseSupplyUnit)
+		switch {
+		case bid.Details.Amt != baseSupply:
+			err = fmt.Errorf("The order amount must be exactly "+
+				"the base supply amount (%v sats)", baseSupply)
+
+		case bid.SelfChanBalance < baseSupply:
+			err = fmt.Errorf("The `self_chan_balance` parameter "+
+				"must be set to at least %v sats", baseSupply)
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("The unable to"+
+				"participate in the outbound liquidity "+
+				"market. %v", err)
 		}
 	}
 
