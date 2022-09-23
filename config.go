@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
@@ -145,7 +146,7 @@ type Config struct {
 
 	LsatMaxRoutingFee btcutil.Amount `long:"lsatmaxroutingfee" description:"The maximum amount in satoshis we are willing to pay in routing fees when paying for the one-time LSAT auth token that is required to use the Pool service."`
 
-	Profile  string `long:"profile" description:"Enable HTTP profiling on given port -- NOTE port must be between 1024 and 65535"`
+	Profile  string `long:"profile" description:"Enable HTTP profiling on given ip:port -- NOTE port must be between 1024 and 65535"`
 	FakeAuth bool   `long:"fakeauth" description:"Disable LSAT authentication and instead use a fake LSAT ID to identify. For testing only, cannot be set on mainnet."`
 
 	TxLabelPrefix string `long:"txlabelprefix" description:"If set, then every transaction poold makes will be created with a label that has this string as a prefix."`
@@ -332,6 +333,35 @@ func Validate(cfg *Config) error {
 			DefaultLndDir, "data", "chain", "bitcoin", cfg.Network,
 			defaultLndMacaroon,
 		)
+	}
+
+	// Enable http profiling and Validate profile port number if requested.
+	if cfg.Profile != "" {
+		portErr := fmt.Errorf("the profile port must be between 1024 " +
+			"and 65535")
+		inRange := func(port int) bool {
+			return port >= 1024 && port <= 65535
+		}
+
+		// Try to parse Profile as a host:port.
+		_, hostPort, err := net.SplitHostPort(cfg.Profile)
+		if err == nil {
+			// Determine if the port is valid.
+			profilePort, err := strconv.Atoi(hostPort)
+			if err != nil || !inRange(profilePort) {
+				return portErr
+			}
+		} else {
+			// Try to parse Profile as a port.
+			profilePort, err := strconv.Atoi(cfg.Profile)
+			if err != nil || !inRange(profilePort) {
+				return portErr
+			}
+
+			// Since the user just set a port, we will serve
+			// debugging information over localhost.
+			cfg.Profile = net.JoinHostPort("127.0.0.1", cfg.Profile)
+		}
 	}
 
 	return nil

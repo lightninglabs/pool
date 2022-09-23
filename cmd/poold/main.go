@@ -2,12 +2,9 @@ package main
 
 import (
 	"fmt"
-	"net"
-	"net/http"
 	_ "net/http/pprof" // nolint:gosec
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/jessevdk/go-flags"
@@ -64,23 +61,6 @@ func start() error {
 	// Make sure the passed configuration is valid.
 	if err := pool.Validate(&config); err != nil {
 		return err
-	}
-
-	// Enable http profiling and Validate profile port number if reqeusted.
-	if config.Profile != "" {
-		profilePort, err := strconv.Atoi(config.Profile)
-		if err != nil || profilePort < 1024 || profilePort > 65535 {
-			return fmt.Errorf("the profile port must be between " +
-				"1024 and 65535")
-		}
-
-		go func() {
-			listenAddr := net.JoinHostPort("", config.Profile)
-			profileRedirect := http.RedirectHandler("/debug/pprof",
-				http.StatusSeeOther)
-			http.Handle("/", profileRedirect)
-			fmt.Println(http.ListenAndServe(listenAddr, nil))
-		}()
 	}
 
 	// Execute command.
