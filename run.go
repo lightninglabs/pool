@@ -2,6 +2,7 @@ package pool
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -39,6 +40,17 @@ func Run(cfg *Config) error {
 	err = build.ParseAndSetDebugLevels(cfg.DebugLevel, logWriter)
 	if err != nil {
 		return err
+	}
+
+	if cfg.Profile != "" {
+		go func() {
+			log.Infof("Pprof listening on %v", cfg.Profile)
+			profileRedirect := http.RedirectHandler(
+				"/debug/pprof", http.StatusSeeOther,
+			)
+			http.Handle("/", profileRedirect)
+			fmt.Println(http.ListenAndServe(cfg.Profile, nil))
+		}()
 	}
 
 	trader := NewServer(cfg)
