@@ -769,10 +769,14 @@ func (a *SidecarAcceptor) getSidecarAsOrder(o order.Nonce) (order.Order, error) 
 		if ticket.Order.BidNonce == o {
 			kit := order.NewKit(ticket.Order.BidNonce)
 			kit.LeaseDuration = ticket.Offer.LeaseDurationBlocks
+			unannounced := ticket.Offer.UnannouncedChannel
+			zeroConf := ticket.Offer.ZeroConfChannel
 			return &order.Bid{
-				Kit:             *kit,
-				SidecarTicket:   ticket,
-				SelfChanBalance: ticket.Offer.PushAmt,
+				Kit:                *kit,
+				SidecarTicket:      ticket,
+				SelfChanBalance:    ticket.Offer.PushAmt,
+				UnannouncedChannel: unannounced,
+				ZeroConfChannel:    zeroConf,
 			}, nil
 		}
 	}

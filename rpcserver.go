@@ -2654,10 +2654,16 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 		return nil, err
 	}
 
+	// We always need to populate these fields because they may be used
+	// to create a valid channel acceptor.
+	bid := &order.Bid{
+		UnannouncedChannel: req.Bid.UnannouncedChannel,
+		ZeroConfChannel:    req.Bid.ZeroConfChannel,
+	}
+
 	// If automated negotiation was set, then we'll parse out the rest of
 	// the bid now so we can validate that it'll pass all checks when we
 	// eventually need to submit it.
-	var bid *order.Bid
 	if req.AutoNegotiate {
 		kit, err := order.ParseRPCOrder(
 			req.Bid.Version, req.Bid.LeaseDurationBlocks,
@@ -2674,9 +2680,11 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 		// We don't add the ticket here yet as we'll only add it at the
 		// very end once the ticket has advanced to the final stage.
 		bid = &order.Bid{
-			Kit:             *kit,
-			MinNodeTier:     nodeTier,
-			SelfChanBalance: btcutil.Amount(req.Bid.SelfChanBalance),
+			Kit:                *kit,
+			MinNodeTier:        nodeTier,
+			SelfChanBalance:    btcutil.Amount(req.Bid.SelfChanBalance),
+			UnannouncedChannel: req.Bid.UnannouncedChannel,
+			ZeroConfChannel:    req.Bid.ZeroConfChannel,
 		}
 
 		// Perform some initial validation on the order to ensure that
@@ -3266,6 +3274,8 @@ func marshallTicket(t *sidecar.Ticket) *poolrpc.DecodedSidecarTicket {
 		OfferSignPubkey:          serializePubKey(t.Offer.SignPubKey),
 		OfferAuto:                t.Offer.Auto,
 		EncodedTicket:            encoded,
+		OfferUnannouncedChannel:  t.Offer.UnannouncedChannel,
+		OfferZeroConfChannel:     t.Offer.ZeroConfChannel,
 	}
 
 	if t.Offer.SigOfferDigest != nil {
