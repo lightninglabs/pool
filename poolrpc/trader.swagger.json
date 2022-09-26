@@ -1370,6 +1370,14 @@
         "encoded_ticket": {
           "type": "string",
           "description": "The original, base58 encoded ticket."
+        },
+        "offer_unannounced_channel": {
+          "type": "boolean",
+          "description": "If true, the channel acceptor for this ticket will expect an unannounced\nchannel."
+        },
+        "offer_zero_conf_channel": {
+          "type": "boolean",
+          "description": "If true, the channel acceptor for this ticket will expect a zero conf\nchannel."
         }
       }
     },

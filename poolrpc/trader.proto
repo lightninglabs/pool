@@ -1372,6 +1372,14 @@ message DecodedSidecarTicket {
 
     // The original, base58 encoded ticket.
     string encoded_ticket = 16;
+
+    // If true, the channel acceptor for this ticket will expect an unannounced
+    // channel.
+    bool offer_unannounced_channel = 17;
+
+    // If true, the channel acceptor for this ticket will expect a zero conf
+    // channel.
+    bool offer_zero_conf_channel = 18;
 }
 
 message RegisterSidecarRequest {
