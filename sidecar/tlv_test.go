@@ -70,11 +70,13 @@ func TestSerializeTicket(t *testing.T) {
 		Version: Version(99),
 		State:   StateRegistered,
 		Offer: Offer{
-			Capacity:       777,
-			PushAmt:        888,
-			SignPubKey:     testPubKey,
-			SigOfferDigest: test.NewSignatureFromInt(22, 55),
-			Auto:           true,
+			Capacity:           777,
+			PushAmt:            888,
+			SignPubKey:         testPubKey,
+			SigOfferDigest:     test.NewSignatureFromInt(22, 55),
+			Auto:               true,
+			UnannouncedChannel: true,
+			ZeroConfChannel:    true,
 		},
 		Recipient: &Recipient{
 			NodePubKey:     testPubKey,

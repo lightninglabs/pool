@@ -1032,8 +1032,8 @@ func (m *Manager) OfferSidecar(ctx context.Context, capacity,
 	// So far everything looks good. Let's create the ticket with the offer
 	// now.
 	ticket, err := sidecar.NewTicket(
-		sidecar.VersionDefault, capacity, pushAmt, duration,
-		acctPubKey.PubKey, auto,
+		capacity, pushAmt, duration, acctPubKey.PubKey, auto,
+		bid.UnannouncedChannel, bid.ZeroConfChannel,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating sidecar ticket: %v", err)

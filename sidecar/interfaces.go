@@ -18,6 +18,10 @@ type Version uint8
 const (
 	// VersionDefault is the initial version of the ticket format.
 	VersionDefault Version = 0
+
+	// VersionUnannouncedZeroConf is the fist version of the ticket format
+	// that added support for unannounced and zero conf channels.
+	VersionUnannouncedZeroConf Version = 1
 )
 
 // State is the state a sidecar ticket currently is in. Each updater of the
@@ -131,6 +135,14 @@ type Offer struct {
 	// Auto determines if the provider requires that the ticket be
 	// completed using an automated negotiation sequence.
 	Auto bool
+
+	// UnannouncedChannel determines if this ticket is interested in
+	// unannounced channels or not.
+	UnannouncedChannel bool
+
+	// ZeroConfChannel determines if this ticket is interested in zero conf
+	// channels or not.
+	ZeroConfChannel bool
 }
 
 // Recipient is a struct holding the information about the recipient of the
@@ -212,9 +224,17 @@ type Ticket struct {
 
 // NewTicket creates a new sidecar ticket with the given version and offer
 // information.
-func NewTicket(version Version, capacity, pushAmt btcutil.Amount,
+func NewTicket(capacity, pushAmt btcutil.Amount,
 	duration uint32, offerPubKey *btcec.PublicKey,
-	auto bool) (*Ticket, error) {
+	auto bool, unannounced, zeroConf bool) (*Ticket, error) {
+
+	// The ticket should always use the minimum version that supports
+	// all the features encoded in it so it can be used by clients using
+	// older pool versions.
+	version := VersionDefault
+	if unannounced || zeroConf {
+		version = VersionUnannouncedZeroConf
+	}
 
 	t := &Ticket{
 		Version: version,
@@ -225,6 +245,8 @@ func NewTicket(version Version, capacity, pushAmt btcutil.Amount,
 			LeaseDurationBlocks: duration,
 			SignPubKey:          offerPubKey,
 			Auto:                auto,
+			UnannouncedChannel:  unannounced,
+			ZeroConfChannel:     zeroConf,
 		},
 	}
 
@@ -252,6 +274,16 @@ func (t *Ticket) OfferDigest() ([32]byte, error) {
 			return result, err
 		}
 
+	case VersionUnannouncedZeroConf:
+		err := lnwire.WriteElements(
+			&msg, t.ID[:], uint8(t.Version), t.Offer.Capacity,
+			t.Offer.PushAmt, t.Offer.Auto,
+			t.Offer.UnannouncedChannel, t.Offer.ZeroConfChannel,
+		)
+		if err != nil {
+			return result, err
+		}
+
 	default:
 		return result, fmt.Errorf("unknown version %d", t.Version)
 	}
@@ -274,6 +306,16 @@ func (t *Ticket) OrderDigest() ([32]byte, error) {
 		err := lnwire.WriteElements(
 			&msg, t.ID[:], uint8(t.Version), t.Offer.Capacity,
 			t.Offer.PushAmt, t.Order.BidNonce[:],
+		)
+		if err != nil {
+			return result, err
+		}
+
+	case VersionUnannouncedZeroConf:
+		err := lnwire.WriteElements(
+			&msg, t.ID[:], uint8(t.Version), t.Offer.Capacity,
+			t.Offer.PushAmt, t.Offer.Auto,
+			t.Offer.UnannouncedChannel, t.Offer.ZeroConfChannel,
 		)
 		if err != nil {
 			return result, err
