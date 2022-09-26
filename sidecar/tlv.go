@@ -16,13 +16,15 @@ const (
 	versionType tlv.Type = 2
 	stateType   tlv.Type = 3
 
-	offerType          tlv.Type = 10
-	capacityType       tlv.Type = 11
-	pushAmtType        tlv.Type = 12
-	leaseDurationType  tlv.Type = 13
-	signPubKeyType     tlv.Type = 14
-	sigOfferDigestType tlv.Type = 15
-	offerAutoType      tlv.Type = 16
+	offerType              tlv.Type = 10
+	capacityType           tlv.Type = 11
+	pushAmtType            tlv.Type = 12
+	leaseDurationType      tlv.Type = 13
+	signPubKeyType         tlv.Type = 14
+	sigOfferDigestType     tlv.Type = 15
+	offerAutoType          tlv.Type = 16
+	unannouncedChannelType tlv.Type = 17
+	zeroConfChannelType    tlv.Type = 18
 
 	recipientType        tlv.Type = 20
 	nodePubKeyType       tlv.Type = 21
@@ -191,6 +193,20 @@ func serializeOffer(o Offer) ([]byte, error) {
 		tlv.MakePrimitiveRecord(offerAutoType, &autoAsInt),
 	}
 
+	if o.UnannouncedChannel {
+		isUnannounced := uint8(1)
+		tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
+			unannouncedChannelType, &isUnannounced,
+		))
+	}
+
+	if o.ZeroConfChannel {
+		isZeroConf := uint8(1)
+		tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
+			zeroConfChannelType, &isZeroConf,
+		))
+	}
+
 	if o.SignPubKey != nil {
 		tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
 			signPubKeyType, &o.SignPubKey,
@@ -213,6 +229,8 @@ func deserializeOffer(offerBytes []byte) (Offer, error) {
 		o                 = Offer{}
 		capacity, pushAmt uint64
 		autoAsInt         uint8
+		isUnannounced     uint8
+		isZeroConf        uint8
 	)
 
 	if err := decodeBytes(
@@ -227,11 +245,15 @@ func deserializeOffer(offerBytes []byte) (Offer, error) {
 			sigOfferDigestType, &o.SigOfferDigest, 64, ESig, DSig,
 		),
 		tlv.MakePrimitiveRecord(offerAutoType, &autoAsInt),
+		tlv.MakePrimitiveRecord(unannouncedChannelType, &isUnannounced),
+		tlv.MakePrimitiveRecord(zeroConfChannelType, &isZeroConf),
 	); err != nil {
 		return o, err
 	}
 
 	o.Auto = autoAsInt == 1
+	o.UnannouncedChannel = isUnannounced == 1
+	o.ZeroConfChannel = isZeroConf == 1
 	o.Capacity = btcutil.Amount(capacity)
 	o.PushAmt = btcutil.Amount(pushAmt)
 

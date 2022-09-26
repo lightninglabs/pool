@@ -98,7 +98,7 @@ func TestChannelOutput(t *testing.T) {
 
 	// And the second test is with a sidecar channel bid.
 	ticket, err := sidecar.NewTicket(
-		sidecar.VersionDefault, 400_000, 0, 12345, pubKeyBid, false,
+		400_000, 0, 12345, pubKeyBid, false, false, false,
 	)
 	require.NoError(t, err)
 	ticket.Recipient = &sidecar.Recipient{
