@@ -2082,6 +2082,10 @@
             "format": "byte"
           },
           "description": "List of nodes that won't be allowed to match with our order. Incompatible\nwith the `allowed_node_ids` field."
+        },
+        "is_public": {
+          "type": "boolean",
+          "description": "Flag used to signal that this order can be shared in public market\nplaces."
         }
       }
     },
