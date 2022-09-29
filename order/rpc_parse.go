@@ -142,6 +142,8 @@ func ParseRPCOrder(version, leaseDuration uint32,
 		copy(kit.NotAllowedNodeIDs[idx][:], nodeID)
 	}
 
+	kit.IsPublic = details.IsPublic
+
 	return kit, nil
 }
 
