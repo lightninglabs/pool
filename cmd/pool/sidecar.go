@@ -160,7 +160,7 @@ func sidecarOffer(ctx *cli.Context) error {
 			bid.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
 				bid.Details.MaxBatchFeeRateSatPerKw,
-			), false, nil,
+			), false, bid.Details.IsPublic, nil,
 		); err != nil {
 			return fmt.Errorf("unable to print order details: %v", err)
 		}

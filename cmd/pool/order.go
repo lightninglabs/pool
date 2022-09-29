@@ -143,6 +143,11 @@ var sharedFlags = []cli.Flag{
 			"with any node unless allowed_node_id is set. Can be " +
 			"specified multiple times",
 	},
+	cli.BoolFlag{
+		Name: "public",
+		Usage: "flag used to signal that this order's details can be " +
+			"shared in public market places.",
+	},
 }
 
 // promptForConfirmation continuously prompts the user for the message until
@@ -314,6 +319,8 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order,
 	params.AllowedNodeIds = allowedNodeIDs
 	params.NotAllowedNodeIds = notAllowedNodeIDs
 
+	params.IsPublic = ctx.Bool("public")
+
 	return params, nil
 }
 
@@ -467,7 +474,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 			ask.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
 				ask.Details.MaxBatchFeeRateSatPerKw,
-			), true, nil,
+			), true, ask.Details.IsPublic, nil,
 		); err != nil {
 			return fmt.Errorf("unable to print order details: %v",
 				err)
@@ -498,7 +505,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 func printOrderDetails(client poolrpc.TraderClient, amt btcutil.Amount,
 	minUnitsMatch order.SupplyUnit, selfChanBalance btcutil.Amount,
 	rate order.FixedRatePremium, leaseDuration uint32,
-	maxBatchFeeRate chainfee.SatPerKWeight, isAsk bool,
+	maxBatchFeeRate chainfee.SatPerKWeight, isAsk, isPublic bool,
 	sidecarTicket *sidecar.Ticket) error {
 
 	quote, err := client.QuoteOrder(
@@ -539,6 +546,8 @@ func printOrderDetails(client poolrpc.TraderClient, amt btcutil.Amount,
 	if selfChanBalance > 0 {
 		fmt.Printf("Self channel balance: %v\n", selfChanBalance)
 	}
+
+	fmt.Printf("Is public: %t\n", isPublic)
 
 	if sidecarTicket != nil {
 		fmt.Println("Sidecar order: ")
@@ -712,7 +721,7 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 			bid.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
 				bid.Details.MaxBatchFeeRateSatPerKw,
-			), false, ticket,
+			), false, bid.Details.IsPublic, ticket,
 		); err != nil {
 			return fmt.Errorf("unable to print order details: %v",
 				err)
