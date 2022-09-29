@@ -443,6 +443,7 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		NodeAddr:                nodeAddrs,
 		ChannelType:             channelType,
 		MaxBatchFeeRateSatPerKw: uint64(o.Details().MaxBatchFeeRate),
+		IsPublic:                o.Details().IsPublic,
 	}
 
 	details.AllowedNodeIds = make(

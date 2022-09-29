@@ -1700,6 +1700,7 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			ChannelType: marshallChannelType(
 				dbOrder.Details().ChannelType,
 			),
+			IsPublic: dbOrder.Details().IsPublic,
 		}
 
 		switch o := dbOrder.(type) {
