@@ -38,6 +38,8 @@ var submitOrderTestCases = []struct {
 			{1, 2, 3}, {2, 3, 4}, {3, 4, 5},
 		}
 		o.Details().NotAllowedNodeIDs = [][33]byte{{4, 5, 6}, {5, 6, 7}}
+		o.Details().IsPublic = true
+
 		return o
 	},
 }, {

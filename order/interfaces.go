@@ -424,6 +424,10 @@ type Kit struct {
 	// NotAllowedNodeIDs is the list of node ids this order is not allowed
 	// to match with.
 	NotAllowedNodeIDs [][33]byte
+
+	// IsPublic is the flag used to signal if the details of this order can
+	// be shared in public marketplaces or not.
+	IsPublic bool
 }
 
 // Nonce is the unique identifier of each order and MUST be created by hashing a
