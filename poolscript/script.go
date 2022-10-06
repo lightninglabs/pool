@@ -453,8 +453,15 @@ func IsExpirySpend(witness wire.TxWitness) bool {
 // IsTaprootExpirySpend determines whether the provided witness corresponds to
 // the expiration script path of a Taproot enabled (version 1) account.
 func IsTaprootExpirySpend(witness wire.TxWitness) bool {
-	// We still have 3 elements, the trader's signature, the script and the
-	// control block.
+	// At a minimum we expect these three elements: the trader's signature,
+	// the script, and the control block. We also accept an additional
+	// optional fourth element: the annex.
+	if hasAnnex(witness) {
+		// Remove the annex element. If the annex is present, it is
+		// always the last element.
+		witness = witness[:len(witness)-1]
+	}
+
 	if len(witness) != 3 {
 		return false
 	}
@@ -496,6 +503,26 @@ func IsTaprootExpirySpend(witness wire.TxWitness) bool {
 		return false
 	}
 	return true
+}
+
+// hasAnnex returns true if the provided witness includes an annex element,
+// otherwise returns false.
+func hasAnnex(witness wire.TxWitness) bool {
+	// By definition, the annex element can not be the sole element in the
+	// witness stack.
+	if len(witness) < 2 {
+		return false
+	}
+
+	// If an annex element is included in the witness stack, by definition,
+	// it will be the last element and will be prefixed by a Taproot annex
+	// tag.
+	lastElement := witness[len(witness)-1]
+	if len(lastElement) == 0 {
+		return false
+	}
+
+	return lastElement[0] == txscript.TaprootAnnexTag
 }
 
 // IsMultiSigSpend determines whether the provided witness corresponds to the
