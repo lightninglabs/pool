@@ -132,6 +132,33 @@ func FuzzWitnessSpendDetection(f *testing.F) {
 	})
 }
 
+// TestHasAnnex tests whether hasAnnex can correctly identify the presence of an
+// annex element within a witness stack.
+func TestHasAnnex(t *testing.T) {
+	t.Parallel()
+
+	// The annex element is the last element and includes the correct
+	// prefix.
+	witness := make([][]byte, 2)
+	witness[0] = []byte{97, 98}
+	witness[1] = []byte{txscript.TaprootAnnexTag, 98}
+	result := hasAnnex(witness)
+	require.True(t, result)
+
+	// The annex element may not be the only element.
+	witness = make([][]byte, 1)
+	witness[0] = []byte{txscript.TaprootAnnexTag, 98}
+	result = hasAnnex(witness)
+	require.False(t, result)
+
+	// The annex element must be the last element.
+	witness = make([][]byte, 2)
+	witness[0] = []byte{txscript.TaprootAnnexTag, 98}
+	witness[1] = []byte{97, 98}
+	result = hasAnnex(witness)
+	require.False(t, result)
+}
+
 // TestWitnessCorrectness tests that our witness sizes are correct and that they
 // can actually spend an output of the given type.
 func TestWitnessCorrectness(t *testing.T) {
