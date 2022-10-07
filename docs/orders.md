@@ -297,6 +297,17 @@ To cancel an order. First get the order_nonce of the to be canceled order by usi
 $ pool orders cancel order_nonce
 ```
 
+## Auction types
+
+Currently there are two kind of auction types supported in pool:
+
+* **BTC inbound liquidity market**: the bidder pays the asker for getting a channel where most of the funding liquidity comes from the asker. The bidder pays a premium based on the asker liquidity supply.
+
+* **BTC outbound liquidity market**: the bidder pays the asker for opening a channel where most of the funding liquidity comes from the bidder side. The bidder pays a premium based on the bidder liquidity supply. 
+In this kind of auctions the asker needs to set the order amount to 100k and specify the `min_chan_amt` that will be matched against the bidder's `self_chan_balance`. The bidder needs to set the order amount to 100k and a `self_chan_balance` greater or equal than 100k.
+Sidecar tickets are not supported in this kind of auction yet.
+
+
 ## Extensibility
 
 At the moment there are only two restrictions that users can set on _who_ their orders will be matched against. There is the global `--newnodesonly` flag which will cause the trader daemon to reject any matches with nodes that its connected `lnd` node already has channels with.

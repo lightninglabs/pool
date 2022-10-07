@@ -33,6 +33,26 @@ const (
 	defaultConfirmationConstraints = 1
 
 	defaultAuctionType = auctionTypeInboundLiquidity
+
+	submitOrderDescription = `
+        Submit a new order in the given market. Currently, Pool supports two
+        types of orders: asks, and bids. In Pool, market participants buy/sell 
+        liquidity in _units_. A unit is 100,000 satoshis.
+
+        In the *inbound* market, the bidder pays the asker a premium for a
+        channel with 50% to 100% of inbound liquidity. The premium amount is 
+        calculated using the funding amount of the asker.
+
+        In the outbound market, the bidder pays the asker a premium for  
+        a channel with outbound liquidity. 
+        To participate in the outbound market the asker needs to create an order
+        with '--amount=100000' (one unit) and the '--min_chan_amt' equals to 
+        the minimum channel size that is willing to accept.
+        The bidder needs to create an order with '--amount=100000' (one unit) 
+        and '--self_chan_balance' equals to the funds that is willing to commit 
+        in a channel. The premium amount is calculated using the funding amount 
+        of the bidder ('--self_chan_balance').
+        `
 )
 
 var ordersCommands = []cli.Command{
@@ -45,9 +65,10 @@ var ordersCommands = []cli.Command{
 			ordersListCommand,
 			ordersCancelCommand,
 			{
-				Name:    "submit",
-				Aliases: []string{"s"},
-				Usage:   "submit an order",
+				Name:        "submit",
+				Aliases:     []string{"s"},
+				Usage:       "submit an order",
+				Description: submitOrderDescription,
 				Subcommands: []cli.Command{
 					ordersSubmitAskCommand,
 					ordersSubmitBidCommand,
