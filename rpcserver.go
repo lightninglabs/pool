@@ -659,6 +659,9 @@ func MarshallAccount(a *account.Account) (*poolrpc.Account, error) {
 	case account.StatePendingBatch:
 		rpcState = poolrpc.AccountState_PENDING_BATCH
 
+	case account.StateExpiredPendingUpdate:
+		rpcState = poolrpc.AccountState_PENDING_UPDATE
+
 	default:
 		return nil, fmt.Errorf("unknown state %v", a.State)
 	}
