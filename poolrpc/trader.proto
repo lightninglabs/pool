@@ -78,6 +78,13 @@ service Trader {
     rpc RecoverAccounts (RecoverAccountsRequest)
         returns (RecoverAccountsResponse);
 
+    /* pool: `accounts listfees`
+    AccountModificationFees returns a map from account key to an ordered list of
+    account action modification fees.
+    */
+    rpc AccountModificationFees (AccountModificationFeesRequest)
+        returns (AccountModificationFeesResponse);
+
     /* pool: `orders submit`
     SubmitOrder creates a new ask or bid order and submits for the given account
     and submits it to the auction server for matching.
@@ -1009,6 +1016,45 @@ message RecoverAccountsRequest {
 message RecoverAccountsResponse {
     // The number of accounts that were recovered.
     uint32 num_recovered_accounts = 1;
+}
+
+message AccountModificationFeesRequest {
+}
+
+message AccountModificationFee {
+    // Modification action type.
+    string action = 1;
+
+    // Transaction ID.
+    string txid = 2;
+
+    // Action transaction block height.
+    int32 block_height = 3;
+
+    // Action transaction timestamp.
+    int64 timestamp = 4;
+
+    // Action transaction output amount.
+    int64 output_amount = 5;
+
+    // Action transaction fee.
+    oneof fee {
+        // A flag which is true if fee value has not been set, and is otherwise
+        // false.
+        bool fee_null = 6;
+
+        // Action transaction fee value.
+        int64 fee_value = 7;
+    }
+}
+
+message ListOfAccountModificationFees {
+    repeated AccountModificationFee modification_fees = 1;
+}
+
+message AccountModificationFeesResponse {
+    // A map from account key to an ordered list of account modification fees.
+    map<string, ListOfAccountModificationFees> accounts = 1;
 }
 
 message AuctionFeeRequest {

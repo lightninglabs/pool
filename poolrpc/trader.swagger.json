@@ -1018,6 +1018,55 @@
         }
       }
     },
+    "poolrpcAccountModificationFee": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "Modification action type."
+        },
+        "txid": {
+          "type": "string",
+          "description": "Transaction ID."
+        },
+        "block_height": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Action transaction block height."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "int64",
+          "description": "Action transaction timestamp."
+        },
+        "output_amount": {
+          "type": "string",
+          "format": "int64",
+          "description": "Action transaction output amount."
+        },
+        "fee_null": {
+          "type": "boolean",
+          "description": "A flag which is true if fee value has not been set, and is otherwise\nfalse."
+        },
+        "fee_value": {
+          "type": "string",
+          "format": "int64",
+          "description": "Action transaction fee value."
+        }
+      }
+    },
+    "poolrpcAccountModificationFeesResponse": {
+      "type": "object",
+      "properties": {
+        "accounts": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/poolrpcListOfAccountModificationFees"
+          },
+          "description": "A map from account key to an ordered list of account modification fees."
+        }
+      }
+    },
     "poolrpcAccountState": {
       "type": "string",
       "enum": [
@@ -1733,6 +1782,17 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/poolrpcAccount"
+          }
+        }
+      }
+    },
+    "poolrpcListOfAccountModificationFees": {
+      "type": "object",
+      "properties": {
+        "modification_fees": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/poolrpcAccountModificationFee"
           }
         }
       }
