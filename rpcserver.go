@@ -92,9 +92,13 @@ func (s *accountStore) PendingBatch() error {
 // newRPCServer creates a new client-side RPC server that uses the given
 // connection to the trader's lnd node and the auction server. A client side
 // database is created in `serverDir` if it does not yet exist.
-func newRPCServer(server *Server) *rpcServer {
+func newRPCServer(server *Server) (*rpcServer, error) {
 	accountStore := &accountStore{server.db}
 	lndServices := &server.lndServices.LndServices
+	batchVersion, err := server.determineBatchVersion()
+	if err != nil {
+		return nil, err
+	}
 	return &rpcServer{
 		server:      server,
 		lndServices: lndServices,
@@ -118,14 +122,14 @@ func newRPCServer(server *Server) *rpcServer {
 			Lightning:    lndServices.Client,
 			Wallet:       lndServices.WalletKit,
 			Signer:       lndServices.Signer,
-			BatchVersion: server.determineBatchVersion(),
+			BatchVersion: batchVersion,
 		}),
 		marshaler: NewMarshaler(&marshalerConfig{
 			GetOrders: server.db.GetOrders,
 			Terms:     server.AuctioneerClient.Terms,
 		}),
 		quit: make(chan struct{}),
-	}
+	}, nil
 }
 
 // Start starts the rpcServer, making it ready to accept incoming requests.
@@ -1305,15 +1309,62 @@ func assertAccountReady(acct *account.Account) error {
 // validateOrder validates the order to ensure that all fields are consistent,
 // and the order is likely to be accepted by the auctioneer. If this method
 // returns nil, then the order is safe to submit to the auctioneer.
-func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
+func (s *rpcServer) validateOrder(o order.Order, acct *account.Account,
 	auctionTerms *terms.AuctioneerTerms) error {
+
+	batchVersion, err := s.server.determineBatchVersion()
+	if err != nil {
+		return err
+	}
+
+	var usesAnchors bool
+	switch o.Details().ChannelType {
+	case order.ChannelTypeScriptEnforced:
+		usesAnchors = true
+	default:
+		usesAnchors = false
+	}
+
+	switch castOrder := o.(type) {
+	case *order.Ask:
+		if castOrder.ConfirmationConstraints == order.OnlyZeroConf {
+			if !batchVersion.SupportsZeroConfChannels() {
+				return fmt.Errorf("batch version %v does not "+
+					"support zero conf channels",
+					batchVersion)
+			}
+
+			if !usesAnchors {
+				return fmt.Errorf("zero conf channels need " +
+					"to use anchors. Use the script " +
+					"enforced channel type")
+			}
+		}
+
+	case *order.Bid:
+		if castOrder.ZeroConfChannel {
+			if !batchVersion.SupportsZeroConfChannels() {
+				return fmt.Errorf("batch version %v does not "+
+					"support zero conf channels",
+					batchVersion)
+			}
+
+			if !usesAnchors {
+				return fmt.Errorf("zero conf channels need " +
+					"to use anchors. Use the script " +
+					"enforced channel type")
+			}
+		}
+	}
 
 	// Now that we now how large the order is, ensure that if it's a
 	// wumbo-sized order, then the backing lnd node is advertising wumbo
 	// support.
-	if order.Details().Amt > lndFunding.MaxBtcFundingAmount && !s.wumboSupported {
+	if o.Details().Amt > lndFunding.MaxBtcFundingAmount &&
+		!s.wumboSupported {
+
 		return fmt.Errorf("%v is wumbo sized, but "+
-			"lnd node isn't signalling wumbo", order.Details().Amt)
+			"lnd node isn't signalling wumbo", o.Details().Amt)
 	}
 
 	// Ensure that the account can actually submit orders in its present
@@ -1324,7 +1375,7 @@ func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
 
 	// If the market isn't currently accepting orders for this particular
 	// lease duration, then we'll exit here as the order will be rejected.
-	leaseDuration := order.Details().LeaseDuration
+	leaseDuration := o.Details().LeaseDuration
 	if _, ok := auctionTerms.LeaseDurationBuckets[leaseDuration]; !ok {
 		return fmt.Errorf("invalid channel lease duration %v "+
 			"blocks, active durations are: %v",
@@ -1334,8 +1385,8 @@ func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
 	// If the order does not specify any AllowedNodeIDs/NotAllowedNodeIDs
 	// it means that it can match with any other order. However, both
 	// fields cannot be set at the same time.
-	if len(order.Details().AllowedNodeIDs) > 0 &&
-		len(order.Details().NotAllowedNodeIDs) > 0 {
+	if len(o.Details().AllowedNodeIDs) > 0 &&
+		len(o.Details().NotAllowedNodeIDs) > 0 {
 
 		return fmt.Errorf("allowed and not allowed node ids set at " +
 			"the same time")
@@ -1348,7 +1399,8 @@ func (s *rpcServer) validateOrder(order order.Order, acct *account.Account,
 // local database, and returns the params needed to submit it to the
 // auctioneer.
 type orderPreparer func(context.Context, order.Order,
-	*account.Account, *terms.AuctioneerTerms) (*order.ServerOrderParams, error)
+	*account.Account, *terms.AuctioneerTerms) (*order.ServerOrderParams,
+	error)
 
 // prepareAndSubmitOrder performs a series of final checks locally to ensure
 // the order is valid, before submitting it to the auctioneer.
@@ -1413,8 +1465,16 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 			return nil, err
 		}
 
+		announcement := order.ChannelAnnouncementConstraints(
+			a.AnnouncementConstraints,
+		)
+		confirmations := order.ChannelConfirmationConstraints(
+			a.ConfirmationConstraints,
+		)
 		o = &order.Ask{
-			Kit: *kit,
+			Kit:                     *kit,
+			AnnouncementConstraints: announcement,
+			ConfirmationConstraints: confirmations,
 		}
 
 	case *poolrpc.SubmitOrderRequest_Bid:
@@ -1436,10 +1496,12 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 		}
 
 		o = &order.Bid{
-			Kit:             *kit,
-			MinNodeTier:     nodeTier,
-			SelfChanBalance: btcutil.Amount(b.SelfChanBalance),
-			SidecarTicket:   ticket,
+			Kit:                *kit,
+			MinNodeTier:        nodeTier,
+			SelfChanBalance:    btcutil.Amount(b.SelfChanBalance),
+			SidecarTicket:      ticket,
+			UnannouncedChannel: b.UnannouncedChannel,
+			ZeroConfChannel:    b.ZeroConfChannel,
 		}
 
 	default:
@@ -1641,14 +1703,23 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			ChannelType: marshallChannelType(
 				dbOrder.Details().ChannelType,
 			),
+			IsPublic: dbOrder.Details().IsPublic,
 		}
 
 		switch o := dbOrder.(type) {
 		case *order.Ask:
+			announcement := auctioneerrpc.ChannelAnnouncementConstraints(
+				o.AnnouncementConstraints,
+			)
+			confirmations := auctioneerrpc.ChannelConfirmationConstraints(
+				o.ConfirmationConstraints,
+			)
 			rpcAsk := &poolrpc.Ask{
-				Details:             details,
-				LeaseDurationBlocks: dbDetails.LeaseDuration,
-				Version:             uint32(o.Version),
+				Details:                 details,
+				LeaseDurationBlocks:     dbDetails.LeaseDuration,
+				Version:                 uint32(o.Version),
+				AnnouncementConstraints: announcement,
+				ConfirmationConstraints: confirmations,
 			}
 			asks = append(asks, rpcAsk)
 
@@ -1664,6 +1735,8 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 				Version:             uint32(o.Version),
 				MinNodeTier:         nodeTier,
 				SelfChanBalance:     uint64(o.SelfChanBalance),
+				UnannouncedChannel:  o.UnannouncedChannel,
+				ZeroConfChannel:     o.ZeroConfChannel,
 			}
 
 			// The sidecar ticket was given to the auction server
@@ -2585,10 +2658,16 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 		return nil, err
 	}
 
+	// We always need to populate these fields because they may be used
+	// to create a valid channel acceptor.
+	bid := &order.Bid{
+		UnannouncedChannel: req.Bid.UnannouncedChannel,
+		ZeroConfChannel:    req.Bid.ZeroConfChannel,
+	}
+
 	// If automated negotiation was set, then we'll parse out the rest of
 	// the bid now so we can validate that it'll pass all checks when we
 	// eventually need to submit it.
-	var bid *order.Bid
 	if req.AutoNegotiate {
 		kit, err := order.ParseRPCOrder(
 			req.Bid.Version, req.Bid.LeaseDurationBlocks,
@@ -2605,9 +2684,11 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 		// We don't add the ticket here yet as we'll only add it at the
 		// very end once the ticket has advanced to the final stage.
 		bid = &order.Bid{
-			Kit:             *kit,
-			MinNodeTier:     nodeTier,
-			SelfChanBalance: btcutil.Amount(req.Bid.SelfChanBalance),
+			Kit:                *kit,
+			MinNodeTier:        nodeTier,
+			SelfChanBalance:    btcutil.Amount(req.Bid.SelfChanBalance),
+			UnannouncedChannel: req.Bid.UnannouncedChannel,
+			ZeroConfChannel:    req.Bid.ZeroConfChannel,
 		}
 
 		// Perform some initial validation on the order to ensure that
@@ -2908,35 +2989,19 @@ func (s *rpcServer) setTicketStateForOrder(newState sidecar.State,
 func (s *rpcServer) determineAccountVersion(
 	newVersion poolrpc.AccountVersion) (account.Version, error) {
 
-	isTaprootCompatible := false
-	verErr := lndclient.AssertVersionCompatible(
-		s.server.lndServices.Version, taprootVersion,
-	)
-	if verErr == nil {
-		isTaprootCompatible = true
-	}
-
 	// Now we can do the account version validation.
 	switch newVersion {
 	case poolrpc.AccountVersion_ACCOUNT_VERSION_LND_DEPENDENT:
-		if isTaprootCompatible {
-			return account.VersionTaprootEnabled, nil
-		}
+		return account.VersionTaprootEnabled, nil
+
+	case poolrpc.AccountVersion_ACCOUNT_VERSION_LEGACY:
+		return account.VersionInitialNoVersion, nil
 
 	case poolrpc.AccountVersion_ACCOUNT_VERSION_TAPROOT:
-		if !isTaprootCompatible {
-			return 0, fmt.Errorf("cannot use Taproot enabled "+
-				"account version, the lnd node Pool is "+
-				"connected to is version %v but needs to be "+
-				"at least %v",
-				s.server.lndServices.Version.AppMinor,
-				taprootVersion.AppMinor)
-		}
-
 		return account.VersionTaprootEnabled, nil
 	}
 
-	return account.VersionInitialNoVersion, nil
+	return account.VersionTaprootEnabled, nil
 }
 
 // rpcOrderStateToDBState maps the order state as received over the RPC
@@ -3213,6 +3278,8 @@ func marshallTicket(t *sidecar.Ticket) *poolrpc.DecodedSidecarTicket {
 		OfferSignPubkey:          serializePubKey(t.Offer.SignPubKey),
 		OfferAuto:                t.Offer.Auto,
 		EncodedTicket:            encoded,
+		OfferUnannouncedChannel:  t.Offer.UnannouncedChannel,
+		OfferZeroConfChannel:     t.Offer.ZeroConfChannel,
 	}
 
 	if t.Offer.SigOfferDigest != nil {

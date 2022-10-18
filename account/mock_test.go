@@ -352,7 +352,7 @@ func (w *mockWallet) SignOutputRaw(context.Context, *wire.MsgTx,
 }
 
 func (w *mockWallet) ComputeInputScript(context.Context, *wire.MsgTx,
-	[]*lndclient.SignDescriptor) ([]*input.Script, error) {
+	[]*lndclient.SignDescriptor, []*wire.TxOut) ([]*input.Script, error) {
 
 	return []*input.Script{{
 		SigScript: []byte("input sig script"),

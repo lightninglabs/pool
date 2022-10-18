@@ -696,6 +696,7 @@ func (m *Manager) BatchChannelSetup(
 			case matchedOrderBid.Details().ChannelType == order.ChannelTypeScriptEnforced:
 				commitmentType = lnrpc.CommitmentType_SCRIPT_ENFORCED_LEASE
 			}
+			private := matchedOrderBid.UnannouncedChannel
 			fundingReq := &lnrpc.OpenChannelRequest{
 				NodePubkey:         matchedOrder.NodeKey[:],
 				LocalFundingAmount: int64(chanAmt),
@@ -704,6 +705,8 @@ func (m *Manager) BatchChannelSetup(
 					matchedOrderBid.SelfChanBalance,
 				),
 				CommitmentType: commitmentType,
+				Private:        private,
+				ZeroConf:       matchedOrderBid.ZeroConfChannel,
 			}
 			chanStream, err := m.cfg.BaseClient.OpenChannel(
 				setupCtx, fundingReq,
@@ -1029,8 +1032,8 @@ func (m *Manager) OfferSidecar(ctx context.Context, capacity,
 	// So far everything looks good. Let's create the ticket with the offer
 	// now.
 	ticket, err := sidecar.NewTicket(
-		sidecar.VersionDefault, capacity, pushAmt, duration,
-		acctPubKey.PubKey, auto,
+		capacity, pushAmt, duration, acctPubKey.PubKey, auto,
+		bid.UnannouncedChannel, bid.ZeroConfChannel,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating sidecar ticket: %v", err)

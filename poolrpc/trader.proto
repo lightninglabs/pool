@@ -677,6 +677,10 @@ message Order {
     // List of nodes that won't be allowed to match with our order. Incompatible
     // with the `allowed_node_ids` field.
     repeated bytes not_allowed_node_ids = 15;
+
+    // Flag used to signal that this order can be shared in public market
+    // places.
+    bool is_public = 17;
 }
 
 message Bid {
@@ -720,6 +724,16 @@ message Bid {
     the base58 encoded ticket, including the prefix and the checksum.
     */
     string sidecar_ticket = 6;
+
+    /*
+    Signals if this bid is interested in an announced or unannounced channel.
+    */
+    bool unannounced_channel = 7;
+
+    /*
+    Signals if this bid is interested in a zero conf channel or not.
+    */
+    bool zero_conf_channel = 8;
 }
 
 message Ask {
@@ -739,6 +753,17 @@ message Ask {
     features are added.
     */
     uint32 version = 3;
+
+    /*
+    The constraints for selling the liquidity based on channel discoverability.
+    */
+    ChannelAnnouncementConstraints announcement_constraints = 4;
+
+    /*
+    The constraints for selling the liquidity based on the number of
+    blocks before considering the channel confirmed.
+    */
+    ChannelConfirmationConstraints confirmation_constraints = 5;
 }
 
 message QuoteOrderRequest {
@@ -1351,6 +1376,14 @@ message DecodedSidecarTicket {
 
     // The original, base58 encoded ticket.
     string encoded_ticket = 16;
+
+    // If true, the channel acceptor for this ticket will expect an unannounced
+    // channel.
+    bool offer_unannounced_channel = 17;
+
+    // If true, the channel acceptor for this ticket will expect a zero conf
+    // channel.
+    bool offer_zero_conf_channel = 18;
 }
 
 message RegisterSidecarRequest {

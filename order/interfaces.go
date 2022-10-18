@@ -192,7 +192,7 @@ const (
 	MatchStateAccepted MatchState = 1
 
 	// MatchStateRejected is the state an order is in after the trader
-	// rejected it, either as an answer to a OderMatchSignBegin or
+	// rejected it, either as an answer to a OrderMatchSignBegin or
 	// OrderMatchFinalize message from the auctioneer.
 	MatchStateRejected MatchState = 2
 
@@ -246,6 +246,42 @@ const (
 	ChannelTypeScriptEnforced ChannelType = 1
 )
 
+// ChannelAnnouncementConstraints is a numerical type used to denote if the
+// channels created from a match can be announced or not.
+type ChannelAnnouncementConstraints uint8
+
+const (
+	// AnnouncementNoPreference denotes that the resulting channels can be
+	// announced or not.
+	AnnouncementNoPreference ChannelAnnouncementConstraints = 0
+
+	// OnlyAnnounced denotes that the resulting channels must be announced
+	// to the network.
+	OnlyAnnounced ChannelAnnouncementConstraints = 1
+
+	// OnlyUnannounced denotes that the resulting channels must not be
+	// announced to the network.
+	OnlyUnannounced ChannelAnnouncementConstraints = 2
+)
+
+// ChannelConfirmationConstraints is a numerical type used to denote if the
+// channels created from a match is zero conf or not.
+type ChannelConfirmationConstraints uint8
+
+const (
+	// ConfirmationNoPreference denotes that the resulting channel can be
+	// zero conf or not.
+	ConfirmationNoPreference ChannelConfirmationConstraints = 0
+
+	// OnlyConfirmed denotes that the resulting channels must be confirmed
+	// onchain before start routing.
+	OnlyConfirmed ChannelConfirmationConstraints = 1
+
+	// OnlyZeroConf denotes that the resulting channels can be used
+	// without having to wait for onchain confirmations.
+	OnlyZeroConf ChannelConfirmationConstraints = 2
+)
+
 var (
 	// ErrInsufficientBalance is the error that is returned if an account
 	// has insufficient balance to perform a requested action.
@@ -254,6 +290,46 @@ var (
 	// ZeroNonce is used to find out if a user-provided nonce is empty.
 	ZeroNonce Nonce
 )
+
+// MatchAnnouncementConstraints returns true when the asker announcement
+// constraints match the bidder announcement preferences.
+func MatchAnnouncementConstraints(asker ChannelAnnouncementConstraints,
+	unannounced bool) bool {
+
+	switch {
+	case asker == AnnouncementNoPreference:
+		return true
+
+	case asker == OnlyAnnounced && !unannounced:
+		return true
+
+	case asker == OnlyUnannounced && unannounced:
+		return true
+
+	default:
+		return false
+	}
+}
+
+// MatchZeroConfConstraints returns true when the asker confirmation
+// constraints match the bidder confirmation preferences.
+func MatchZeroConfConstraints(asker ChannelConfirmationConstraints,
+	zeroConf bool) bool {
+
+	switch {
+	case asker == ConfirmationNoPreference:
+		return true
+
+	case asker == OnlyConfirmed && !zeroConf:
+		return true
+
+	case asker == OnlyZeroConf && zeroConf:
+		return true
+
+	default:
+		return false
+	}
+}
 
 // Order is an interface to allow generic handling of both ask and bid orders
 // by both store and manager.
@@ -348,6 +424,10 @@ type Kit struct {
 	// NotAllowedNodeIDs is the list of node ids this order is not allowed
 	// to match with.
 	NotAllowedNodeIDs [][33]byte
+
+	// IsPublic is the flag used to signal if the details of this order can
+	// be shared in public marketplaces or not.
+	IsPublic bool
 }
 
 // Nonce is the unique identifier of each order and MUST be created by hashing a
@@ -393,6 +473,14 @@ func NewKit(nonce Nonce) *Kit {
 type Ask struct {
 	// Kit contains all the common order parameters.
 	Kit
+
+	// AnnouncementConstraints specifies the constraints for the matched
+	// channels in terms of announced/unannounced.
+	AnnouncementConstraints ChannelAnnouncementConstraints
+
+	// ConfirmationConstraints specifies the constraints for the matched
+	// channels in terms of confirmed/zero conf.
+	ConfirmationConstraints ChannelConfirmationConstraints
 }
 
 // Type returns the order type.
@@ -596,6 +684,14 @@ type Bid struct {
 	// happens out of band). This will only be used if the order version is
 	// VersionSidecarChannel or greater.
 	SidecarTicket *sidecar.Ticket
+
+	// UnannouncedChannel signals if the resulting channel needs to be
+	// announced or not.
+	UnannouncedChannel bool
+
+	// ZeroConfChannel signals if the resulting channels need to be zero
+	// conf or not.
+	ZeroConfChannel bool
 }
 
 // Type returns the order type.

@@ -24,10 +24,11 @@ const (
 
 	channelTypePeerDependent  = "legacy"
 	channelTypeScriptEnforced = "script-enforced"
-)
 
-// Default max batch fee rate to 100 sat/vByte.
-const defaultMaxBatchFeeRateSatPerVByte = 100
+	defaultMaxBatchFeeRateSatPerVByte = 100
+
+	defaultConfirmationConstraints = 1
+)
 
 var ordersCommands = []cli.Command{
 	{
@@ -100,6 +101,18 @@ var baseBidFlags = []cli.Flag{
 			"from our account into the channel; can be " +
 			"used to create up to 50/50 balanced channels",
 	},
+	cli.BoolFlag{
+		Name: "unannounced_channel",
+		Usage: "flag used to signal that this bid is interested only " +
+			"in unannounced channels. If this flag is not set, " +
+			"the channels resulting from matching this order " +
+			"will be announced to the network",
+	},
+	cli.BoolFlag{
+		Name: "zero_conf_channel",
+		Usage: "flag used to signal that this bid is only interested " +
+			"in zero conf channels",
+	},
 }
 
 var sharedFlags = []cli.Flag{
@@ -129,6 +142,11 @@ var sharedFlags = []cli.Flag{
 			"with; if empty, the order will be able to match " +
 			"with any node unless allowed_node_id is set. Can be " +
 			"specified multiple times",
+	},
+	cli.BoolFlag{
+		Name: "public",
+		Usage: "flag used to signal that this order's details can be " +
+			"shared in public market places.",
 	},
 }
 
@@ -162,7 +180,9 @@ func promptForConfirmation(msg string) bool {
 // line positional arguments and/or flags and parses them based on their
 // destination data type. No formal in-depth validation is performed as the
 // server will do that on the RPC level anyway.
-func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, error) {
+func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order,
+	error) {
+
 	var (
 		args   = ctx.Args()
 		params = &poolrpc.Order{}
@@ -174,7 +194,8 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 	case args.Present():
 		amt, err := parseAmt(args.First())
 		if err != nil {
-			return nil, fmt.Errorf("unable to decode amount: %v", err)
+			return nil, fmt.Errorf("unable to decode amount: %v",
+				err)
 		}
 		params.Amt = uint64(amt)
 		args = args.Tail()
@@ -197,11 +218,13 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 
 	case minChanAmt < order.BaseSupplyUnit:
 		return nil, fmt.Errorf("minimum channel amount %v is below "+
-			"required value of %v", minChanAmt, order.BaseSupplyUnit)
+			"required value of %v", minChanAmt,
+			order.BaseSupplyUnit)
 
 	case minChanAmt > btcutil.Amount(params.Amt):
 		return nil, fmt.Errorf("minimum channel amount %v is above "+
-			"order amount %v", minChanAmt, btcutil.Amount(params.Amt))
+			"order amount %v", minChanAmt,
+			btcutil.Amount(params.Amt))
 	}
 	params.MinUnitsMatch = uint32(minChanAmt / order.BaseSupplyUnit)
 
@@ -296,6 +319,8 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order, 
 	params.AllowedNodeIds = allowedNodeIDs
 	params.NotAllowedNodeIds = notAllowedNodeIDs
 
+	params.IsPublic = ctx.Bool("public")
+
 	return params, nil
 }
 
@@ -376,6 +401,23 @@ var ordersSubmitAskCommand = cli.Command{
 			Usage: "the minimum amount of satoshis that a " +
 				"resulting channel from this order must have",
 		},
+		cli.Uint64Flag{
+			Name: "announcement_constraints",
+			Usage: "specifies if the liquidity must be sold in " +
+				"announced or unannounced channels. Set to 1 " +
+				"for only announced channels and 2 for only " +
+				"unannounced ones. The default value is \"no " +
+				"preference\"",
+		},
+		cli.Uint64Flag{
+			Name: "confirmation_constraints",
+			Usage: "specifies if the liquidity must be sold in " +
+				"zero conf or confirmed channels. Set to 1 " +
+				"for only confirmed channels and 2 for only " +
+				"zero conf ones. The default value is \"only " +
+				"confirmed\"",
+			Value: defaultConfirmationConstraints,
+		},
 		cli.BoolFlag{
 			Name:  "force",
 			Usage: "skip order placement confirmation",
@@ -391,9 +433,21 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 		return nil
 	}
 
+	announcement := auctioneerrpc.ChannelAnnouncementConstraints(
+		ctx.Uint64("announcement_constraints"),
+	)
+
+	confirmations := auctioneerrpc.ChannelConfirmationConstraints(
+		ctx.Uint64("confirmation_constraints"),
+	)
+
 	ask := &poolrpc.Ask{
-		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
-		Version:             uint32(order.VersionChannelType),
+		LeaseDurationBlocks: uint32(
+			ctx.Uint64("lease_duration_blocks"),
+		),
+		Version:                 uint32(order.VersionChannelType),
+		AnnouncementConstraints: announcement,
+		ConfirmationConstraints: confirmations,
 	}
 
 	params, err := parseCommonParams(ctx, ask.LeaseDurationBlocks)
@@ -420,9 +474,10 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 			ask.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
 				ask.Details.MaxBatchFeeRateSatPerKw,
-			), true, nil,
+			), true, ask.Details.IsPublic, nil,
 		); err != nil {
-			return fmt.Errorf("unable to print order details: %v", err)
+			return fmt.Errorf("unable to print order details: %v",
+				err)
 		}
 
 		if !promptForConfirmation("Confirm order (yes/no): ") {
@@ -450,7 +505,7 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 func printOrderDetails(client poolrpc.TraderClient, amt btcutil.Amount,
 	minUnitsMatch order.SupplyUnit, selfChanBalance btcutil.Amount,
 	rate order.FixedRatePremium, leaseDuration uint32,
-	maxBatchFeeRate chainfee.SatPerKWeight, isAsk bool,
+	maxBatchFeeRate chainfee.SatPerKWeight, isAsk, isPublic bool,
 	sidecarTicket *sidecar.Ticket) error {
 
 	quote, err := client.QuoteOrder(
@@ -491,6 +546,8 @@ func printOrderDetails(client poolrpc.TraderClient, amt btcutil.Amount,
 	if selfChanBalance > 0 {
 		fmt.Printf("Self channel balance: %v\n", selfChanBalance)
 	}
+
+	fmt.Printf("Is public: %t\n", isPublic)
 
 	if sidecarTicket != nil {
 		fmt.Println("Sidecar order: ")
@@ -548,9 +605,13 @@ func parseBaseBid(ctx *cli.Context) (*poolrpc.Bid, *sidecar.Ticket, error) {
 	}
 
 	bid := &poolrpc.Bid{
-		LeaseDurationBlocks: uint32(ctx.Uint64("lease_duration_blocks")),
-		Version:             uint32(order.VersionChannelType),
-		MinNodeTier:         nodeTier,
+		LeaseDurationBlocks: uint32(
+			ctx.Uint64("lease_duration_blocks"),
+		),
+		Version:            uint32(order.VersionChannelType),
+		MinNodeTier:        nodeTier,
+		UnannouncedChannel: ctx.Bool("unannounced_channel"),
+		ZeroConfChannel:    ctx.Bool("zero_conf_channel"),
 	}
 
 	// Let's find out if this is an order for a sidecar channel because if
@@ -621,9 +682,9 @@ func parseBaseBid(ctx *cli.Context) (*poolrpc.Bid, *sidecar.Ticket, error) {
 
 		bidUnits := order.NewSupplyFromSats(bidAmt)
 		if bid.Details.MinUnitsMatch != uint32(bidUnits) {
-			return nil, nil, fmt.Errorf("when using self_chan_balance the " +
-				"min_chan_amt must be set to the same value " +
-				"as amt")
+			return nil, nil, fmt.Errorf("when using " +
+				"self_chan_balance the min_chan_amt must be " +
+				"set to the same value as amt")
 		}
 	}
 
@@ -660,9 +721,10 @@ func ordersSubmitBid(ctx *cli.Context) error { // nolint: dupl
 			bid.LeaseDurationBlocks,
 			chainfee.SatPerKWeight(
 				bid.Details.MaxBatchFeeRateSatPerKw,
-			), false, ticket,
+			), false, bid.Details.IsPublic, ticket,
 		); err != nil {
-			return fmt.Errorf("unable to print order details: %v", err)
+			return fmt.Errorf("unable to print order details: %v",
+				err)
 		}
 
 		if !promptForConfirmation("Confirm order (yes/no): ") {

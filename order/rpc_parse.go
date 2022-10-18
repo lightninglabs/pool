@@ -142,6 +142,8 @@ func ParseRPCOrder(version, leaseDuration uint32,
 		copy(kit.NotAllowedNodeIDs[idx][:], nodeID)
 	}
 
+	kit.IsPublic = details.IsPublic
+
 	return kit, nil
 }
 
@@ -284,8 +286,16 @@ func ParseRPCServerAsk(details *auctioneerrpc.ServerAsk) (*MatchedOrder, error) 
 
 	kit.LeaseDuration = details.LeaseDurationBlocks
 
+	announcement := ChannelAnnouncementConstraints(
+		details.AnnouncementConstraints,
+	)
+	confirmations := ChannelConfirmationConstraints(
+		details.ConfirmationConstraints,
+	)
 	o.Order = &Ask{
-		Kit: *kit,
+		Kit:                     *kit,
+		AnnouncementConstraints: announcement,
+		ConfirmationConstraints: confirmations,
 	}
 
 	return o, nil
@@ -308,8 +318,10 @@ func ParseRPCServerBid(details *auctioneerrpc.ServerBid) (*MatchedOrder, error) 
 	}
 
 	o.Order = &Bid{
-		Kit:             *kit,
-		SelfChanBalance: btcutil.Amount(details.SelfChanBalance),
+		Kit:                *kit,
+		SelfChanBalance:    btcutil.Amount(details.SelfChanBalance),
+		UnannouncedChannel: details.UnannouncedChannel,
+		ZeroConfChannel:    details.ZeroConfChannel,
 	}
 
 	return o, nil

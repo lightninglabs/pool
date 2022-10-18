@@ -619,7 +619,7 @@ func TestDeriveFundingShim(t *testing.T) {
 
 	// And the second test is with a sidecar channel bid.
 	ticket, err := sidecar.NewTicket(
-		sidecar.VersionDefault, 400_000, 0, 12345, pubKeyBid, false,
+		400_000, 0, 12345, pubKeyBid, false, false, false,
 	)
 	require.NoError(t, err)
 	ticket.Recipient = &sidecar.Recipient{
@@ -850,18 +850,25 @@ func TestOfferSidecar(t *testing.T) {
 	var nodeKeyRaw [33]byte
 	copy(nodeKeyRaw[:], privKey.PubKey().SerializeCompressed())
 
+	bid := &order.Bid{
+		UnannouncedChannel: true,
+		ZeroConfChannel:    true,
+	}
+
 	// Let's create our offer now.
 	capacity, pushAmt := btcutil.Amount(100_000), btcutil.Amount(40_000)
 	ticket, err := h.mgr.OfferSidecar(
 		context.Background(), capacity, pushAmt, 2016,
 		&keychain.KeyDescriptor{
 			PubKey: privKey.PubKey(),
-		}, nil, false,
+		}, bid, false,
 	)
 	require.NoError(t, err)
 
 	require.Equal(t, capacity, ticket.Offer.Capacity)
 	require.Equal(t, pushAmt, ticket.Offer.PushAmt)
+	require.True(t, ticket.Offer.UnannouncedChannel)
+	require.True(t, ticket.Offer.ZeroConfChannel)
 	require.Equal(t, privKey.PubKey(), ticket.Offer.SignPubKey)
 	require.Equal(t, sig, ticket.Offer.SigOfferDigest)
 

@@ -974,6 +974,10 @@ message ServerOrder {
     // List of nodes that won't be allowed to match with our order. Incompatible
     // with the `allowed_node_ids` field.
     repeated bytes not_allowed_node_ids = 15;
+
+    // Flag used to signal that this order can be shared in public market
+    // places.
+    bool is_public = 17;
 }
 
 enum NodeTier {
@@ -991,6 +995,20 @@ enum NodeTier {
     // nodes in the network. This is the current default node tier when
     // submitting bid orders.
     TIER_1 = 2;
+}
+
+// Channel announcement constraints for matched channels.
+enum ChannelAnnouncementConstraints {
+    ANNOUNCEMENT_NO_PREFERENCE = 0;
+    ONLY_ANNOUNCED = 1;
+    ONLY_UNANNOUNCED = 2;
+}
+
+// Channel confirmation constraints for matched channels.
+enum ChannelConfirmationConstraints {
+    CONFIRMATION_NO_PREFERENCE = 0;
+    ONLY_CONFIRMED = 1;
+    ONLY_ZEROCONF = 2;
 }
 
 message ServerBid {
@@ -1038,6 +1056,16 @@ message ServerBid {
     correspond to the recipient node's details.
     */
     bool is_sidecar_channel = 7;
+
+    /*
+    Signals if this bid is interested in an announced or unannounced channel.
+    */
+    bool unannounced_channel = 8;
+
+    /*
+    Signals if this bid is interested in a zero conf channel or not.
+    */
+    bool zero_conf_channel = 9;
 }
 
 message ServerAsk {
@@ -1057,6 +1085,17 @@ message ServerAsk {
     features are added.
     */
     uint32 version = 5;
+
+    /*
+    The constraints for selling the liquidity based on channel discoverability.
+    */
+    ChannelAnnouncementConstraints announcement_constraints = 6;
+
+    /*
+    The constraints for selling the liquidity based on the number of
+    blocks before considering the channel confirmed.
+    */
+    ChannelConfirmationConstraints confirmation_constraints = 7;
 }
 
 message CancelOrder {
