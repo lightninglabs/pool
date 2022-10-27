@@ -2410,9 +2410,9 @@ type Bid struct {
 	//Give the incoming channel that results from this bid being matched an
 	//initial outbound balance by adding additional funds from the taker's account
 	//into the channel. As a simplification for the execution protocol and the
-	//channel reserve calculations, the self_chan_balance can be at most the same
-	//as the order amount and the min_chan_amt must be set to the full order
-	//amount.
+	//channel reserve calculations the min_chan_amt must be set to the full order
+	//amount. For the inbound liquidity market the self_chan_balance can be at
+	//most the same as the order amount.
 	SelfChanBalance uint64 `protobuf:"varint,5,opt,name=self_chan_balance,json=selfChanBalance,proto3" json:"self_chan_balance,omitempty"`
 	//
 	//If this bid order is meant to lease a channel for another node (which is

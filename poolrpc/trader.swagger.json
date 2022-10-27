@@ -1206,7 +1206,7 @@
         "self_chan_balance": {
           "type": "string",
           "format": "uint64",
-          "description": "Give the incoming channel that results from this bid being matched an\ninitial outbound balance by adding additional funds from the taker's account\ninto the channel. As a simplification for the execution protocol and the\nchannel reserve calculations, the self_chan_balance can be at most the same\nas the order amount and the min_chan_amt must be set to the full order\namount."
+          "description": "Give the incoming channel that results from this bid being matched an\ninitial outbound balance by adding additional funds from the taker's account\ninto the channel. As a simplification for the execution protocol and the\nchannel reserve calculations the min_chan_amt must be set to the full order\namount. For the inbound liquidity market the self_chan_balance can be at\nmost the same as the order amount."
         },
         "sidecar_ticket": {
           "type": "string",
