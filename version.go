@@ -28,12 +28,12 @@ const semanticAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 // versioning 2.0.0 spec (http://semver.org/).
 const (
 	appMajor uint = 0
-	appMinor uint = 5
-	appPatch uint = 7
+	appMinor uint = 6
+	appPatch uint = 0
 
 	// appPreRelease MUST only contain characters from semanticAlphabet per
 	// the semantic versioning spec.
-	appPreRelease = "alpha"
+	appPreRelease = "beta"
 
 	// defaultAgentName is the default name of the software that is added as
 	// the first part of the user agent string.
