@@ -319,7 +319,10 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order,
 	params.AllowedNodeIds = allowedNodeIDs
 	params.NotAllowedNodeIds = notAllowedNodeIDs
 
-	params.IsPublic = ctx.Bool("public")
+	params.IsPublic = true
+	if ctx.IsSet("public") {
+		params.IsPublic = ctx.Bool("public")
+	}
 
 	return params, nil
 }
