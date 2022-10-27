@@ -73,6 +73,7 @@ func ParseRPCOrder(version, leaseDuration uint32,
 	}
 
 	copy(kit.AcctKey[:], details.TraderKey)
+	kit.AuctionType = AuctionType(details.AuctionType)
 	kit.Version = Version(version)
 	kit.FixedRate = details.RateFixed
 	kit.Amt = btcutil.Amount(details.Amt)
@@ -89,7 +90,9 @@ func ParseRPCOrder(version, leaseDuration uint32,
 		return nil, errors.New("min units match must be greater than 0")
 
 	// The min units match must not exceed the total order units.
-	case details.MinUnitsMatch > uint32(kit.Units):
+	case kit.AuctionType != BTCOutboundLiquidity &&
+		details.MinUnitsMatch > uint32(kit.Units):
+
 		return nil, errors.New("min units match must not exceed " +
 			"total order units")
 	}
@@ -205,6 +208,7 @@ func ParseRPCServerOrder(version uint32, details *auctioneerrpc.ServerOrder,
 
 	copy(nonce[:], details.OrderNonce)
 	kit := NewKit(nonce)
+	kit.AuctionType = AuctionType(details.AuctionType)
 	kit.Version = Version(version)
 	kit.FixedRate = details.RateFixed
 	kit.Amt = btcutil.Amount(details.Amt)

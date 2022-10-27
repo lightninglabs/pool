@@ -805,28 +805,66 @@ func TestOfferSidecarValidation(t *testing.T) {
 		name        string
 		capacity    btcutil.Amount
 		pushAmt     btcutil.Amount
+		bid         *order.Bid
 		expectedErr string
 	}{{
 		name:        "empty capacity",
+		bid:         &order.Bid{},
 		expectedErr: "channel capacity must be positive multiple of",
 	}, {
 		name:        "invalid capacity",
 		capacity:    123,
+		bid:         &order.Bid{},
 		expectedErr: "channel capacity must be positive multiple of",
 	}, {
 		name:     "invalid push amount",
 		capacity: 100000,
 		pushAmt:  100001,
+		bid:      &order.Bid{},
 		expectedErr: "self channel balance must be smaller than " +
 			"or equal to capacity",
+	}, {
+		name:     "no sidecar for outbound market",
+		capacity: 100000,
+		pushAmt:  0,
+		bid: &order.Bid{
+			Kit: order.Kit{
+				AuctionType: order.BTCOutboundLiquidity,
+			},
+		},
+		expectedErr: "market does not support sidecar tickets",
 	}}
+
+	privKey, err := btcec.NewPrivateKey()
+	require.NoError(t, err)
+	desc := &keychain.KeyDescriptor{
+		PubKey: privKey.PubKey(),
+	}
+
+	// We'll need a formally valid signature to pass the parsing. So we'll
+	// just create a dummy signature from a random key pair.
+	hash := sha256.New()
+	_, _ = hash.Write([]byte("foo"))
+	digest := hash.Sum(nil)
+	sig := ecdsa.Sign(privKey, digest)
+
+	h.mgr.cfg.NodePubKey = privKey.PubKey()
+	h.signerMock.Signature = sig.Serialize()
+	var nodeKeyRaw [33]byte
+	copy(nodeKeyRaw[:], privKey.PubKey().SerializeCompressed())
+
 	for _, testCase := range negativeCases {
 		_, err := h.mgr.OfferSidecar(
 			context.Background(), testCase.capacity,
-			testCase.pushAmt, 2016, nil, nil, false,
+			testCase.pushAmt, 2016, desc, testCase.bid, false,
 		)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), testCase.expectedErr)
+		fmt.Println(testCase.expectedErr)
+		if testCase.expectedErr != "" {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), testCase.expectedErr)
+			continue
+		}
+		require.NoError(t, err)
 	}
 }
 

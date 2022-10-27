@@ -1341,6 +1341,14 @@ func (s *rpcServer) validateOrder(o order.Order, acct *account.Account,
 			}
 		}
 
+		if castOrder.AuctionType == order.BTCOutboundLiquidity &&
+			castOrder.MinUnitsMatch == 0 {
+
+			return fmt.Errorf("min chan amount must be greater " +
+				"than zero for participating in the outbound " +
+				"liquidity market")
+		}
+
 	case *order.Bid:
 		if castOrder.ZeroConfChannel {
 			if !batchVersion.SupportsZeroConfChannels() {
@@ -1390,6 +1398,13 @@ func (s *rpcServer) validateOrder(o order.Order, acct *account.Account,
 
 		return fmt.Errorf("allowed and not allowed node ids set at " +
 			"the same time")
+	}
+
+	if o.Details().AuctionType == order.BTCOutboundLiquidity &&
+		o.Details().Units != 1 {
+
+		return fmt.Errorf("to participate in the outbound liquidity " +
+			"market the order amt should be exactly 100k sats")
 	}
 
 	return nil
@@ -2330,11 +2345,19 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					clearingPrice = batch.ClearingPrices[duration]
 				}
 
+				premiumAmt := chanAmt
+				auctionType := ourOrder.Details().AuctionType
+				if auctionType == order.BTCOutboundLiquidity {
+					premiumAmt += btcutil.Amount(
+						selfChanBalance,
+					)
+				}
+
 				// Calculate the premium paid/received to/from
 				// the maker/taker and the execution fee paid
 				// to the auctioneer and tally them.
 				premium := clearingPrice.LumpSumPremium(
-					chanAmt, bidDuration,
+					premiumAmt, bidDuration,
 				)
 				exeFee := batch.ExecutionFee.BaseFee() +
 					batch.ExecutionFee.ExecutionFee(chanAmt)

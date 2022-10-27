@@ -899,6 +899,20 @@ enum OrderChannelType {
     ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED = 2;
 }
 
+enum AuctionType {
+    /*
+    Default auction type where the bidder is paying for getting bitcoin inbound
+    liqiudity from the asker.
+    */
+    AUCTION_TYPE_BTC_INBOUND_LIQUIDITY = 0;
+
+    /*
+    Auction type where the bidder is paying the asker to accept a channel
+    (bitcoin outbound liquidity) from the bidder.
+    */
+    AUCTION_TYPE_BTC_OUTBOUND_LIQUIDITY = 1;
+}
+
 message ServerOrder {
     /*
     The trader's account key of the account to use for the order.
@@ -975,6 +989,9 @@ message ServerOrder {
     // with the `allowed_node_ids` field.
     repeated bytes not_allowed_node_ids = 15;
 
+    // Auction type where this order must be considered during the matching.
+    AuctionType auction_type = 16;
+
     // Flag used to signal that this order can be shared in public market
     // places.
     bool is_public = 17;
@@ -1043,9 +1060,9 @@ message ServerBid {
     Give the incoming channel that results from this bid being matched an
     initial outbound balance by adding additional funds from the taker's account
     into the channel. As a simplification for the execution protocol and the
-    channel reserve calculations, the self_chan_balance can be at most the same
-    as the order amount and the min_chan_amt must be set to the full order
-    amount.
+    channel reserve calculations the min_chan_amt must be set to the full order
+    amount. For the inbound liquidity market the self_chan_balance can be at
+    most the same as the order amount.
     */
     uint64 self_chan_balance = 6;
 

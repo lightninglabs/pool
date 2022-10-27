@@ -51,6 +51,10 @@ const (
 	// to store the channel confirmation match preferences.
 	askChannelConfirmationConstraintsType tlv.Type = 9
 
+	// orderAuctionType is the tlv type that we use to store the auction
+	// type for an order.
+	orderAuctionType tlv.Type = 10
+
 	// orderIsPublicType is the tlv type we use to store a flag value when
 	// it is ok to share details of this order in public markets.
 	orderIsPublicType tlv.Type = 11
@@ -698,6 +702,7 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 		askAnnouncementConstraints uint8
 		bidZeroConf                uint8
 		askConfirmationConstraints uint8
+		auctionType                uint8
 		isPublic                   uint8
 	)
 
@@ -726,6 +731,7 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 			askChannelConfirmationConstraintsType,
 			&askConfirmationConstraints,
 		),
+		tlv.MakePrimitiveRecord(orderAuctionType, &auctionType),
 		tlv.MakePrimitiveRecord(orderIsPublicType, &isPublic),
 	)
 	if err != nil {
@@ -802,6 +808,10 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 			return fmt.Errorf("invalid notAllowedNodeIDs: %v", err)
 		}
 		o.Details().NotAllowedNodeIDs = nodeIDs
+	}
+
+	if t, ok := parsedTypes[orderAuctionType]; ok && t == nil {
+		o.Details().AuctionType = order.AuctionType(auctionType)
 	}
 
 	t, ok := parsedTypes[orderIsPublicType]
@@ -903,6 +913,11 @@ func serializeOrderTlvData(w io.Writer, o order.Order) error {
 	tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
 		askChannelConfirmationConstraintsType,
 		&askConfirmationConstraints,
+	))
+
+	auctionType := uint8(o.Details().AuctionType)
+	tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
+		orderAuctionType, &auctionType,
 	))
 
 	if o.Details().IsPublic {

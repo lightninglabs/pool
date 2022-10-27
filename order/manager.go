@@ -465,8 +465,9 @@ func (m *manager) validateAndSignTicketForOrder(ctx context.Context,
 
 	// The signature is valid! Let's now make sure the offer and the order
 	// parameters actually match.
-	err := sidecar.CheckOfferParamsForOrder(
-		o, bid.Amt, btcutil.Amount(bid.MinUnitsMatch), BaseSupplyUnit,
+	err := CheckOfferParamsForOrder(
+		bid.AuctionType, o, bid.Amt, btcutil.Amount(bid.MinUnitsMatch),
+		BaseSupplyUnit,
 	)
 	if err != nil {
 		return err

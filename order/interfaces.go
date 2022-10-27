@@ -282,6 +282,34 @@ const (
 	OnlyZeroConf ChannelConfirmationConstraints = 2
 )
 
+// AuctionType is a numerical type used to denote in what auction market should
+// this order be considered in.
+type AuctionType uint32
+
+const (
+	// BTCInboundLiquidity is an auction type where the bidder pays the
+	// asker a premium to get btc inbound liquidity from him.
+	BTCInboundLiquidity AuctionType = 0
+
+	// BTCOutboundLiquidity is an auction type where the bidder pays the
+	// asker a premium to accept a btc channel from the bidder.
+	BTCOutboundLiquidity AuctionType = 1
+)
+
+// String returns a human readable string representation of the auction type.
+func (a AuctionType) String() string {
+	switch a {
+	case BTCInboundLiquidity:
+		return "btc_inbound_liquidity"
+
+	case BTCOutboundLiquidity:
+		return "btc_outbound_liquidity"
+
+	default:
+		return fmt.Sprintf("unknown<%d>", a)
+	}
+}
+
 var (
 	// ErrInsufficientBalance is the error that is returned if an account
 	// has insufficient balance to perform a requested action.
@@ -368,6 +396,9 @@ type Kit struct {
 	// Preimage is the randomly generated preimage to the nonce hash. It is
 	// only known to the trader client.
 	Preimage lntypes.Preimage
+
+	// AuctionType is the market where this offer should be considered in.
+	AuctionType AuctionType
 
 	// Version is the feature version of this order. Can be used to
 	// distinguish between certain feature sets or to signal feature flags.
@@ -608,7 +639,7 @@ func (a *Ask) ReservedValue(feeSchedule terms.FeeSchedule,
 
 	return reservedValue(a, func(amt btcutil.Amount) btcutil.Amount {
 		delta, _, _ := makerDelta(
-			feeSchedule, clearingPrice, amt, a.LeaseDuration,
+			feeSchedule, clearingPrice, amt, amt, a.LeaseDuration,
 		)
 		return delta
 	}, accountVersion)
@@ -792,12 +823,75 @@ func (b *Bid) ReservedValue(feeSchedule terms.FeeSchedule,
 	clearingPrice := FixedRatePremium(b.FixedRate)
 
 	return reservedValue(b, func(amt btcutil.Amount) btcutil.Amount {
+		premiumAmt := amt
+		if b.Details().AuctionType == BTCOutboundLiquidity {
+			premiumAmt += b.SelfChanBalance
+		}
+
 		delta, _, _ := takerDelta(
-			feeSchedule, clearingPrice, amt, b.SelfChanBalance,
-			b.LeaseDuration,
+			feeSchedule, clearingPrice, premiumAmt,
+			b.SelfChanBalance, b.LeaseDuration,
 		)
 		return delta
 	}, accountVersion)
+}
+
+// CheckOfferParams makes sure the offer parameters of an offer are valid and
+// sane.
+func CheckOfferParams(auctionType AuctionType, capacity, pushAmt,
+	baseSupplyUnit btcutil.Amount) error {
+
+	if capacity == 0 || capacity%baseSupplyUnit != 0 {
+		return fmt.Errorf("channel capacity must be positive multiple "+
+			"of %d", baseSupplyUnit)
+	}
+
+	if auctionType == BTCInboundLiquidity && pushAmt > capacity {
+		return fmt.Errorf("self channel balance must be smaller than " +
+			"or equal to capacity")
+	}
+
+	if auctionType == BTCOutboundLiquidity {
+		// Only multiples of 100k sats are allowed in the outbound
+		// market.
+		if pushAmt == 0 || pushAmt%baseSupplyUnit != 0 {
+			return fmt.Errorf("self balance must be a positive "+
+				"multiple of %d", baseSupplyUnit)
+		}
+	}
+
+	return nil
+}
+
+// CheckOfferParamsForOrder makes sure that the order parameters in a
+// sidecar offer are formally valid, sane and match the order parameters.
+func CheckOfferParamsForOrder(auctionType AuctionType, offer sidecar.Offer,
+	bidAmt, bidMinUnitsMatch, baseSupplyUnit btcutil.Amount) error {
+
+	if auctionType != BTCInboundLiquidity {
+		return fmt.Errorf("%s market does not support sidecar tickets",
+			auctionType)
+	}
+
+	err := CheckOfferParams(
+		auctionType, offer.Capacity, offer.PushAmt, baseSupplyUnit,
+	)
+	if err != nil {
+		return err
+	}
+
+	if offer.Capacity != bidAmt {
+		return fmt.Errorf("invalid bid amount %v, must match sidecar "+
+			"ticket's capacity %v", bidAmt, offer.Capacity)
+	}
+
+	if offer.Capacity != bidMinUnitsMatch*baseSupplyUnit {
+		return fmt.Errorf("invalid min units match %v, must match "+
+			"sidecar ticket's capacity %v",
+			bidMinUnitsMatch*baseSupplyUnit, offer.Capacity)
+	}
+
+	return nil
 }
 
 // ValidateSelfChanBalance makes sure that all conditions to use the
@@ -808,8 +902,8 @@ func (b *Bid) ValidateSelfChanBalance() error {
 			"order version")
 	}
 
-	if err := sidecar.CheckOfferParams(
-		b.Amt, b.SelfChanBalance, BaseSupplyUnit,
+	if err := CheckOfferParams(
+		b.AuctionType, b.Amt, b.SelfChanBalance, BaseSupplyUnit,
 	); err != nil {
 		return fmt.Errorf("invalid self chan balance: %v", err)
 	}
@@ -817,6 +911,14 @@ func (b *Bid) ValidateSelfChanBalance() error {
 	if b.Units != b.MinUnitsMatch {
 		return fmt.Errorf("to use self chan balance the min units " +
 			"match must be equal to the order amount in units")
+	}
+
+	if b.AuctionType == BTCOutboundLiquidity &&
+		b.SelfChanBalance < BaseSupplyUnit {
+
+		return fmt.Errorf("to participate in the outbound liquidity " +
+			"market the self chan balance should be at least " +
+			"100k sats")
 	}
 
 	return nil

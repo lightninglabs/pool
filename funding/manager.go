@@ -1023,8 +1023,15 @@ func (m *Manager) OfferSidecar(ctx context.Context, capacity,
 	acctPubKey *keychain.KeyDescriptor,
 	bid *order.Bid, auto bool) (*sidecar.Ticket, error) {
 
+	if bid.Details().AuctionType != order.BTCInboundLiquidity {
+		return nil, fmt.Errorf("%s market does not support sidecar "+
+			"tickets", bid.Details().AuctionType)
+	}
+
 	// Make sure the capacity and push amounts are sane.
-	err := sidecar.CheckOfferParams(capacity, pushAmt, order.BaseSupplyUnit)
+	err := order.CheckOfferParams(
+		bid.AuctionType, capacity, pushAmt, order.BaseSupplyUnit,
+	)
 	if err != nil {
 		return nil, err
 	}

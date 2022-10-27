@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestOrderReservedValue checks orders' ReservedValue merhod returning the
+// TestOrderReservedValue checks orders' ReservedValue method returning the
 // expected worst case value.
 func TestOrderReservedValue(t *testing.T) {
 	t.Parallel()
@@ -240,7 +240,7 @@ func TestOrderReservedValue(t *testing.T) {
 					1, o.MaxBatchFeeRate, v,
 				)
 
-				// For bids the lump sum, chain fee  and the
+				// For bids the lump sum, chain fee and the
 				// execution fee must be reserved.
 				expValue += lumpSum + chainFee + exeFee
 			}

@@ -431,11 +431,21 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		return fmt.Errorf("unhandled channel type %v", c)
 	}
 
+	var auctionType auctioneerrpc.AuctionType
+	switch o.Details().AuctionType {
+	case order.BTCInboundLiquidity:
+		auctionType = auctioneerrpc.AuctionType_AUCTION_TYPE_BTC_INBOUND_LIQUIDITY
+	case order.BTCOutboundLiquidity:
+		auctionType = auctioneerrpc.AuctionType_AUCTION_TYPE_BTC_OUTBOUND_LIQUIDITY
+	}
+	minChanAmt := uint64(o.Details().MinUnitsMatch.ToSatoshis())
+
 	details := &auctioneerrpc.ServerOrder{
 		TraderKey:               o.Details().AcctKey[:],
+		AuctionType:             auctionType,
 		RateFixed:               o.Details().FixedRate,
 		Amt:                     uint64(o.Details().Amt),
-		MinChanAmt:              uint64(o.Details().MinUnitsMatch.ToSatoshis()),
+		MinChanAmt:              minChanAmt,
 		OrderNonce:              nonce[:],
 		OrderSig:                serverParams.RawSig,
 		MultiSigKey:             serverParams.MultiSigKey[:],

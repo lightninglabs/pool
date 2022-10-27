@@ -203,7 +203,11 @@ func (v *batchVerifier) Verify(batch *Batch, bestHeight uint32) error {
 				),
 			}
 
-		case unitsFilled < ourOrder.Details().MinUnitsMatch:
+		// For the BTCOutboundLiquidity market exactly one unit will be
+		// matched.
+		case ourOrder.Details().AuctionType != BTCOutboundLiquidity &&
+			unitsFilled < ourOrder.Details().MinUnitsMatch:
+
 			return &MismatchErr{
 				msg: fmt.Sprintf("invalid units to be filled "+
 					"for order %v. matched %d units, but "+
@@ -283,6 +287,13 @@ func (v *batchVerifier) validateMatchedOrder(tally *AccountTally,
 			"orders", ourOrder.Nonce())
 	}
 
+	// Auction types must match.
+	auctionType := ourOrder.Details().AuctionType
+	if auctionType != otherOrder.Order.Details().AuctionType {
+		return fmt.Errorf("order %v did not match the same auction "+
+			"type", ourOrder.Nonce())
+	}
+
 	// Make sure we weren't matched to our own order.
 	if otherOrder.NodeKey == v.ourNodePubkey {
 		return fmt.Errorf("other order is an order from our node")
@@ -305,10 +316,15 @@ func (v *batchVerifier) validateMatchedOrder(tally *AccountTally,
 			return fmt.Errorf("ask price greater than bid price")
 		}
 
+		makerAmt := otherOrder.UnitsFilled.ToSatoshis()
+		premiumAmt := makerAmt
+		if auctionType == BTCOutboundLiquidity {
+			premiumAmt += other.SelfChanBalance
+		}
+
 		// This match checks out, deduct it from the account's balance.
 		tally.CalcMakerDelta(
-			executionFee, clearingPrice,
-			otherOrder.UnitsFilled.ToSatoshis(),
+			executionFee, clearingPrice, makerAmt, premiumAmt,
 			other.LeaseDuration,
 		)
 
@@ -324,11 +340,16 @@ func (v *batchVerifier) validateMatchedOrder(tally *AccountTally,
 			return fmt.Errorf("ask price greater than bid price")
 		}
 
+		takerAmt := ours.SelfChanBalance
+		premiumAmt := otherOrder.UnitsFilled.ToSatoshis()
+		if auctionType == BTCOutboundLiquidity {
+			premiumAmt += takerAmt
+		}
+
 		// This match checks out, deduct it from the account's balance.
 		tally.CalcTakerDelta(
-			executionFee, clearingPrice,
-			otherOrder.UnitsFilled.ToSatoshis(),
-			ours.SelfChanBalance, ours.LeaseDuration,
+			executionFee, clearingPrice, takerAmt, premiumAmt,
+			ours.LeaseDuration,
 		)
 	}
 
