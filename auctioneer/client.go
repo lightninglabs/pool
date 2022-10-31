@@ -507,6 +507,7 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 			IsSidecarChannel:    castOrder.SidecarTicket != nil,
 			UnannouncedChannel:  castOrder.UnannouncedChannel,
 			ZeroConfChannel:     castOrder.ZeroConfChannel,
+			MinReserveChannel:   castOrder.MinReserveChannel,
 		}
 		rpcRequest.Details = &auctioneerrpc.ServerSubmitOrderRequest_Bid{
 			Bid: serverBid,

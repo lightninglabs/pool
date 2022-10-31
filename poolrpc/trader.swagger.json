@@ -1219,6 +1219,10 @@
         "zero_conf_channel": {
           "type": "boolean",
           "description": "Signals if this bid is interested in a zero conf channel or not."
+        },
+        "min_reserve_channel": {
+          "type": "boolean",
+          "description": "Signals if this bid is interested in a minimal reserve channel."
         }
       }
     },
@@ -1387,6 +1391,10 @@
         "offer_zero_conf_channel": {
           "type": "boolean",
           "description": "If true, the channel acceptor for this ticket will expect a zero conf\nchannel."
+        },
+        "offer_min_reserve_channel": {
+          "type": "boolean",
+          "description": "If true, the channel acceptor for this ticket will expect a minimal\nreserve channel."
         }
       }
     },

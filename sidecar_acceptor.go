@@ -25,13 +25,14 @@ import (
 
 // SidecarAcceptor is a type that is exclusively responsible for managing the
 // recipient's tasks of executing a sidecar channel. The two tasks are:
-// 1. Verify a sidecar ticket and the offer contained within then add the
-//    recipient node information to the ticket so it can be returned to the
-//    sidecar provider. This is step 2/4 of the entire sidecar execution
-//    protocol.
-// 2. Interact with the auction server and connect out to an asker's node in the
-//    right moment then accept the incoming channel. This is step 4/4 of the
-//    entire sidecar execution protocol.
+//  1. Verify a sidecar ticket and the offer contained within then add the
+//     recipient node information to the ticket so it can be returned to the
+//     sidecar provider. This is step 2/4 of the entire sidecar execution
+//     protocol.
+//  2. Interact with the auction server and connect out to an asker's node in the
+//     right moment then accept the incoming channel. This is step 4/4 of the
+//     entire sidecar execution protocol.
+//
 // The code for these two tasks are kept separate from the default funding
 // manager to make it easier to extract a standalone sidecar acceptor client
 // later on. It also makes it easier to see what code would need to be re-
@@ -777,6 +778,7 @@ func (a *SidecarAcceptor) getSidecarAsOrder(o order.Nonce) (order.Order, error) 
 				SelfChanBalance:    ticket.Offer.PushAmt,
 				UnannouncedChannel: unannounced,
 				ZeroConfChannel:    zeroConf,
+				MinReserveChannel:  ticket.Offer.MinReserveChannel,
 			}, nil
 		}
 	}

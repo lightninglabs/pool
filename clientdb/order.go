@@ -58,6 +58,10 @@ const (
 	// orderIsPublicType is the tlv type we use to store a flag value when
 	// it is ok to share details of this order in public markets.
 	orderIsPublicType tlv.Type = 11
+
+	// bidMinReserveChannelType is the tlv type we use to store a flag
+	// value when a bid accepts minimal reserve channels.
+	bidMinReserveChannelType tlv.Type = 12
 )
 
 var (
@@ -704,6 +708,7 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 		askConfirmationConstraints uint8
 		auctionType                uint8
 		isPublic                   uint8
+		bidMinReserveChannel       uint8
 	)
 
 	// We'll add records for all possible additional order data fields here
@@ -733,6 +738,7 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 		),
 		tlv.MakePrimitiveRecord(orderAuctionType, &auctionType),
 		tlv.MakePrimitiveRecord(orderIsPublicType, &isPublic),
+		tlv.MakePrimitiveRecord(bidMinReserveChannelType, &bidMinReserveChannel),
 	)
 	if err != nil {
 		return err
@@ -788,6 +794,11 @@ func deserializeOrderTlvData(r io.Reader, o order.Order) error {
 		if ok && t == nil && bidZeroConf == 1 {
 			castOrder.ZeroConfChannel = true
 		}
+
+		t, ok = parsedTypes[bidMinReserveChannelType]
+		if ok && t == nil && bidMinReserveChannel == 1 {
+			castOrder.MinReserveChannel = true
+		}
 	}
 
 	if t, ok := parsedTypes[orderChannelType]; ok && t == nil {
@@ -831,6 +842,7 @@ func serializeOrderTlvData(w io.Writer, o order.Order) error {
 		bidUnannouncedChannel      uint8
 		askConfirmationConstraints uint8
 		bidZeroConfChannel         uint8
+		bidMinReserveChannel       uint8
 	)
 
 	switch castOrder := o.(type) {
@@ -908,6 +920,10 @@ func serializeOrderTlvData(w io.Writer, o order.Order) error {
 
 	tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
 		bidZeroConfType, &bidZeroConfChannel,
+	))
+
+	tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
+		bidMinReserveChannelType, &bidMinReserveChannel,
 	))
 
 	tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
