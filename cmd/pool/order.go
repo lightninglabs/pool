@@ -46,9 +46,9 @@ const (
         In the outbound market, the bidder pays the asker a premium for  
         a channel with outbound liquidity. 
         To participate in the outbound market the asker needs to create an order
-        with '--amount=100000' (one unit) and the '--min_chan_amt' equals to 
+        with '--amt=100000' (one unit) and the '--min_chan_amt' equals to 
         the minimum channel size that is willing to accept.
-        The bidder needs to create an order with '--amount=100000' (one unit) 
+        The bidder needs to create an order with '--amt=100000' (one unit) 
         and '--self_chan_balance' equals to the funds that is willing to commit 
         in a channel. The premium amount is calculated using the funding amount 
         of the bidder ('--self_chan_balance').
