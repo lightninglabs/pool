@@ -309,6 +309,40 @@ func validateMinChanAmount(ctx *cli.Context,
 	return nil
 }
 
+// validateOrderSelfBalance checks that the self balance amount is valid for
+// the given market.
+func validateOrderSelfBalance(ctx *cli.Context, bid *poolrpc.Bid) error {
+	bidAmt := btcutil.Amount(bid.Details.Amt)
+	bidUnits := order.NewSupplyFromSats(bidAmt)
+
+	switch {
+	case isInboundLiquidityOrder(ctx):
+		// Make sure the self channel balance is within reasonable
+		// limits (currently max the same of the total order amount)
+		// and that the min units matched is also set to 100% of the
+		// order amount.
+		if bid.Details.MinUnitsMatch != uint32(bidUnits) {
+			return fmt.Errorf("when using " +
+				"self_chan_balance the min_chan_amt must be " +
+				"set to the same value as amt")
+		}
+
+	case isOutboundLiquidityOrder(ctx):
+		if bid.SelfChanBalance < uint64(order.BaseSupplyUnit) {
+			return fmt.Errorf("the self balance amount must be at "+
+				"least the base supply amount (%v sats)",
+				order.BaseSupplyUnit)
+		}
+	}
+
+	// Default checks.
+	return order.CheckOfferParams(
+		order.AuctionType(bid.Details.AuctionType), bidAmt,
+		btcutil.Amount(bid.SelfChanBalance),
+		order.BaseSupplyUnit,
+	)
+}
+
 // parseCommonParams tries to read the common order parameters from the command
 // line positional arguments and/or flags and parses them based on their
 // destination data type. No formal in-depth validation is performed as the
@@ -809,6 +843,21 @@ func parseBaseBid(ctx *cli.Context) (*poolrpc.Bid, *sidecar.Ticket, error) {
 	params.MinUnitsMatch = uint32(minChanAmt / order.BaseSupplyUnit)
 
 	bid.Details = params
+
+	hasSelfChanBalance := ctx.IsSet("self_chan_balance")
+	switch {
+	case !hasSelfChanBalance && isOutboundLiquidityOrder(ctx):
+		return nil, nil, fmt.Errorf("the `self_chan_balance` "+
+			"parameter must be set to at least %v sats",
+			order.BaseSupplyUnit)
+
+	case hasSelfChanBalance:
+		bid.SelfChanBalance = ctx.Uint64("self_chan_balance")
+		if err = validateOrderSelfBalance(ctx, bid); err != nil {
+			return nil, nil, fmt.Errorf("invalid self balance "+
+				"amount: %v", err)
+		}
+	}
 
 	return bid, ticket, nil
 }
