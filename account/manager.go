@@ -3,6 +3,7 @@ package account
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -105,6 +106,70 @@ func (wt witnessType) witnessSize() (int, error) {
 	default:
 		return 0, fmt.Errorf("unknown witness type %v", wt)
 	}
+}
+
+// IsExpirySpend returns true if the witness is taking an expiration path.
+func (wt witnessType) IsExpirySpend() bool {
+	switch wt {
+	case expiryWitness, expiryTaproot:
+		return true
+	default:
+		return false
+	}
+}
+
+// Action is a type of account modification.
+type Action string
+
+const (
+	CREATE   Action = "create"
+	DEPOSIT  Action = "deposit"
+	WITHDRAW Action = "withdraw"
+	RENEW    Action = "renew"
+	CLOSE    Action = "close"
+)
+
+type TxLabel struct {
+	Account AccountTxLabel `json:"account"`
+}
+
+type AccountTxLabel struct {
+	Key           string          `json:"key"`
+	Action        Action          `json:"action"`
+	ExpiryHeight  uint32          `json:"expiry_height"`
+	OutputIndex   uint32          `json:"output_index"`
+	IsExpirySpend bool            `json:"expiry_spend"`
+	TxFee         *btcutil.Amount `json:"tx_fee"`
+	BalanceDiff   btcutil.Amount  `json:"balance_diff"`
+}
+
+// actionTxLabel returns a transaction label for use with account
+// modification actions.
+func actionTxLabel(account *Account, action Action, isExpirySpend bool,
+	txFee *btcutil.Amount, balanceDiff btcutil.Amount) string {
+
+	prefixTag := "poold -- %s"
+
+	acctKey := account.TraderKey.PubKey.SerializeCompressed()
+	key := fmt.Sprintf("%x", acctKey)
+	label := AccountTxLabel{
+		Key:           key,
+		Action:        action,
+		ExpiryHeight:  account.Expiry,
+		OutputIndex:   account.OutPoint.Index,
+		IsExpirySpend: isExpirySpend,
+		TxFee:         txFee,
+		BalanceDiff:   balanceDiff,
+	}
+	labelJson, err := json.Marshal(label)
+	if err != nil {
+		log.Errorf("Internal error: failed to serialize json "+
+			"from %v", label)
+		return fmt.Sprintf(prefixTag, action)
+	}
+
+	labelString := fmt.Sprintf(prefixTag, labelJson)
+	return labelString
 }
 
 // ManagerConfig contains all of the required dependencies for the Manager to
@@ -548,10 +613,23 @@ func (m *manager) resumeAccount(ctx context.Context, account *Account, // nolint
 					"be greater than 0", acctKey)
 			}
 
-			// If we have a label prefix, then we'll apply that now
-			// and also attach some additional meta data.
-			contextLabel := fmt.Sprintf(" poold -- "+
-				"AccountCreation(acct_key=%x)", acctKey)
+			// Attach additional meta data to transaction label.
+			//
+			// TODO(ffranr): Tx inputs are required to calculate the
+			// fee. The fee will be added to the tx label.
+			// m.cfg.Wallet.SendOutputs returns and selects tx
+			// inputs but also requires the label as an argument.
+			// Instead, the tx should be constructed via
+			// m.cfg.Wallet.FundPsbt which would give us an
+			// opportunity to inspect tx inputs before creating a
+			// tx label.
+			var txFee *btcutil.Amount = nil
+
+			balanceDiff := account.Value
+			contextLabel := actionTxLabel(
+				account, CREATE, false, txFee,
+				balanceDiff,
+			)
 			label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
 
 			// TODO(wilmer): Expose manual controls to bump fees.
@@ -624,9 +702,20 @@ func (m *manager) resumeAccount(ctx context.Context, account *Account, // nolint
 				}
 			}
 
-			acctKey := account.TraderKey.PubKey.SerializeCompressed()
-			contextLabel := fmt.Sprintf(" poold -- "+
-				"AccountCreation(acct_key=%x)", acctKey)
+			txFee, err := m.deriveFeeFromTx(ctx, accountTx)
+			fee := &txFee
+			if err != nil {
+				log.Errorf(
+					"Failed to derive fee from "+
+						"transaction: %v", accountTx,
+				)
+				fee = nil
+			}
+			balanceDiff := account.Value
+			contextLabel := actionTxLabel(
+				account, CREATE, false, fee,
+				balanceDiff,
+			)
 			label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
 
 			err = m.maybeBroadcastTx(ctx, accountTx, label)
@@ -766,12 +855,22 @@ func (m *manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	// transaction to confirm so that we can transition the account to its
 	// final state.
 	case StatePendingClosed:
-		acctKey := account.TraderKey.PubKey.SerializeCompressed()
-		contextLabel := fmt.Sprintf(" poold -- "+
-			"AccountClosure(acct_key=%x)", acctKey)
+		txFee, err := m.deriveFeeFromTx(ctx, account.LatestTx)
+		fee := &txFee
+		if err != nil {
+			log.Errorf(
+				"Failed to derive fee from "+
+					"transaction: %v", account.LatestTx,
+			)
+			fee = nil
+		}
+		balanceDiff := account.Value
+		contextLabel := actionTxLabel(
+			account, CLOSE, false, fee, balanceDiff,
+		)
 		label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
 
-		err := m.maybeBroadcastTx(ctx, account.LatestTx, label)
+		err = m.maybeBroadcastTx(ctx, account.LatestTx, label)
 		if err != nil {
 			return err
 		}
@@ -796,6 +895,32 @@ func (m *manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	}
 
 	return nil
+}
+
+// deriveFeeFromTx derives the transaction fee from a given transaction message.
+func (m *manager) deriveFeeFromTx(ctx context.Context,
+	tx *wire.MsgTx) (btcutil.Amount, error) {
+
+	// Input and output values are required to calculate the tx fee. However,
+	// tx messages do not contain input values. We will therefore locate those
+	// input values via the outputs that they represent.
+	var sumInputs int64
+	for _, txIn := range tx.TxIn {
+		spendTx, err := m.locateTxByHash(ctx, txIn.PreviousOutPoint.Hash)
+		if err != nil {
+			return 0, nil
+		}
+		txOut := spendTx.TxOut[txIn.PreviousOutPoint.Index]
+		sumInputs += txOut.Value
+	}
+
+	var sumOutputs int64
+	for _, txOut := range tx.TxOut {
+		sumOutputs += txOut.Value
+	}
+
+	fee := sumInputs - sumOutputs
+	return btcutil.Amount(fee), nil
 }
 
 // locateTxByOutput locates a transaction from the Manager's TxSource by one of
@@ -1165,8 +1290,7 @@ func (m *manager) DepositAccount(ctx context.Context,
 	// and assuming it's valid, broadcast the deposit transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
 	modifiedAccount, spendTx, err := m.spendAccount(
-		ctx, account, packet, spendWitnessType, modifiers, false,
-		bestHeight,
+		ctx, account, DEPOSIT, packet, spendWitnessType, modifiers, bestHeight,
 	)
 	if err != nil {
 		releaseInputs()
@@ -1241,8 +1365,7 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 	// and assuming it's valid, broadcast the withdrawal transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
 	modifiedAccount, spendTx, err := m.spendAccount(
-		ctx, account, packet, spendWitnessType, modifiers, false,
-		bestHeight,
+		ctx, account, WITHDRAW, packet, spendWitnessType, modifiers, bestHeight,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1317,8 +1440,7 @@ func (m *manager) RenewAccount(ctx context.Context,
 	// and assuming it's valid, broadcast the update transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
 	modifiedAccount, spendTx, err := m.spendAccount(
-		ctx, account, packet, spendWitnessType, modifiers, false,
-		bestHeight,
+		ctx, account, RENEW, packet, spendWitnessType, modifiers, bestHeight,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1454,8 +1576,7 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		ValueModifier(0), StateModifier(StatePendingClosed),
 	}
 	_, spendTx, err := m.spendAccount(
-		ctx, account, packet, spendWitnessType, modifiers, true,
-		bestHeight,
+		ctx, account, CLOSE, packet, spendWitnessType, modifiers, bestHeight,
 	)
 	if err != nil {
 		return nil, err
@@ -1472,13 +1593,13 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 // able to resume the spend of an account upon restarts if they happen to
 // shutdown mid-process.
 func (m *manager) spendAccount(ctx context.Context, account *Account,
-	packet *psbt.Packet, witnessType witnessType, modifiers []Modifier,
-	isClose bool, bestHeight uint32) (*Account, *wire.MsgTx, error) {
+	action Action, packet *psbt.Packet, witnessType witnessType,
+	modifiers []Modifier, bestHeight uint32) (*Account, *wire.MsgTx, error) {
 
 	// In case we're not closing the account, let's now locate our
 	// re-created account output.
 	accountOutputIdx := -1
-	if !isClose {
+	if action != CLOSE {
 		// The account output should be recreated, so we need to locate
 		// the new account outpoint.
 		newAccountOutput, err := account.Copy(modifiers...).Output()
@@ -1514,7 +1635,7 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 	var lockTime uint32
 	switch witnessType {
 	case expiryWitness, expiryTaproot:
-		if !isClose {
+		if action != CLOSE {
 			return nil, nil, errors.New("modifications for " +
 				"expired accounts are not currently supported")
 		}
@@ -1551,14 +1672,13 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 		return nil, nil, err
 	}
 
-	// As this is a generic account modification, we'll add some additional
-	// information to make accounting for this transaction a bit easier.
-	deposit := prevAccountState.Value < account.Value
-	acctKey := account.TraderKey.PubKey.SerializeCompressed()
-	contextLabel := fmt.Sprintf(" poold -- AccountModification(acct_key=%x, "+
-		"expiry=%v, deposit=%v, is_close=%v)", acctKey,
-		witnessType == expiryWitness, deposit, isClose)
-
+	// Generate transaction label.
+	isExpirySpend := witnessType.IsExpirySpend()
+	txFee := deriveFeeFromPsbt(packet)
+	balanceDiff := account.Value - prevAccountState.Value
+	contextLabel := actionTxLabel(
+		account, action, isExpirySpend, &txFee, balanceDiff,
+	)
 	label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
 
 	if err := m.maybeBroadcastTx(ctx, spendTx, label); err != nil {
@@ -1566,6 +1686,22 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 	}
 
 	return account, spendTx, nil
+}
+
+// deriveFeeFromPsbt returns the transaction fee from a given PSBT packet.
+func deriveFeeFromPsbt(packet *psbt.Packet) btcutil.Amount {
+	var sumInputs int64
+	for _, packageInput := range packet.Inputs {
+		sumInputs += packageInput.WitnessUtxo.Value
+	}
+
+	var sumOutputs int64
+	for _, txOut := range packet.UnsignedTx.TxOut {
+		sumOutputs += txOut.Value
+	}
+
+	fee := sumInputs - sumOutputs
+	return btcutil.Amount(fee)
 }
 
 // RecoverAccount re-introduces a recovered account into the database and starts
