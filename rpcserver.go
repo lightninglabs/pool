@@ -1718,6 +1718,9 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			ChannelType: marshallChannelType(
 				dbOrder.Details().ChannelType,
 			),
+			AuctionType: auctioneerrpc.AuctionType(
+				dbOrder.Details().AuctionType,
+			),
 			IsPublic: dbOrder.Details().IsPublic,
 		}
 
