@@ -60,8 +60,8 @@ func CancelPendingFundingShims(matchedOrders map[order.Nonce][]*order.MatchedOrd
 			)
 			if err != nil {
 				log.Warnf("Unable to unregister funding shim "+
-					"(pendingChanID=%x) for order=%v",
-					pendingChanID[:], bidNonce)
+					"(pendingChanID=%x) for order=%v: %v",
+					pendingChanID[:], bidNonce, err)
 			}
 		}
 	}
