@@ -455,8 +455,9 @@ var ordersSubmitAskCommand = cli.Command{
 		cli.Uint64Flag{
 			Name: "announcement_constraints",
 			Usage: "specifies if the liquidity must be sold in " +
-				"announced or unannounced channels. Set to 1 " +
-				"for only announced channels and 2 for only " +
+				"announced or unannounced channels. Set to 0 " +
+				"to express no preference, set to 1 for only " +
+				"announced channels and 2 for only " +
 				"unannounced ones. The default value is \"no " +
 				"preference\"",
 		},
