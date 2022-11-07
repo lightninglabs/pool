@@ -210,6 +210,139 @@ func promptForConfirmation(msg string) bool {
 	}
 }
 
+// isBidOrder returns true for the Bid type.
+func isBidOrder(orderType order.Type) bool {
+	return orderType == order.TypeBid
+}
+
+// isInboundLiquidityOrder returns true when the `auction_type` param is set
+// to the inbound liquidity market.
+func isInboundLiquidityOrder(ctx *cli.Context) bool {
+	return ctx.String("auction_type") == auctionTypeInboundLiquidity
+}
+
+// isOutboundLiquidityOrder returns true when the `auction_type` param is set
+// to the outbound liquidity market.
+func isOutboundLiquidityOrder(ctx *cli.Context) bool {
+	return ctx.String("auction_type") == auctionTypeOutboundLiquidity
+}
+
+// validateOrderAmount checks that the order amount is valid for the given
+// market.
+func validateOrderAmount(ctx *cli.Context, orderAmt uint64) error {
+	baseSupply := uint64(order.BaseSupplyUnit)
+	if isOutboundLiquidityOrder(ctx) && orderAmt != baseSupply {
+		return fmt.Errorf("the order amount must be exactly the base "+
+			"supply amount (%v sats)", baseSupply)
+	}
+
+	return nil
+}
+
+// getMinChanAmount returns the minChanAmount for an order taking into account
+// the `min_chan_amt` parameter and the target market.
+func getMinChanAmount(ctx *cli.Context, orderAmt uint64,
+	orderType order.Type) btcutil.Amount {
+
+	// If a `min_chan_amt` parameter was set by the user use its value.
+	if ctx.IsSet("min_chan_amt") {
+		return btcutil.Amount(ctx.Uint64("min_chan_amt"))
+	}
+
+	// If the `min_chan_amt` parameter was not set we use its default value
+	// depending on auction/order type and order amount.
+	switch {
+	// If the minimum channel amount flag wasn't provided, use a
+	// default of 10% and round to the nearest unit.
+	case isInboundLiquidityOrder(ctx):
+		minChanAmt := order.RoundToNextSupplyUnit(
+			btcutil.Amount(orderAmt) / 10,
+		).ToSatoshis()
+		return minChanAmt
+
+	// The outbound liquidity market only has default values for
+	// bid orders.
+	case isOutboundLiquidityOrder(ctx) && isBidOrder(orderType):
+		return order.BaseSupplyUnit
+	}
+
+	return 0
+}
+
+// validateMinChanAmount checks that the the minimum channel amount parameter
+// has been properly set.
+func validateMinChanAmount(ctx *cli.Context,
+	orderAmt, minChanAmt btcutil.Amount, orderType order.Type) error {
+
+	baseSupply := uint64(order.BaseSupplyUnit)
+	switch {
+	// minChanAmt will be internally expressed as supply units so it must
+	// be a multiple of the BaseSupplyUnit.
+	case minChanAmt%order.BaseSupplyUnit != 0:
+		return fmt.Errorf("minimum channel amount %v must be "+
+			"a multiple of %v", minChanAmt, baseSupply)
+
+	// We cannot match less than one unit.
+	case minChanAmt < order.BaseSupplyUnit:
+		return fmt.Errorf("minimum channel amount %v is less than "+
+			"acceptable lower bound (%v)", minChanAmt, baseSupply)
+
+	// Validation checks that only apply to the inbound liquidity market.
+	case isInboundLiquidityOrder(ctx):
+		if minChanAmt > orderAmt {
+			return fmt.Errorf("minimum channel amount %v is "+
+				"above order amount %v", minChanAmt,
+				orderAmt)
+		}
+
+	// Validation checks that only apply to the outbound liquidity market.
+	//
+	// NOTE: ask orders do not have any extra constraints in this market.
+	case isOutboundLiquidityOrder(ctx) && isBidOrder(orderType):
+		if minChanAmt != order.BaseSupplyUnit {
+			return fmt.Errorf("the minimum channel amount must be "+
+				"exactly equal to the base supply unit "+
+				"(%v sats))", baseSupply)
+		}
+	}
+
+	return nil
+}
+
+// validateOrderSelfBalance checks that the self balance amount is valid for
+// the given market.
+func validateOrderSelfBalance(ctx *cli.Context, bid *poolrpc.Bid) error {
+	bidAmt := btcutil.Amount(bid.Details.Amt)
+	bidUnits := order.NewSupplyFromSats(bidAmt)
+
+	switch {
+	case isInboundLiquidityOrder(ctx):
+		// Make sure the self channel balance is within reasonable
+		// limits (currently max the same of the total order amount)
+		// and that the min units matched is also set to 100% of the
+		// order amount.
+		if bid.Details.MinUnitsMatch != uint32(bidUnits) {
+			return fmt.Errorf("when using " +
+				"self_chan_balance the min_chan_amt must be " +
+				"set to the same value as amt")
+		}
+
+	case isOutboundLiquidityOrder(ctx):
+		if bid.SelfChanBalance < uint64(order.BaseSupplyUnit) {
+			return fmt.Errorf("the self balance amount must be at "+
+				"least the base supply amount (%v sats)",
+				order.BaseSupplyUnit)
+		}
+	}
+
+	// Default checks.
+	return order.CheckOfferParams(
+		order.AuctionType(bid.Details.AuctionType), bidAmt,
+		btcutil.Amount(bid.SelfChanBalance),
+		order.BaseSupplyUnit,
+	)
+}
+
 // parseCommonParams tries to read the common order parameters from the command
 // line positional arguments and/or flags and parses them based on their
 // destination data type. No formal in-depth validation is performed as the
@@ -234,35 +367,11 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order,
 		params.Amt = uint64(amt)
 		args = args.Tail()
 	}
-
-	// If the minimum channel amount flag wasn't provided, use a default of
-	// 10% and round to the nearest unit.
-	minChanAmt := btcutil.Amount(ctx.Uint64("min_chan_amt"))
-	if minChanAmt == 0 {
-		minChanAmt = order.RoundToNextSupplyUnit(
-			btcutil.Amount(params.Amt) / 10,
-		).ToSatoshis()
+	err := validateOrderAmount(ctx, params.Amt)
+	if err != nil {
+		return nil, fmt.Errorf("invalid order amount: %v", err)
 	}
 
-	// Verify the minimum channel amount flag has been properly set.
-	switch {
-	case minChanAmt%order.BaseSupplyUnit != 0:
-		return nil, fmt.Errorf("minimum channel amount %v must be "+
-			"a multiple of %v", minChanAmt, order.BaseSupplyUnit)
-
-	case minChanAmt < order.BaseSupplyUnit:
-		return nil, fmt.Errorf("minimum channel amount %v is below "+
-			"required value of %v", minChanAmt,
-			order.BaseSupplyUnit)
-
-	case minChanAmt > btcutil.Amount(params.Amt):
-		return nil, fmt.Errorf("minimum channel amount %v is above "+
-			"order amount %v", minChanAmt,
-			btcutil.Amount(params.Amt))
-	}
-	params.MinUnitsMatch = uint32(minChanAmt / order.BaseSupplyUnit)
-
-	var err error
 	params.TraderKey, err = parseAccountKey(ctx, args)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse acct_key: %v", err)
@@ -506,29 +615,16 @@ func ordersSubmitAsk(ctx *cli.Context) error { // nolint: dupl
 		return fmt.Errorf("unable to parse order params: %v", err)
 	}
 
-	ask.Details = params
-
-	// Checks for the outbound liquidity market.
-	if ask.Details.AuctionType == auctioneerrpc.AuctionType_AUCTION_TYPE_BTC_OUTBOUND_LIQUIDITY {
-		var err error
-		baseSupply := uint64(order.BaseSupplyUnit)
-		switch {
-		case ask.Details.Amt != baseSupply:
-			err = fmt.Errorf("The order amount be exactly the "+
-				"base supply amount (%v sats)", baseSupply)
-
-		case !ctx.IsSet("min_chan_amt") ||
-			ctx.Uint64("min_chan_amt") == 0:
-
-			err = fmt.Errorf("The `min_chan_amt` parameter must "+
-				"be set to at least %v sats", baseSupply)
-		}
-
-		if err != nil {
-			return fmt.Errorf("unable to participate in the "+
-				"outbound liquidity market. %v", err)
-		}
+	minChanAmt := getMinChanAmount(ctx, params.Amt, order.TypeAsk)
+	err = validateMinChanAmount(
+		ctx, btcutil.Amount(params.Amt), minChanAmt, order.TypeAsk,
+	)
+	if err != nil {
+		return fmt.Errorf("invalid min chan amount: %v", err)
 	}
+	params.MinUnitsMatch = uint32(minChanAmt / order.BaseSupplyUnit)
+
+	ask.Details = params
 
 	client, cleanup, err := getClient(ctx)
 	if err != nil {
@@ -737,48 +833,29 @@ func parseBaseBid(ctx *cli.Context) (*poolrpc.Bid, *sidecar.Ticket, error) {
 			"params: %v", err)
 	}
 
+	minChanAmt := getMinChanAmount(ctx, params.Amt, order.TypeBid)
+	err = validateMinChanAmount(
+		ctx, btcutil.Amount(params.Amt), minChanAmt, order.TypeBid,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid min chan amount: %v", err)
+	}
+	params.MinUnitsMatch = uint32(minChanAmt / order.BaseSupplyUnit)
+
 	bid.Details = params
 
-	// Make sure the self channel balance is within reasonable limits
-	// (currently max the same of the total order amount) and that the min
-	// units matched is also set to 100% of the order amount.
-	if ctx.IsSet("self_chan_balance") {
+	hasSelfChanBalance := ctx.IsSet("self_chan_balance")
+	switch {
+	case !hasSelfChanBalance && isOutboundLiquidityOrder(ctx):
+		return nil, nil, fmt.Errorf("the `self_chan_balance` "+
+			"parameter must be set to at least %v sats",
+			order.BaseSupplyUnit)
+
+	case hasSelfChanBalance:
 		bid.SelfChanBalance = ctx.Uint64("self_chan_balance")
-		bidAmt := btcutil.Amount(bid.Details.Amt)
-		err := order.CheckOfferParams(
-			order.AuctionType(bid.Details.AuctionType), bidAmt,
-			btcutil.Amount(bid.SelfChanBalance),
-			order.BaseSupplyUnit,
-		)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		bidUnits := order.NewSupplyFromSats(bidAmt)
-		if bid.Details.MinUnitsMatch != uint32(bidUnits) {
-			return nil, nil, fmt.Errorf("when using " +
-				"self_chan_balance the min_chan_amt must be " +
-				"set to the same value as amt")
-		}
-	}
-
-	// Checks for the outbound liquidity market.
-	if bid.Details.AuctionType == auctioneerrpc.AuctionType_AUCTION_TYPE_BTC_OUTBOUND_LIQUIDITY {
-		var err error
-		baseSupply := uint64(order.BaseSupplyUnit)
-		switch {
-		case bid.Details.Amt != baseSupply:
-			err = fmt.Errorf("The order amount must be exactly "+
-				"the base supply amount (%v sats)", baseSupply)
-
-		case bid.SelfChanBalance < baseSupply:
-			err = fmt.Errorf("The `self_chan_balance` parameter "+
-				"must be set to at least %v sats", baseSupply)
-		}
-		if err != nil {
-			return nil, nil, fmt.Errorf("The unable to"+
-				"participate in the outbound liquidity "+
-				"market. %v", err)
+		if err = validateOrderSelfBalance(ctx, bid); err != nil {
+			return nil, nil, fmt.Errorf("invalid self balance "+
+				"amount: %v", err)
 		}
 	}
 
