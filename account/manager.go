@@ -164,12 +164,11 @@ func actionTxLabel(account *Account, action Action, isExpirySpend bool,
 	labelJson, err := json.Marshal(label)
 	if err != nil {
 		log.Errorf("Internal error: failed to serialize json "+
-			"from %v", label)
+			"from %v: %v", label, err)
 		return fmt.Sprintf(prefixTag, action)
 	}
 
-	labelString := fmt.Sprintf(prefixTag, labelJson)
-	return labelString
+	return fmt.Sprintf(prefixTag, labelJson)
 }
 
 // ManagerConfig contains all of the required dependencies for the Manager to
@@ -702,19 +701,14 @@ func (m *manager) resumeAccount(ctx context.Context, account *Account, // nolint
 				}
 			}
 
-			txFee, err := m.deriveFeeFromTx(ctx, accountTx)
-			fee := &txFee
+			fee, err := m.deriveFeeFromTx(ctx, accountTx)
 			if err != nil {
-				log.Errorf(
-					"Failed to derive fee from "+
-						"transaction: %v", accountTx,
-				)
-				fee = nil
+				log.Errorf("Failed to derive fee from "+
+					"transaction: %v, %v", accountTx, err)
 			}
 			balanceDiff := account.Value
 			contextLabel := actionTxLabel(
-				account, CREATE, false, fee,
-				balanceDiff,
+				account, CREATE, false, fee, balanceDiff,
 			)
 			label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
 
@@ -855,14 +849,10 @@ func (m *manager) resumeAccount(ctx context.Context, account *Account, // nolint
 	// transaction to confirm so that we can transition the account to its
 	// final state.
 	case StatePendingClosed:
-		txFee, err := m.deriveFeeFromTx(ctx, account.LatestTx)
-		fee := &txFee
+		fee, err := m.deriveFeeFromTx(ctx, account.LatestTx)
 		if err != nil {
-			log.Errorf(
-				"Failed to derive fee from "+
-					"transaction: %v", account.LatestTx,
-			)
-			fee = nil
+			log.Errorf("Failed to derive fee from "+
+				"transaction: %v, %v", account.LatestTx, err)
 		}
 		balanceDiff := account.Value
 		contextLabel := actionTxLabel(
@@ -899,7 +889,7 @@ func (m *manager) resumeAccount(ctx context.Context, account *Account, // nolint
 
 // deriveFeeFromTx derives the transaction fee from a given transaction message.
 func (m *manager) deriveFeeFromTx(ctx context.Context,
-	tx *wire.MsgTx) (btcutil.Amount, error) {
+	tx *wire.MsgTx) (*btcutil.Amount, error) {
 
 	// Input and output values are required to calculate the tx fee. However,
 	// tx messages do not contain input values. We will therefore locate those
@@ -908,7 +898,7 @@ func (m *manager) deriveFeeFromTx(ctx context.Context,
 	for _, txIn := range tx.TxIn {
 		spendTx, err := m.locateTxByHash(ctx, txIn.PreviousOutPoint.Hash)
 		if err != nil {
-			return 0, nil
+			return nil, err
 		}
 		txOut := spendTx.TxOut[txIn.PreviousOutPoint.Index]
 		sumInputs += txOut.Value
@@ -919,8 +909,8 @@ func (m *manager) deriveFeeFromTx(ctx context.Context,
 		sumOutputs += txOut.Value
 	}
 
-	fee := sumInputs - sumOutputs
-	return btcutil.Amount(fee), nil
+	fee := btcutil.Amount(sumInputs - sumOutputs)
+	return &fee, nil
 }
 
 // locateTxByOutput locates a transaction from the Manager's TxSource by one of
