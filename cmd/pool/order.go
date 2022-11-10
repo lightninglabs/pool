@@ -135,6 +135,11 @@ var baseBidFlags = []cli.Flag{
 			"will be announced to the network",
 	},
 	cli.BoolFlag{
+		Name: "min_reserve_channel",
+		Usage: "flag used to signal that this bid is interested only " +
+			"in channels which have minimal reserves",
+	},
+	cli.BoolFlag{
 		Name: "zero_conf_channel",
 		Usage: "flag used to signal that this bid is only interested " +
 			"in zero conf channels",
@@ -782,6 +787,7 @@ func parseBaseBid(ctx *cli.Context) (*poolrpc.Bid, *sidecar.Ticket, error) {
 		MinNodeTier:        nodeTier,
 		UnannouncedChannel: ctx.Bool("unannounced_channel"),
 		ZeroConfChannel:    ctx.Bool("zero_conf_channel"),
+		MinReserveChannel:  ctx.Bool("min_reserve_channel"),
 	}
 
 	// Let's find out if this is an order for a sidecar channel because if

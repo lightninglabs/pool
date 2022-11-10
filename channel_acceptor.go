@@ -212,6 +212,18 @@ func (s *ChannelAcceptor) acceptChannel(_ context.Context,
 		}, nil
 	}
 
+	// If a minimal reserve channel is expected, ensure that the channel
+	// reserve is equal to the dust limit (minimum according to BOLT#2).
+	if expectedChanBid.MinReserveChannel {
+		if req.ChannelReserve != req.DustLimit {
+			return &lndclient.AcceptorResponse{
+				Accept: false,
+				Error: "channel reserve not set to dust limit " +
+					"even though minimal reserve channel expected",
+			}, nil
+		}
+	}
+
 	return &lndclient.AcceptorResponse{
 		Accept: true,
 	}, nil

@@ -1517,6 +1517,7 @@ func (s *rpcServer) SubmitOrder(ctx context.Context,
 			SidecarTicket:      ticket,
 			UnannouncedChannel: b.UnannouncedChannel,
 			ZeroConfChannel:    b.ZeroConfChannel,
+			MinReserveChannel:  b.MinReserveChannel,
 		}
 
 	default:
@@ -1755,6 +1756,7 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 				SelfChanBalance:     uint64(o.SelfChanBalance),
 				UnannouncedChannel:  o.UnannouncedChannel,
 				ZeroConfChannel:     o.ZeroConfChannel,
+				MinReserveChannel:   o.MinReserveChannel,
 			}
 
 			// The sidecar ticket was given to the auction server
@@ -2689,6 +2691,7 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 	bid := &order.Bid{
 		UnannouncedChannel: req.Bid.UnannouncedChannel,
 		ZeroConfChannel:    req.Bid.ZeroConfChannel,
+		MinReserveChannel:  req.Bid.MinReserveChannel,
 	}
 
 	// If automated negotiation was set, then we'll parse out the rest of
@@ -2715,6 +2718,7 @@ func (s *rpcServer) OfferSidecar(ctx context.Context,
 			SelfChanBalance:    btcutil.Amount(req.Bid.SelfChanBalance),
 			UnannouncedChannel: req.Bid.UnannouncedChannel,
 			ZeroConfChannel:    req.Bid.ZeroConfChannel,
+			MinReserveChannel:  req.Bid.MinReserveChannel,
 		}
 
 		// Perform some initial validation on the order to ensure that
@@ -3306,6 +3310,7 @@ func marshallTicket(t *sidecar.Ticket) *poolrpc.DecodedSidecarTicket {
 		EncodedTicket:            encoded,
 		OfferUnannouncedChannel:  t.Offer.UnannouncedChannel,
 		OfferZeroConfChannel:     t.Offer.ZeroConfChannel,
+		OfferMinReserveChannel:   t.Offer.MinReserveChannel,
 	}
 
 	if t.Offer.SigOfferDigest != nil {

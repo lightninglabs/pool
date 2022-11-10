@@ -1083,6 +1083,11 @@ message ServerBid {
     Signals if this bid is interested in a zero conf channel or not.
     */
     bool zero_conf_channel = 9;
+
+    /*
+    Signals if this bid is interested in a minimal reserve channel.
+    */
+    bool min_reserve_channel = 10;
 }
 
 message ServerAsk {

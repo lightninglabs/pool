@@ -723,6 +723,10 @@ type Bid struct {
 	// ZeroConfChannel signals if the resulting channels need to be zero
 	// conf or not.
 	ZeroConfChannel bool
+
+	// MinReserveChannel signals if the resulting channels may have minimal
+	// reserves or not.
+	MinReserveChannel bool
 }
 
 // Type returns the order type.

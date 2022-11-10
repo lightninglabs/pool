@@ -143,6 +143,10 @@ type Offer struct {
 	// ZeroConfChannel determines if this ticket is interested in zero conf
 	// channels or not.
 	ZeroConfChannel bool
+
+	// MinReserveChannel determines if this ticket is interested in minimal reserve
+	// channels or not.
+	MinReserveChannel bool
 }
 
 // Recipient is a struct holding the information about the recipient of the
