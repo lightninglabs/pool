@@ -17,7 +17,7 @@ GOFUZZ := go test -fuzztime 1m -fuzz
 GOFILES_NOVENDOR = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -name "*pb.go" -not -name "*pb.gw.go" -not -name "*.pb.json.go")
 GOLIST := go list -deps $(PKG)/... | grep '$(PKG)'| grep -v '/vendor/'
 
-COMMIT := $(shell git describe --abbrev=40 --dirty)
+COMMIT := $(shell git describe --tags --dirty)
 LDFLAGS := -X $(PKG).Commit=$(COMMIT)
 
 RM := rm -f

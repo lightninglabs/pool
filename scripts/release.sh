@@ -30,7 +30,7 @@ function check_tag_correct() {
   local tag=$1
 
   # If a tag is specified, ensure that that tag is present and checked out.
-  if [[ $tag != $(git describe) ]]; then
+  if [[ $tag != $(git describe --tags) ]]; then
     red "tag $tag not checked out"
     exit 1
   fi
