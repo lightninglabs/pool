@@ -49,12 +49,14 @@ var (
 )
 
 type testCase struct {
-	name        string
-	feeExpr     FeeExpr
-	fee         btcutil.Amount
-	version     Version
-	newVersion  Version
-	expectedErr string
+	name          string
+	feeExpr       FeeExpr
+	fee           btcutil.Amount
+	version       Version
+	newVersion    Version
+	expectedErr   string
+	action        Action
+	isExpirySpend bool
 
 	// The following fields are only used by deposit tests.
 	fundedOutputAmount btcutil.Amount
@@ -1429,4 +1431,56 @@ func TestMakeTxnLabel(t *testing.T) {
 
 		require.Equal(t, genLabel, testCase.label)
 	}
+}
+
+// TestParseTxLabel tests whether an account transaction labels can be
+// parsed correctly.
+func TestParseTxLabel(t *testing.T) {
+	t.Parallel()
+
+	cases := []*testCase{
+		{
+			fee:           btcutil.Amount(1027),
+			action:        WITHDRAW,
+			isExpirySpend: false,
+		},
+		{
+			fee:           btcutil.Amount(42),
+			action:        DEPOSIT,
+			isExpirySpend: false,
+		},
+		{
+			fee:           btcutil.Amount(42),
+			action:        RENEW,
+			isExpirySpend: true,
+		},
+	}
+
+	runSubTests(t, cases, func(t *testing.T, h *testHarness, tc *testCase) {
+		expiryHeight := uint32(bestHeight + maxAccountExpiry)
+		account := h.openAccount(
+			maxAccountValue, expiryHeight, bestHeight, tc.version,
+		)
+		acctKey := account.TraderKey.PubKey.SerializeCompressed()
+		key := fmt.Sprintf("%x", acctKey)
+		label := actionTxLabel(
+			account, tc.action, tc.isExpirySpend, &tc.fee,
+			btcutil.Amount(10000),
+		)
+		actual, err := ParseTxLabel(label)
+
+		expected := &TxLabel{
+			AccountTxLabel{
+				Key:           key,
+				Action:        tc.action,
+				ExpiryHeight:  expiryHeight,
+				OutputIndex:   0,
+				IsExpirySpend: tc.isExpirySpend,
+				TxFee:         &tc.fee,
+				BalanceDiff:   btcutil.Amount(10000),
+			},
+		}
+		require.Nil(t, err)
+		require.Equal(t, expected, actual)
+	})
 }

@@ -26,6 +26,7 @@ var accountsCommands = []cli.Command{
 			withdrawAccountCommand,
 			renewAccountCommand,
 			closeAccountCommand,
+			listAccountFeesCommand,
 			bumpAccountFeeCommand,
 			recoverAccountsCommand,
 		},
@@ -816,6 +817,35 @@ func bumpAccountFee(ctx *cli.Context) error {
 
 	printRespJSON(resp)
 
+	return nil
+}
+
+var listAccountFeesCommand = cli.Command{
+	Name:      "listfees",
+	ShortName: "f",
+	Usage:     "list the account modification transaction fees",
+	Description: `
+	This command prints a map from account key to an ordered list of account
+	modification transaction fees.
+	`,
+	Action: listAccountFees,
+}
+
+func listAccountFees(ctx *cli.Context) error {
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.AccountModificationFees(
+		context.Background(), &poolrpc.AccountModificationFeesRequest{},
+	)
+	if err != nil {
+		return err
+	}
+
+	printRespJSON(resp)
 	return nil
 }
 

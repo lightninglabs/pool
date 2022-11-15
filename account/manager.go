@@ -30,6 +30,7 @@ import (
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/lightningnetwork/lnd/lnwallet"
@@ -52,6 +53,8 @@ const (
 	// both extremes for valid account expirations.
 	minAccountExpiry = 144       // One day worth of blocks.
 	maxAccountExpiry = 144 * 365 // A year worth of blocks.
+
+	txLabelPrefixTag = "poold -- "
 )
 
 var (
@@ -148,27 +151,46 @@ type AccountTxLabel struct {
 func actionTxLabel(account *Account, action Action, isExpirySpend bool,
 	txFee *btcutil.Amount, balanceDiff btcutil.Amount) string {
 
-	prefixTag := "poold -- %s"
-
 	acctKey := account.TraderKey.PubKey.SerializeCompressed()
 	key := fmt.Sprintf("%x", acctKey)
-	label := AccountTxLabel{
-		Key:           key,
-		Action:        action,
-		ExpiryHeight:  account.Expiry,
-		OutputIndex:   account.OutPoint.Index,
-		IsExpirySpend: isExpirySpend,
-		TxFee:         txFee,
-		BalanceDiff:   balanceDiff,
+	label := TxLabel{
+		Account: AccountTxLabel{
+			Key:           key,
+			Action:        action,
+			ExpiryHeight:  account.Expiry,
+			OutputIndex:   account.OutPoint.Index,
+			IsExpirySpend: isExpirySpend,
+			TxFee:         txFee,
+			BalanceDiff:   balanceDiff,
+		},
 	}
 	labelJson, err := json.Marshal(label)
 	if err != nil {
 		log.Errorf("Internal error: failed to serialize json "+
 			"from %v: %v", label, err)
-		return fmt.Sprintf(prefixTag, action)
+		return fmt.Sprintf("%s%s", txLabelPrefixTag, action)
 	}
 
-	return fmt.Sprintf(prefixTag, labelJson)
+	return fmt.Sprintf("%s%s", txLabelPrefixTag, labelJson)
+}
+
+// IsPoolTx returns true if the given transaction is related to pool.
+func IsPoolTx(tx *lnrpc.Transaction) bool {
+	return strings.HasPrefix(tx.Label, txLabelPrefixTag)
+}
+
+// ParseTxLabel parses and returns data fields stored in a given transaction
+// label.
+func ParseTxLabel(label string) (*TxLabel, error) {
+	label = strings.TrimPrefix(label, txLabelPrefixTag)
+
+	var data TxLabel
+	err := json.Unmarshal([]byte(label), &data)
+	if err != nil {
+		return nil, err
+	}
+
+	return &data, nil
 }
 
 // ManagerConfig contains all of the required dependencies for the Manager to

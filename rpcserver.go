@@ -3030,6 +3030,80 @@ func (s *rpcServer) determineAccountVersion(
 	return account.VersionTaprootEnabled, nil
 }
 
+// AccountModificationFees returns a map from account key to an ordered list of
+// account modifying action fees.
+func (s *rpcServer) AccountModificationFees(ctx context.Context,
+	req *poolrpc.AccountModificationFeesRequest) (
+	*poolrpc.AccountModificationFeesResponse, error) {
+
+	// Retrieve all lightning wallet transactions.
+	transactionDetails, err := s.lndClient.GetTransactions(
+		ctx, &lnrpc.GetTransactionsRequest{},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving transactions: %v", err)
+	}
+
+	// A map from account key to an ordered list of account action fees.
+	accountActions := make(map[string][]*poolrpc.AccountModificationFee)
+
+	for _, tx := range transactionDetails.Transactions {
+		// Skip transactions which are not related to pool.
+		if !account.IsPoolTx(tx) {
+			continue
+		}
+
+		// Parse account data from transaction label.
+		labelData, err := account.ParseTxLabel(tx.Label)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse transaction "+
+				"label: %v (error: %v)", tx.Label, err)
+		}
+
+		// Ignore transaction if account modification not found.
+		if labelData == nil {
+			continue
+		}
+
+		// Select the account specific transaction output. Each account
+		// action transaction should include an account specific output.
+		output := tx.OutputDetails[labelData.Account.OutputIndex]
+
+		// Construct account modification fee structure.
+		acctModFee := &poolrpc.AccountModificationFee{
+			Action:       string(labelData.Account.Action),
+			Txid:         tx.TxHash,
+			BlockHeight:  tx.BlockHeight,
+			Timestamp:    tx.TimeStamp,
+			OutputAmount: output.Amount,
+		}
+		acctModFee.Fee = &poolrpc.AccountModificationFee_FeeNull{
+			FeeNull: true,
+		}
+		if labelData.Account.TxFee != nil {
+			acctModFee.Fee = &poolrpc.AccountModificationFee_FeeValue{
+				FeeValue: int64(*labelData.Account.TxFee),
+			}
+		}
+
+		// Handle all non-create account actions.
+		accountActions[labelData.Account.Key] = append(
+			accountActions[labelData.Account.Key], acctModFee,
+		)
+	}
+
+	result := make(map[string]*poolrpc.ListOfAccountModificationFees)
+	for traderKey, modificationFees := range accountActions {
+		result[traderKey] = &poolrpc.ListOfAccountModificationFees{
+			ModificationFees: modificationFees,
+		}
+	}
+
+	return &poolrpc.AccountModificationFeesResponse{
+		Accounts: result,
+	}, nil
+}
+
 // rpcOrderStateToDBState maps the order state as received over the RPC
 // protocol to the local state that we use in the database.
 func rpcOrderStateToDBState(state auctioneerrpc.OrderState) (order.State,

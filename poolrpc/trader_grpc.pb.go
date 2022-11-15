@@ -66,6 +66,10 @@ type TraderClient interface {
 	//RecoverAccounts queries the auction server for this trader daemon's accounts
 	//in case we lost our local account database.
 	RecoverAccounts(ctx context.Context, in *RecoverAccountsRequest, opts ...grpc.CallOption) (*RecoverAccountsResponse, error)
+	// pool: `accounts listfees`
+	//AccountModificationFees returns a map from account key to an ordered list of
+	//account action modification fees.
+	AccountModificationFees(ctx context.Context, in *AccountModificationFeesRequest, opts ...grpc.CallOption) (*AccountModificationFeesResponse, error)
 	// pool: `orders submit`
 	//SubmitOrder creates a new ask or bid order and submits for the given account
 	//and submits it to the auction server for matching.
@@ -260,6 +264,15 @@ func (c *traderClient) BumpAccountFee(ctx context.Context, in *BumpAccountFeeReq
 func (c *traderClient) RecoverAccounts(ctx context.Context, in *RecoverAccountsRequest, opts ...grpc.CallOption) (*RecoverAccountsResponse, error) {
 	out := new(RecoverAccountsResponse)
 	err := c.cc.Invoke(ctx, "/poolrpc.Trader/RecoverAccounts", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *traderClient) AccountModificationFees(ctx context.Context, in *AccountModificationFeesRequest, opts ...grpc.CallOption) (*AccountModificationFeesResponse, error) {
+	out := new(AccountModificationFeesResponse)
+	err := c.cc.Invoke(ctx, "/poolrpc.Trader/AccountModificationFees", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -479,6 +492,10 @@ type TraderServer interface {
 	//RecoverAccounts queries the auction server for this trader daemon's accounts
 	//in case we lost our local account database.
 	RecoverAccounts(context.Context, *RecoverAccountsRequest) (*RecoverAccountsResponse, error)
+	// pool: `accounts listfees`
+	//AccountModificationFees returns a map from account key to an ordered list of
+	//account action modification fees.
+	AccountModificationFees(context.Context, *AccountModificationFeesRequest) (*AccountModificationFeesResponse, error)
 	// pool: `orders submit`
 	//SubmitOrder creates a new ask or bid order and submits for the given account
 	//and submits it to the auction server for matching.
@@ -609,6 +626,9 @@ func (UnimplementedTraderServer) BumpAccountFee(context.Context, *BumpAccountFee
 }
 func (UnimplementedTraderServer) RecoverAccounts(context.Context, *RecoverAccountsRequest) (*RecoverAccountsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RecoverAccounts not implemented")
+}
+func (UnimplementedTraderServer) AccountModificationFees(context.Context, *AccountModificationFeesRequest) (*AccountModificationFeesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AccountModificationFees not implemented")
 }
 func (UnimplementedTraderServer) SubmitOrder(context.Context, *SubmitOrderRequest) (*SubmitOrderResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitOrder not implemented")
@@ -871,6 +891,24 @@ func _Trader_RecoverAccounts_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TraderServer).RecoverAccounts(ctx, req.(*RecoverAccountsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Trader_AccountModificationFees_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AccountModificationFeesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TraderServer).AccountModificationFees(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/poolrpc.Trader/AccountModificationFees",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TraderServer).AccountModificationFees(ctx, req.(*AccountModificationFeesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1249,6 +1287,10 @@ var Trader_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecoverAccounts",
 			Handler:    _Trader_RecoverAccounts_Handler,
+		},
+		{
+			MethodName: "AccountModificationFees",
+			Handler:    _Trader_AccountModificationFees_Handler,
 		},
 		{
 			MethodName: "SubmitOrder",
