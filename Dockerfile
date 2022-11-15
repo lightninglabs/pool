@@ -1,8 +1,5 @@
 FROM --platform=${BUILDPLATFORM} golang:1.18.5-alpine as builder
 
-# Copy in the local repository to build from.
-COPY . /go/src/github.com/lightninglabs/pool
-
 # Force Go to use the cgo based DNS resolver. This is required to ensure DNS
 # queries required to connect to linked containers succeed.
 ENV GODEBUG netdns=cgo
@@ -10,12 +7,12 @@ ENV GODEBUG netdns=cgo
 # Explicitly turn on the use of modules (until this becomes the default).
 ENV GO111MODULE on
 
-# Install dependencies and install/build pool.
-RUN apk add --no-cache --update alpine-sdk \
-    git \
-    make \
-&&  cd /go/src/github.com/lightninglabs/pool \
-&&  make install
+# Install dependencies.
+RUN apk add --no-cache --update alpine-sdk git make
+
+# Build and install both pool binaries (daemon and CLI).
+COPY . /go/src/github.com/lightninglabs/pool
+RUN cd /go/src/github.com/lightninglabs/pool && make install
 
 # Start a new, final image to reduce size.
 FROM --platform=${BUILDPLATFORM} alpine as final
