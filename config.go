@@ -171,6 +171,11 @@ type Config struct {
 	// the server is going to use to listen for (and issue) shutdown
 	// commands on.
 	ShutdownInterceptor signal.Interceptor
+
+	// RequestShutdown is a call-back function that can be called in order
+	// to indicate that pool has received a critical error and needs to shut
+	// down.
+	RequestShutdown func()
 }
 
 // DebugConfig is a set of debug options used for development and testing only.
@@ -217,6 +222,7 @@ func DefaultConfig() Config {
 			// "no value set".
 			BatchVersion: -1,
 		},
+		RequestShutdown: func() {},
 	}
 }
 

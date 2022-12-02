@@ -18,6 +18,7 @@ func Run(cfg *Config) error {
 	if err != nil {
 		return err
 	}
+	cfg.RequestShutdown = cfg.ShutdownInterceptor.RequestShutdown
 
 	logWriter = build.NewRotatingLogWriter()
 	SetupLoggers(logWriter, cfg.ShutdownInterceptor)
