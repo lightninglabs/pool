@@ -259,7 +259,7 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 			if err != nil && !errors.Is(err, order.ErrMismatchErr) {
 				rpcLog.Errorf("Error handling server message: "+
 					"%v", err)
-				s.server.cfg.ShutdownInterceptor.RequestShutdown()
+				s.server.cfg.RequestShutdown()
 			}
 
 		case err := <-s.auctioneer.StreamErrChan:
@@ -286,7 +286,7 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 			if err != nil {
 				rpcLog.Errorf("Unable to receive block "+
 					"notification: %v", err)
-				s.server.cfg.ShutdownInterceptor.RequestShutdown()
+				s.server.cfg.RequestShutdown()
 			}
 
 		// In case the server is shutting down.
@@ -2648,7 +2648,7 @@ func (s *rpcServer) StopDaemon(_ context.Context,
 	_ *poolrpc.StopDaemonRequest) (*poolrpc.StopDaemonResponse, error) {
 
 	rpcLog.Infof("Stop requested through RPC, gracefully shutting down")
-	s.server.cfg.ShutdownInterceptor.RequestShutdown()
+	s.server.cfg.RequestShutdown()
 
 	return &poolrpc.StopDaemonResponse{}, nil
 }
