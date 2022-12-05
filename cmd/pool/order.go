@@ -573,10 +573,10 @@ var ordersSubmitAskCommand = cli.Command{
 		cli.Uint64Flag{
 			Name: "confirmation_constraints",
 			Usage: "specifies if the liquidity must be sold in " +
-				"zero conf or confirmed channels. Set to 1 " +
-				"for only confirmed channels and 2 for only " +
-				"zero conf ones. The default value is \"only " +
-				"confirmed\"",
+				"zero conf or confirmed channels. Set to 0 " +
+				"to express no preference, set to 1 for only " +
+				"confirmed channels and 2 for only zero conf " +
+				"ones. The default value is \"only confirmed\"",
 			Value: defaultConfirmationConstraints,
 		},
 		cli.BoolFlag{
