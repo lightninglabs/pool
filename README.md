@@ -95,5 +95,5 @@ $ make install
 This will install the binaries into your `$GOPATH/bin` directory.
 
 ## Compatibility
-Lightning Pool requires `lnd` version `0.14.3-beta` or higher (`v0.15.0-beta` or
+Lightning Pool requires `lnd` version `0.14.3-beta` or higher (`v0.15.4-beta` or
 later is recommended).
