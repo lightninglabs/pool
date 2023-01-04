@@ -1700,6 +1700,14 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			}
 		}
 
+		allowedNodeIDs := order.MarshalNodeIDSlice(
+			dbOrder.Details().AllowedNodeIDs,
+		)
+
+		notAllowedNodeIDs := order.MarshalNodeIDSlice(
+			dbOrder.Details().NotAllowedNodeIDs,
+		)
+
 		details := &poolrpc.Order{
 			TraderKey: dbDetails.AcctKey[:],
 			RateFixed: dbDetails.FixedRate,
@@ -1723,7 +1731,9 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			AuctionType: auctioneerrpc.AuctionType(
 				dbOrder.Details().AuctionType,
 			),
-			IsPublic: dbOrder.Details().IsPublic,
+			AllowedNodeIds:    allowedNodeIDs,
+			NotAllowedNodeIds: notAllowedNodeIDs,
+			IsPublic:          dbOrder.Details().IsPublic,
 		}
 
 		switch o := dbOrder.(type) {
@@ -1780,8 +1790,7 @@ func (s *rpcServer) ListOrders(ctx context.Context,
 			bids = append(bids, rpcBid)
 
 		default:
-			return nil, fmt.Errorf("unknown order type: %v",
-				o)
+			return nil, fmt.Errorf("unknown order type: %v", o)
 		}
 	}
 	return &poolrpc.ListOrdersResponse{

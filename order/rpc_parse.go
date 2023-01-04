@@ -127,23 +127,19 @@ func ParseRPCOrder(version, leaseDuration uint32,
 			"at the same time")
 	}
 
-	kit.AllowedNodeIDs = make([][33]byte, len(details.AllowedNodeIds))
-	for idx, nodeID := range details.AllowedNodeIds {
-		if _, err := btcec.ParsePubKey(nodeID); err != nil {
-			return nil, fmt.Errorf("invalid allowed_node_id: %x",
-				nodeID)
-		}
-		copy(kit.AllowedNodeIDs[idx][:], nodeID)
+	allowedNodeIDs, err := UnmarshalNodeIDSlice(details.AllowedNodeIds)
+	if err != nil {
+		return nil, fmt.Errorf("invalid allowed_node_ids: %v", err)
 	}
+	kit.AllowedNodeIDs = allowedNodeIDs
 
-	kit.NotAllowedNodeIDs = make([][33]byte, len(details.NotAllowedNodeIds))
-	for idx, nodeID := range details.NotAllowedNodeIds {
-		if _, err := btcec.ParsePubKey(nodeID); err != nil {
-			return nil, fmt.Errorf("invalid not_allowed_node_id: "+
-				"%x", nodeID)
-		}
-		copy(kit.NotAllowedNodeIDs[idx][:], nodeID)
+	notAllowedNodeIDs, err := UnmarshalNodeIDSlice(
+		details.NotAllowedNodeIds,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("invalid not_allowed_node_ids: %v", err)
 	}
+	kit.NotAllowedNodeIDs = notAllowedNodeIDs
 
 	kit.IsPublic = details.IsPublic
 
@@ -522,6 +518,43 @@ func ParseRPCSign(signMsg *auctioneerrpc.OrderMatchSignBegin) (AccountNonces,
 	}
 
 	return nonces, prevOutputs, nil
+}
+
+// MarshalNodeIDSlice returns a flattened version of an slice of node ids to be
+// used in rpc serialization.
+func MarshalNodeIDSlice(nodeIDs [][33]byte) [][]byte {
+	res := make([][]byte, 0, len(nodeIDs))
+
+	for i := range nodeIDs {
+		nodeID := make([]byte, 33)
+		copy(nodeID, nodeIDs[i][:])
+
+		res = append(res, nodeID)
+	}
+
+	return res
+}
+
+// UnmarshalNodeIDSlice returns a slice of node ids from a flatten version.
+func UnmarshalNodeIDSlice(slice [][]byte) ([][33]byte, error) {
+	nodeIDs := make([][33]byte, len(slice))
+	for idx := range slice {
+		// Check that the node id pub key is in the correct format.
+		if len(slice[idx]) != 33 {
+			return nil, fmt.Errorf("invalid node_id length: %x",
+				slice[idx])
+		}
+
+		// Check that the node id pub key is a valid key.
+		if _, err := btcec.ParsePubKey(slice[idx]); err != nil {
+			return nil, fmt.Errorf("invalid node_id: %x",
+				slice[idx])
+		}
+
+		copy(nodeIDs[idx][:], slice[idx])
+	}
+
+	return nodeIDs, nil
 }
 
 // randomPreimage creates a new preimage from a random number generator.
