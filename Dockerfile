@@ -1,4 +1,4 @@
-FROM --platform=${BUILDPLATFORM} golang:1.18.5-alpine as builder
+FROM --platform=${BUILDPLATFORM} golang:1.19.4-alpine as builder
 
 # Force Go to use the cgo based DNS resolver. This is required to ensure DNS
 # queries required to connect to linked containers succeed.
