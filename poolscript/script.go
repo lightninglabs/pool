@@ -275,10 +275,11 @@ func (r *RecoveryHelper) LocateAnyOutput(expiry uint32,
 // AccountScript returns the output script of an account on-chain.
 //
 // For version 0 (p2wsh) this returns the hash of the following script:
-// <trader_key> OP_CHECKSIGVERIFY
-// <auctioneer_key> OP_CHECKSIG OP_IFDUP OP_NOTIF
-//	<account_expiry> OP_CHECKLOCKTIMEVERIFY
-// OP_ENDIF
+//
+//	<trader_key> OP_CHECKSIGVERIFY
+//	<auctioneer_key> OP_CHECKSIG OP_IFDUP OP_NOTIF
+//	        <account_expiry> OP_CHECKLOCKTIMEVERIFY
+//	OP_ENDIF
 //
 // For version 1 (p2tr) this returns the taproot key of a MuSig2 combined key
 // of the auctioneer's and trader's public keys as the internal key, tweaked
