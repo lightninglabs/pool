@@ -238,7 +238,9 @@ func (s *rpcServer) Stop() error {
 }
 
 // serverHandler is the main event loop of the server.
-func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error) {
+func (s *rpcServer) serverHandler(blockChan chan int32,
+	blockErrChan chan error) {
+
 	defer s.wg.Done()
 
 	for {
@@ -275,7 +277,7 @@ func (s *rpcServer) serverHandler(blockChan chan int32, blockErrChan chan error)
 				}
 			}
 
-			rpcLog.Error("Unknown server error: %v", err)
+			rpcLog.Errorf("Unknown server error: %v", err)
 
 		case height := <-blockChan:
 			rpcLog.Infof("Received new block notification: "+
