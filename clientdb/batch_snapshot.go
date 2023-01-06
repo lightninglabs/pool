@@ -15,25 +15,26 @@ import (
 )
 
 // batch-snapshot-bucket
-//         |
-//         |-- batch-snapshot-pending-key: <batch snapshot>
-//         |
-//         |-- batch-snapshot-seq-bucket
-//         |              |
-//         |              |-- <sequence num>
-//         |              |        |
-//         |              |        |-- batch-snapshot-batch: <batch snapshot>
-//         |              |
-//         |              |-- <sequence num>
-//         |              |        |
-//         |             ...      ...
-//         |
-//         |-- batch-snapshot-batchid-index-bucket
-//                       |
-//                       |-- <batch id>: <sequence-num>
-//                       |-- <batch id>: <sequence-num>
-//                       |
-//                      ...
+//
+//	|
+//	|-- batch-snapshot-pending-key: <batch snapshot>
+//	|
+//	|-- batch-snapshot-seq-bucket
+//	|              |
+//	|              |-- <sequence num>
+//	|              |        |
+//	|              |        |-- batch-snapshot-batch: <batch snapshot>
+//	|              |
+//	|              |-- <sequence num>
+//	|              |        |
+//	|             ...      ...
+//	|
+//	|-- batch-snapshot-batchid-index-bucket
+//	              |
+//	              |-- <batch id>: <sequence-num>
+//	              |-- <batch id>: <sequence-num>
+//	              |
+//	             ...
 var (
 	// batchSnapshotBucketKey is the top level bucket where we'll find
 	// snapshot information about all batches we have participated in.

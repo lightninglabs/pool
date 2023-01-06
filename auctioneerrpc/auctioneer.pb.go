@@ -32,10 +32,9 @@ const (
 	ChannelType_TWEAKLESS ChannelType = 0
 	// The channel uses an anchor-based commitment.
 	ChannelType_ANCHORS ChannelType = 1
-	//
-	//The channel build upon the anchor-based commitment and requires an
-	//additional CLTV of the channel lease maturity on any commitment and HTLC
-	//outputs that pay directly to the channel initiator (the seller).
+	// The channel build upon the anchor-based commitment and requires an
+	// additional CLTV of the channel lease maturity on any commitment and HTLC
+	// outputs that pay directly to the channel initiator (the seller).
 	ChannelType_SCRIPT_ENFORCED_LEASE ChannelType = 2
 )
 
@@ -83,32 +82,25 @@ func (ChannelType) EnumDescriptor() ([]byte, []int) {
 type AuctionAccountState int32
 
 const (
-	//
-	//The account's funding transaction is not yet confirmed on-chain.
+	// The account's funding transaction is not yet confirmed on-chain.
 	AuctionAccountState_STATE_PENDING_OPEN AuctionAccountState = 0
-	//
-	//The account is fully open and confirmed on-chain.
+	// The account is fully open and confirmed on-chain.
 	AuctionAccountState_STATE_OPEN AuctionAccountState = 1
-	//
-	//The account is still open but the CLTV expiry has passed and the trader can
-	//close it without the auctioneer's key. Orders for accounts in this state
-	//won't be accepted.
+	// The account is still open but the CLTV expiry has passed and the trader can
+	// close it without the auctioneer's key. Orders for accounts in this state
+	// won't be accepted.
 	AuctionAccountState_STATE_EXPIRED AuctionAccountState = 2
-	//
-	//The account was modified by a deposit or withdrawal and is currently waiting
-	//for the modifying transaction to confirm.
+	// The account was modified by a deposit or withdrawal and is currently waiting
+	// for the modifying transaction to confirm.
 	AuctionAccountState_STATE_PENDING_UPDATE AuctionAccountState = 3
-	//
-	//The account is closed. The auctioneer doesn't track whether the closing
-	//transaction is already confirmed on-chain or not.
+	// The account is closed. The auctioneer doesn't track whether the closing
+	// transaction is already confirmed on-chain or not.
 	AuctionAccountState_STATE_CLOSED AuctionAccountState = 4
-	//
-	//The account has recently participated in a batch and is not yet confirmed.
+	// The account has recently participated in a batch and is not yet confirmed.
 	AuctionAccountState_STATE_PENDING_BATCH AuctionAccountState = 5
-	//
-	//The account has reached the expiration height while it had a pending update
-	//that hasn't yet confirmed. This allows accounts to be renewed once
-	//confirmed and expired.
+	// The account has reached the expiration height while it had a pending update
+	// that hasn't yet confirmed. This allows accounts to be renewed once
+	// confirmed and expired.
 	AuctionAccountState_STATE_EXPIRED_PENDING_UPDATE AuctionAccountState = 6
 )
 
@@ -166,14 +158,12 @@ type OrderChannelType int32
 const (
 	// Used to set defaults when a trader doesn't specify a channel type.
 	OrderChannelType_ORDER_CHANNEL_TYPE_UNKNOWN OrderChannelType = 0
-	//
-	//The channel type will vary per matched channel based on the features shared
-	//between its participants.
+	// The channel type will vary per matched channel based on the features shared
+	// between its participants.
 	OrderChannelType_ORDER_CHANNEL_TYPE_PEER_DEPENDENT OrderChannelType = 1
-	//
-	//A channel type that builds upon the anchors commitment format to enforce
-	//channel lease maturities in the commitment and HTLC outputs that pay to the
-	//channel initiator/seller.
+	// A channel type that builds upon the anchors commitment format to enforce
+	// channel lease maturities in the commitment and HTLC outputs that pay to the
+	// channel initiator/seller.
 	OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED OrderChannelType = 2
 )
 
@@ -221,13 +211,11 @@ func (OrderChannelType) EnumDescriptor() ([]byte, []int) {
 type AuctionType int32
 
 const (
-	//
-	//Default auction type where the bidder is paying for getting bitcoin inbound
-	//liqiudity from the asker.
+	// Default auction type where the bidder is paying for getting bitcoin inbound
+	// liqiudity from the asker.
 	AuctionType_AUCTION_TYPE_BTC_INBOUND_LIQUIDITY AuctionType = 0
-	//
-	//Auction type where the bidder is paying the asker to accept a channel
-	//(bitcoin outbound liquidity) from the bidder.
+	// Auction type where the bidder is paying the asker to accept a channel
+	// (bitcoin outbound liquidity) from the bidder.
 	AuctionType_AUCTION_TYPE_BTC_OUTBOUND_LIQUIDITY AuctionType = 1
 )
 
@@ -492,21 +480,17 @@ func (OrderState) EnumDescriptor() ([]byte, []int) {
 type DurationBucketState int32
 
 const (
-	//
-	//NO_MARKET indicates that this bucket doesn't actually exist, in that no
-	//market is present for this market.
+	// NO_MARKET indicates that this bucket doesn't actually exist, in that no
+	// market is present for this market.
 	DurationBucketState_NO_MARKET DurationBucketState = 0
-	//
-	//MARKET_CLOSED indicates that this market exists, but that it isn't currently
-	//running.
+	// MARKET_CLOSED indicates that this market exists, but that it isn't currently
+	// running.
 	DurationBucketState_MARKET_CLOSED DurationBucketState = 1
-	//
-	//ACCEPTING_ORDERS indicates that we're accepting orders for this bucket, but
-	//not yet clearing for this duration.
+	// ACCEPTING_ORDERS indicates that we're accepting orders for this bucket, but
+	// not yet clearing for this duration.
 	DurationBucketState_ACCEPTING_ORDERS DurationBucketState = 2
-	//
-	//MARKET_OPEN indicates that we're accepting orders, and fully clearing the
-	//market for this duration.
+	// MARKET_OPEN indicates that we're accepting orders, and fully clearing the
+	// market for this duration.
 	DurationBucketState_MARKET_OPEN DurationBucketState = 3
 )
 
@@ -558,17 +542,14 @@ type OrderMatchReject_RejectReason int32
 const (
 	// The reason cannot be mapped to a specific code.
 	OrderMatchReject_UNKNOWN OrderMatchReject_RejectReason = 0
-	//
-	//The client didn't come up with the same result as the server and is
-	//rejecting the batch because of that.
+	// The client didn't come up with the same result as the server and is
+	// rejecting the batch because of that.
 	OrderMatchReject_SERVER_MISBEHAVIOR OrderMatchReject_RejectReason = 1
-	//
-	//The client doesn't support the current batch verification version the
-	//server is using.
+	// The client doesn't support the current batch verification version the
+	// server is using.
 	OrderMatchReject_BATCH_VERSION_MISMATCH OrderMatchReject_RejectReason = 2
-	//
-	//The client rejects some of the orders, not the full batch. When this
-	//code is set, the rejected_orders map must be set.
+	// The client rejects some of the orders, not the full batch. When this
+	// code is set, the rejected_orders map must be set.
 	OrderMatchReject_PARTIAL_REJECT OrderMatchReject_RejectReason = 3
 )
 
@@ -618,18 +599,16 @@ func (OrderMatchReject_RejectReason) EnumDescriptor() ([]byte, []int) {
 type OrderReject_OrderRejectReason int32
 
 const (
-	//
-	//The trader's client has a preference to only match orders with peers it
-	//doesn't already have channels with. The order that is rejected with this
-	//reason type comes from a peer that the trader already has channels with.
+	// The trader's client has a preference to only match orders with peers it
+	// doesn't already have channels with. The order that is rejected with this
+	// reason type comes from a peer that the trader already has channels with.
 	OrderReject_DUPLICATE_PEER OrderReject_OrderRejectReason = 0
-	//
-	//The trader's client couldn't connect to the remote node of the matched
-	//order or the channel funding could not be initialized for another
-	//reason. This could also be the rejecting node's fault if their
-	//connection is not stable. Using this code can have a negative impact on
-	//the reputation score of both nodes, depending on the number of errors
-	//recorded.
+	// The trader's client couldn't connect to the remote node of the matched
+	// order or the channel funding could not be initialized for another
+	// reason. This could also be the rejecting node's fault if their
+	// connection is not stable. Using this code can have a negative impact on
+	// the reputation score of both nodes, depending on the number of errors
+	// recorded.
 	OrderReject_CHANNEL_FUNDING_FAILED OrderReject_OrderRejectReason = 1
 )
 
@@ -675,20 +654,16 @@ func (OrderReject_OrderRejectReason) EnumDescriptor() ([]byte, []int) {
 type SubscribeError_Error int32
 
 const (
-	//
-	//The error cannot be mapped to a specific code.
+	// The error cannot be mapped to a specific code.
 	SubscribeError_UNKNOWN SubscribeError_Error = 0
-	//
-	//The server is shutting down for maintenance. Traders should close the
-	//long-lived stream/connection and try to connect again after some time.
+	// The server is shutting down for maintenance. Traders should close the
+	// long-lived stream/connection and try to connect again after some time.
 	SubscribeError_SERVER_SHUTDOWN SubscribeError_Error = 1
-	//
-	//The account the trader tried to subscribe to does not exist in the
-	//auctioneer's database.
+	// The account the trader tried to subscribe to does not exist in the
+	// auctioneer's database.
 	SubscribeError_ACCOUNT_DOES_NOT_EXIST SubscribeError_Error = 2
-	//
-	//The account the trader tried to subscribe to was never completed and a
-	//reservation for it is still pending.
+	// The account the trader tried to subscribe to was never completed and a
+	// reservation for it is still pending.
 	SubscribeError_INCOMPLETE_ACCOUNT_RESERVATION SubscribeError_Error = 3
 )
 
@@ -835,17 +810,13 @@ type ReserveAccountRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The desired value of the account in satoshis.
+	// The desired value of the account in satoshis.
 	AccountValue uint64 `protobuf:"varint,1,opt,name=account_value,json=accountValue,proto3" json:"account_value,omitempty"`
-	//
-	//The block height at which the account should expire.
+	// The block height at which the account should expire.
 	AccountExpiry uint32 `protobuf:"varint,2,opt,name=account_expiry,json=accountExpiry,proto3" json:"account_expiry,omitempty"`
-	//
-	//The trader's account key.
+	// The trader's account key.
 	TraderKey []byte `protobuf:"bytes,3,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
-	//
-	//The account version. Must be set to 0 for legacy (non-taproot) accounts.
+	// The account version. Must be set to 0 for legacy (non-taproot) accounts.
 	Version uint32 `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`
 }
 
@@ -914,24 +885,22 @@ type ReserveAccountResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The base key of the auctioneer. This key should be tweaked with the trader's
-	//per-batch tweaked key to obtain the corresponding per-batch tweaked
-	//auctioneer key. Or, in case of the version 1, Taproot enabled account, the
-	//trader and auctioneer key will be combined into a MuSig2 combined key that
-	//is static throughout the lifetime of the account. The on-chain uniqueness of
-	//the generated output will be ensured by the merkle root hash that is applied
-	//as a tweak to the MuSig2 combined internal key. The merkle root hash is
-	//either the hash of the timeout script path (which uses the trader key
-	//tweaked with the per-batch key) directly or the root of a tree with one leaf
-	//that is the timeout script path and a leaf that is a Taro commitment (which
-	//is a root hash by itself).
+	// The base key of the auctioneer. This key should be tweaked with the trader's
+	// per-batch tweaked key to obtain the corresponding per-batch tweaked
+	// auctioneer key. Or, in case of the version 1, Taproot enabled account, the
+	// trader and auctioneer key will be combined into a MuSig2 combined key that
+	// is static throughout the lifetime of the account. The on-chain uniqueness of
+	// the generated output will be ensured by the merkle root hash that is applied
+	// as a tweak to the MuSig2 combined internal key. The merkle root hash is
+	// either the hash of the timeout script path (which uses the trader key
+	// tweaked with the per-batch key) directly or the root of a tree with one leaf
+	// that is the timeout script path and a leaf that is a Taro commitment (which
+	// is a root hash by itself).
 	AuctioneerKey []byte `protobuf:"bytes,1,opt,name=auctioneer_key,json=auctioneerKey,proto3" json:"auctioneer_key,omitempty"`
-	//
-	//The initial per-batch key to be used for the account. For every cleared
-	//batch that the account participates in, this key will be incremented by the
-	//base point of its curve, resulting in a new key for both the trader and
-	//auctioneer in every batch.
+	// The initial per-batch key to be used for the account. For every cleared
+	// batch that the account participates in, this key will be incremented by the
+	// base point of its curve, resulting in a new key for both the trader and
+	// auctioneer in every batch.
 	InitialBatchKey []byte `protobuf:"bytes,2,opt,name=initial_batch_key,json=initialBatchKey,proto3" json:"initial_batch_key,omitempty"`
 }
 
@@ -986,37 +955,34 @@ type ServerInitAccountRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//Transaction output of the account. Has to be unspent and be a P2WSH of
-	//the account script below. The amount must also exactly correspond to the
-	//account value below.
+	// Transaction output of the account. Has to be unspent and be a P2WSH of
+	// the account script below. The amount must also exactly correspond to the
+	// account value below.
 	AccountPoint *OutPoint `protobuf:"bytes,1,opt,name=account_point,json=accountPoint,proto3" json:"account_point,omitempty"`
-	//
-	//The script used to create the account point. For version 1 (Taproot enabled)
-	//accounts this represents the 32-byte (x-only) Taproot public key with the
-	//combined MuSig2 key of the auctioneer's key and the trader's key with the
-	//expiry script path applied as a single tapscript leaf.
+	// The script used to create the account point. For version 1 (Taproot enabled)
+	// accounts this represents the 32-byte (x-only) Taproot public key with the
+	// combined MuSig2 key of the auctioneer's key and the trader's key with the
+	// expiry script path applied as a single tapscript leaf.
 	AccountScript []byte `protobuf:"bytes,2,opt,name=account_script,json=accountScript,proto3" json:"account_script,omitempty"`
-	//
-	//The value of the account in satoshis. Must match the amount of the
-	//account_point output.
+	// The value of the account in satoshis. Must match the amount of the
+	// account_point output.
 	AccountValue uint64 `protobuf:"varint,3,opt,name=account_value,json=accountValue,proto3" json:"account_value,omitempty"`
-	//
-	//The block height at which the account should expire.
+	// The block height at which the account should expire.
 	AccountExpiry uint32 `protobuf:"varint,4,opt,name=account_expiry,json=accountExpiry,proto3" json:"account_expiry,omitempty"`
-	//
-	//The trader's account key.
+	// The trader's account key.
 	TraderKey []byte `protobuf:"bytes,5,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
 	// The user agent string that identifies the software running on the user's
 	// side. This can be changed in the user's client software but it _SHOULD_
 	// conform to the following pattern and use less than 256 characters:
-	//    Agent-Name/semver-version(/additional-info)
-	// Examples:
-	//    poold/v0.4.2-beta/commit=3b635821,initiator=pool-cli
-	//    litd/v0.4.0-alpha/commit=326d754,initiator=lit-ui
-	UserAgent string `protobuf:"bytes,6,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
 	//
-	//The account version. Must be set to 0 for legacy (non-taproot) accounts.
+	//	Agent-Name/semver-version(/additional-info)
+	//
+	// Examples:
+	//
+	//	poold/v0.4.2-beta/commit=3b635821,initiator=pool-cli
+	//	litd/v0.4.0-alpha/commit=326d754,initiator=lit-ui
+	UserAgent string `protobuf:"bytes,6,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+	// The account version. Must be set to 0 for legacy (non-taproot) accounts.
 	Version uint32 `protobuf:"varint,7,opt,name=version,proto3" json:"version,omitempty"`
 }
 
@@ -1145,16 +1111,20 @@ type ServerSubmitOrderRequest struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Details:
+	//
 	//	*ServerSubmitOrderRequest_Ask
 	//	*ServerSubmitOrderRequest_Bid
 	Details isServerSubmitOrderRequest_Details `protobuf_oneof:"details"`
 	// The user agent string that identifies the software running on the user's
 	// side. This can be changed in the user's client software but it _SHOULD_
 	// conform to the following pattern and use less than 256 characters:
-	//    Agent-Name/semver-version(/additional-info)
+	//
+	//	Agent-Name/semver-version(/additional-info)
+	//
 	// Examples:
-	//    poold/v0.4.2-beta/commit=3b635821,initiator=pool-cli
-	//    litd/v0.4.0-alpha/commit=326d754,initiator=lit-ui
+	//
+	//	poold/v0.4.2-beta/commit=3b635821,initiator=pool-cli
+	//	litd/v0.4.0-alpha/commit=326d754,initiator=lit-ui
 	UserAgent string `protobuf:"bytes,3,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
 }
 
@@ -1223,14 +1193,12 @@ type isServerSubmitOrderRequest_Details interface {
 }
 
 type ServerSubmitOrderRequest_Ask struct {
-	//
-	//Submit an ask order.
+	// Submit an ask order.
 	Ask *ServerAsk `protobuf:"bytes,1,opt,name=ask,proto3,oneof"`
 }
 
 type ServerSubmitOrderRequest_Bid struct {
-	//
-	//Submit a bid order.
+	// Submit a bid order.
 	Bid *ServerBid `protobuf:"bytes,2,opt,name=bid,proto3,oneof"`
 }
 
@@ -1244,6 +1212,7 @@ type ServerSubmitOrderResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Details:
+	//
 	//	*ServerSubmitOrderResponse_InvalidOrder
 	//	*ServerSubmitOrderResponse_Accepted
 	Details isServerSubmitOrderResponse_Details `protobuf_oneof:"details"`
@@ -1307,14 +1276,12 @@ type isServerSubmitOrderResponse_Details interface {
 }
 
 type ServerSubmitOrderResponse_InvalidOrder struct {
-	//
-	//Order failed with the given reason.
+	// Order failed with the given reason.
 	InvalidOrder *InvalidOrder `protobuf:"bytes,1,opt,name=invalid_order,json=invalidOrder,proto3,oneof"`
 }
 
 type ServerSubmitOrderResponse_Accepted struct {
-	//
-	//Order was accepted.
+	// Order was accepted.
 	Accepted bool `protobuf:"varint,2,opt,name=accepted,proto3,oneof"`
 }
 
@@ -1327,8 +1294,7 @@ type ServerCancelOrderRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The preimage to the order's unique nonce.
+	// The preimage to the order's unique nonce.
 	OrderNoncePreimage []byte `protobuf:"bytes,1,opt,name=order_nonce_preimage,json=orderNoncePreimage,proto3" json:"order_nonce_preimage,omitempty"`
 }
 
@@ -1415,6 +1381,7 @@ type ClientAuctionMessage struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Msg:
+	//
 	//	*ClientAuctionMessage_Commit
 	//	*ClientAuctionMessage_Subscribe
 	//	*ClientAuctionMessage_Accept
@@ -1510,48 +1477,42 @@ type isClientAuctionMessage_Msg interface {
 }
 
 type ClientAuctionMessage_Commit struct {
-	//
-	//Signal the intent to receive updates about a certain account and start
-	//by sending the commitment part of the authentication handshake. This is
-	//step 1 of the 3-way handshake.
+	// Signal the intent to receive updates about a certain account and start
+	// by sending the commitment part of the authentication handshake. This is
+	// step 1 of the 3-way handshake.
 	Commit *AccountCommitment `protobuf:"bytes,1,opt,name=commit,proto3,oneof"`
 }
 
 type ClientAuctionMessage_Subscribe struct {
-	//
-	//Subscribe to update and interactive order execution events for account
-	//given and all its orders. Contains the final signature and is step 3 of
-	//the 3-way authentication handshake.
+	// Subscribe to update and interactive order execution events for account
+	// given and all its orders. Contains the final signature and is step 3 of
+	// the 3-way authentication handshake.
 	Subscribe *AccountSubscription `protobuf:"bytes,2,opt,name=subscribe,proto3,oneof"`
 }
 
 type ClientAuctionMessage_Accept struct {
-	//
-	//Accept the orders to be matched.
+	// Accept the orders to be matched.
 	Accept *OrderMatchAccept `protobuf:"bytes,3,opt,name=accept,proto3,oneof"`
 }
 
 type ClientAuctionMessage_Reject struct {
-	//
-	//Reject a whole batch.
+	// Reject a whole batch.
 	Reject *OrderMatchReject `protobuf:"bytes,4,opt,name=reject,proto3,oneof"`
 }
 
 type ClientAuctionMessage_Sign struct {
-	//
-	//The channel funding negotiations with the matched peer were successful
-	//and the inputs to spend from the accounts are now signed.
+	// The channel funding negotiations with the matched peer were successful
+	// and the inputs to spend from the accounts are now signed.
 	Sign *OrderMatchSign `protobuf:"bytes,5,opt,name=sign,proto3,oneof"`
 }
 
 type ClientAuctionMessage_Recover struct {
-	//
-	//The trader has lost its database and is trying to recover their
-	//accounts. This message can be sent after the successful completion of
-	//the 3-way authentication handshake where it will be established if the
-	//account exists on the auctioneer's side. This message must only be sent
-	//if the auctioneer knows of the account, otherwise it will regard it as a
-	//critical error and terminate the connection.
+	// The trader has lost its database and is trying to recover their
+	// accounts. This message can be sent after the successful completion of
+	// the 3-way authentication handshake where it will be established if the
+	// account exists on the auctioneer's side. This message must only be sent
+	// if the auctioneer knows of the account, otherwise it will regard it as a
+	// critical error and terminate the connection.
 	Recover *AccountRecovery `protobuf:"bytes,6,opt,name=recover,proto3,oneof"`
 }
 
@@ -1572,15 +1533,13 @@ type AccountCommitment struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The SHA256 hash of the trader's account key and a 32 byte random nonce.
-	//commit_hash = SHA256(accountPubKey || nonce)
+	// The SHA256 hash of the trader's account key and a 32 byte random nonce.
+	// commit_hash = SHA256(accountPubKey || nonce)
 	CommitHash []byte `protobuf:"bytes,1,opt,name=commit_hash,json=commitHash,proto3" json:"commit_hash,omitempty"`
-	//
-	//The batch verification protocol version the client is using. Clients that
-	//don't use the latest version will be declined to connect and participate in
-	//an auction. The user should then be informed that a software update is
-	//required.
+	// The batch verification protocol version the client is using. Clients that
+	// don't use the latest version will be declined to connect and participate in
+	// an auction. The user should then be informed that a software update is
+	// required.
 	BatchVersion uint32 `protobuf:"varint,2,opt,name=batch_version,json=batchVersion,proto3" json:"batch_version,omitempty"`
 }
 
@@ -1635,17 +1594,14 @@ type AccountSubscription struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The trader's account key of the account to subscribe to.
+	// The trader's account key of the account to subscribe to.
 	TraderKey []byte `protobuf:"bytes,1,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
-	//
-	//The random 32 byte nonce the trader used to create the commitment hash.
+	// The random 32 byte nonce the trader used to create the commitment hash.
 	CommitNonce []byte `protobuf:"bytes,2,opt,name=commit_nonce,json=commitNonce,proto3" json:"commit_nonce,omitempty"`
-	//
-	//The signature over the auth_hash which is the hash of the commitment and
-	//challenge. The signature is created with the trader's account key they
-	//committed to.
-	//auth_hash = SHA256(SHA256(accountPubKey || nonce) || challenge)
+	// The signature over the auth_hash which is the hash of the commitment and
+	// challenge. The signature is created with the trader's account key they
+	// committed to.
+	// auth_hash = SHA256(SHA256(accountPubKey || nonce) || challenge)
 	AuthSig []byte `protobuf:"bytes,3,opt,name=auth_sig,json=authSig,proto3" json:"auth_sig,omitempty"`
 }
 
@@ -1707,9 +1663,8 @@ type OrderMatchAccept struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The batch ID this acceptance message refers to. Must be set to avoid out-of-
-	//order responses from disrupting the batching process.
+	// The batch ID this acceptance message refers to. Must be set to avoid out-of-
+	// order responses from disrupting the batching process.
 	BatchId []byte `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
 }
 
@@ -1757,29 +1712,25 @@ type OrderMatchReject struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The ID of the batch to reject.
+	// The ID of the batch to reject.
 	BatchId []byte `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
-	//
-	//The reason/error string for the rejection.
+	// The reason/error string for the rejection.
 	Reason string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
-	//
-	//The reason as a code.
+	// The reason as a code.
 	ReasonCode OrderMatchReject_RejectReason `protobuf:"varint,3,opt,name=reason_code,json=reasonCode,proto3,enum=poolrpc.OrderMatchReject_RejectReason" json:"reason_code,omitempty"`
+	// The map of order nonces the trader was matched with but doesn't accept. The
+	// map contains the _other_ trader's order nonces and the reason for rejecting
+	// them. This can be a subset of the whole list of orders presented as matches
+	// if the trader only wants to reject some of them. This map is only
+	// considered by the auctioneer if the main reason_code is set to
+	// PARTIAL_REJECT. Otherwise it is assumed that the whole batch was faulty for
+	// some reason and that the trader rejects all orders contained. The auctioneer
+	// will only accept a certain number of these partial rejects before a trader's
+	// account is removed completely from the current batch. Abusing this
+	// functionality can also lead to a ban of the trader.
 	//
-	//The map of order nonces the trader was matched with but doesn't accept. The
-	//map contains the _other_ trader's order nonces and the reason for rejecting
-	//them. This can be a subset of the whole list of orders presented as matches
-	//if the trader only wants to reject some of them. This map is only
-	//considered by the auctioneer if the main reason_code is set to
-	//PARTIAL_REJECT. Otherwise it is assumed that the whole batch was faulty for
-	//some reason and that the trader rejects all orders contained. The auctioneer
-	//will only accept a certain number of these partial rejects before a trader's
-	//account is removed completely from the current batch. Abusing this
-	//functionality can also lead to a ban of the trader.
-	//
-	//The order nonces are hex encoded strings because the protobuf map doesn't
-	//allow raw bytes to be the map key type.
+	// The order nonces are hex encoded strings because the protobuf map doesn't
+	// allow raw bytes to be the map key type.
 	RejectedOrders map[string]*OrderReject `protobuf:"bytes,4,rep,name=rejected_orders,json=rejectedOrders,proto3" json:"rejected_orders,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
@@ -1848,11 +1799,9 @@ type OrderReject struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The reason/error string for the rejection.
+	// The reason/error string for the rejection.
 	Reason string `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
-	//
-	//The reason as a code.
+	// The reason as a code.
 	ReasonCode OrderReject_OrderRejectReason `protobuf:"varint,2,opt,name=reason_code,json=reasonCode,proto3,enum=poolrpc.OrderReject_OrderRejectReason" json:"reason_code,omitempty"`
 }
 
@@ -1913,13 +1862,11 @@ type ChannelInfo struct {
 	LocalNodeKey []byte `protobuf:"bytes,2,opt,name=local_node_key,json=localNodeKey,proto3" json:"local_node_key,omitempty"`
 	// The remote node's identifying public key.
 	RemoteNodeKey []byte `protobuf:"bytes,3,opt,name=remote_node_key,json=remoteNodeKey,proto3" json:"remote_node_key,omitempty"`
-	//
-	//The node's base public key used within the non-delayed pay-to-self output on
-	//the commitment transaction.
+	// The node's base public key used within the non-delayed pay-to-self output on
+	// the commitment transaction.
 	LocalPaymentBasePoint []byte `protobuf:"bytes,4,opt,name=local_payment_base_point,json=localPaymentBasePoint,proto3" json:"local_payment_base_point,omitempty"`
-	//
-	//RemotePaymentBasePoint is the remote node's base public key used within the
-	//non-delayed pay-to-self output on the commitment transaction.
+	// RemotePaymentBasePoint is the remote node's base public key used within the
+	// non-delayed pay-to-self output on the commitment transaction.
 	RemotePaymentBasePoint []byte `protobuf:"bytes,5,opt,name=remote_payment_base_point,json=remotePaymentBasePoint,proto3" json:"remote_payment_base_point,omitempty"`
 }
 
@@ -1995,31 +1942,27 @@ type OrderMatchSign struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The ID of the batch that the signatures are meant for.
+	// The ID of the batch that the signatures are meant for.
 	BatchId []byte `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
-	//
-	//A map with the signatures to spend the accounts being spent in a batch
-	//transaction. The map key corresponds to the trader's account key of the
-	//account in the batch transaction. The account key/ID has to be hex encoded
-	//into a string because protobuf doesn't allow bytes as a map key data type.
-	//For version 1 (Taproot enabled) accounts, this merely represents a partial
-	//MuSig2 signature that can be combined into a full signature by the auction
-	//server by adding its own partial signature. A set of nonces will be provided
-	//by the trader for each v1 account to allow finalizing the MuSig2 signing
-	//session.
+	// A map with the signatures to spend the accounts being spent in a batch
+	// transaction. The map key corresponds to the trader's account key of the
+	// account in the batch transaction. The account key/ID has to be hex encoded
+	// into a string because protobuf doesn't allow bytes as a map key data type.
+	// For version 1 (Taproot enabled) accounts, this merely represents a partial
+	// MuSig2 signature that can be combined into a full signature by the auction
+	// server by adding its own partial signature. A set of nonces will be provided
+	// by the trader for each v1 account to allow finalizing the MuSig2 signing
+	// session.
 	AccountSigs map[string][]byte `protobuf:"bytes,2,rep,name=account_sigs,json=accountSigs,proto3" json:"account_sigs,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	//
-	//The information for each channel created as part of a batch that's submitted
-	//to the auctioneer to ensure they can properly enforce a channel's service
-	//lifetime. Entries are indexed by the string representation of a channel's
-	//outpoint.
+	// The information for each channel created as part of a batch that's submitted
+	// to the auctioneer to ensure they can properly enforce a channel's service
+	// lifetime. Entries are indexed by the string representation of a channel's
+	// outpoint.
 	ChannelInfos map[string]*ChannelInfo `protobuf:"bytes,3,rep,name=channel_infos,json=channelInfos,proto3" json:"channel_infos,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	//
-	//A set of 66-byte nonces for each version 1 (Taproot enabled) account. The
-	//nonces can be used to produce a MuSig2 partial signature to spend the
-	//account using the key spend path, which is a MuSig2 combined key of the
-	//auctioneer key and the trader key.
+	// A set of 66-byte nonces for each version 1 (Taproot enabled) account. The
+	// nonces can be used to produce a MuSig2 partial signature to spend the
+	// account using the key spend path, which is a MuSig2 combined key of the
+	// auctioneer key and the trader key.
 	TraderNonces map[string][]byte `protobuf:"bytes,4,rep,name=trader_nonces,json=traderNonces,proto3" json:"trader_nonces,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
@@ -2088,8 +2031,7 @@ type AccountRecovery struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The trader's account key of the account to recover.
+	// The trader's account key of the account to recover.
 	TraderKey []byte `protobuf:"bytes,1,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
 }
 
@@ -2138,6 +2080,7 @@ type ServerAuctionMessage struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Msg:
+	//
 	//	*ServerAuctionMessage_Challenge
 	//	*ServerAuctionMessage_Success
 	//	*ServerAuctionMessage_Error
@@ -2241,57 +2184,50 @@ type isServerAuctionMessage_Msg interface {
 }
 
 type ServerAuctionMessage_Challenge struct {
-	//
-	//Step 2 of the 3-way authentication handshake. Contains the
-	//authentication challenge. Subscriptions sent by the trader must sign
-	//the message SHA256(SHA256(accountPubKey || nonce) || challenge)
-	//with their account key to prove ownership of said key.
+	// Step 2 of the 3-way authentication handshake. Contains the
+	// authentication challenge. Subscriptions sent by the trader must sign
+	// the message SHA256(SHA256(accountPubKey || nonce) || challenge)
+	// with their account key to prove ownership of said key.
 	Challenge *ServerChallenge `protobuf:"bytes,1,opt,name=challenge,proto3,oneof"`
 }
 
 type ServerAuctionMessage_Success struct {
-	//
-	//The trader has subscribed to account updates successfully, the 3-way
-	//authentication handshake completed normally.
+	// The trader has subscribed to account updates successfully, the 3-way
+	// authentication handshake completed normally.
 	Success *SubscribeSuccess `protobuf:"bytes,2,opt,name=success,proto3,oneof"`
 }
 
 type ServerAuctionMessage_Error struct {
-	//
-	//An error occurred during any part of the communication. The trader
-	//should inspect the error code and act accordingly.
+	// An error occurred during any part of the communication. The trader
+	// should inspect the error code and act accordingly.
 	Error *SubscribeError `protobuf:"bytes,3,opt,name=error,proto3,oneof"`
 }
 
 type ServerAuctionMessage_Prepare struct {
-	//
-	//The auctioneer has matched a set of orders into a batch and now
-	//instructs the traders to validate the batch and prepare for order
-	//execution. Because traders have the possibility of backing out of a
-	//batch, multiple of these messages with the SAME batch_id can be sent.
+	// The auctioneer has matched a set of orders into a batch and now
+	// instructs the traders to validate the batch and prepare for order
+	// execution. Because traders have the possibility of backing out of a
+	// batch, multiple of these messages with the SAME batch_id can be sent.
 	Prepare *OrderMatchPrepare `protobuf:"bytes,4,opt,name=prepare,proto3,oneof"`
 }
 
 type ServerAuctionMessage_Sign struct {
-	//
-	//This message is sent after all traders send back an OrderMatchAccept
-	//method. It signals that the traders should execute their local funding
-	//protocol, then send signatures for their account inputs.
+	// This message is sent after all traders send back an OrderMatchAccept
+	// method. It signals that the traders should execute their local funding
+	// protocol, then send signatures for their account inputs.
 	Sign *OrderMatchSignBegin `protobuf:"bytes,5,opt,name=sign,proto3,oneof"`
 }
 
 type ServerAuctionMessage_Finalize struct {
-	//
-	//All traders have accepted and signed the batch and the final transaction
-	//was broadcast.
+	// All traders have accepted and signed the batch and the final transaction
+	// was broadcast.
 	Finalize *OrderMatchFinalize `protobuf:"bytes,6,opt,name=finalize,proto3,oneof"`
 }
 
 type ServerAuctionMessage_Account struct {
-	//
-	//The answer to a trader's request for account recovery. This message
-	//contains all information that is needed to restore the account to
-	//working order on the trader side.
+	// The answer to a trader's request for account recovery. This message
+	// contains all information that is needed to restore the account to
+	// working order on the trader side.
 	Account *AuctionAccount `protobuf:"bytes,7,opt,name=account,proto3,oneof"`
 }
 
@@ -2314,12 +2250,10 @@ type ServerChallenge struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The unique challenge for each stream that has to be signed with the trader's
-	//account key for each account subscription.
+	// The unique challenge for each stream that has to be signed with the trader's
+	// account key for each account subscription.
 	Challenge []byte `protobuf:"bytes,1,opt,name=challenge,proto3" json:"challenge,omitempty"`
-	//
-	//The commit hash the challenge was created for.
+	// The commit hash the challenge was created for.
 	CommitHash []byte `protobuf:"bytes,2,opt,name=commit_hash,json=commitHash,proto3" json:"commit_hash,omitempty"`
 }
 
@@ -2374,8 +2308,7 @@ type SubscribeSuccess struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The trader's account key this message is referring to.
+	// The trader's account key this message is referring to.
 	TraderKey []byte `protobuf:"bytes,1,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
 }
 
@@ -2423,14 +2356,12 @@ type MatchedMarket struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//Maps a user's own order_nonce to the opposite order type they were matched
-	//with. The order_nonce is a 32 byte hex encoded string because bytes is not
-	//allowed as a map key data type in protobuf.
+	// Maps a user's own order_nonce to the opposite order type they were matched
+	// with. The order_nonce is a 32 byte hex encoded string because bytes is not
+	// allowed as a map key data type in protobuf.
 	MatchedOrders map[string]*MatchedOrder `protobuf:"bytes,1,rep,name=matched_orders,json=matchedOrders,proto3" json:"matched_orders,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	//
-	//The uniform clearing price rate in parts per billion that was used for this
-	//batch.
+	// The uniform clearing price rate in parts per billion that was used for this
+	// batch.
 	ClearingPriceRate uint32 `protobuf:"varint,2,opt,name=clearing_price_rate,json=clearingPriceRate,proto3" json:"clearing_price_rate,omitempty"`
 }
 
@@ -2485,52 +2416,41 @@ type OrderMatchPrepare struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//Deprecated, use matched_markets.
+	// Deprecated, use matched_markets.
 	//
 	// Deprecated: Do not use.
 	MatchedOrders map[string]*MatchedOrder `protobuf:"bytes,1,rep,name=matched_orders,json=matchedOrders,proto3" json:"matched_orders,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	//
-	//Deprecated, use matched_markets.
+	// Deprecated, use matched_markets.
 	//
 	// Deprecated: Do not use.
 	ClearingPriceRate uint32 `protobuf:"varint,2,opt,name=clearing_price_rate,json=clearingPriceRate,proto3" json:"clearing_price_rate,omitempty"`
-	//
-	//A list of the user's own accounts that are being spent by the matched
-	//orders. The list contains the differences that would be applied by the
-	//server when executing the orders.
+	// A list of the user's own accounts that are being spent by the matched
+	// orders. The list contains the differences that would be applied by the
+	// server when executing the orders.
 	ChargedAccounts []*AccountDiff `protobuf:"bytes,3,rep,name=charged_accounts,json=chargedAccounts,proto3" json:"charged_accounts,omitempty"`
-	//
-	//The fee parameters used to calculate the execution fees.
+	// The fee parameters used to calculate the execution fees.
 	ExecutionFee *ExecutionFee `protobuf:"bytes,4,opt,name=execution_fee,json=executionFee,proto3" json:"execution_fee,omitempty"`
-	//
-	//The batch transaction with all non-witness data.
+	// The batch transaction with all non-witness data.
 	BatchTransaction []byte `protobuf:"bytes,5,opt,name=batch_transaction,json=batchTransaction,proto3" json:"batch_transaction,omitempty"`
-	//
-	//Fee rate of the batch transaction, expressed in satoshis per 1000 weight
-	//units (sat/kW).
+	// Fee rate of the batch transaction, expressed in satoshis per 1000 weight
+	// units (sat/kW).
 	FeeRateSatPerKw uint64 `protobuf:"varint,6,opt,name=fee_rate_sat_per_kw,json=feeRateSatPerKw,proto3" json:"fee_rate_sat_per_kw,omitempty"`
-	//
-	//Fee rebate in satoshis, offered if another batch participant wants to pay
-	//more fees for a faster confirmation.
+	// Fee rebate in satoshis, offered if another batch participant wants to pay
+	// more fees for a faster confirmation.
 	FeeRebateSat uint64 `protobuf:"varint,7,opt,name=fee_rebate_sat,json=feeRebateSat,proto3" json:"fee_rebate_sat,omitempty"`
-	//
-	//The 32 byte unique identifier of this batch.
+	// The 32 byte unique identifier of this batch.
 	BatchId []byte `protobuf:"bytes,8,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
-	//
-	//The batch verification protocol version the server is using. Clients that
-	//don't support this version MUST return an `OrderMatchAccept` message with
-	//an empty list of orders so the batch can continue. The user should then be
-	//informed that a software update is required.
+	// The batch verification protocol version the server is using. Clients that
+	// don't support this version MUST return an `OrderMatchAccept` message with
+	// an empty list of orders so the batch can continue. The user should then be
+	// informed that a software update is required.
 	BatchVersion uint32 `protobuf:"varint,9,opt,name=batch_version,json=batchVersion,proto3" json:"batch_version,omitempty"`
-	//
-	//Maps the distinct lease duration markets to the orders that were matched
-	//within and the discovered market clearing price.
+	// Maps the distinct lease duration markets to the orders that were matched
+	// within and the discovered market clearing price.
 	MatchedMarkets map[uint32]*MatchedMarket `protobuf:"bytes,10,rep,name=matched_markets,json=matchedMarkets,proto3" json:"matched_markets,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	//
-	//The earliest absolute height in the chain in which the batch transaction can
-	//be found within. This will be used by traders to base off their absolute
-	//channel lease maturity height.
+	// The earliest absolute height in the chain in which the batch transaction can
+	// be found within. This will be used by traders to base off their absolute
+	// channel lease maturity height.
 	BatchHeightHint uint32 `protobuf:"varint,11,opt,name=batch_height_hint,json=batchHeightHint,proto3" json:"batch_height_hint,omitempty"`
 }
 
@@ -2650,11 +2570,9 @@ type TxOut struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The value of the transaction output in satoshis.
+	// The value of the transaction output in satoshis.
 	Value uint64 `protobuf:"varint,1,opt,name=value,proto3" json:"value,omitempty"`
-	//
-	//The public key script of the output.
+	// The public key script of the output.
 	PkScript []byte `protobuf:"bytes,2,opt,name=pk_script,json=pkScript,proto3" json:"pk_script,omitempty"`
 }
 
@@ -2709,19 +2627,16 @@ type OrderMatchSignBegin struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The 32 byte unique identifier of this batch.
+	// The 32 byte unique identifier of this batch.
 	BatchId []byte `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
-	//
-	//A set of 66-byte nonces for each version 1 (Taproot enabled) account. The
-	//nonces can be used to produce a MuSig2 partial signature to spend the
-	//account using the key spend path, which is a MuSig2 combined key of the
-	//auctioneer key and the trader key.
+	// A set of 66-byte nonces for each version 1 (Taproot enabled) account. The
+	// nonces can be used to produce a MuSig2 partial signature to spend the
+	// account using the key spend path, which is a MuSig2 combined key of the
+	// auctioneer key and the trader key.
 	ServerNonces map[string][]byte `protobuf:"bytes,2,rep,name=server_nonces,json=serverNonces,proto3" json:"server_nonces,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	//
-	//The full list of UTXO information for each of the inputs being spent. This
-	//is required when spending one or more Taproot enabled (account version 1)
-	//outputs.
+	// The full list of UTXO information for each of the inputs being spent. This
+	// is required when spending one or more Taproot enabled (account version 1)
+	// outputs.
 	PrevOutputs []*TxOut `protobuf:"bytes,3,rep,name=prev_outputs,json=prevOutputs,proto3" json:"prev_outputs,omitempty"`
 }
 
@@ -2783,11 +2698,9 @@ type OrderMatchFinalize struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The unique identifier of the finalized batch.
+	// The unique identifier of the finalized batch.
 	BatchId []byte `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
-	//
-	//The final transaction ID of the published batch transaction.
+	// The final transaction ID of the published batch transaction.
 	BatchTxid []byte `protobuf:"bytes,2,opt,name=batch_txid,json=batchTxid,proto3" json:"batch_txid,omitempty"`
 }
 
@@ -2842,23 +2755,19 @@ type SubscribeError struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The string representation of the subscription error.
+	// The string representation of the subscription error.
 	Error string `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
-	//
-	//The error code of the subscription error.
+	// The error code of the subscription error.
 	ErrorCode SubscribeError_Error `protobuf:"varint,2,opt,name=error_code,json=errorCode,proto3,enum=poolrpc.SubscribeError_Error" json:"error_code,omitempty"`
-	//
-	//The trader's account key this error is referring to. This is not set if
-	//the error code is SERVER_SHUTDOWN as that error is only sent once per
-	//connection and not per individual subscription.
+	// The trader's account key this error is referring to. This is not set if
+	// the error code is SERVER_SHUTDOWN as that error is only sent once per
+	// connection and not per individual subscription.
 	TraderKey []byte `protobuf:"bytes,3,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
-	//
-	//The auctioneer's partial account information as it was stored when creating
-	//the reservation. This is only set if the error code is
-	//INCOMPLETE_ACCOUNT_RESERVATION. Only the fields value, expiry, trader_key,
-	//auctioneer_key, batch_key and height_hint will be set in that
-	//case.
+	// The auctioneer's partial account information as it was stored when creating
+	// the reservation. This is only set if the error code is
+	// INCOMPLETE_ACCOUNT_RESERVATION. Only the fields value, expiry, trader_key,
+	// auctioneer_key, batch_key and height_hint will be set in that
+	// case.
 	AccountReservation *AuctionAccount `protobuf:"bytes,4,opt,name=account_reservation,json=accountReservation,proto3" json:"account_reservation,omitempty"`
 }
 
@@ -2927,39 +2836,29 @@ type AuctionAccount struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The value of the account in satoshis. Must match the amount of the
-	//account_point output.
+	// The value of the account in satoshis. Must match the amount of the
+	// account_point output.
 	Value uint64 `protobuf:"varint,1,opt,name=value,proto3" json:"value,omitempty"`
-	//
-	//The block height at which the account should expire.
+	// The block height at which the account should expire.
 	Expiry uint32 `protobuf:"varint,2,opt,name=expiry,proto3" json:"expiry,omitempty"`
-	//
-	//The trader's account key.
+	// The trader's account key.
 	TraderKey []byte `protobuf:"bytes,3,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
-	//
-	//The long term auctioneer's account key.
+	// The long term auctioneer's account key.
 	AuctioneerKey []byte `protobuf:"bytes,4,opt,name=auctioneer_key,json=auctioneerKey,proto3" json:"auctioneer_key,omitempty"`
-	//
-	//The current batch key used to create the account output.
+	// The current batch key used to create the account output.
 	BatchKey []byte `protobuf:"bytes,5,opt,name=batch_key,json=batchKey,proto3" json:"batch_key,omitempty"`
-	//
-	//The current state of the account as the auctioneer sees it.
+	// The current state of the account as the auctioneer sees it.
 	State AuctionAccountState `protobuf:"varint,6,opt,name=state,proto3,enum=poolrpc.AuctionAccountState" json:"state,omitempty"`
-	//
-	//The block height of the last change to the account's output. Can be used to
-	//scan the chain for the output's spend state more efficiently.
+	// The block height of the last change to the account's output. Can be used to
+	// scan the chain for the output's spend state more efficiently.
 	HeightHint uint32 `protobuf:"varint,7,opt,name=height_hint,json=heightHint,proto3" json:"height_hint,omitempty"`
-	//
-	//Transaction output of the account. Depending on the state of the account,
-	//this output might have been spent.
+	// Transaction output of the account. Depending on the state of the account,
+	// this output might have been spent.
 	Outpoint *OutPoint `protobuf:"bytes,8,opt,name=outpoint,proto3" json:"outpoint,omitempty"`
-	//
-	//The latest transaction of an account. This is only known by the auctioneer
-	//after the account has met its initial funding confirmation.
+	// The latest transaction of an account. This is only known by the auctioneer
+	// after the account has met its initial funding confirmation.
 	LatestTx []byte `protobuf:"bytes,9,opt,name=latest_tx,json=latestTx,proto3" json:"latest_tx,omitempty"`
-	//
-	//The account version. Will be set to 0 for legacy (non-taproot) accounts.
+	// The account version. Will be set to 0 for legacy (non-taproot) accounts.
 	Version uint32 `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"`
 }
 
@@ -3070,13 +2969,11 @@ type MatchedOrder struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The bids the trader's own order was matched against. This list is empty if
-	//the trader's order was a bid order itself.
+	// The bids the trader's own order was matched against. This list is empty if
+	// the trader's order was a bid order itself.
 	MatchedBids []*MatchedBid `protobuf:"bytes,1,rep,name=matched_bids,json=matchedBids,proto3" json:"matched_bids,omitempty"`
-	//
-	//The asks the trader's own order was matched against. This list is empty if
-	//the trader's order was an ask order itself.
+	// The asks the trader's own order was matched against. This list is empty if
+	// the trader's order was an ask order itself.
 	MatchedAsks []*MatchedAsk `protobuf:"bytes,2,rep,name=matched_asks,json=matchedAsks,proto3" json:"matched_asks,omitempty"`
 }
 
@@ -3131,11 +3028,9 @@ type MatchedAsk struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The ask order that was matched against.
+	// The ask order that was matched against.
 	Ask *ServerAsk `protobuf:"bytes,1,opt,name=ask,proto3" json:"ask,omitempty"`
-	//
-	//The number of units that were filled from/by this matched order.
+	// The number of units that were filled from/by this matched order.
 	UnitsFilled uint32 `protobuf:"varint,2,opt,name=units_filled,json=unitsFilled,proto3" json:"units_filled,omitempty"`
 }
 
@@ -3190,11 +3085,9 @@ type MatchedBid struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The ask order that was matched against.
+	// The ask order that was matched against.
 	Bid *ServerBid `protobuf:"bytes,1,opt,name=bid,proto3" json:"bid,omitempty"`
-	//
-	//The number of units that were filled from/by this matched order.
+	// The number of units that were filled from/by this matched order.
 	UnitsFilled uint32 `protobuf:"varint,2,opt,name=units_filled,json=unitsFilled,proto3" json:"units_filled,omitempty"`
 }
 
@@ -3249,32 +3142,26 @@ type AccountDiff struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The final balance of the account after the executed batch.
+	// The final balance of the account after the executed batch.
 	EndingBalance uint64 `protobuf:"varint,1,opt,name=ending_balance,json=endingBalance,proto3" json:"ending_balance,omitempty"`
-	//
-	//Depending on the amount of the final balance of the account, the remainder
-	//is either sent to a new on-chain output, extended off-chain or fully
-	//consumed by the batch and its fees.
+	// Depending on the amount of the final balance of the account, the remainder
+	// is either sent to a new on-chain output, extended off-chain or fully
+	// consumed by the batch and its fees.
 	EndingState AccountDiff_AccountState `protobuf:"varint,2,opt,name=ending_state,json=endingState,proto3,enum=poolrpc.AccountDiff_AccountState" json:"ending_state,omitempty"`
-	//
-	//If the account was re-created on-chain then the new account's index in the
-	//transaction is set here. If the account was fully spent or the remainder was
-	//extended off-chain then no new account outpoint is created and -1 is
-	//returned here.
+	// If the account was re-created on-chain then the new account's index in the
+	// transaction is set here. If the account was fully spent or the remainder was
+	// extended off-chain then no new account outpoint is created and -1 is
+	// returned here.
 	OutpointIndex int32 `protobuf:"varint,3,opt,name=outpoint_index,json=outpointIndex,proto3" json:"outpoint_index,omitempty"`
-	//
-	//The trader's account key this diff is referring to.
+	// The trader's account key this diff is referring to.
 	TraderKey []byte `protobuf:"bytes,4,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
-	//
-	//The new account expiry height used to verify the batch. If the batch is
-	//successfully executed the account must update its expiry height to this
-	//value.
+	// The new account expiry height used to verify the batch. If the batch is
+	// successfully executed the account must update its expiry height to this
+	// value.
 	NewExpiry uint32 `protobuf:"varint,5,opt,name=new_expiry,json=newExpiry,proto3" json:"new_expiry,omitempty"`
-	//
-	//The new account version used to verify the batch. If this is non-zero, it
-	//means the account was automatically upgraded to the given version during the
-	//batch execution.
+	// The new account version used to verify the batch. If this is non-zero, it
+	// means the account was automatically upgraded to the given version during the
+	// batch execution.
 	NewVersion uint32 `protobuf:"varint,6,opt,name=new_version,json=newVersion,proto3" json:"new_version,omitempty"`
 }
 
@@ -3357,41 +3244,31 @@ type ServerOrder struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The trader's account key of the account to use for the order.
+	// The trader's account key of the account to use for the order.
 	TraderKey []byte `protobuf:"bytes,1,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
-	//
-	//Fixed order rate in parts per billion.
+	// Fixed order rate in parts per billion.
 	RateFixed uint32 `protobuf:"varint,2,opt,name=rate_fixed,json=rateFixed,proto3" json:"rate_fixed,omitempty"`
-	//
-	//Order amount in satoshis.
+	// Order amount in satoshis.
 	Amt        uint64 `protobuf:"varint,3,opt,name=amt,proto3" json:"amt,omitempty"`
 	MinChanAmt uint64 `protobuf:"varint,4,opt,name=min_chan_amt,json=minChanAmt,proto3" json:"min_chan_amt,omitempty"`
-	//
-	//Order nonce of 32 byte length, acts as unique order identifier.
+	// Order nonce of 32 byte length, acts as unique order identifier.
 	OrderNonce []byte `protobuf:"bytes,6,opt,name=order_nonce,json=orderNonce,proto3" json:"order_nonce,omitempty"`
-	//
-	//Signature of the order's digest, signed with the user's account key. The
-	//signature must be fixed-size LN wire format encoded. Version 0 includes the
-	//fields version, rate_fixed, amt, max_batch_fee_rate_sat_per_kw and
-	//lease_duration_blocks in the order digest.
+	// Signature of the order's digest, signed with the user's account key. The
+	// signature must be fixed-size LN wire format encoded. Version 0 includes the
+	// fields version, rate_fixed, amt, max_batch_fee_rate_sat_per_kw and
+	// lease_duration_blocks in the order digest.
 	OrderSig []byte `protobuf:"bytes,7,opt,name=order_sig,json=orderSig,proto3" json:"order_sig,omitempty"`
-	//
-	//The multi signature key of the node creating the order, will be used for the
-	//target channel's funding TX 2-of-2 multi signature output.
+	// The multi signature key of the node creating the order, will be used for the
+	// target channel's funding TX 2-of-2 multi signature output.
 	MultiSigKey []byte `protobuf:"bytes,8,opt,name=multi_sig_key,json=multiSigKey,proto3" json:"multi_sig_key,omitempty"`
-	//
-	//The pubkey of the node creating the order.
+	// The pubkey of the node creating the order.
 	NodePub []byte `protobuf:"bytes,9,opt,name=node_pub,json=nodePub,proto3" json:"node_pub,omitempty"`
-	//
-	//The network addresses of the node creating the order.
+	// The network addresses of the node creating the order.
 	NodeAddr []*NodeAddress `protobuf:"bytes,10,rep,name=node_addr,json=nodeAddr,proto3" json:"node_addr,omitempty"`
-	//
-	//The type of the channel that should be opened.
+	// The type of the channel that should be opened.
 	ChannelType OrderChannelType `protobuf:"varint,12,opt,name=channel_type,json=channelType,proto3,enum=poolrpc.OrderChannelType" json:"channel_type,omitempty"`
-	//
-	//Maximum fee rate the trader is willing to pay for the batch transaction,
-	//expressed in satoshis per 1000 weight units (sat/kW).
+	// Maximum fee rate the trader is willing to pay for the batch transaction,
+	// expressed in satoshis per 1000 weight units (sat/kW).
 	MaxBatchFeeRateSatPerKw uint64 `protobuf:"varint,13,opt,name=max_batch_fee_rate_sat_per_kw,json=maxBatchFeeRateSatPerKw,proto3" json:"max_batch_fee_rate_sat_per_kw,omitempty"`
 	// List of nodes that will be allowed to match with our order. Incompatible
 	// with the `not_allowed_node_ids` field.
@@ -3548,40 +3425,32 @@ type ServerBid struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The common fields shared between both ask and bid order types.
+	// The common fields shared between both ask and bid order types.
 	Details *ServerOrder `protobuf:"bytes,1,opt,name=details,proto3" json:"details,omitempty"`
-	//
-	//Required number of blocks that a channel opened as a result of this bid
-	//should be kept open.
+	// Required number of blocks that a channel opened as a result of this bid
+	// should be kept open.
 	LeaseDurationBlocks uint32 `protobuf:"varint,2,opt,name=lease_duration_blocks,json=leaseDurationBlocks,proto3" json:"lease_duration_blocks,omitempty"`
-	//
-	//The version of the order format that is used. Will be increased once new
-	//features are added.
+	// The version of the order format that is used. Will be increased once new
+	// features are added.
 	Version uint32 `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`
-	//
-	//The minimum node tier this order should be matched with. Only asks backed by
-	//a node this tier or higher will be eligible for matching with this bid.
+	// The minimum node tier this order should be matched with. Only asks backed by
+	// a node this tier or higher will be eligible for matching with this bid.
 	MinNodeTier NodeTier `protobuf:"varint,5,opt,name=min_node_tier,json=minNodeTier,proto3,enum=poolrpc.NodeTier" json:"min_node_tier,omitempty"`
-	//
-	//Give the incoming channel that results from this bid being matched an
-	//initial outbound balance by adding additional funds from the taker's account
-	//into the channel. As a simplification for the execution protocol and the
-	//channel reserve calculations the min_chan_amt must be set to the full order
-	//amount. For the inbound liquidity market the self_chan_balance can be at
-	//most the same as the order amount.
+	// Give the incoming channel that results from this bid being matched an
+	// initial outbound balance by adding additional funds from the taker's account
+	// into the channel. As a simplification for the execution protocol and the
+	// channel reserve calculations the min_chan_amt must be set to the full order
+	// amount. For the inbound liquidity market the self_chan_balance can be at
+	// most the same as the order amount.
 	SelfChanBalance uint64 `protobuf:"varint,6,opt,name=self_chan_balance,json=selfChanBalance,proto3" json:"self_chan_balance,omitempty"`
-	//
-	//If this bid order is meant to lease a channel for another node (which is
-	//dubbed a "sidecar channel") then this boolean needs to be set to true. The
-	//multi_sig_key, node_pub and node_addr fields of the order details must then
-	//correspond to the recipient node's details.
+	// If this bid order is meant to lease a channel for another node (which is
+	// dubbed a "sidecar channel") then this boolean needs to be set to true. The
+	// multi_sig_key, node_pub and node_addr fields of the order details must then
+	// correspond to the recipient node's details.
 	IsSidecarChannel bool `protobuf:"varint,7,opt,name=is_sidecar_channel,json=isSidecarChannel,proto3" json:"is_sidecar_channel,omitempty"`
-	//
-	//Signals if this bid is interested in an announced or unannounced channel.
+	// Signals if this bid is interested in an announced or unannounced channel.
 	UnannouncedChannel bool `protobuf:"varint,8,opt,name=unannounced_channel,json=unannouncedChannel,proto3" json:"unannounced_channel,omitempty"`
-	//
-	//Signals if this bid is interested in a zero conf channel or not.
+	// Signals if this bid is interested in a zero conf channel or not.
 	ZeroConfChannel bool `protobuf:"varint,9,opt,name=zero_conf_channel,json=zeroConfChannel,proto3" json:"zero_conf_channel,omitempty"`
 }
 
@@ -3678,23 +3547,18 @@ type ServerAsk struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The common fields shared between both ask and bid order types.
+	// The common fields shared between both ask and bid order types.
 	Details *ServerOrder `protobuf:"bytes,1,opt,name=details,proto3" json:"details,omitempty"`
-	//
-	//The number of blocks the liquidity provider is willing to provide the
-	//channel funds for.
+	// The number of blocks the liquidity provider is willing to provide the
+	// channel funds for.
 	LeaseDurationBlocks uint32 `protobuf:"varint,4,opt,name=lease_duration_blocks,json=leaseDurationBlocks,proto3" json:"lease_duration_blocks,omitempty"`
-	//
-	//The version of the order format that is used. Will be increased once new
-	//features are added.
+	// The version of the order format that is used. Will be increased once new
+	// features are added.
 	Version uint32 `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`
-	//
-	//The constraints for selling the liquidity based on channel discoverability.
+	// The constraints for selling the liquidity based on channel discoverability.
 	AnnouncementConstraints ChannelAnnouncementConstraints `protobuf:"varint,6,opt,name=announcement_constraints,json=announcementConstraints,proto3,enum=poolrpc.ChannelAnnouncementConstraints" json:"announcement_constraints,omitempty"`
-	//
-	//The constraints for selling the liquidity based on the number of
-	//blocks before considering the channel confirmed.
+	// The constraints for selling the liquidity based on the number of
+	// blocks before considering the channel confirmed.
 	ConfirmationConstraints ChannelConfirmationConstraints `protobuf:"varint,7,opt,name=confirmation_constraints,json=confirmationConstraints,proto3,enum=poolrpc.ChannelConfirmationConstraints" json:"confirmation_constraints,omitempty"`
 }
 
@@ -3882,9 +3746,8 @@ type ServerInput struct {
 
 	// The outpoint that the input corresponds to.
 	Outpoint *OutPoint `protobuf:"bytes,1,opt,name=outpoint,proto3" json:"outpoint,omitempty"`
-	//
-	//The signature script required by the input. This only applies to NP2WKH
-	//inputs.
+	// The signature script required by the input. This only applies to NP2WKH
+	// inputs.
 	SigScript []byte `protobuf:"bytes,2,opt,name=sig_script,json=sigScript,proto3" json:"sig_script,omitempty"`
 }
 
@@ -3996,31 +3859,26 @@ type ServerModifyAccountRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The trader's account key of the account to be modified.
+	// The trader's account key of the account to be modified.
 	TraderKey []byte `protobuf:"bytes,1,opt,name=trader_key,json=traderKey,proto3" json:"trader_key,omitempty"`
-	//
-	//An additional set of inputs that can be included in the spending transaction
-	//of an account. These can be used to deposit more funds into an account.
-	//These must be under control of the backing lnd node's wallet.
+	// An additional set of inputs that can be included in the spending transaction
+	// of an account. These can be used to deposit more funds into an account.
+	// These must be under control of the backing lnd node's wallet.
 	NewInputs []*ServerInput `protobuf:"bytes,2,rep,name=new_inputs,json=newInputs,proto3" json:"new_inputs,omitempty"`
-	//
-	//An additional set of outputs that can be included in the spending
-	//transaction of an account. These can be used to withdraw funds from an
-	//account.
+	// An additional set of outputs that can be included in the spending
+	// transaction of an account. These can be used to withdraw funds from an
+	// account.
 	NewOutputs []*ServerOutput `protobuf:"bytes,3,rep,name=new_outputs,json=newOutputs,proto3" json:"new_outputs,omitempty"`
 	// The new parameters to apply for the account.
 	NewParams *ServerModifyAccountRequest_NewAccountParameters `protobuf:"bytes,4,opt,name=new_params,json=newParams,proto3" json:"new_params,omitempty"`
-	//
-	//A set of 66-byte nonces for each version 1 (Taproot enabled) account. The
-	//nonces can be used to produce a MuSig2 partial signature to spend the
-	//account using the key spend path, which is a MuSig2 combined key of the
-	//auctioneer key and the trader key.
+	// A set of 66-byte nonces for each version 1 (Taproot enabled) account. The
+	// nonces can be used to produce a MuSig2 partial signature to spend the
+	// account using the key spend path, which is a MuSig2 combined key of the
+	// auctioneer key and the trader key.
 	TraderNonces []byte `protobuf:"bytes,5,opt,name=trader_nonces,json=traderNonces,proto3" json:"trader_nonces,omitempty"`
-	//
-	//The full list of UTXO information for each of the inputs being spent. This
-	//is required when spending a Taproot enabled (account version 1) output or
-	//when adding additional Taproot inputs.
+	// The full list of UTXO information for each of the inputs being spent. This
+	// is required when spending a Taproot enabled (account version 1) output or
+	// when adding additional Taproot inputs.
 	PrevOutputs []*TxOut `protobuf:"bytes,6,rep,name=prev_outputs,json=prevOutputs,proto3" json:"prev_outputs,omitempty"`
 }
 
@@ -4103,19 +3961,17 @@ type ServerModifyAccountResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The auctioneer's signature that allows a trader to broadcast a transaction
-	//spending from an account output. For version 1 (Taproot enabled) accounts,
-	//this merely represents a partial MuSig2 signature that can be combined into
-	//a full signature by the trader daemon by adding its own partial signature. A
-	//set of nonces will be provided by the server (in case this is a v1 account)
-	//to allow finalizing the MuSig2 signing session.
+	// The auctioneer's signature that allows a trader to broadcast a transaction
+	// spending from an account output. For version 1 (Taproot enabled) accounts,
+	// this merely represents a partial MuSig2 signature that can be combined into
+	// a full signature by the trader daemon by adding its own partial signature. A
+	// set of nonces will be provided by the server (in case this is a v1 account)
+	// to allow finalizing the MuSig2 signing session.
 	AccountSig []byte `protobuf:"bytes,1,opt,name=account_sig,json=accountSig,proto3" json:"account_sig,omitempty"`
-	//
-	//An optional set of 66-byte nonces for a version 1 (Taproot enabled) account
-	//spend. The nonces can be used to produce a MuSig2 partial signature to spend
-	//the account using the key spend path, which is a MuSig2 combined key of the
-	//auctioneer key and the trader key.
+	// An optional set of 66-byte nonces for a version 1 (Taproot enabled) account
+	// spend. The nonces can be used to produce a MuSig2 partial signature to spend
+	// the account using the key spend path, which is a MuSig2 combined key of the
+	// auctioneer key and the trader key.
 	ServerNonces []byte `protobuf:"bytes,2,opt,name=server_nonces,json=serverNonces,proto3" json:"server_nonces,omitempty"`
 }
 
@@ -4217,13 +4073,11 @@ type ServerOrderStateResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The state the order currently is in.
+	// The state the order currently is in.
 	State OrderState `protobuf:"varint,1,opt,name=state,proto3,enum=poolrpc.OrderState" json:"state,omitempty"`
-	//
-	//The number of currently unfilled units of this order. This will be equal to
-	//the total amount of units until the order has reached the state PARTIAL_FILL
-	//or EXECUTED.
+	// The number of currently unfilled units of this order. This will be equal to
+	// the total amount of units until the order has reached the state PARTIAL_FILL
+	// or EXECUTED.
 	UnitsUnfulfilled uint32 `protobuf:"varint,2,opt,name=units_unfulfilled,json=unitsUnfulfilled,proto3" json:"units_unfulfilled,omitempty"`
 }
 
@@ -4316,39 +4170,31 @@ type TermsResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The maximum account size in satoshis currently allowed by the auctioneer.
+	// The maximum account size in satoshis currently allowed by the auctioneer.
 	MaxAccountValue uint64 `protobuf:"varint,1,opt,name=max_account_value,json=maxAccountValue,proto3" json:"max_account_value,omitempty"`
-	//
-	//Deprecated, use explicit order duration from lease_duration_buckets.
+	// Deprecated, use explicit order duration from lease_duration_buckets.
 	//
 	// Deprecated: Do not use.
 	MaxOrderDurationBlocks uint32 `protobuf:"varint,2,opt,name=max_order_duration_blocks,json=maxOrderDurationBlocks,proto3" json:"max_order_duration_blocks,omitempty"`
-	//
-	//The execution fee charged per matched order.
+	// The execution fee charged per matched order.
 	ExecutionFee *ExecutionFee `protobuf:"bytes,3,opt,name=execution_fee,json=executionFee,proto3" json:"execution_fee,omitempty"`
-	//
-	//Deprecated, use lease_duration_buckets.
+	// Deprecated, use lease_duration_buckets.
 	//
 	// Deprecated: Do not use.
 	LeaseDurations map[uint32]bool `protobuf:"bytes,4,rep,name=lease_durations,json=leaseDurations,proto3" json:"lease_durations,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 	// The confirmation target to use for fee estimation of the next batch.
 	NextBatchConfTarget uint32 `protobuf:"varint,5,opt,name=next_batch_conf_target,json=nextBatchConfTarget,proto3" json:"next_batch_conf_target,omitempty"`
-	//
-	//The fee rate, in satoshis per kiloweight, estimated to use for the next
-	//batch.
+	// The fee rate, in satoshis per kiloweight, estimated to use for the next
+	// batch.
 	NextBatchFeeRateSatPerKw uint64 `protobuf:"varint,6,opt,name=next_batch_fee_rate_sat_per_kw,json=nextBatchFeeRateSatPerKw,proto3" json:"next_batch_fee_rate_sat_per_kw,omitempty"`
-	//
-	//The absolute unix timestamp at which the auctioneer will attempt to clear
-	//the next batch.
+	// The absolute unix timestamp at which the auctioneer will attempt to clear
+	// the next batch.
 	NextBatchClearTimestamp uint64 `protobuf:"varint,7,opt,name=next_batch_clear_timestamp,json=nextBatchClearTimestamp,proto3" json:"next_batch_clear_timestamp,omitempty"`
-	//
-	//The set of lease durations the market is currently accepting and the state
-	//the duration buckets currently are in.
+	// The set of lease durations the market is currently accepting and the state
+	// the duration buckets currently are in.
 	LeaseDurationBuckets map[uint32]DurationBucketState `protobuf:"bytes,8,rep,name=lease_duration_buckets,json=leaseDurationBuckets,proto3" json:"lease_duration_buckets,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3,enum=poolrpc.DurationBucketState"`
-	//
-	//The value used by the auctioneer to determine if an account expiry height
-	//needs to be extended after participating in a batch and for how long.
+	// The value used by the auctioneer to determine if an account expiry height
+	// needs to be extended after participating in a batch and for how long.
 	AutoRenewExtensionBlocks uint32 `protobuf:"varint,9,opt,name=auto_renew_extension_blocks,json=autoRenewExtensionBlocks,proto3" json:"auto_renew_extension_blocks,omitempty"`
 }
 
@@ -4456,9 +4302,8 @@ type RelevantBatchRequest struct {
 
 	// The unique identifier of the batch.
 	Id []byte `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	//
-	//The set of accounts the trader is interested in retrieving information
-	//for within the batch. Each account is identified by its trader key.
+	// The set of accounts the trader is interested in retrieving information
+	// for within the batch. Each account is identified by its trader key.
 	Accounts [][]byte `protobuf:"bytes,2,rep,name=accounts,proto3" json:"accounts,omitempty"`
 }
 
@@ -4517,17 +4362,14 @@ type RelevantBatch struct {
 	Version uint32 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
 	// The unique identifier of the batch.
 	Id []byte `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
-	//
-	//The set of modifications that should be applied to the requested accounts as
-	//a result of this batch.
+	// The set of modifications that should be applied to the requested accounts as
+	// a result of this batch.
 	ChargedAccounts []*AccountDiff `protobuf:"bytes,3,rep,name=charged_accounts,json=chargedAccounts,proto3" json:"charged_accounts,omitempty"`
-	//
-	//Deprecated, use matched_markets.
+	// Deprecated, use matched_markets.
 	//
 	// Deprecated: Do not use.
 	MatchedOrders map[string]*MatchedOrder `protobuf:"bytes,4,rep,name=matched_orders,json=matchedOrders,proto3" json:"matched_orders,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	//
-	//Deprecated, use matched_markets.
+	// Deprecated, use matched_markets.
 	//
 	// Deprecated: Do not use.
 	ClearingPriceRate uint32 `protobuf:"varint,5,opt,name=clearing_price_rate,json=clearingPriceRate,proto3" json:"clearing_price_rate,omitempty"`
@@ -4535,15 +4377,13 @@ type RelevantBatch struct {
 	ExecutionFee *ExecutionFee `protobuf:"bytes,6,opt,name=execution_fee,json=executionFee,proto3" json:"execution_fee,omitempty"`
 	// The batch transaction including all witness data.
 	Transaction []byte `protobuf:"bytes,7,opt,name=transaction,proto3" json:"transaction,omitempty"`
-	//
-	//Fee rate of the batch transaction, expressed in satoshis per 1000 weight
-	//units (sat/kW).
+	// Fee rate of the batch transaction, expressed in satoshis per 1000 weight
+	// units (sat/kW).
 	FeeRateSatPerKw uint64 `protobuf:"varint,8,opt,name=fee_rate_sat_per_kw,json=feeRateSatPerKw,proto3" json:"fee_rate_sat_per_kw,omitempty"`
 	// The unix timestamp in nanoseconds the batch was made.
 	CreationTimestampNs uint64 `protobuf:"varint,9,opt,name=creation_timestamp_ns,json=creationTimestampNs,proto3" json:"creation_timestamp_ns,omitempty"`
-	//
-	//Maps the distinct lease duration markets to the orders that were matched
-	//within and the discovered market clearing price.
+	// Maps the distinct lease duration markets to the orders that were matched
+	// within and the discovered market clearing price.
 	MatchedMarkets map[uint32]*MatchedMarket `protobuf:"bytes,10,rep,name=matched_markets,json=matchedMarkets,proto3" json:"matched_markets,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
@@ -4656,11 +4496,9 @@ type ExecutionFee struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The base fee in satoshis charged per order, regardless of the matched size.
+	// The base fee in satoshis charged per order, regardless of the matched size.
 	BaseFee uint64 `protobuf:"varint,1,opt,name=base_fee,json=baseFee,proto3" json:"base_fee,omitempty"`
-	//
-	//The fee rate in parts per million.
+	// The fee rate in parts per million.
 	FeeRate uint64 `protobuf:"varint,2,opt,name=fee_rate,json=feeRate,proto3" json:"fee_rate,omitempty"`
 }
 
@@ -4770,11 +4608,9 @@ type OutPoint struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//Raw bytes representing the transaction id.
+	// Raw bytes representing the transaction id.
 	Txid []byte `protobuf:"bytes,1,opt,name=txid,proto3" json:"txid,omitempty"`
-	//
-	//The index of the output on the transaction.
+	// The index of the output on the transaction.
 	OutputIndex uint32 `protobuf:"varint,2,opt,name=output_index,json=outputIndex,proto3" json:"output_index,omitempty"`
 }
 
@@ -5111,12 +4947,10 @@ type MatchedMarketSnapshot struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The set of all orders matched in the batch.
+	// The set of all orders matched in the batch.
 	MatchedOrders []*MatchedOrderSnapshot `protobuf:"bytes,1,rep,name=matched_orders,json=matchedOrders,proto3" json:"matched_orders,omitempty"`
-	//
-	//The uniform clearing price rate in parts per billion that was used for this
-	//batch.
+	// The uniform clearing price rate in parts per billion that was used for this
+	// batch.
 	ClearingPriceRate uint32 `protobuf:"varint,2,opt,name=clearing_price_rate,json=clearingPriceRate,proto3" json:"clearing_price_rate,omitempty"`
 }
 
@@ -5177,13 +5011,11 @@ type BatchSnapshotResponse struct {
 	BatchId []byte `protobuf:"bytes,2,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
 	// The unique identifier of the prior batch.
 	PrevBatchId []byte `protobuf:"bytes,3,opt,name=prev_batch_id,json=prevBatchId,proto3" json:"prev_batch_id,omitempty"`
-	//
-	//Deprecated, use matched_markets.
+	// Deprecated, use matched_markets.
 	//
 	// Deprecated: Do not use.
 	ClearingPriceRate uint32 `protobuf:"varint,4,opt,name=clearing_price_rate,json=clearingPriceRate,proto3" json:"clearing_price_rate,omitempty"`
-	//
-	//Deprecated, use matched_markets.
+	// Deprecated, use matched_markets.
 	//
 	// Deprecated: Do not use.
 	MatchedOrders []*MatchedOrderSnapshot `protobuf:"bytes,5,rep,name=matched_orders,json=matchedOrders,proto3" json:"matched_orders,omitempty"`
@@ -5195,9 +5027,8 @@ type BatchSnapshotResponse struct {
 	BatchTxFeeRateSatPerKw uint64 `protobuf:"varint,8,opt,name=batch_tx_fee_rate_sat_per_kw,json=batchTxFeeRateSatPerKw,proto3" json:"batch_tx_fee_rate_sat_per_kw,omitempty"`
 	// The unix timestamp in nanoseconds the batch was made.
 	CreationTimestampNs uint64 `protobuf:"varint,9,opt,name=creation_timestamp_ns,json=creationTimestampNs,proto3" json:"creation_timestamp_ns,omitempty"`
-	//
-	//Maps the distinct lease duration markets to the orders that were matched
-	//within and the discovered market clearing price.
+	// Maps the distinct lease duration markets to the orders that were matched
+	// within and the discovered market clearing price.
 	MatchedMarkets map[uint32]*MatchedMarketSnapshot `protobuf:"bytes,10,rep,name=matched_markets,json=matchedMarkets,proto3" json:"matched_markets,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
@@ -5463,14 +5294,12 @@ type BatchSnapshotsRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//The unique identifier of the first batch to return, encoded as a compressed
-	//pubkey. This represents the newest/most current batch to fetch. If this is
-	//empty or a zero batch ID, the most recent finalized batch is used as the
-	//starting point to go back from.
+	// The unique identifier of the first batch to return, encoded as a compressed
+	// pubkey. This represents the newest/most current batch to fetch. If this is
+	// empty or a zero batch ID, the most recent finalized batch is used as the
+	// starting point to go back from.
 	StartBatchId []byte `protobuf:"bytes,1,opt,name=start_batch_id,json=startBatchId,proto3" json:"start_batch_id,omitempty"`
-	//
-	//The number of batches to return at most, including the start batch.
+	// The number of batches to return at most, including the start batch.
 	NumBatchesBack uint32 `protobuf:"varint,2,opt,name=num_batches_back,json=numBatchesBack,proto3" json:"num_batches_back,omitempty"`
 }
 
@@ -5615,13 +5444,11 @@ type MarketInfo struct {
 	NumAsks []*MarketInfo_TierValue `protobuf:"bytes,1,rep,name=num_asks,json=numAsks,proto3" json:"num_asks,omitempty"`
 	// The number of open/pending bid orders per node tier.
 	NumBids []*MarketInfo_TierValue `protobuf:"bytes,2,rep,name=num_bids,json=numBids,proto3" json:"num_bids,omitempty"`
-	//
-	//The total number of open/unmatched units in open/pending ask orders per node
-	//tier.
+	// The total number of open/unmatched units in open/pending ask orders per node
+	// tier.
 	AskOpenInterestUnits []*MarketInfo_TierValue `protobuf:"bytes,3,rep,name=ask_open_interest_units,json=askOpenInterestUnits,proto3" json:"ask_open_interest_units,omitempty"`
-	//
-	//The total number of open/unmatched units in open/pending bid orders per node
-	//tier.
+	// The total number of open/unmatched units in open/pending bid orders per node
+	// tier.
 	BidOpenInterestUnits []*MarketInfo_TierValue `protobuf:"bytes,4,rep,name=bid_open_interest_units,json=bidOpenInterestUnits,proto3" json:"bid_open_interest_units,omitempty"`
 }
 
