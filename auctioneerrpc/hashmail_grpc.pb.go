@@ -18,26 +18,22 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HashMailClient interface {
-	//
-	//NewCipherBox creates a new cipher box pipe/stream given a valid
-	//authentication mechanism. If the authentication mechanism has been revoked,
-	//or needs to be changed, then a CipherChallenge message is returned.
-	//Otherwise the method will either be accepted or rejected.
+	// NewCipherBox creates a new cipher box pipe/stream given a valid
+	// authentication mechanism. If the authentication mechanism has been revoked,
+	// or needs to be changed, then a CipherChallenge message is returned.
+	// Otherwise the method will either be accepted or rejected.
 	NewCipherBox(ctx context.Context, in *CipherBoxAuth, opts ...grpc.CallOption) (*CipherInitResp, error)
-	//
-	//DelCipherBox attempts to tear down an existing cipher box pipe. The same
-	//authentication mechanism used to initially create the stream MUST be
-	//specified.
+	// DelCipherBox attempts to tear down an existing cipher box pipe. The same
+	// authentication mechanism used to initially create the stream MUST be
+	// specified.
 	DelCipherBox(ctx context.Context, in *CipherBoxAuth, opts ...grpc.CallOption) (*DelCipherBoxResp, error)
-	//
-	//SendStream opens up the write side of the passed CipherBox pipe. Writes
-	//will be non-blocking up to the buffer size of the pipe. Beyond that writes
-	//will block until completed.
+	// SendStream opens up the write side of the passed CipherBox pipe. Writes
+	// will be non-blocking up to the buffer size of the pipe. Beyond that writes
+	// will block until completed.
 	SendStream(ctx context.Context, opts ...grpc.CallOption) (HashMail_SendStreamClient, error)
-	//
-	//RecvStream opens up the read side of the passed CipherBox pipe. This method
-	//will block until a full message has been read as this is a message based
-	//pipe/stream abstraction.
+	// RecvStream opens up the read side of the passed CipherBox pipe. This method
+	// will block until a full message has been read as this is a message based
+	// pipe/stream abstraction.
 	RecvStream(ctx context.Context, in *CipherBoxDesc, opts ...grpc.CallOption) (HashMail_RecvStreamClient, error)
 }
 
@@ -137,26 +133,22 @@ func (x *hashMailRecvStreamClient) Recv() (*CipherBox, error) {
 // All implementations must embed UnimplementedHashMailServer
 // for forward compatibility
 type HashMailServer interface {
-	//
-	//NewCipherBox creates a new cipher box pipe/stream given a valid
-	//authentication mechanism. If the authentication mechanism has been revoked,
-	//or needs to be changed, then a CipherChallenge message is returned.
-	//Otherwise the method will either be accepted or rejected.
+	// NewCipherBox creates a new cipher box pipe/stream given a valid
+	// authentication mechanism. If the authentication mechanism has been revoked,
+	// or needs to be changed, then a CipherChallenge message is returned.
+	// Otherwise the method will either be accepted or rejected.
 	NewCipherBox(context.Context, *CipherBoxAuth) (*CipherInitResp, error)
-	//
-	//DelCipherBox attempts to tear down an existing cipher box pipe. The same
-	//authentication mechanism used to initially create the stream MUST be
-	//specified.
+	// DelCipherBox attempts to tear down an existing cipher box pipe. The same
+	// authentication mechanism used to initially create the stream MUST be
+	// specified.
 	DelCipherBox(context.Context, *CipherBoxAuth) (*DelCipherBoxResp, error)
-	//
-	//SendStream opens up the write side of the passed CipherBox pipe. Writes
-	//will be non-blocking up to the buffer size of the pipe. Beyond that writes
-	//will block until completed.
+	// SendStream opens up the write side of the passed CipherBox pipe. Writes
+	// will be non-blocking up to the buffer size of the pipe. Beyond that writes
+	// will block until completed.
 	SendStream(HashMail_SendStreamServer) error
-	//
-	//RecvStream opens up the read side of the passed CipherBox pipe. This method
-	//will block until a full message has been read as this is a message based
-	//pipe/stream abstraction.
+	// RecvStream opens up the read side of the passed CipherBox pipe. This method
+	// will block until a full message has been read as this is a message based
+	// pipe/stream abstraction.
 	RecvStream(*CipherBoxDesc, HashMail_RecvStreamServer) error
 	mustEmbedUnimplementedHashMailServer()
 }

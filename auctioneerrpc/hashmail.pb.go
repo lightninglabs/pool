@@ -87,9 +87,8 @@ type SidecarAuth struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//
-	//A valid sidecar ticket that has been signed (offered) by a Pool account in
-	//the active state.
+	// A valid sidecar ticket that has been signed (offered) by a Pool account in
+	// the active state.
 	Ticket string `protobuf:"bytes,1,opt,name=ticket,proto3" json:"ticket,omitempty"`
 }
 
@@ -140,6 +139,7 @@ type CipherBoxAuth struct {
 	// A description of the stream one is attempting to initialize.
 	Desc *CipherBoxDesc `protobuf:"bytes,1,opt,name=desc,proto3" json:"desc,omitempty"`
 	// Types that are assignable to Auth:
+	//
 	//	*CipherBoxAuth_AcctAuth
 	//	*CipherBoxAuth_SidecarAuth
 	Auth isCipherBoxAuth_Auth `protobuf_oneof:"auth"`
@@ -388,6 +388,7 @@ type CipherInitResp struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Resp:
+	//
 	//	*CipherInitResp_Success
 	//	*CipherInitResp_Challenge
 	//	*CipherInitResp_Error
@@ -459,23 +460,20 @@ type isCipherInitResp_Resp interface {
 }
 
 type CipherInitResp_Success struct {
-	//
-	//CipherSuccess is returned if the initialization of the cipher box was
-	//successful.
+	// CipherSuccess is returned if the initialization of the cipher box was
+	// successful.
 	Success *CipherSuccess `protobuf:"bytes,1,opt,name=success,proto3,oneof"`
 }
 
 type CipherInitResp_Challenge struct {
-	//
-	//CipherChallenge is returned if the authentication mechanism was revoked
-	//or needs to be refreshed.
+	// CipherChallenge is returned if the authentication mechanism was revoked
+	// or needs to be refreshed.
 	Challenge *CipherChallenge `protobuf:"bytes,2,opt,name=challenge,proto3,oneof"`
 }
 
 type CipherInitResp_Error struct {
-	//
-	//CipherError is returned if the authentication mechanism failed to
-	//validate.
+	// CipherError is returned if the authentication mechanism failed to
+	// validate.
 	Error *CipherError `protobuf:"bytes,3,opt,name=error,proto3,oneof"`
 }
 

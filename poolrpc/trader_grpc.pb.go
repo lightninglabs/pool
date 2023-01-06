@@ -20,146 +20,144 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TraderClient interface {
 	// pool: `getinfo`
-	//GetInfo returns general information about the state of the Pool trader
-	//daemon.
+	// GetInfo returns general information about the state of the Pool trader
+	// daemon.
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	// pool: `stop`
-	//Stop gracefully shuts down the Pool trader daemon.
+	// Stop gracefully shuts down the Pool trader daemon.
 	StopDaemon(ctx context.Context, in *StopDaemonRequest, opts ...grpc.CallOption) (*StopDaemonResponse, error)
-	//
-	//QuoteAccount gets a fee quote to fund an account of the given size with the
-	//given confirmation target. If the connected lnd wallet doesn't have enough
-	//balance to fund an account of the requested size, an error is returned.
+	// QuoteAccount gets a fee quote to fund an account of the given size with the
+	// given confirmation target. If the connected lnd wallet doesn't have enough
+	// balance to fund an account of the requested size, an error is returned.
 	QuoteAccount(ctx context.Context, in *QuoteAccountRequest, opts ...grpc.CallOption) (*QuoteAccountResponse, error)
 	// pool: `accounts new`
-	//InitAccount creates a new account with the requested size and expiration,
-	//funding it from the wallet of the connected lnd node.
+	// InitAccount creates a new account with the requested size and expiration,
+	// funding it from the wallet of the connected lnd node.
 	InitAccount(ctx context.Context, in *InitAccountRequest, opts ...grpc.CallOption) (*Account, error)
 	// pool: `accounts list`
-	//ListAccounts returns a list of all accounts known to the trader daemon and
-	//their current state.
+	// ListAccounts returns a list of all accounts known to the trader daemon and
+	// their current state.
 	ListAccounts(ctx context.Context, in *ListAccountsRequest, opts ...grpc.CallOption) (*ListAccountsResponse, error)
 	// pool: `accounts close`
-	//CloseAccount closes an account and returns the funds locked in that account
-	//to the connected lnd node's wallet.
+	// CloseAccount closes an account and returns the funds locked in that account
+	// to the connected lnd node's wallet.
 	CloseAccount(ctx context.Context, in *CloseAccountRequest, opts ...grpc.CallOption) (*CloseAccountResponse, error)
 	// pool: `accounts withdraw`
-	//WithdrawAccount splits off parts of the account balance into the specified
-	//outputs while recreating the account with a reduced balance.
+	// WithdrawAccount splits off parts of the account balance into the specified
+	// outputs while recreating the account with a reduced balance.
 	WithdrawAccount(ctx context.Context, in *WithdrawAccountRequest, opts ...grpc.CallOption) (*WithdrawAccountResponse, error)
 	// pool: `accounts deposit`
-	//DepositAccount adds more funds from the connected lnd node's wallet to an
-	//account.
+	// DepositAccount adds more funds from the connected lnd node's wallet to an
+	// account.
 	DepositAccount(ctx context.Context, in *DepositAccountRequest, opts ...grpc.CallOption) (*DepositAccountResponse, error)
 	// pool: `accounts renew`
-	//RenewAccount renews the expiration of an account.
+	// RenewAccount renews the expiration of an account.
 	RenewAccount(ctx context.Context, in *RenewAccountRequest, opts ...grpc.CallOption) (*RenewAccountResponse, error)
 	// pool: `accounts bumpfee`
-	//BumpAccountFee attempts to bump the fee of an account's transaction through
-	//child-pays-for-parent (CPFP). Since the CPFP is performed through the
-	//backing lnd node, the account transaction must contain an output under its
-	//control for a successful bump. If a CPFP has already been performed for an
-	//account, and this RPC is invoked again, then a replacing transaction (RBF)
-	//of the child will be broadcast.
+	// BumpAccountFee attempts to bump the fee of an account's transaction through
+	// child-pays-for-parent (CPFP). Since the CPFP is performed through the
+	// backing lnd node, the account transaction must contain an output under its
+	// control for a successful bump. If a CPFP has already been performed for an
+	// account, and this RPC is invoked again, then a replacing transaction (RBF)
+	// of the child will be broadcast.
 	BumpAccountFee(ctx context.Context, in *BumpAccountFeeRequest, opts ...grpc.CallOption) (*BumpAccountFeeResponse, error)
 	// pool: `accounts recover`
-	//RecoverAccounts queries the auction server for this trader daemon's accounts
-	//in case we lost our local account database.
+	// RecoverAccounts queries the auction server for this trader daemon's accounts
+	// in case we lost our local account database.
 	RecoverAccounts(ctx context.Context, in *RecoverAccountsRequest, opts ...grpc.CallOption) (*RecoverAccountsResponse, error)
 	// pool: `accounts listfees`
-	//AccountModificationFees returns a map from account key to an ordered list of
-	//account action modification fees.
+	// AccountModificationFees returns a map from account key to an ordered list of
+	// account action modification fees.
 	AccountModificationFees(ctx context.Context, in *AccountModificationFeesRequest, opts ...grpc.CallOption) (*AccountModificationFeesResponse, error)
 	// pool: `orders submit`
-	//SubmitOrder creates a new ask or bid order and submits for the given account
-	//and submits it to the auction server for matching.
+	// SubmitOrder creates a new ask or bid order and submits for the given account
+	// and submits it to the auction server for matching.
 	SubmitOrder(ctx context.Context, in *SubmitOrderRequest, opts ...grpc.CallOption) (*SubmitOrderResponse, error)
 	// pool: `orders list`
-	//ListOrders returns a list of all active and archived orders that are
-	//currently known to the trader daemon.
+	// ListOrders returns a list of all active and archived orders that are
+	// currently known to the trader daemon.
 	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error)
 	// pool: `orders cancel`
-	//CancelOrder cancels an active order with the auction server to remove it
-	//from future matching.
+	// CancelOrder cancels an active order with the auction server to remove it
+	// from future matching.
 	CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*CancelOrderResponse, error)
-	//
-	//QuoteOrder calculates the premium, execution fees and max batch fee rate for
-	//an order based on the given order parameters.
+	// QuoteOrder calculates the premium, execution fees and max batch fee rate for
+	// an order based on the given order parameters.
 	QuoteOrder(ctx context.Context, in *QuoteOrderRequest, opts ...grpc.CallOption) (*QuoteOrderResponse, error)
 	// pool: `auction fee`
-	//AuctionFee returns the current auction order execution fee specified by the
-	//auction server.
+	// AuctionFee returns the current auction order execution fee specified by the
+	// auction server.
 	AuctionFee(ctx context.Context, in *AuctionFeeRequest, opts ...grpc.CallOption) (*AuctionFeeResponse, error)
 	// pool: `auction leasedurations`
-	//LeaseDurations returns the current set of valid lease duration in the
-	//market as is, and also information w.r.t if the market is currently active.
+	// LeaseDurations returns the current set of valid lease duration in the
+	// market as is, and also information w.r.t if the market is currently active.
 	LeaseDurations(ctx context.Context, in *LeaseDurationRequest, opts ...grpc.CallOption) (*LeaseDurationResponse, error)
 	// pool: `auction nextbatchinfo`
-	//NextBatchInfo returns information about the next batch the auctioneer will
-	//perform.
+	// NextBatchInfo returns information about the next batch the auctioneer will
+	// perform.
 	NextBatchInfo(ctx context.Context, in *NextBatchInfoRequest, opts ...grpc.CallOption) (*NextBatchInfoResponse, error)
 	// pool: `auction snapshot`
-	//BatchSnapshot returns the snapshot of a past batch identified by its ID.
-	//If no ID is provided, the snapshot of the last finalized batch is returned.
-	//Deprecated, use BatchSnapshots instead.
+	// BatchSnapshot returns the snapshot of a past batch identified by its ID.
+	// If no ID is provided, the snapshot of the last finalized batch is returned.
+	// Deprecated, use BatchSnapshots instead.
 	BatchSnapshot(ctx context.Context, in *auctioneerrpc.BatchSnapshotRequest, opts ...grpc.CallOption) (*auctioneerrpc.BatchSnapshotResponse, error)
 	// pool: `listauth`
-	//GetLsatTokens returns all LSAT tokens the daemon ever paid for.
+	// GetLsatTokens returns all LSAT tokens the daemon ever paid for.
 	GetLsatTokens(ctx context.Context, in *TokensRequest, opts ...grpc.CallOption) (*TokensResponse, error)
 	// pool: `auction leases`
-	//Leases returns the list of channels that were either purchased or sold by
-	//the trader within the auction.
+	// Leases returns the list of channels that were either purchased or sold by
+	// the trader within the auction.
 	Leases(ctx context.Context, in *LeasesRequest, opts ...grpc.CallOption) (*LeasesResponse, error)
 	// pool: `auction ratings`
-	//Returns the Node Tier information for this target Lightning node, and other
-	//related ranking information.
+	// Returns the Node Tier information for this target Lightning node, and other
+	// related ranking information.
 	NodeRatings(ctx context.Context, in *NodeRatingRequest, opts ...grpc.CallOption) (*NodeRatingResponse, error)
 	// pool: `auction snapshot`
-	//BatchSnapshots returns a list of batch snapshots starting at the start batch
-	//ID and going back through the history of batches, returning at most the
-	//number of specified batches. A maximum of 100 snapshots can be queried in
-	//one call. If no start batch ID is provided, the most recent finalized batch
-	//is used as the starting point to go back from.
+	// BatchSnapshots returns a list of batch snapshots starting at the start batch
+	// ID and going back through the history of batches, returning at most the
+	// number of specified batches. A maximum of 100 snapshots can be queried in
+	// one call. If no start batch ID is provided, the most recent finalized batch
+	// is used as the starting point to go back from.
 	BatchSnapshots(ctx context.Context, in *auctioneerrpc.BatchSnapshotsRequest, opts ...grpc.CallOption) (*auctioneerrpc.BatchSnapshotsResponse, error)
 	// pool: `sidecar offer`
-	//OfferSidecar is step 1/4 of the sidecar negotiation between the provider
-	//(the trader submitting the bid order) and the recipient (the trader
-	//receiving the sidecar channel).
-	//This step must be run by the provider. The result is a sidecar ticket with
-	//an offer to lease a sidecar channel for the recipient. The offer will be
-	//signed with the provider's lnd node public key. The ticket returned by this
-	//call will have the state "offered".
+	// OfferSidecar is step 1/4 of the sidecar negotiation between the provider
+	// (the trader submitting the bid order) and the recipient (the trader
+	// receiving the sidecar channel).
+	// This step must be run by the provider. The result is a sidecar ticket with
+	// an offer to lease a sidecar channel for the recipient. The offer will be
+	// signed with the provider's lnd node public key. The ticket returned by this
+	// call will have the state "offered".
 	OfferSidecar(ctx context.Context, in *OfferSidecarRequest, opts ...grpc.CallOption) (*SidecarTicket, error)
 	// pool: `sidecar register`
-	//RegisterSidecarRequest is step 2/4 of the sidecar negotiation between the
-	//provider (the trader submitting the bid order) and the recipient (the trader
-	//receiving the sidecar channel).
-	//This step must be run by the recipient. The result is a sidecar ticket with
-	//the recipient's node information and channel funding multisig pubkey filled
-	//in. The ticket returned by this call will have the state "registered".
+	// RegisterSidecarRequest is step 2/4 of the sidecar negotiation between the
+	// provider (the trader submitting the bid order) and the recipient (the trader
+	// receiving the sidecar channel).
+	// This step must be run by the recipient. The result is a sidecar ticket with
+	// the recipient's node information and channel funding multisig pubkey filled
+	// in. The ticket returned by this call will have the state "registered".
 	RegisterSidecar(ctx context.Context, in *RegisterSidecarRequest, opts ...grpc.CallOption) (*SidecarTicket, error)
 	// pool: `sidecar expectchannel`
-	//ExpectSidecarChannel is step 4/4 of the sidecar negotiation between the
-	//provider (the trader submitting the bid order) and the recipient (the trader
-	//receiving the sidecar channel).
-	//This step must be run by the recipient once the provider has submitted the
-	//bid order for the sidecar channel. From this point onwards the Pool trader
-	//daemon of both the provider as well as the recipient need to be online to
-	//receive and react to match making events from the server.
+	// ExpectSidecarChannel is step 4/4 of the sidecar negotiation between the
+	// provider (the trader submitting the bid order) and the recipient (the trader
+	// receiving the sidecar channel).
+	// This step must be run by the recipient once the provider has submitted the
+	// bid order for the sidecar channel. From this point onwards the Pool trader
+	// daemon of both the provider as well as the recipient need to be online to
+	// receive and react to match making events from the server.
 	ExpectSidecarChannel(ctx context.Context, in *ExpectSidecarChannelRequest, opts ...grpc.CallOption) (*ExpectSidecarChannelResponse, error)
 	// pool: `sidecar printticket`
-	//Decodes the base58 encoded sidecar ticket into its individual data fields
-	//for a more human-readable representation.
+	// Decodes the base58 encoded sidecar ticket into its individual data fields
+	// for a more human-readable representation.
 	DecodeSidecarTicket(ctx context.Context, in *SidecarTicket, opts ...grpc.CallOption) (*DecodedSidecarTicket, error)
 	// pool: `sidecar list`
-	//ListSidecars lists all sidecar tickets currently in the local database. This
-	//includes tickets offered by our node as well as tickets that our node is the
-	//recipient of. Optionally a ticket ID can be provided to filter the tickets.
+	// ListSidecars lists all sidecar tickets currently in the local database. This
+	// includes tickets offered by our node as well as tickets that our node is the
+	// recipient of. Optionally a ticket ID can be provided to filter the tickets.
 	ListSidecars(ctx context.Context, in *ListSidecarsRequest, opts ...grpc.CallOption) (*ListSidecarsResponse, error)
 	// pool: `sidecar cancel`
-	//CancelSidecar cancels the execution of a specific sidecar ticket. Depending
-	//on the state of the sidecar ticket its associated bid order might be
-	//canceled as well (if this ticket was offered by our node).
+	// CancelSidecar cancels the execution of a specific sidecar ticket. Depending
+	// on the state of the sidecar ticket its associated bid order might be
+	// canceled as well (if this ticket was offered by our node).
 	CancelSidecar(ctx context.Context, in *CancelSidecarRequest, opts ...grpc.CallOption) (*CancelSidecarResponse, error)
 }
 
@@ -446,146 +444,144 @@ func (c *traderClient) CancelSidecar(ctx context.Context, in *CancelSidecarReque
 // for forward compatibility
 type TraderServer interface {
 	// pool: `getinfo`
-	//GetInfo returns general information about the state of the Pool trader
-	//daemon.
+	// GetInfo returns general information about the state of the Pool trader
+	// daemon.
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	// pool: `stop`
-	//Stop gracefully shuts down the Pool trader daemon.
+	// Stop gracefully shuts down the Pool trader daemon.
 	StopDaemon(context.Context, *StopDaemonRequest) (*StopDaemonResponse, error)
-	//
-	//QuoteAccount gets a fee quote to fund an account of the given size with the
-	//given confirmation target. If the connected lnd wallet doesn't have enough
-	//balance to fund an account of the requested size, an error is returned.
+	// QuoteAccount gets a fee quote to fund an account of the given size with the
+	// given confirmation target. If the connected lnd wallet doesn't have enough
+	// balance to fund an account of the requested size, an error is returned.
 	QuoteAccount(context.Context, *QuoteAccountRequest) (*QuoteAccountResponse, error)
 	// pool: `accounts new`
-	//InitAccount creates a new account with the requested size and expiration,
-	//funding it from the wallet of the connected lnd node.
+	// InitAccount creates a new account with the requested size and expiration,
+	// funding it from the wallet of the connected lnd node.
 	InitAccount(context.Context, *InitAccountRequest) (*Account, error)
 	// pool: `accounts list`
-	//ListAccounts returns a list of all accounts known to the trader daemon and
-	//their current state.
+	// ListAccounts returns a list of all accounts known to the trader daemon and
+	// their current state.
 	ListAccounts(context.Context, *ListAccountsRequest) (*ListAccountsResponse, error)
 	// pool: `accounts close`
-	//CloseAccount closes an account and returns the funds locked in that account
-	//to the connected lnd node's wallet.
+	// CloseAccount closes an account and returns the funds locked in that account
+	// to the connected lnd node's wallet.
 	CloseAccount(context.Context, *CloseAccountRequest) (*CloseAccountResponse, error)
 	// pool: `accounts withdraw`
-	//WithdrawAccount splits off parts of the account balance into the specified
-	//outputs while recreating the account with a reduced balance.
+	// WithdrawAccount splits off parts of the account balance into the specified
+	// outputs while recreating the account with a reduced balance.
 	WithdrawAccount(context.Context, *WithdrawAccountRequest) (*WithdrawAccountResponse, error)
 	// pool: `accounts deposit`
-	//DepositAccount adds more funds from the connected lnd node's wallet to an
-	//account.
+	// DepositAccount adds more funds from the connected lnd node's wallet to an
+	// account.
 	DepositAccount(context.Context, *DepositAccountRequest) (*DepositAccountResponse, error)
 	// pool: `accounts renew`
-	//RenewAccount renews the expiration of an account.
+	// RenewAccount renews the expiration of an account.
 	RenewAccount(context.Context, *RenewAccountRequest) (*RenewAccountResponse, error)
 	// pool: `accounts bumpfee`
-	//BumpAccountFee attempts to bump the fee of an account's transaction through
-	//child-pays-for-parent (CPFP). Since the CPFP is performed through the
-	//backing lnd node, the account transaction must contain an output under its
-	//control for a successful bump. If a CPFP has already been performed for an
-	//account, and this RPC is invoked again, then a replacing transaction (RBF)
-	//of the child will be broadcast.
+	// BumpAccountFee attempts to bump the fee of an account's transaction through
+	// child-pays-for-parent (CPFP). Since the CPFP is performed through the
+	// backing lnd node, the account transaction must contain an output under its
+	// control for a successful bump. If a CPFP has already been performed for an
+	// account, and this RPC is invoked again, then a replacing transaction (RBF)
+	// of the child will be broadcast.
 	BumpAccountFee(context.Context, *BumpAccountFeeRequest) (*BumpAccountFeeResponse, error)
 	// pool: `accounts recover`
-	//RecoverAccounts queries the auction server for this trader daemon's accounts
-	//in case we lost our local account database.
+	// RecoverAccounts queries the auction server for this trader daemon's accounts
+	// in case we lost our local account database.
 	RecoverAccounts(context.Context, *RecoverAccountsRequest) (*RecoverAccountsResponse, error)
 	// pool: `accounts listfees`
-	//AccountModificationFees returns a map from account key to an ordered list of
-	//account action modification fees.
+	// AccountModificationFees returns a map from account key to an ordered list of
+	// account action modification fees.
 	AccountModificationFees(context.Context, *AccountModificationFeesRequest) (*AccountModificationFeesResponse, error)
 	// pool: `orders submit`
-	//SubmitOrder creates a new ask or bid order and submits for the given account
-	//and submits it to the auction server for matching.
+	// SubmitOrder creates a new ask or bid order and submits for the given account
+	// and submits it to the auction server for matching.
 	SubmitOrder(context.Context, *SubmitOrderRequest) (*SubmitOrderResponse, error)
 	// pool: `orders list`
-	//ListOrders returns a list of all active and archived orders that are
-	//currently known to the trader daemon.
+	// ListOrders returns a list of all active and archived orders that are
+	// currently known to the trader daemon.
 	ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error)
 	// pool: `orders cancel`
-	//CancelOrder cancels an active order with the auction server to remove it
-	//from future matching.
+	// CancelOrder cancels an active order with the auction server to remove it
+	// from future matching.
 	CancelOrder(context.Context, *CancelOrderRequest) (*CancelOrderResponse, error)
-	//
-	//QuoteOrder calculates the premium, execution fees and max batch fee rate for
-	//an order based on the given order parameters.
+	// QuoteOrder calculates the premium, execution fees and max batch fee rate for
+	// an order based on the given order parameters.
 	QuoteOrder(context.Context, *QuoteOrderRequest) (*QuoteOrderResponse, error)
 	// pool: `auction fee`
-	//AuctionFee returns the current auction order execution fee specified by the
-	//auction server.
+	// AuctionFee returns the current auction order execution fee specified by the
+	// auction server.
 	AuctionFee(context.Context, *AuctionFeeRequest) (*AuctionFeeResponse, error)
 	// pool: `auction leasedurations`
-	//LeaseDurations returns the current set of valid lease duration in the
-	//market as is, and also information w.r.t if the market is currently active.
+	// LeaseDurations returns the current set of valid lease duration in the
+	// market as is, and also information w.r.t if the market is currently active.
 	LeaseDurations(context.Context, *LeaseDurationRequest) (*LeaseDurationResponse, error)
 	// pool: `auction nextbatchinfo`
-	//NextBatchInfo returns information about the next batch the auctioneer will
-	//perform.
+	// NextBatchInfo returns information about the next batch the auctioneer will
+	// perform.
 	NextBatchInfo(context.Context, *NextBatchInfoRequest) (*NextBatchInfoResponse, error)
 	// pool: `auction snapshot`
-	//BatchSnapshot returns the snapshot of a past batch identified by its ID.
-	//If no ID is provided, the snapshot of the last finalized batch is returned.
-	//Deprecated, use BatchSnapshots instead.
+	// BatchSnapshot returns the snapshot of a past batch identified by its ID.
+	// If no ID is provided, the snapshot of the last finalized batch is returned.
+	// Deprecated, use BatchSnapshots instead.
 	BatchSnapshot(context.Context, *auctioneerrpc.BatchSnapshotRequest) (*auctioneerrpc.BatchSnapshotResponse, error)
 	// pool: `listauth`
-	//GetLsatTokens returns all LSAT tokens the daemon ever paid for.
+	// GetLsatTokens returns all LSAT tokens the daemon ever paid for.
 	GetLsatTokens(context.Context, *TokensRequest) (*TokensResponse, error)
 	// pool: `auction leases`
-	//Leases returns the list of channels that were either purchased or sold by
-	//the trader within the auction.
+	// Leases returns the list of channels that were either purchased or sold by
+	// the trader within the auction.
 	Leases(context.Context, *LeasesRequest) (*LeasesResponse, error)
 	// pool: `auction ratings`
-	//Returns the Node Tier information for this target Lightning node, and other
-	//related ranking information.
+	// Returns the Node Tier information for this target Lightning node, and other
+	// related ranking information.
 	NodeRatings(context.Context, *NodeRatingRequest) (*NodeRatingResponse, error)
 	// pool: `auction snapshot`
-	//BatchSnapshots returns a list of batch snapshots starting at the start batch
-	//ID and going back through the history of batches, returning at most the
-	//number of specified batches. A maximum of 100 snapshots can be queried in
-	//one call. If no start batch ID is provided, the most recent finalized batch
-	//is used as the starting point to go back from.
+	// BatchSnapshots returns a list of batch snapshots starting at the start batch
+	// ID and going back through the history of batches, returning at most the
+	// number of specified batches. A maximum of 100 snapshots can be queried in
+	// one call. If no start batch ID is provided, the most recent finalized batch
+	// is used as the starting point to go back from.
 	BatchSnapshots(context.Context, *auctioneerrpc.BatchSnapshotsRequest) (*auctioneerrpc.BatchSnapshotsResponse, error)
 	// pool: `sidecar offer`
-	//OfferSidecar is step 1/4 of the sidecar negotiation between the provider
-	//(the trader submitting the bid order) and the recipient (the trader
-	//receiving the sidecar channel).
-	//This step must be run by the provider. The result is a sidecar ticket with
-	//an offer to lease a sidecar channel for the recipient. The offer will be
-	//signed with the provider's lnd node public key. The ticket returned by this
-	//call will have the state "offered".
+	// OfferSidecar is step 1/4 of the sidecar negotiation between the provider
+	// (the trader submitting the bid order) and the recipient (the trader
+	// receiving the sidecar channel).
+	// This step must be run by the provider. The result is a sidecar ticket with
+	// an offer to lease a sidecar channel for the recipient. The offer will be
+	// signed with the provider's lnd node public key. The ticket returned by this
+	// call will have the state "offered".
 	OfferSidecar(context.Context, *OfferSidecarRequest) (*SidecarTicket, error)
 	// pool: `sidecar register`
-	//RegisterSidecarRequest is step 2/4 of the sidecar negotiation between the
-	//provider (the trader submitting the bid order) and the recipient (the trader
-	//receiving the sidecar channel).
-	//This step must be run by the recipient. The result is a sidecar ticket with
-	//the recipient's node information and channel funding multisig pubkey filled
-	//in. The ticket returned by this call will have the state "registered".
+	// RegisterSidecarRequest is step 2/4 of the sidecar negotiation between the
+	// provider (the trader submitting the bid order) and the recipient (the trader
+	// receiving the sidecar channel).
+	// This step must be run by the recipient. The result is a sidecar ticket with
+	// the recipient's node information and channel funding multisig pubkey filled
+	// in. The ticket returned by this call will have the state "registered".
 	RegisterSidecar(context.Context, *RegisterSidecarRequest) (*SidecarTicket, error)
 	// pool: `sidecar expectchannel`
-	//ExpectSidecarChannel is step 4/4 of the sidecar negotiation between the
-	//provider (the trader submitting the bid order) and the recipient (the trader
-	//receiving the sidecar channel).
-	//This step must be run by the recipient once the provider has submitted the
-	//bid order for the sidecar channel. From this point onwards the Pool trader
-	//daemon of both the provider as well as the recipient need to be online to
-	//receive and react to match making events from the server.
+	// ExpectSidecarChannel is step 4/4 of the sidecar negotiation between the
+	// provider (the trader submitting the bid order) and the recipient (the trader
+	// receiving the sidecar channel).
+	// This step must be run by the recipient once the provider has submitted the
+	// bid order for the sidecar channel. From this point onwards the Pool trader
+	// daemon of both the provider as well as the recipient need to be online to
+	// receive and react to match making events from the server.
 	ExpectSidecarChannel(context.Context, *ExpectSidecarChannelRequest) (*ExpectSidecarChannelResponse, error)
 	// pool: `sidecar printticket`
-	//Decodes the base58 encoded sidecar ticket into its individual data fields
-	//for a more human-readable representation.
+	// Decodes the base58 encoded sidecar ticket into its individual data fields
+	// for a more human-readable representation.
 	DecodeSidecarTicket(context.Context, *SidecarTicket) (*DecodedSidecarTicket, error)
 	// pool: `sidecar list`
-	//ListSidecars lists all sidecar tickets currently in the local database. This
-	//includes tickets offered by our node as well as tickets that our node is the
-	//recipient of. Optionally a ticket ID can be provided to filter the tickets.
+	// ListSidecars lists all sidecar tickets currently in the local database. This
+	// includes tickets offered by our node as well as tickets that our node is the
+	// recipient of. Optionally a ticket ID can be provided to filter the tickets.
 	ListSidecars(context.Context, *ListSidecarsRequest) (*ListSidecarsResponse, error)
 	// pool: `sidecar cancel`
-	//CancelSidecar cancels the execution of a specific sidecar ticket. Depending
-	//on the state of the sidecar ticket its associated bid order might be
-	//canceled as well (if this ticket was offered by our node).
+	// CancelSidecar cancels the execution of a specific sidecar ticket. Depending
+	// on the state of the sidecar ticket its associated bid order might be
+	// canceled as well (if this ticket was offered by our node).
 	CancelSidecar(context.Context, *CancelSidecarRequest) (*CancelSidecarResponse, error)
 	mustEmbedUnimplementedTraderServer()
 }
