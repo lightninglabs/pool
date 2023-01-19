@@ -82,6 +82,14 @@ type LocalBatchSnapshot struct {
 	// the batch transaction.
 	BatchTxFeeRate chainfee.SatPerKWeight
 
+	// spendingAccountsSnapshot is a snapshot of the local accounts that
+	// participated in this batch before any potential account updates were
+	// applied.
+	//
+	// NOTE: this field is used for estimating on-chains fee using the
+	// account version.
+	SpendingAccountsSnapshot map[[33]byte]*account.Account
+
 	// Account holds snapshots of the ending state of the local accounts
 	// that participated in this batch.
 	Accounts map[[33]byte]*account.Account
@@ -97,6 +105,7 @@ type LocalBatchSnapshot struct {
 
 // NewSnapshot creates a new LocalBatchSnapshot from the passed order batched.
 func NewSnapshot(batch *order.Batch, ourOrders []order.Order,
+	spendingAccountsSnapshot []*account.Account,
 	accounts []*account.Account) (*LocalBatchSnapshot, error) {
 
 	// We only support LinearFeeSchedule at this point (because of
@@ -105,6 +114,14 @@ func NewSnapshot(batch *order.Batch, ourOrders []order.Order,
 	if !ok {
 		return nil, fmt.Errorf("unsupported fee schedule: %T",
 			batch.ExecutionFee)
+	}
+
+	// Reformulate account data structure into a map keyed on trader key.
+	spendingAccsSnapshot := make(map[[33]byte]*account.Account)
+	for _, a := range accounts {
+		var key [33]byte
+		copy(key[:], a.TraderKey.PubKey.SerializeCompressed())
+		spendingAccsSnapshot[key] = a
 	}
 
 	as := make(map[[33]byte]*account.Account)
@@ -120,15 +137,16 @@ func NewSnapshot(batch *order.Batch, ourOrders []order.Order,
 	}
 
 	snapshot := &LocalBatchSnapshot{
-		Version:        batch.Version,
-		BatchID:        batch.ID,
-		ClearingPrices: batch.ClearingPrices,
-		ExecutionFee:   *feeSched,
-		BatchTX:        batch.BatchTX,
-		BatchTxFeeRate: batch.BatchTxFeeRate,
-		Accounts:       as,
-		Orders:         os,
-		MatchedOrders:  batch.MatchedOrders,
+		Version:                  batch.Version,
+		BatchID:                  batch.ID,
+		ClearingPrices:           batch.ClearingPrices,
+		ExecutionFee:             *feeSched,
+		BatchTX:                  batch.BatchTX,
+		BatchTxFeeRate:           batch.BatchTxFeeRate,
+		SpendingAccountsSnapshot: spendingAccsSnapshot,
+		Accounts:                 as,
+		Orders:                   os,
+		MatchedOrders:            batch.MatchedOrders,
 	}
 
 	return snapshot, nil
