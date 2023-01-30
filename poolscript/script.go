@@ -32,6 +32,11 @@ const (
 	// taproot script tree merkle root.
 	VersionTaprootMuSig2 Version = 1
 
+	// VersionTaprootMuSig2V100RC2 is the script version that uses the
+	// MuSig2 protocol v1.0.0-rc2 for creating the MuSig2 combined internal
+	// key but is otherwise identical to VersionTaprootMuSig2.
+	VersionTaprootMuSig2V100RC2 Version = 2
+
 	// AccountKeyFamily is the key family used to derive keys which will be
 	// used in the 2 of 2 multi-sig construction of a CLM account.
 	AccountKeyFamily keychain.KeyFamily = 220
@@ -298,15 +303,16 @@ func AccountScript(version Version, expiry uint32, traderKey, auctioneerKey,
 		}
 		return input.WitnessScriptHash(witnessScript)
 
-	case VersionTaprootMuSig2:
+	case VersionTaprootMuSig2, VersionTaprootMuSig2V100RC2:
 		aggregateKey, _, err := TaprootKey(
-			expiry, traderKey, auctioneerKey, batchKey, secret,
+			version, expiry, traderKey, auctioneerKey, batchKey,
+			secret,
 		)
 		if err != nil {
 			return nil, err
 		}
 
-		return payToWitnessTaprootScript(aggregateKey.FinalKey)
+		return txscript.PayToTaprootScript(aggregateKey.FinalKey)
 
 	default:
 		return nil, fmt.Errorf("invalid script version <%d>", version)
@@ -316,7 +322,7 @@ func AccountScript(version Version, expiry uint32, traderKey, auctioneerKey,
 // TaprootKey returns the aggregated MuSig2 combined internal key and the
 // tweaked Taproot key of an account output, as well as the expiry script tap
 // leaf.
-func TaprootKey(expiry uint32, traderKey, auctioneerKey,
+func TaprootKey(scriptVersion Version, expiry uint32, traderKey, auctioneerKey,
 	batchKey *btcec.PublicKey, secret [32]byte) (*musig2.AggregateKey,
 	*txscript.TapLeaf, error) {
 
@@ -327,27 +333,43 @@ func TaprootKey(expiry uint32, traderKey, auctioneerKey,
 		return nil, nil, err
 	}
 
+	var muSig2Version input.MuSig2Version
+	switch scriptVersion {
+	// The v0.4.0 MuSig2 implementation requires the keys to be serialized
+	// using the Schnorr (32-byte x-only) serialization format.
+	case VersionTaprootMuSig2:
+		muSig2Version = input.MuSig2Version040
+
+		auctioneerKey, err = schnorr.ParsePubKey(
+			schnorr.SerializePubKey(auctioneerKey),
+		)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error parsing auctioneer "+
+				"key: %w", err)
+		}
+
+		traderKey, err = schnorr.ParsePubKey(
+			schnorr.SerializePubKey(traderKey),
+		)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error parsing trader "+
+				"key: %w", err)
+		}
+
+	// The v1.0.0-rc2 MuSig2 implementation works with the regular, 33-byte
+	// compressed keys, so we can just pass them in as they are.
+	case VersionTaprootMuSig2V100RC2:
+		muSig2Version = input.MuSig2Version100RC2
+
+	default:
+		return nil, nil, fmt.Errorf("invalid account version <%d>",
+			scriptVersion)
+	}
+
 	rootHash := expiryLeaf.TapHash()
-
-	auctioneerKeySchnorr, err := schnorr.ParsePubKey(
-		schnorr.SerializePubKey(auctioneerKey),
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error parsing auctioneer key: %v",
-			err)
-	}
-
-	traderKeySchnorr, err := schnorr.ParsePubKey(
-		schnorr.SerializePubKey(traderKey),
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error parsing trader key: %v", err)
-	}
-
 	aggregateKey, err := input.MuSig2CombineKeys(
-		input.MuSig2Version040, []*btcec.PublicKey{
-			auctioneerKeySchnorr, traderKeySchnorr,
-		}, true, &input.MuSig2Tweaks{
+		muSig2Version, []*btcec.PublicKey{auctioneerKey, traderKey},
+		true, &input.MuSig2Tweaks{
 			TaprootTweak: rootHash[:],
 		},
 	)
@@ -356,17 +378,6 @@ func TaprootKey(expiry uint32, traderKey, auctioneerKey,
 	}
 
 	return aggregateKey, expiryLeaf, nil
-}
-
-// payToWitnessTaprootScript creates a new script to pay to a version 1
-// (taproot) witness program. The passed hash is expected to be valid.
-func payToWitnessTaprootScript(taprootKey *btcec.PublicKey) ([]byte, error) {
-	builder := txscript.NewScriptBuilder()
-
-	builder.AddOp(txscript.OP_1)
-	builder.AddData(schnorr.SerializePubKey(taprootKey))
-
-	return builder.Script()
 }
 
 // TaprootExpiryScript returns the leaf script of the expiry script path.
@@ -554,10 +565,10 @@ func IsTaprootMultiSigSpend(witness wire.TxWitness) bool {
 
 // TaprootMuSig2SigningSession creates a MuSig2 signing session for a Taproot
 // account spend.
-func TaprootMuSig2SigningSession(ctx context.Context, expiry uint32, traderKey,
-	batchKey *btcec.PublicKey, sharedSecret [32]byte,
-	auctioneerKey *btcec.PublicKey, signer lndclient.SignerClient,
-	localKeyLocator *keychain.KeyLocator,
+func TaprootMuSig2SigningSession(ctx context.Context, version Version,
+	expiry uint32, traderKey, batchKey *btcec.PublicKey,
+	sharedSecret [32]byte, auctioneerKey *btcec.PublicKey,
+	signer lndclient.SignerClient, localKeyLocator *keychain.KeyLocator,
 	remoteNonces *MuSig2Nonces) (*input.MuSig2SessionInfo, func(), error) {
 
 	expiryLeaf, err := TaprootExpiryScript(
@@ -581,22 +592,42 @@ func TaprootMuSig2SigningSession(ctx context.Context, expiry uint32, traderKey,
 		))
 	}
 
-	signers := [][]byte{make([]byte, 32), make([]byte, 32)}
-	copy(signers[0], schnorr.SerializePubKey(traderKey))
-	copy(signers[1], schnorr.SerializePubKey(auctioneerKey))
+	var (
+		signers       [][]byte
+		muSig2Version input.MuSig2Version
+	)
+
+	switch version {
+	case VersionTaprootMuSig2:
+		muSig2Version = input.MuSig2Version040
+		signers = [][]byte{
+			schnorr.SerializePubKey(traderKey),
+			schnorr.SerializePubKey(auctioneerKey),
+		}
+
+	case VersionTaprootMuSig2V100RC2:
+		muSig2Version = input.MuSig2Version100RC2
+		signers = [][]byte{
+			traderKey.SerializeCompressed(),
+			auctioneerKey.SerializeCompressed(),
+		}
+
+	default:
+		return nil, nil, fmt.Errorf("unsupported version: %v", version)
+	}
+
 	sessionInfo, err := signer.MuSig2CreateSession(
-		ctx, input.MuSig2Version040, localKeyLocator, signers,
-		sessionOpts...,
+		ctx, muSig2Version, localKeyLocator, signers, sessionOpts...,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error creating MuSig2 session: %v",
 			err)
 	}
 
-	log.Tracef("Created MuSig2 signing session for expiry=%d, "+
+	log.Tracef("Created MuSig2 signing session version=%d for expiry=%d, "+
 		"traderKey=%x, batchKey=%x, sharedSecret=%x, "+
 		"auctioneerKey=%x, rootHash=%x, combinedKey=%x, "+
-		"localNonces=%x, remoteNonces=%x",
+		"localNonces=%x, remoteNonces=%x", version,
 		expiry, traderKey.SerializeCompressed(),
 		batchKey.SerializeCompressed(), sharedSecret[:],
 		auctioneerKey.SerializeCompressed(), rootHash[:],
