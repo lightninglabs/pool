@@ -345,10 +345,9 @@ func TaprootKey(expiry uint32, traderKey, auctioneerKey,
 	}
 
 	aggregateKey, err := input.MuSig2CombineKeys(
-		[]*btcec.PublicKey{
+		input.MuSig2Version040, []*btcec.PublicKey{
 			auctioneerKeySchnorr, traderKeySchnorr,
-		},
-		&input.MuSig2Tweaks{
+		}, true, &input.MuSig2Tweaks{
 			TaprootTweak: rootHash[:],
 		},
 	)
@@ -582,11 +581,12 @@ func TaprootMuSig2SigningSession(ctx context.Context, expiry uint32, traderKey,
 		))
 	}
 
-	signers := make([][32]byte, 2)
-	copy(signers[0][:], schnorr.SerializePubKey(traderKey))
-	copy(signers[1][:], schnorr.SerializePubKey(auctioneerKey))
+	signers := [][]byte{make([]byte, 32), make([]byte, 32)}
+	copy(signers[0], schnorr.SerializePubKey(traderKey))
+	copy(signers[1], schnorr.SerializePubKey(auctioneerKey))
 	sessionInfo, err := signer.MuSig2CreateSession(
-		ctx, localKeyLocator, signers, sessionOpts...,
+		ctx, input.MuSig2Version040, localKeyLocator, signers,
+		sessionOpts...,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error creating MuSig2 session: %v",

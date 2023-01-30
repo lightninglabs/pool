@@ -12,6 +12,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -41,8 +42,8 @@ type MockWalletKit struct {
 
 var _ lndclient.WalletKitClient = (*MockWalletKit)(nil)
 
-func (m *MockWalletKit) ListUnspent(context.Context, int32,
-	int32) ([]*lnwallet.Utxo, error) {
+func (m *MockWalletKit) ListUnspent(context.Context, int32, int32,
+	...lndclient.ListUnspentOption) ([]*lnwallet.Utxo, error) {
 
 	return nil, nil
 }
@@ -153,6 +154,12 @@ func (m *MockWalletKit) ListSweeps(_ context.Context) ([]string, error) {
 	return m.Sweeps, nil
 }
 
+func (m *MockWalletKit) ListSweepsVerbose(
+	_ context.Context) ([]lnwallet.TransactionDetail, error) {
+
+	return nil, nil
+}
+
 // AddTx marks the given transaction as relevant.
 func (m *MockWalletKit) AddTx(tx *wire.MsgTx) {
 	m.lock.Lock()
@@ -239,4 +246,12 @@ func (m *MockWalletKit) ImportPublicKey(ctx context.Context,
 	pubkey *btcec.PublicKey, addrType lnwallet.AddressType) error {
 
 	return nil
+}
+
+// ImportTaprootScript imports a user-provided taproot script into the wallet.
+// The imported script will act as a pay-to-taproot address.
+func (m *MockWalletKit) ImportTaprootScript(_ context.Context,
+	_ *waddrmgr.Tapscript) (btcutil.Address, error) {
+
+	return nil, nil
 }

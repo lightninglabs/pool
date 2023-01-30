@@ -18,6 +18,7 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chanbackup"
 	"github.com/lightningnetwork/lnd/channeldb"
+	"github.com/lightningnetwork/lnd/invoices"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/invoicesrpc"
@@ -199,7 +200,7 @@ func (m *MockLightning) AddInvoice(_ context.Context,
 		PaymentRequest: payReqString,
 		Amount:         in.Value,
 		CreationDate:   creationDate,
-		State:          channeldb.ContractOpen,
+		State:          invoices.ContractOpen,
 		IsKeysend:      false,
 	}
 
@@ -225,8 +226,9 @@ func (m *MockLightning) LookupInvoice(_ context.Context,
 }
 
 // ListTransactions returns all known transactions of the backing lnd node.
-func (m *MockLightning) ListTransactions(context.Context, int32,
-	int32) ([]lndclient.Transaction, error) {
+func (m *MockLightning) ListTransactions(_ context.Context, _, _ int32,
+	_ ...lndclient.ListTransactionsOption) ([]lndclient.Transaction,
+	error) {
 
 	m.lock.Lock()
 	txs := m.Transactions

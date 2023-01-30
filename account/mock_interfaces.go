@@ -270,18 +270,23 @@ func (m *MockTxSource) EXPECT() *MockTxSourceMockRecorder {
 }
 
 // ListTransactions mocks base method.
-func (m *MockTxSource) ListTransactions(ctx context.Context, startHeight, endHeight int32) ([]lndclient.Transaction, error) {
+func (m *MockTxSource) ListTransactions(ctx context.Context, startHeight, endHeight int32, opts ...lndclient.ListTransactionsOption) ([]lndclient.Transaction, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListTransactions", ctx, startHeight, endHeight)
+	varargs := []interface{}{ctx, startHeight, endHeight}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ListTransactions", varargs...)
 	ret0, _ := ret[0].([]lndclient.Transaction)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListTransactions indicates an expected call of ListTransactions.
-func (mr *MockTxSourceMockRecorder) ListTransactions(ctx, startHeight, endHeight interface{}) *gomock.Call {
+func (mr *MockTxSourceMockRecorder) ListTransactions(ctx, startHeight, endHeight interface{}, opts ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTransactions", reflect.TypeOf((*MockTxSource)(nil).ListTransactions), ctx, startHeight, endHeight)
+	varargs := append([]interface{}{ctx, startHeight, endHeight}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTransactions", reflect.TypeOf((*MockTxSource)(nil).ListTransactions), varargs...)
 }
 
 // MockTxFeeEstimator is a mock of TxFeeEstimator interface.

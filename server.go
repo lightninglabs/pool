@@ -26,6 +26,8 @@ import (
 	"github.com/lightninglabs/pool/perms"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
+	"github.com/lightningnetwork/lnd/kvdb"
+	"github.com/lightningnetwork/lnd/lncfg"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/lnwire"
@@ -86,6 +88,7 @@ type Server struct {
 	restListener    net.Listener
 	restCancel      func()
 	macaroonService *lndclient.MacaroonService
+	macaroonDB      kvdb.Backend
 	wg              sync.WaitGroup
 }
 
@@ -147,10 +150,19 @@ func (s *Server) Start() error {
 
 	// Create and start the macaroon service and let it create its default
 	// macaroon in case it doesn't exist yet.
+	rks, db, err := lndclient.NewBoltMacaroonStore(
+		s.cfg.BaseDir, lncfg.MacaroonDBName,
+		clientdb.DefaultPoolDBTimeout,
+	)
+	if err != nil {
+		return err
+	}
+	shutdownFuncs["macaroondb"] = db.Close
+
+	s.macaroonDB = db
 	s.macaroonService, err = lndclient.NewMacaroonService(
 		&lndclient.MacaroonServiceConfig{
-			DBPath:           s.cfg.BaseDir,
-			DBTimeout:        clientdb.DefaultPoolDBTimeout,
+			RootKeyStore:     rks,
 			MacaroonLocation: poolMacaroonLocation,
 			MacaroonPath:     s.cfg.MacaroonPath,
 			Checkers: []macaroons.Checker{
@@ -364,11 +376,19 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 	if withMacaroonService {
 		// Create and start the macaroon service and let it create its
 		// default macaroon in case it doesn't exist yet.
-		var err error
+		rks, db, err := lndclient.NewBoltMacaroonStore(
+			s.cfg.BaseDir, lncfg.MacaroonDBName,
+			clientdb.DefaultPoolDBTimeout,
+		)
+		if err != nil {
+			return err
+		}
+		shutdownFuncs["macaroondb"] = db.Close
+
+		s.macaroonDB = db
 		s.macaroonService, err = lndclient.NewMacaroonService(
 			&lndclient.MacaroonServiceConfig{
-				DBPath:           s.cfg.BaseDir,
-				DBTimeout:        clientdb.DefaultPoolDBTimeout,
+				RootKeyStore:     rks,
 				MacaroonLocation: poolMacaroonLocation,
 				MacaroonPath:     s.cfg.MacaroonPath,
 				Checkers: []macaroons.Checker{
@@ -648,6 +668,12 @@ func (s *Server) Stop() error {
 			log.Errorf("Error stopping macaroon service: %v", err)
 		}
 	}
+	if s.macaroonDB != nil {
+		if err := s.macaroonDB.Close(); err != nil {
+			log.Errorf("Error closing macaroon DB: %v", err)
+		}
+	}
+
 	s.lndServices.Close()
 	s.wg.Wait()
 

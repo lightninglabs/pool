@@ -254,6 +254,8 @@ type mockWallet struct {
 		chainfee.SatPerKWeight) (*wire.MsgTx, error)
 }
 
+var _ lndclient.WalletKitClient = (*mockWallet)(nil)
+
 func newMockWallet() *mockWallet {
 	return &mockWallet{
 		publishChan: make(chan *wire.MsgTx, 1),
@@ -312,7 +314,8 @@ func (w *mockWallet) NextAddr(context.Context, string,
 }
 
 func (w *mockWallet) ListTransactions(context.Context, int32,
-	int32) ([]lndclient.Transaction, error) {
+	int32, ...lndclient.ListTransactionsOption) ([]lndclient.Transaction,
+	error) {
 
 	return w.txs, nil
 }
@@ -327,8 +330,8 @@ func (w *mockWallet) interceptSendOutputs(f func(context.Context, []*wire.TxOut,
 	w.sendOutputs = f
 }
 
-func (w *mockWallet) ListUnspent(_ context.Context, _, _ int32) (
-	[]*lnwallet.Utxo, error) {
+func (w *mockWallet) ListUnspent(context.Context, int32, int32,
+	...lndclient.ListUnspentOption) ([]*lnwallet.Utxo, error) {
 
 	return w.utxos, nil
 }
@@ -446,7 +449,7 @@ func (w *mockWallet) FinalizePsbt(_ context.Context, packet *psbt.Packet,
 // MuSig2CreateSession creates a new musig session with the key and signers
 // provided.
 func (w *mockWallet) MuSig2CreateSession(_ context.Context,
-	_ *keychain.KeyLocator, _ [][32]byte,
+	version input.MuSig2Version, _ *keychain.KeyLocator, _ [][]byte,
 	opts ...lndclient.MuSig2SessionOpts) (*input.MuSig2SessionInfo, error) {
 
 	var (
@@ -469,6 +472,7 @@ func (w *mockWallet) MuSig2CreateSession(_ context.Context,
 		TaprootInternalKey: nil,
 		HaveAllNonces:      false,
 		HaveAllSigs:        false,
+		Version:            version,
 	}
 
 	w.Lock()
@@ -565,6 +569,8 @@ type mockChainNotifier struct {
 	errChan   chan error
 }
 
+var _ lndclient.ChainNotifierClient = (*mockChainNotifier)(nil)
+
 func newMockChainNotifier() *mockChainNotifier {
 	return &mockChainNotifier{
 		confChan:  make(chan *chainntnfs.TxConfirmation),
@@ -575,8 +581,9 @@ func newMockChainNotifier() *mockChainNotifier {
 }
 
 func (n *mockChainNotifier) RegisterConfirmationsNtfn(ctx context.Context,
-	txid *chainhash.Hash, pkScript []byte, numConfs,
-	heightHint int32) (chan *chainntnfs.TxConfirmation, chan error, error) {
+	txid *chainhash.Hash, pkScript []byte, numConfs, heightHint int32,
+	opts ...lndclient.NotifierOption) (chan *chainntnfs.TxConfirmation,
+	chan error, error) {
 
 	return n.confChan, n.errChan, nil
 }

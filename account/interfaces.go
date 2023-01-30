@@ -468,8 +468,9 @@ type TxSource interface {
 	// limit the block range that we query over. These values can be left
 	// as zero to include all blocks. To include unconfirmed transactions
 	// in the query, endHeight must be set to -1.
-	ListTransactions(ctx context.Context, startHeight,
-		endHeight int32) ([]lndclient.Transaction, error)
+	ListTransactions(ctx context.Context, startHeight, endHeight int32,
+		opts ...lndclient.ListTransactionsOption) (
+		[]lndclient.Transaction, error)
 }
 
 // TxFeeEstimator is a type that provides us with a realistic fee estimation to

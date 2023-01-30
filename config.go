@@ -431,15 +431,24 @@ func loadCertWithCreate(cfg *Config) (tls.Certificate, *x509.Certificate,
 		!lnrpc.FileExists(cfg.TLSKeyPath) {
 
 		log.Infof("Generating TLS certificates...")
-		err := cert.GenCertPair(
-			defaultSelfSignedOrganization, cfg.TLSCertPath,
-			cfg.TLSKeyPath, cfg.TLSExtraIPs,
+		certBytes, keyBytes, err := cert.GenCertPair(
+			defaultSelfSignedOrganization, cfg.TLSExtraIPs,
 			cfg.TLSExtraDomains, cfg.TLSDisableAutofill,
 			DefaultAutogenValidity,
 		)
 		if err != nil {
 			return tls.Certificate{}, nil, err
 		}
+
+		// Now that we have the certificate and key, we'll store them
+		// to the file system.
+		err = cert.WriteCertPair(
+			cfg.TLSCertPath, cfg.TLSKeyPath, certBytes, keyBytes,
+		)
+		if err != nil {
+			return tls.Certificate{}, nil, err
+		}
+
 		log.Infof("Done generating TLS certificates")
 	}
 
