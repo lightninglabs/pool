@@ -130,7 +130,7 @@ func (s *batchSigner) signInputMuSig2(acctKey [33]byte,
 	}
 
 	sessionInfo, cleanup, err := poolscript.TaprootMuSig2SigningSession(
-		ctx, poolscript.VersionTaprootMuSig2, account.Expiry,
+		ctx, account.Version.ScriptVersion(), account.Expiry,
 		account.TraderKey.PubKey, account.BatchKey, account.Secret,
 		account.AuctioneerKey, s.signer, &account.TraderKey.KeyLocator,
 		&serverNonces,

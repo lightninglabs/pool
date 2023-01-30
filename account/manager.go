@@ -1753,7 +1753,7 @@ func (m *manager) RecoverAccount(ctx context.Context, account *Account) error {
 // expired or not.
 func determineWitnessType(account *Account, bestHeight uint32) witnessType {
 	switch account.Version {
-	case VersionTaprootEnabled:
+	case VersionTaprootEnabled, VersionMuSig2V100RC2:
 		if account.State == StateExpired ||
 			bestHeight >= account.Expiry {
 
@@ -2045,7 +2045,7 @@ func (m *manager) signAccountMuSig2(ctx context.Context, account *Account,
 	modifiers []Modifier, previousOutputs []*wire.TxOut) ([]byte, error) {
 
 	sessionInfo, cleanup, err := poolscript.TaprootMuSig2SigningSession(
-		ctx, poolscript.VersionTaprootMuSig2, account.Expiry,
+		ctx, account.Version.ScriptVersion(), account.Expiry,
 		account.TraderKey.PubKey, account.BatchKey, account.Secret,
 		account.AuctioneerKey, m.cfg.Signer,
 		&account.TraderKey.KeyLocator, nil,
@@ -2514,10 +2514,10 @@ func (m *manager) decorateAccountInput(account *Account, packet *psbt.Packet,
 
 	var controlBlockBytes []byte
 	if account.Version >= VersionTaprootEnabled {
+		scriptVersion := account.Version.ScriptVersion()
 		aggregateKey, expiryScript, err := poolscript.TaprootKey(
-			poolscript.VersionTaprootMuSig2, account.Expiry,
-			account.TraderKey.PubKey, account.AuctioneerKey,
-			account.BatchKey, account.Secret,
+			scriptVersion, account.Expiry, account.TraderKey.PubKey,
+			account.AuctioneerKey, account.BatchKey, account.Secret,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error creating taproot key: %v",
