@@ -53,6 +53,12 @@ const (
 	// VersionTaprootEnabled is the version that introduced account
 	// versioning and the upgrade to Taproot (with MuSig2 multi-sig).
 	VersionTaprootEnabled Version = 1
+
+	// VersionMuSig2V100RC2 is the version that bumped the MuSig2 protocol
+	// version used to v1.0.0-rc2. This is the very verbose code internal
+	// version name, in anything user facing, we'll just call this
+	// "Taproot v2" to keep it simple and short.
+	VersionMuSig2V100RC2 Version = 2
 )
 
 // String returns the string representation of the version.
@@ -63,6 +69,9 @@ func (v Version) String() string {
 
 	case VersionTaprootEnabled:
 		return "account_p2tr"
+
+	case VersionMuSig2V100RC2:
+		return "account_p2tr_v2"
 
 	default:
 		return fmt.Sprintf("unknown <%d>", v)
@@ -76,6 +85,9 @@ func (v Version) ScriptVersion() poolscript.Version {
 	case VersionTaprootEnabled:
 		return poolscript.VersionTaprootMuSig2
 
+	case VersionMuSig2V100RC2:
+		return poolscript.VersionTaprootMuSig2V100RC2
+
 	default:
 		return poolscript.VersionWitnessScript
 	}
@@ -84,7 +96,9 @@ func (v Version) ScriptVersion() poolscript.Version {
 // ValidateVersion ensures that a given version is a valid and known version.
 func ValidateVersion(version Version) error {
 	switch version {
-	case VersionInitialNoVersion, VersionTaprootEnabled:
+	case VersionInitialNoVersion, VersionTaprootEnabled,
+		VersionMuSig2V100RC2:
+
 		return nil
 
 	default:
