@@ -883,6 +883,9 @@ func (s *Server) determineBatchVersion() (order.BatchVersion, error) {
 	// We set the default value of the config flag to -1, so we can
 	// differentiate between no value set and the first version (0).
 	if configVersion >= 0 {
+		log.Infof("Using configured batch version %d for connecting "+
+			"to auctioneer", configVersion)
+
 		return order.BatchVersion(configVersion), nil
 	}
 
@@ -898,6 +901,8 @@ func (s *Server) determineBatchVersion() (order.BatchVersion, error) {
 		return 0, err
 	}
 
+	baseVersion := order.UpgradeAccountTaprootBatchVersion
+
 	// If the node supports ZeroConfChannels use that batch version.
 	_, zeroConfOpt := info.Features[uint32(lnwire.ZeroConfOptional)]
 	_, zeroConfReq := info.Features[uint32(lnwire.ZeroConfRequired)]
@@ -908,8 +913,22 @@ func (s *Server) determineBatchVersion() (order.BatchVersion, error) {
 	supportsSCIDAlias := SCIDAliasOpt || SCIDAliasReq
 
 	if supportsZeroConf && supportsSCIDAlias {
-		return order.ZeroConfChannelsBatchVersion, nil
+		baseVersion |= order.ZeroConfChannelsFlag
 	}
 
-	return order.UpgradeAccountTaprootBatchVersion, nil
+	// We can only use the new version of the MuSig2 protocol if we have a
+	// recent lnd version that added support for specifying the MuSig2
+	// version in the RPC.
+	currentLndVersion := s.lndServices.Version
+	verErr := lndclient.AssertVersionCompatible(
+		currentLndVersion, muSig2V100RC2Version,
+	)
+	if verErr == nil {
+		baseVersion |= order.UpgradeAccountTaprootV2Flag
+	}
+
+	log.Infof("Using batch version %d for connecting to auctioneer",
+		baseVersion)
+
+	return baseVersion, nil
 }

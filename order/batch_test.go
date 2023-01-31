@@ -2,6 +2,7 @@ package order
 
 import (
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -125,4 +126,84 @@ func TestChannelOutput(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint32(0), idx)
 	require.Equal(t, batchTx.TxOut[0], out)
+}
+
+// TestBatchVersionFlags tests the various batch versions and their supported
+// features.
+func TestBatchVersionFlags(t *testing.T) {
+	testCases := []struct {
+		version            BatchVersion
+		supportExtension   bool
+		supportUnannounced bool
+		supportTaproot     bool
+		supportTaprootV2   bool
+		supportZeroConf    bool
+	}{{
+		version: DefaultBatchVersion,
+	}, {
+		version:          ExtendAccountBatchVersion,
+		supportExtension: true,
+	}, {
+		version:            UnannouncedChannelsBatchVersion,
+		supportExtension:   true,
+		supportUnannounced: true,
+	}, {
+		version:            UpgradeAccountTaprootBatchVersion,
+		supportExtension:   true,
+		supportUnannounced: true,
+		supportTaproot:     true,
+	}, {
+		version:            ZeroConfChannelsBatchVersion,
+		supportExtension:   true,
+		supportUnannounced: true,
+		supportTaproot:     true,
+		supportZeroConf:    true,
+	}, {
+		version: UpgradeAccountTaprootBatchVersion |
+			ZeroConfChannelsFlag,
+		supportExtension:   true,
+		supportUnannounced: true,
+		supportTaproot:     true,
+		supportZeroConf:    true,
+	}, {
+		version: UpgradeAccountTaprootBatchVersion |
+			UpgradeAccountTaprootV2Flag,
+		supportExtension:   true,
+		supportUnannounced: true,
+		supportTaproot:     true,
+		supportTaprootV2:   true,
+	}, {
+		version: UpgradeAccountTaprootBatchVersion |
+			ZeroConfChannelsFlag | UpgradeAccountTaprootV2Flag,
+		supportExtension:   true,
+		supportUnannounced: true,
+		supportTaproot:     true,
+		supportTaprootV2:   true,
+		supportZeroConf:    true,
+	}}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%d", tc.version), func(tt *testing.T) {
+			require.Equal(
+				tt, tc.supportExtension,
+				tc.version.SupportsAccountExtension(),
+			)
+			require.Equal(
+				tt, tc.supportUnannounced,
+				tc.version.SupportsUnannouncedChannels(),
+			)
+			require.Equal(
+				tt, tc.supportTaproot,
+				tc.version.SupportsAccountTaprootUpgrade(),
+			)
+			require.Equal(
+				tt, tc.supportTaprootV2,
+				tc.version.SupportsAccountTaprootV2Upgrade(),
+			)
+			require.Equal(
+				tt, tc.supportZeroConf,
+				tc.version.SupportsZeroConfChannels(),
+			)
+		})
+	}
 }
