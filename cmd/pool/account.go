@@ -74,7 +74,7 @@ const (
 
 	// defaultAccountTarget is the default number of accounts that will try
 	// to recreate in the account recovery process.
-	defaultAccountTarget = 20
+	defaultAccountTarget = 50
 )
 
 var (
@@ -874,9 +874,10 @@ var recoverAccountsCommand = cli.Command{
 		},
 		cli.Uint64Flag{
 			Name: "account_target",
-			Usage: "number of accounts that we are looking to " +
-				"recover, set higher if there were more than " +
-				"20 accounts",
+			Usage: fmt.Sprintf("number of accounts that we are "+
+				"looking to recover, set higher if there were "+
+				"more than %d accounts or attempts at "+
+				"creating accounts", defaultAccountTarget),
 			Value: defaultAccountTarget,
 		},
 		cli.StringFlag{
