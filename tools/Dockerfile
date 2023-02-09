@@ -3,6 +3,7 @@ FROM golang:1.19.4
 RUN apt-get update && apt-get install -y git
 ENV GOCACHE=/tmp/build/.cache
 ENV GOMODCACHE=/tmp/build/.modcache
+ENV GOFLAGS="-buildvcs=false"
 
 COPY . /tmp/tools
 

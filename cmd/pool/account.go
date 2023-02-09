@@ -8,6 +8,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/lightninglabs/pool/auctioneer"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli"
@@ -73,8 +74,14 @@ const (
 	defaultFundingConfTarget = 6
 
 	// defaultAccountTarget is the default number of accounts that will try
-	// to recreate in the account recovery process.
-	defaultAccountTarget = 20
+	// to recreate in the account recovery process. We set it to the same
+	// number that is used to differentiate between a "hole" in the keys
+	// resulting from failed attempts and there not being any keys at all.
+	// This means, if a user requires more than 50 attempts before the first
+	// account is created, they will need to override this value in the
+	// client. But we need a safeguard here to not bombard our server with
+	// attempts.
+	defaultAccountTarget = auctioneer.MaxUnusedAccountKeyLookup
 )
 
 var (
@@ -874,9 +881,10 @@ var recoverAccountsCommand = cli.Command{
 		},
 		cli.Uint64Flag{
 			Name: "account_target",
-			Usage: "number of accounts that we are looking to " +
-				"recover, set higher if there were more than " +
-				"20 accounts",
+			Usage: fmt.Sprintf("number of accounts that we are "+
+				"looking to recover, set higher if there were "+
+				"more than %d accounts or attempts at "+
+				"creating accounts", defaultAccountTarget),
 			Value: defaultAccountTarget,
 		},
 		cli.StringFlag{

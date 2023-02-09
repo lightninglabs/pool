@@ -37,12 +37,12 @@ import (
 const (
 	reconnectRetries = math.MaxInt16
 
-	// maxUnusedAccountKeyLookup is the number of successive account keys
+	// MaxUnusedAccountKeyLookup is the number of successive account keys
 	// that we try and the server does not know of before aborting recovery.
 	// This is necessary to skip "holes" in our list of keys that can happen
 	// if the user tries to open an account but that fails. Then some keys
 	// aren't used.
-	maxUnusedAccountKeyLookup = 50
+	MaxUnusedAccountKeyLookup = 50
 )
 
 var (
@@ -793,7 +793,7 @@ func (c *Client) RecoverAccounts(ctx context.Context,
 
 			// Stop looking for further accounts if we've got a
 			// certain number of negative responses from the server.
-			if numNotFoundAccounts > maxUnusedAccountKeyLookup {
+			if numNotFoundAccounts > MaxUnusedAccountKeyLookup {
 				return recoveredAccounts, nil
 			}
 
