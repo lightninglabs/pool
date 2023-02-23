@@ -223,7 +223,7 @@ func (h *testHarness) expireAccount(account *Account) {
 }
 
 func (h *testHarness) closeAccount(account *Account, feeExpr FeeExpr,
-	bestHeight uint32) *wire.MsgTx {
+	bestHeight uint32) {
 
 	h.t.Helper()
 
@@ -259,8 +259,6 @@ func (h *testHarness) closeAccount(account *Account, feeExpr FeeExpr,
 	account.State = StateClosed
 	account.HeightHint = spendHeight
 	h.assertAccountExists(account)
-
-	return closeTx
 }
 
 func (h *testHarness) assertSpendTxBroadcast(accountBeforeSpend *Account,
@@ -1058,7 +1056,7 @@ func TestAccountWithdrawal(t *testing.T) {
 		// Finally, close the account to ensure we can process another
 		// spend after the withdrawal.
 		expr := defaultFeeExpr
-		_ = h.closeAccount(account, &expr, bestHeight)
+		h.closeAccount(account, &expr, bestHeight)
 	})
 }
 
@@ -1233,7 +1231,7 @@ func TestAccountDeposit(t *testing.T) {
 		// Finally, close the account to ensure we can process another
 		// spend after the withdrawal.
 		expr := defaultFeeExpr
-		_ = h.closeAccount(account, &expr, bestHeight)
+		h.closeAccount(account, &expr, bestHeight)
 	})
 }
 

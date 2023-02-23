@@ -269,7 +269,7 @@ func getMinChanAmount(ctx *cli.Context, orderAmt uint64,
 	return 0
 }
 
-// validateMinChanAmount checks that the the minimum channel amount parameter
+// validateMinChanAmount checks that the minimum channel amount parameter
 // has been properly set.
 func validateMinChanAmount(ctx *cli.Context,
 	orderAmt, minChanAmt btcutil.Amount, orderType order.Type) error {

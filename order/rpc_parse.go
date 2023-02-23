@@ -102,7 +102,7 @@ func ParseRPCOrder(version, leaseDuration uint32,
 	// Default value, trader didn't specify a channel type.
 	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_UNKNOWN:
 		// If we have a chan type selector, we'll use that, otherwise
-		// we'll just use peer dependent channels as as default.
+		// we'll just use peer dependent channels as default.
 		if opts.chanTypeSelector != nil {
 			kit.ChannelType = opts.chanTypeSelector()
 		} else {

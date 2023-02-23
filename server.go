@@ -287,7 +287,7 @@ func (s *Server) Start() error {
 		s.restListener = tls.NewListener(s.restListener, serverTLSCfg)
 		shutdownFuncs["restListener"] = s.restListener.Close
 
-		s.restProxy = &http.Server{Handler: mux}
+		s.restProxy = &http.Server{Handler: mux} //nolint:gosec
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()

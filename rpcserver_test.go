@@ -30,7 +30,7 @@ func getAccountKey(acctKey []byte) *btcec.PublicKey {
 	return res
 }
 
-func genRenewAccountReq(accountKey []byte, absolute, relative uint32,
+func genRenewAccountReq(accountKey []byte, relative uint32,
 	feerate uint64, version uint32) *poolrpc.RenewAccountRequest {
 
 	req := &poolrpc.RenewAccountRequest{
@@ -41,14 +41,8 @@ func genRenewAccountReq(accountKey []byte, absolute, relative uint32,
 
 	req.AccountKey = accountKey
 	req.FeeRateSatPerKw = feerate
-	if absolute != 0 {
-		req.AccountExpiry = &poolrpc.RenewAccountRequest_AbsoluteExpiry{
-			AbsoluteExpiry: absolute,
-		}
-	} else {
-		req.AccountExpiry = &poolrpc.RenewAccountRequest_RelativeExpiry{
-			RelativeExpiry: relative,
-		}
+	req.AccountExpiry = &poolrpc.RenewAccountRequest_RelativeExpiry{
+		RelativeExpiry: relative,
 	}
 
 	return req
@@ -70,7 +64,7 @@ var renewAccountTestCases = []struct {
 		AppPatch: 3,
 	},
 	getReq: func() *poolrpc.RenewAccountRequest {
-		return genRenewAccountReq(traderKeyRaw, 0, 10, 1000, 1)
+		return genRenewAccountReq(traderKeyRaw, 10, 1000, 1)
 	},
 	mockSetter: func(req *poolrpc.RenewAccountRequest,
 		accMgr *account.MockManager, marshalerMock *MockMarshaler) {
@@ -105,7 +99,7 @@ var renewAccountTestCases = []struct {
 	name:   "we are able to successfully renew an account",
 	lndVer: minimalCompatibleVersion,
 	getReq: func() *poolrpc.RenewAccountRequest {
-		return genRenewAccountReq(traderKeyRaw, 0, 10, 1000, 0)
+		return genRenewAccountReq(traderKeyRaw, 10, 1000, 0)
 	},
 	mockSetter: func(req *poolrpc.RenewAccountRequest,
 		accMgr *account.MockManager, marshalerMock *MockMarshaler) {
@@ -155,7 +149,7 @@ var renewAccountTestCases = []struct {
 	name:   "req should specify absolute/relative expiry",
 	lndVer: minimalCompatibleVersion,
 	getReq: func() *poolrpc.RenewAccountRequest {
-		return genRenewAccountReq(traderKeyRaw, 0, 0, 1000, 0)
+		return genRenewAccountReq(traderKeyRaw, 0, 1000, 0)
 	},
 	expectedError: "either relative or absolute height must be specified",
 	mockSetter: func(req *poolrpc.RenewAccountRequest,
@@ -168,7 +162,7 @@ var renewAccountTestCases = []struct {
 	name:   "req should specify a valid fee rate",
 	lndVer: minimalCompatibleVersion,
 	getReq: func() *poolrpc.RenewAccountRequest {
-		return genRenewAccountReq(traderKeyRaw, 0, 100, 0, 0)
+		return genRenewAccountReq(traderKeyRaw, 100, 0, 0)
 	},
 	expectedError: "fee rate of 0 sat/kw is too low, minimum is 253 sat/kw",
 	mockSetter: func(req *poolrpc.RenewAccountRequest,

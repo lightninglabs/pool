@@ -3024,7 +3024,7 @@ func (s *rpcServer) setTicketStateForOrder(newState sidecar.State,
 // determineAccountVersion parses the RPC version and makes sure it can actually
 // be used.
 func (s *rpcServer) determineAccountVersion(
-	newVersion poolrpc.AccountVersion) (account.Version, error) {
+	newVersion poolrpc.AccountVersion) (account.Version, error) { //nolint
 
 	// Now we can do the account version validation.
 	switch newVersion {
