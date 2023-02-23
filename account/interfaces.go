@@ -59,6 +59,8 @@ const (
 	// version name, in anything user facing, we'll just call this
 	// "Taproot v2" to keep it simple and short.
 	VersionMuSig2V100RC2 Version = 2
+
+	VersionTaro Version = 3
 )
 
 // String returns the string representation of the version.
@@ -72,6 +74,9 @@ func (v Version) String() string {
 
 	case VersionMuSig2V100RC2:
 		return "account_p2tr_v2"
+
+	case VersionTaro:
+		return "account_taro"
 
 	default:
 		return fmt.Sprintf("unknown <%d>", v)
@@ -88,6 +93,9 @@ func (v Version) ScriptVersion() poolscript.Version {
 	case VersionMuSig2V100RC2:
 		return poolscript.VersionTaprootMuSig2V100RC2
 
+	case VersionTaro:
+		return poolscript.VersionTaro
+
 	default:
 		return poolscript.VersionWitnessScript
 	}
@@ -97,7 +105,7 @@ func (v Version) ScriptVersion() poolscript.Version {
 func ValidateVersion(version Version) error {
 	switch version {
 	case VersionInitialNoVersion, VersionTaprootEnabled,
-		VersionMuSig2V100RC2:
+		VersionMuSig2V100RC2, VersionTaro:
 
 		return nil
 
@@ -260,6 +268,11 @@ type Account struct {
 
 	// Version is the version of the account.
 	Version Version
+
+	// TaroLeaf is an optional Tapscript leaf that commits to Taro assets.
+	// This is only populated if the account is a Taro account and there are
+	// assets to commit to.
+	TaroLeaf *txscript.TapLeaf
 }
 
 const (
@@ -274,7 +287,7 @@ const (
 func (a *Account) Output() (*wire.TxOut, error) {
 	script, err := poolscript.AccountScript(
 		a.Version.ScriptVersion(), a.Expiry, a.TraderKey.PubKey,
-		a.AuctioneerKey, a.BatchKey, a.Secret,
+		a.AuctioneerKey, a.BatchKey, a.Secret, a.TaroLeaf,
 	)
 	if err != nil {
 		return nil, err
@@ -289,11 +302,11 @@ func (a *Account) Output() (*wire.TxOut, error) {
 // NextOutputScript returns the next on-chain output script that is to be
 // associated with the account. This is done by using the next batch key, which
 // results from incrementing the current one by its curve's base point.
-func (a *Account) NextOutputScript() ([]byte, error) {
+func (a *Account) NextOutputScript(taroLeaf *txscript.TapLeaf) ([]byte, error) {
 	nextBatchKey := poolscript.IncrementKey(a.BatchKey)
 	return poolscript.AccountScript(
 		a.Version.ScriptVersion(), a.Expiry, a.TraderKey.PubKey,
-		a.AuctioneerKey, nextBatchKey, a.Secret,
+		a.AuctioneerKey, nextBatchKey, a.Secret, taroLeaf,
 	)
 }
 
@@ -322,6 +335,13 @@ func (a *Account) Copy(modifiers ...Modifier) *Account {
 	}
 	if a.State != StateInitiated {
 		accountCopy.LatestTx = a.LatestTx.Copy()
+	}
+	if a.TaroLeaf != nil {
+		accountCopy.TaroLeaf = &txscript.TapLeaf{
+			LeafVersion: a.TaroLeaf.LeafVersion,
+			Script:      make([]byte, len(a.TaroLeaf.Script)),
+		}
+		copy(accountCopy.TaroLeaf.Script, a.TaroLeaf.Script)
 	}
 
 	for _, modifier := range modifiers {
@@ -392,6 +412,14 @@ func LatestTxModifier(tx *wire.MsgTx) Modifier {
 func VersionModifier(version Version) Modifier {
 	return func(account *Account) {
 		account.Version = version
+	}
+}
+
+// TaroLeafModifier is a functional option that modifies the Taro leaf of an
+// account.
+func TaroLeafModifier(taroLeaf *txscript.TapLeaf) Modifier {
+	return func(account *Account) {
+		account.TaroLeaf = taroLeaf
 	}
 }
 
@@ -691,4 +719,10 @@ type Manager interface {
 	// RecoverAccount re-introduces a recovered account into the database
 	// and starts all watchers necessary depending on the account's state.
 	RecoverAccount(ctx context.Context, account *Account) error
+
+	// MintAssets...
+	MintAssets(ctx context.Context, traderKey,
+		taroBatchKey *btcec.PublicKey, feeRate chainfee.SatPerKWeight,
+		bestHeight uint32, newVersion Version) (*Account, *wire.MsgTx,
+		error)
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account/watcher"
 	"github.com/lightninglabs/pool/poolscript"
+	"github.com/lightninglabs/taro/tarorpc/mintrpc"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -82,6 +83,11 @@ const (
 	// muSig2Taproot is the type used for a witness taking the MuSig2
 	// combined signature key spend path of a Taproot account.
 	muSig2Taproot
+
+	// expiryTaro is the type used for a witness taking the expiration path
+	// of a Taro account. There is no corresponding multi-sig path for Taro
+	// because that looks identical to the normal MuSig2 Taproot path.
+	expiryTaro = 4
 )
 
 // scriptVersion returns the Pool script version the witness type uses.
@@ -106,6 +112,8 @@ func (wt witnessType) witnessSize() (int, error) {
 		return poolscript.TaprootExpiryWitnessSize, nil
 	case muSig2Taproot:
 		return poolscript.TaprootMultiSigWitnessSize, nil
+	case expiryTaro:
+		return poolscript.TaprootExpiryScriptSize, nil
 	default:
 		return 0, fmt.Errorf("unknown witness type %v", wt)
 	}
@@ -114,7 +122,7 @@ func (wt witnessType) witnessSize() (int, error) {
 // IsExpirySpend returns true if the witness is taking an expiration path.
 func (wt witnessType) IsExpirySpend() bool {
 	switch wt {
-	case expiryWitness, expiryTaproot:
+	case expiryWitness, expiryTaproot, expiryTaro:
 		return true
 	default:
 		return false
@@ -129,6 +137,7 @@ const (
 	DEPOSIT  Action = "deposit"
 	WITHDRAW Action = "withdraw"
 	RENEW    Action = "renew"
+	MINT     Action = "mint"
 	CLOSE    Action = "close"
 )
 
@@ -235,6 +244,17 @@ type ManagerConfig struct {
 
 	// LndVersion is the version of the connected lnd node.
 	LndVersion *verrpc.Version
+
+	// Taro is the Taro daemon client.
+	Taro TaroClient
+}
+
+type TaroClient interface {
+	IsConnected() bool
+	PrepareExternalAnchor(*Account, *btcec.PublicKey) (*txscript.TapLeaf,
+		*mintrpc.MintingBatch, error)
+	ExternalAnchor(*Account, *btcec.PublicKey, *psbt.Packet, int32) error
+	PrepareReAnchor(account *Account) (*txscript.TapLeaf, error)
 }
 
 // Manager is responsible for the management of accounts on-chain.
@@ -1274,8 +1294,12 @@ func (m *manager) DepositAccount(ctx context.Context,
 
 	// TODO(wilmer): Reject if account has pending orders.
 
+	// TODO(guggero): Re-anchor any assets that are in the account.
+	var updatedTaroLeaf *txscript.TapLeaf
+
 	newAccountOutput, modifiers, err := createNewAccountOutput(
 		account, newAccountValue, newExpiry, &newVersion,
+		updatedTaroLeaf,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1302,7 +1326,8 @@ func (m *manager) DepositAccount(ctx context.Context,
 	// and assuming it's valid, broadcast the deposit transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
 	modifiedAccount, spendTx, err := m.spendAccount(
-		ctx, account, DEPOSIT, packet, spendWitnessType, modifiers, bestHeight,
+		ctx, account, DEPOSIT, packet, spendWitnessType, modifiers,
+		bestHeight,
 	)
 	if err != nil {
 		releaseInputs()
@@ -1347,6 +1372,14 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 
 	// TODO(wilmer): Reject if account has pending orders.
 
+	var updatedTaroLeaf *txscript.TapLeaf
+	if account.TaroLeaf != nil {
+		updatedTaroLeaf, err = m.cfg.Taro.PrepareReAnchor(account)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// To start, we'll need to determine the new value of the account after
 	// creating the outputs specified as part of the withdrawal, which we'll
 	// then use to create the new account output.
@@ -1359,6 +1392,7 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 	}
 	newAccountOutput, modifiers, err := createNewAccountOutput(
 		account, newAccountValue, newExpiry, &newVersion,
+		updatedTaroLeaf,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1377,10 +1411,23 @@ func (m *manager) WithdrawAccount(ctx context.Context,
 	// and assuming it's valid, broadcast the withdrawal transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
 	modifiedAccount, spendTx, err := m.spendAccount(
-		ctx, account, WITHDRAW, packet, spendWitnessType, modifiers, bestHeight,
+		ctx, account, WITHDRAW, packet, spendWitnessType, modifiers,
+		bestHeight,
 	)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if updatedTaroLeaf != nil {
+		// The withdrawal output is our change output.
+		changeOutput := int32(-1)
+		err = m.cfg.Taro.ExternalAnchor(
+			modifiedAccount, packet, changeOutput,
+		)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to commit external "+
+				"anchor: %w", err)
+		}
 	}
 
 	return modifiedAccount, spendTx, nil
@@ -1434,8 +1481,13 @@ func (m *manager) RenewAccount(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// TODO(guggero): Re-anchor any assets that are in the account.
+	var updatedTaroLeaf *txscript.TapLeaf
+
 	newAccountOutput, modifiers, err := createNewAccountOutput(
 		account, newAccountValue, &newExpiry, &newVersion,
+		updatedTaroLeaf,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1452,7 +1504,8 @@ func (m *manager) RenewAccount(ctx context.Context,
 	// and assuming it's valid, broadcast the update transaction.
 	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
 	modifiedAccount, spendTx, err := m.spendAccount(
-		ctx, account, RENEW, packet, spendWitnessType, modifiers, bestHeight,
+		ctx, account, RENEW, packet, spendWitnessType, modifiers,
+		bestHeight,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -1588,7 +1641,8 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 		ValueModifier(0), StateModifier(StatePendingClosed),
 	}
 	_, spendTx, err := m.spendAccount(
-		ctx, account, CLOSE, packet, spendWitnessType, modifiers, bestHeight,
+		ctx, account, CLOSE, packet, spendWitnessType, modifiers,
+		bestHeight,
 	)
 	if err != nil {
 		return nil, err
@@ -1603,7 +1657,7 @@ func (m *manager) CloseAccount(ctx context.Context, traderKey *btcec.PublicKey,
 // spending transaction, and finally watching for the new account state
 // on-chain. These operations are performed in this order to ensure trader are
 // able to resume the spend of an account upon restarts if they happen to
-// shutdown mid-process.
+// shut down mid-process.
 func (m *manager) spendAccount(ctx context.Context, account *Account,
 	action Action, packet *psbt.Packet, witnessType witnessType,
 	modifiers []Modifier, bestHeight uint32) (*Account, *wire.MsgTx, error) {
@@ -1646,7 +1700,7 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 
 	var lockTime uint32
 	switch witnessType {
-	case expiryWitness, expiryTaproot:
+	case expiryWitness, expiryTaproot, expiryTaro:
 		if action != CLOSE {
 			return nil, nil, errors.New("modifications for " +
 				"expired accounts are not currently supported")
@@ -1692,6 +1746,10 @@ func (m *manager) spendAccount(ctx context.Context, account *Account,
 		account, action, isExpirySpend, &txFee, balanceDiff,
 	)
 	label := makeTxnLabel(m.cfg.TxLabelPrefix, contextLabel)
+
+	log.Debugf("Broadcasting %s transaction for account %x: %v", action,
+		account.TraderKey.PubKey.SerializeCompressed(),
+		spew.Sdump(spendTx))
 
 	if err := m.maybeBroadcastTx(ctx, spendTx, label); err != nil {
 		return nil, nil, err
@@ -1748,6 +1806,95 @@ func (m *manager) RecoverAccount(ctx context.Context, account *Account) error {
 	return m.resumeAccount(ctx, account, false, true, 0)
 }
 
+// MintAssets...
+func (m *manager) MintAssets(ctx context.Context, traderKey,
+	taroBatchKey *btcec.PublicKey, feeRate chainfee.SatPerKWeight,
+	bestHeight uint32, newVersion Version) (*Account, *wire.MsgTx, error) {
+
+	// The account can only be modified in `StateOpen` and its new value
+	// should not exceed the maximum allowed.
+	account, err := m.cfg.Store.Account(traderKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	if account.State != StateOpen {
+		return nil, nil, fmt.Errorf("account must be in %v to be "+
+			"used for asset minting", StateOpen)
+	}
+
+	// Can't downgrade an account.
+	if newVersion < account.Version {
+		return nil, nil, fmt.Errorf("cannot downgrade account "+
+			"version to %s", newVersion)
+	}
+
+	// Attempt to look up and freeze our minting batch in the Taro daemon.
+	taroLeaf, batch, err := m.cfg.Taro.PrepareExternalAnchor(
+		account, taroBatchKey,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to prepare minting "+
+			"batch: %w", err)
+	}
+
+	log.Debugf("Minting %d assets from batch %x", len(batch.Assets),
+		batch.BatchKey)
+
+	// Determine the new account output after committing to the minting
+	// batch.
+	spendWitnessType := multiSigWitness
+	if account.Version >= VersionTaprootEnabled {
+		spendWitnessType = muSig2Taproot
+	}
+	newAccountValue, err := valueAfterAccountUpdate(
+		account, nil, spendWitnessType, feeRate,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	newAccountOutput, modifiers, err := createNewAccountOutput(
+		account, newAccountValue, &account.Expiry, &newVersion,
+		taroLeaf,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	packet, err := m.createSpendTx(account, []*wire.TxOut{newAccountOutput})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	log.Debugf("Got funded PSBT packet %s", spew.Sdump(packet))
+
+	// We'll tack on the change output if it was needed and an additional
+	// `StatePendingUpdate` modifier to our account and proceed with the
+	// rest of the flow. This should request a signature from the auctioneer
+	// and assuming it's valid, broadcast the deposit transaction.
+	modifiers = append(modifiers, StateModifier(StatePendingUpdate))
+	modifiedAccount, spendTx, err := m.spendAccount(
+		ctx, account, MINT, packet, spendWitnessType, modifiers,
+		bestHeight,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	log.Debugf("Got signed TX: %s", spew.Sdump(spendTx))
+
+	// We are spending the account only, so there is no change output.
+	changeOutput := int32(-1)
+	err = m.cfg.Taro.ExternalAnchor(
+		modifiedAccount, taroBatchKey, packet, changeOutput,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to commit external "+
+			"anchor: %w", err)
+	}
+
+	return modifiedAccount, spendTx, nil
+}
+
 // determineWitnessType determines the appropriate witness type to use for the
 // spending transaction for an account based on its version and whether it has
 // expired or not.
@@ -1761,6 +1908,19 @@ func determineWitnessType(account *Account, bestHeight uint32) witnessType {
 		}
 
 		return muSig2Taproot
+
+	case VersionTaro:
+		if account.State == StateExpired ||
+			bestHeight >= account.Expiry {
+
+			return expiryTaro
+		}
+
+		// The multi-sig witness of a Taro account cannot be
+		// distinguished from a normal MuSig2 witness, since it's just
+		// a signature.
+		return muSig2Taproot
+
 	default:
 		if account.State == StateExpired ||
 			bestHeight >= account.Expiry {
@@ -2048,7 +2208,7 @@ func (m *manager) signAccountMuSig2(ctx context.Context, account *Account,
 		ctx, account.Version.ScriptVersion(), account.Expiry,
 		account.TraderKey.PubKey, account.BatchKey, account.Secret,
 		account.AuctioneerKey, m.cfg.Signer,
-		&account.TraderKey.KeyLocator, nil,
+		&account.TraderKey.KeyLocator, account.TaroLeaf, nil,
 	)
 	if err != nil {
 		return nil, err
@@ -2154,6 +2314,10 @@ func valueAfterAccountUpdate(account *Account, outputs []*wire.TxOut,
 	// required minimum.
 	fee := feeRate.FeeForWeight(int64(weightEstimator.Weight()))
 	newAccountValue := account.Value - outputTotal - fee
+	log.Debugf("Weight estimate for account update: weight=%v (fee=%v, "+
+		"fee_rate=%v, old_value=%v, new_value=%v)",
+		weightEstimator.Weight(), fee, feeRate, account.Value,
+		newAccountValue)
 	if newAccountValue < MinAccountValue {
 		return 0, fmt.Errorf("new account value is below accepted "+
 			"minimum of %v", MinAccountValue)
@@ -2314,8 +2478,8 @@ func (m *manager) inputsForDeposit(ctx context.Context, account *Account,
 // createNewAccountOutput creates the next account output in the sequence using
 // the new account value and optional new account expiry.
 func createNewAccountOutput(account *Account, newAccountValue btcutil.Amount,
-	newAccountExpiry *uint32, newVersion *Version) (*wire.TxOut, []Modifier,
-	error) {
+	newAccountExpiry *uint32, newVersion *Version,
+	newTaroLeaf *txscript.TapLeaf) (*wire.TxOut, []Modifier, error) {
 
 	modifiers := []Modifier{
 		ValueModifier(newAccountValue),
@@ -2327,6 +2491,7 @@ func createNewAccountOutput(account *Account, newAccountValue btcutil.Amount,
 	if newVersion != nil && *newVersion > account.Version {
 		modifiers = append(modifiers, VersionModifier(*newVersion))
 	}
+	modifiers = append(modifiers, TaroLeafModifier(newTaroLeaf))
 
 	newAccountOutput, err := account.Copy(modifiers...).Output()
 	if err != nil {
@@ -2518,6 +2683,7 @@ func (m *manager) decorateAccountInput(account *Account, packet *psbt.Packet,
 		aggregateKey, expiryScript, err := poolscript.TaprootKey(
 			scriptVersion, account.Expiry, account.TraderKey.PubKey,
 			account.AuctioneerKey, account.BatchKey, account.Secret,
+			account.TaroLeaf,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error creating taproot key: %v",
@@ -2525,8 +2691,12 @@ func (m *manager) decorateAccountInput(account *Account, packet *psbt.Packet,
 		}
 		pIn.WitnessScript = expiryScript.Script
 
+		leaves := []txscript.TapLeaf{*expiryScript}
+		if account.TaroLeaf != nil {
+			leaves = append(leaves, *account.TaroLeaf)
+		}
 		tapscript := input.TapscriptFullTree(
-			aggregateKey.PreTweakedKey, *expiryScript,
+			aggregateKey.PreTweakedKey, leaves...,
 		)
 		controlBlockBytes, err = tapscript.ControlBlock.ToBytes()
 		if err != nil {

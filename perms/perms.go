@@ -62,6 +62,10 @@ var RequiredPermissions = map[string][]bakery.Op{
 		Entity: "account",
 		Action: "read",
 	}},
+	"/poolrpc.Trader/MintAssets": {{
+		Entity: "account",
+		Action: "read",
+	}},
 	"/poolrpc.Trader/SubmitOrder": {{
 		Entity: "order",
 		Action: "write",

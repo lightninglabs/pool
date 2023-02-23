@@ -245,7 +245,7 @@ func (d *AccountDiff) validateEndingState(tx *wire.MsgTx,
 
 		// Final check, make sure we arrive at the same script for the
 		// new account output.
-		nextScript, err := acct.NextOutputScript()
+		nextScript, err := acct.NextOutputScript(nil)
 		if err != nil {
 			return fmt.Errorf("could not derive next account "+
 				"script: %v", err)

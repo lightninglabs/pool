@@ -1015,6 +1015,9 @@
         "version": {
           "$ref": "#/definitions/poolrpcAccountVersion",
           "description": "The current version of the account."
+        },
+        "taro_leaf": {
+          "$ref": "#/definitions/poolrpcTapLeaf"
         }
       }
     },
@@ -1088,7 +1091,8 @@
         "ACCOUNT_VERSION_LND_DEPENDENT",
         "ACCOUNT_VERSION_LEGACY",
         "ACCOUNT_VERSION_TAPROOT",
-        "ACCOUNT_VERSION_TAPROOT_V2"
+        "ACCOUNT_VERSION_TAPROOT_V2",
+        "ACCOUNT_VERSION_TARO"
       ],
       "default": "ACCOUNT_VERSION_LND_DEPENDENT",
       "description": " - ACCOUNT_VERSION_LND_DEPENDENT: Let the version of lnd decide. If a version of lnd \u003e= 0.15.0-beta is\ndetected then a Taproot account is created. For earlier versions a legacy\naccount is created. If a version of lnd \u003e= 0.16.0-beta is detected, then a\nTaproot v2 account is created.\n - ACCOUNT_VERSION_LEGACY: A legacy SegWit v0 p2wsh account with a single script.\n - ACCOUNT_VERSION_TAPROOT: A Taproot enabled account with MuSig2 combined internal key and the expiry\nscript as a single tap script leaf.\n - ACCOUNT_VERSION_TAPROOT_V2: A Taproot enabled account with MuSig2 combined internal key and the expiry\nscript as a single tap script leaf. This version uses the MuSig2 v1.0.0-rc2\nprotocol for creating the combined internal key. This can only be selected\nwhen the connected lnd version is \u003e= 0.16.0-beta."
@@ -1995,6 +1999,20 @@
         }
       }
     },
+    "poolrpcMintAssetsResponse": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/definitions/poolrpcAccount",
+          "description": "The state of the account after processing the minting request."
+        },
+        "mint_txid": {
+          "type": "string",
+          "format": "byte",
+          "description": "The transaction used to mint the assets."
+        }
+      }
+    },
     "poolrpcNextBatchInfoResponse": {
       "type": "object",
       "properties": {
@@ -2512,6 +2530,19 @@
         "updated_sidecar_ticket": {
           "type": "string",
           "description": "In case a bid order was submitted for a sidecar ticket, that ticket is\nupdated with the new state and bid order nonce."
+        }
+      }
+    },
+    "poolrpcTapLeaf": {
+      "type": "object",
+      "properties": {
+        "leaf_version": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "leaf_script": {
+          "type": "string",
+          "format": "byte"
         }
       }
     },

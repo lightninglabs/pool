@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/lightninglabs/pool/taro"
+	"github.com/lightninglabs/taro/tarocfg"
 	"github.com/lightningnetwork/lnd/cert"
 	"github.com/lightningnetwork/lnd/lncfg"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -78,6 +80,13 @@ var (
 	// macaroon.
 	DefaultMacaroonPath = filepath.Join(
 		DefaultBaseDir, DefaultNetwork, DefaultMacaroonFilename,
+	)
+
+	// TaroDefaultMacaroonPath is the default full path of tarod's
+	// admin.macaroon.
+	TaroDefaultMacaroonPath = filepath.Join(
+		tarocfg.DefaultDataDir, DefaultNetwork,
+		tarocfg.DefaultAdminMacFilename,
 	)
 
 	// DefaultLndDir is the default location where we look for lnd's tls and
@@ -153,6 +162,8 @@ type Config struct {
 
 	Lnd *LndConfig `group:"lnd" namespace:"lnd"`
 
+	Taro *taro.Config `group:"taro" namespace:"taro"`
+
 	// RPCListener is a network listener that can be set if poold should be
 	// used as a library and listen on the given listener instead of what is
 	// configured in the --rpclisten parameter. Setting this will also
@@ -215,6 +226,12 @@ func DefaultConfig() Config {
 		Lnd: &LndConfig{
 			Host:         "localhost:10009",
 			MacaroonPath: DefaultLndMacaroonPath,
+		},
+		Taro: &taro.Config{
+			Host: fmt.Sprintf("localhost:%d",
+				tarocfg.DefaultRPCPort),
+			MacaroonPath: TaroDefaultMacaroonPath,
+			TLSPath:      tarocfg.DefaultTLSCertPath,
 		},
 		DebugConfig: &DebugConfig{
 			// The default value is dynamic depending on the lnd
@@ -338,6 +355,17 @@ func Validate(cfg *Config) error {
 		cfg.Lnd.MacaroonPath = path.Join(
 			DefaultLndDir, "data", "chain", "bitcoin", cfg.Network,
 			defaultLndMacaroon,
+		)
+	}
+
+	// Adjust the default tarod macaroon path if only the network is
+	// specified.
+	if cfg.Network != DefaultNetwork &&
+		cfg.Taro.MacaroonPath == TaroDefaultMacaroonPath {
+
+		cfg.Taro.MacaroonPath = filepath.Join(
+			tarocfg.DefaultDataDir, cfg.Network,
+			tarocfg.DefaultAdminMacFilename,
 		)
 	}
 

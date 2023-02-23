@@ -9,10 +9,12 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightninglabs/taro/commitment"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 )
@@ -36,6 +38,8 @@ const (
 	// MuSig2 protocol v1.0.0-rc2 for creating the MuSig2 combined internal
 	// key but is otherwise identical to VersionTaprootMuSig2.
 	VersionTaprootMuSig2V100RC2 Version = 2
+
+	VersionTaro Version = 3
 
 	// AccountKeyFamily is the key family used to derive keys which will be
 	// used in the 2 of 2 multi-sig construction of a CLM account.
@@ -108,6 +112,16 @@ const (
 	//	- control_block_varint_len: 1 byte (control block length)
 	//	- <control_block>: 33 bytes
 	TaprootExpiryWitnessSize = 1 + 1 + 64 + 1 + TaprootExpiryScriptSize + 1 + 33
+
+	// TaroExpiryWitnessSize evaluates to 172 bytes:
+	//	- num_witness_elements: 1 byte
+	//	- trader_sig_varint_len: 1 byte (trader_sig length)
+	//	- <trader_sig>: 64 bytes
+	//	- witness_script_varint_len: 1 byte (script length)
+	//	- <witness_script>: 39 bytes
+	//	- control_block_varint_len: 1 byte (control block length)
+	//	- <control_block>: 33+32 bytes (internal key + Taro leaf hash)
+	TaroExpiryWitnessSize = 1 + 1 + 64 + 1 + TaprootExpiryScriptSize + 1 + 33 + 32
 )
 
 // MuSig2Nonces is a type for a MuSig2 nonce pair (2 times 33-byte).
@@ -291,7 +305,8 @@ func (r *RecoveryHelper) LocateAnyOutput(expiry uint32,
 // with the hash of a single script leaf that has the following script:
 // <trader_key> OP_CHECKSIGVERIFY <account_expiry> OP_CHECKLOCKTIMEVERIFY.
 func AccountScript(version Version, expiry uint32, traderKey, auctioneerKey,
-	batchKey *btcec.PublicKey, secret [32]byte) ([]byte, error) {
+	batchKey *btcec.PublicKey, secret [32]byte,
+	taroLeaf *txscript.TapLeaf) ([]byte, error) {
 
 	switch version {
 	case VersionWitnessScript:
@@ -306,7 +321,18 @@ func AccountScript(version Version, expiry uint32, traderKey, auctioneerKey,
 	case VersionTaprootMuSig2, VersionTaprootMuSig2V100RC2:
 		aggregateKey, _, err := TaprootKey(
 			version, expiry, traderKey, auctioneerKey, batchKey,
-			secret,
+			secret, nil,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		return txscript.PayToTaprootScript(aggregateKey.FinalKey)
+
+	case VersionTaro:
+		aggregateKey, _, err := TaprootKey(
+			version, expiry, traderKey, auctioneerKey, batchKey,
+			secret, taroLeaf,
 		)
 		if err != nil {
 			return nil, err
@@ -323,14 +349,32 @@ func AccountScript(version Version, expiry uint32, traderKey, auctioneerKey,
 // tweaked Taproot key of an account output, as well as the expiry script tap
 // leaf.
 func TaprootKey(scriptVersion Version, expiry uint32, traderKey, auctioneerKey,
-	batchKey *btcec.PublicKey, secret [32]byte) (*musig2.AggregateKey,
-	*txscript.TapLeaf, error) {
+	batchKey *btcec.PublicKey, secret [32]byte,
+	taroLeaf *txscript.TapLeaf) (*musig2.AggregateKey, *txscript.TapLeaf,
+	error) {
 
 	expiryLeaf, err := TaprootExpiryScript(
 		expiry, traderKey, batchKey, secret,
 	)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// This is a sanity check to avoid the Taro tap leaf being provided for
+	// the wrong account version.
+	var rootHash chainhash.Hash
+	switch {
+	case taroLeaf != nil && scriptVersion == VersionTaro:
+		rootHash = commitment.TapBranchHash(
+			expiryLeaf.TapHash(), taroLeaf.TapHash(),
+		)
+
+	case taroLeaf != nil:
+		return nil, nil, fmt.Errorf("taro leaf provided for script "+
+			"version <%d>", scriptVersion)
+
+	default:
+		rootHash = expiryLeaf.TapHash()
 	}
 
 	var muSig2Version input.MuSig2Version
@@ -358,7 +402,7 @@ func TaprootKey(scriptVersion Version, expiry uint32, traderKey, auctioneerKey,
 
 	// The v1.0.0-rc2 MuSig2 implementation works with the regular, 33-byte
 	// compressed keys, so we can just pass them in as they are.
-	case VersionTaprootMuSig2V100RC2:
+	case VersionTaprootMuSig2V100RC2, VersionTaro:
 		muSig2Version = input.MuSig2Version100RC2
 
 	default:
@@ -366,7 +410,6 @@ func TaprootKey(scriptVersion Version, expiry uint32, traderKey, auctioneerKey,
 			scriptVersion)
 	}
 
-	rootHash := expiryLeaf.TapHash()
 	aggregateKey, err := input.MuSig2CombineKeys(
 		muSig2Version, []*btcec.PublicKey{auctioneerKey, traderKey},
 		true, &input.MuSig2Tweaks{
@@ -569,6 +612,7 @@ func TaprootMuSig2SigningSession(ctx context.Context, version Version,
 	expiry uint32, traderKey, batchKey *btcec.PublicKey,
 	sharedSecret [32]byte, auctioneerKey *btcec.PublicKey,
 	signer lndclient.SignerClient, localKeyLocator *keychain.KeyLocator,
+	taroLeaf *txscript.TapLeaf,
 	remoteNonces *MuSig2Nonces) (*input.MuSig2SessionInfo, func(), error) {
 
 	expiryLeaf, err := TaprootExpiryScript(
@@ -579,7 +623,23 @@ func TaprootMuSig2SigningSession(ctx context.Context, version Version,
 			"script: %v", err)
 	}
 
-	rootHash := expiryLeaf.TapHash()
+	// This is a sanity check to avoid the Taro tap leaf being provided for
+	// the wrong account version.
+	var rootHash chainhash.Hash
+	switch {
+	case taroLeaf != nil && version == VersionTaro:
+		rootHash = commitment.TapBranchHash(
+			expiryLeaf.TapHash(), taroLeaf.TapHash(),
+		)
+
+	case taroLeaf != nil:
+		return nil, nil, fmt.Errorf("taro leaf provided for script "+
+			"version <%d>", version)
+
+	default:
+		rootHash = expiryLeaf.TapHash()
+	}
+
 	sessionOpts := []lndclient.MuSig2SessionOpts{
 		lndclient.MuSig2TaprootTweakOpt(rootHash[:], false),
 	}
@@ -605,7 +665,7 @@ func TaprootMuSig2SigningSession(ctx context.Context, version Version,
 			schnorr.SerializePubKey(auctioneerKey),
 		}
 
-	case VersionTaprootMuSig2V100RC2:
+	case VersionTaprootMuSig2V100RC2, VersionTaro:
 		muSig2Version = input.MuSig2Version100RC2
 		signers = [][]byte{
 			traderKey.SerializeCompressed(),

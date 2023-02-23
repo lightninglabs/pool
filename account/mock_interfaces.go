@@ -490,6 +490,22 @@ func (mr *MockManagerMockRecorder) InitAccount(ctx, value, version, feeRate, exp
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitAccount", reflect.TypeOf((*MockManager)(nil).InitAccount), ctx, value, version, feeRate, expiry, bestHeight)
 }
 
+// MintAssets mocks base method.
+func (m *MockManager) MintAssets(ctx context.Context, traderKey, taroBatchKey *v2.PublicKey, feeRate chainfee.SatPerKWeight, bestHeight uint32, newVersion Version) (*Account, *wire.MsgTx, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MintAssets", ctx, traderKey, taroBatchKey, feeRate, bestHeight, newVersion)
+	ret0, _ := ret[0].(*Account)
+	ret1, _ := ret[1].(*wire.MsgTx)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// MintAssets indicates an expected call of MintAssets.
+func (mr *MockManagerMockRecorder) MintAssets(ctx, traderKey, taroBatchKey, feeRate, bestHeight, newVersion interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MintAssets", reflect.TypeOf((*MockManager)(nil).MintAssets), ctx, traderKey, taroBatchKey, feeRate, bestHeight, newVersion)
+}
+
 // QuoteAccount mocks base method.
 func (m *MockManager) QuoteAccount(ctx context.Context, value btcutil.Amount, confTarget uint32) (chainfee.SatPerKWeight, btcutil.Amount, error) {
 	m.ctrl.T.Helper()

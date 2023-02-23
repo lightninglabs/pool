@@ -116,7 +116,7 @@ func TestFindInitialAccountState(t *testing.T) {
 					poolscript.VersionWitnessScript,
 					177, acc.TraderKey.PubKey,
 					tc.config.AuctioneerPubKey,
-					batchKey, acc.Secret,
+					batchKey, acc.Secret, nil,
 				)
 
 				tc.config.Transactions = append(
@@ -221,7 +221,7 @@ func TestFindAccountUpdate(t *testing.T) {
 			script, _ := poolscript.AccountScript(
 				poolscript.VersionWitnessScript,
 				tc.expectedExpiry, acc.TraderKey.PubKey,
-				acc.AuctioneerKey, batchKey, acc.Secret,
+				acc.AuctioneerKey, batchKey, acc.Secret, nil,
 			)
 
 			tx := &wire.MsgTx{

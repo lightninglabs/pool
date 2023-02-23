@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightningnetwork/lnd/tlv"
 	"go.etcd.io/bbolt"
@@ -19,8 +20,11 @@ const (
 	accountStateVersionedMask account.State = 0b1000_0000
 
 	// accountVersionType is the first additional field we added to the
-	// account as a TLV field and it encodes the account's version.
+	// account as a TLV field, and it encodes the account's version.
 	accountVersionType tlv.Type = 0
+
+	accountTaroLeafVersionType tlv.Type = 1
+	accountTaroLeafScriptType  tlv.Type = 2
 )
 
 var (
@@ -233,6 +237,16 @@ func serializeAccountTlvData(w *bytes.Buffer, a *account.Account) error {
 		tlv.MakePrimitiveRecord(accountVersionType, &version),
 	}
 
+	if a.TaroLeaf != nil {
+		leafVersion := uint8(a.TaroLeaf.LeafVersion)
+		tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
+			accountTaroLeafVersionType, &leafVersion,
+		))
+		tlvRecords = append(tlvRecords, tlv.MakePrimitiveRecord(
+			accountTaroLeafScriptType, &a.TaroLeaf.Script,
+		))
+	}
+
 	tlvStream, err := tlv.NewStream(tlvRecords...)
 	if err != nil {
 		return err
@@ -271,10 +285,16 @@ func deserializeAccountTlvData(r io.Reader, a *account.Account) error {
 	}
 
 	var (
-		version uint8
+		version     uint8
+		leafVersion uint8
+		leafScript  []byte
 	)
 	tlvStream, err := tlv.NewStream(
 		tlv.MakePrimitiveRecord(accountVersionType, &version),
+		tlv.MakePrimitiveRecord(
+			accountTaroLeafVersionType, &leafVersion,
+		),
+		tlv.MakePrimitiveRecord(accountTaroLeafScriptType, &leafScript),
 	)
 	if err != nil {
 		return err
@@ -289,6 +309,12 @@ func deserializeAccountTlvData(r io.Reader, a *account.Account) error {
 
 	if t, ok := parsedTypes[accountVersionType]; ok && t == nil {
 		a.Version = account.Version(version)
+	}
+	if t, ok := parsedTypes[accountTaroLeafVersionType]; ok && t == nil {
+		a.TaroLeaf = &txscript.TapLeaf{
+			LeafVersion: txscript.TapscriptLeafVersion(leafVersion),
+			Script:      leafScript,
+		}
 	}
 
 	return nil

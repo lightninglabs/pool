@@ -386,6 +386,14 @@ func (c *Client) ModifyAccount(ctx context.Context, account *account.Account,
 			Expiry:  modifiedAccount.Expiry,
 			Version: uint32(modifiedAccount.Version),
 		}
+		if modifiedAccount.TaroLeaf != nil {
+			req.NewParams.TaroLeaf = &auctioneerrpc.TapLeaf{
+				LeafVersion: uint32(
+					modifiedAccount.TaroLeaf.LeafVersion,
+				),
+				LeafScript: modifiedAccount.TaroLeaf.Script,
+			}
+		}
 	}
 
 	for idx, prevOutput := range previousOutputs {

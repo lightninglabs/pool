@@ -133,7 +133,7 @@ func (s *batchSigner) signInputMuSig2(acctKey [33]byte,
 		ctx, account.Version.ScriptVersion(), account.Expiry,
 		account.TraderKey.PubKey, account.BatchKey, account.Secret,
 		account.AuctioneerKey, s.signer, &account.TraderKey.KeyLocator,
-		&serverNonces,
+		account.TaroLeaf, &serverNonces,
 	)
 	if err != nil {
 		return nil, emptyNonces, fmt.Errorf("error creating MuSig2 "+

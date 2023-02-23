@@ -663,7 +663,7 @@ func deriveRawKey(t *testing.T, walletKit *test.MockWalletKit,
 }
 
 func scriptForAcct(t *testing.T, acct *account.Account) []byte {
-	script, err := acct.NextOutputScript()
+	script, err := acct.NextOutputScript(nil)
 	if err != nil {
 		t.Errorf("error deriving next script: %v", err)
 	}

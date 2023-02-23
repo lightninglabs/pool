@@ -9,6 +9,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/pool/account"
@@ -19,10 +20,16 @@ import (
 var (
 	testOutPoint = wire.OutPoint{Index: 1}
 
-	testRawAuctioneerKey, _ = hex.DecodeString("02187d1a0e30f4e5016fc1137363ee9e7ed5dde1e6c50f367422336df7a108b716")
-	testAuctioneerKey, _    = btcec.ParsePubKey(testRawAuctioneerKey)
+	testRawAuctioneerKey, _ = hex.DecodeString(
+		"02187d1a0e30f4e5016fc1137363ee9e7ed5dde1e6c50f367422336df7a1" +
+			"08b716",
+	)
+	testAuctioneerKey, _ = btcec.ParsePubKey(testRawAuctioneerKey)
 
-	testRawTraderKey, _ = hex.DecodeString("036b51e0cc2d9e5988ee4967e0ba67ef3727bb633fea21a0af58e0c9395446ba09")
+	testRawTraderKey, _ = hex.DecodeString(
+		"036b51e0cc2d9e5988ee4967e0ba67ef3727bb633fea21a0af58e0c93954" +
+			"46ba09",
+	)
 	testTraderKey, _    = btcec.ParsePubKey(testRawTraderKey)
 	testRawTraderKeyArr = [33]byte{
 		0x03, 0x6b, 0x51, 0xe0, 0xcc, 0x2d, 0x9e, 0x59, 0x88, 0xee,
@@ -39,8 +46,11 @@ var (
 		PubKey: testTraderKey,
 	}
 
-	testRawBatchKey, _ = hex.DecodeString("02824d0cbac65e01712124c50ff2cc74ce22851d7b444c1bf2ae66afefb8eaf27f")
-	testBatchKey, _    = btcec.ParsePubKey(testRawBatchKey)
+	testRawBatchKey, _ = hex.DecodeString(
+		"02824d0cbac65e01712124c50ff2cc74ce22851d7b444c1bf2ae66afefb8" +
+			"eaf27f",
+	)
+	testBatchKey, _ = btcec.ParsePubKey(testRawBatchKey)
 
 	sharedSecret = [32]byte{0x73, 0x65, 0x63, 0x72, 0x65, 0x74}
 )
@@ -94,6 +104,11 @@ func TestAccounts(t *testing.T) {
 		Secret:        sharedSecret,
 		State:         account.StateInitiated,
 		HeightHint:    1,
+		Version:       account.VersionTaro,
+		TaroLeaf: &txscript.TapLeaf{
+			LeafVersion: txscript.BaseLeafVersion,
+			Script:      []byte("testscript"),
+		},
 	}
 
 	// First, we'll add it to the database. We should be able to retrieve

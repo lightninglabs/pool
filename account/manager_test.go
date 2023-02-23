@@ -314,7 +314,7 @@ func (h *testHarness) assertSpendTxBroadcast(accountBeforeSpend *Account,
 
 	// Perhaps this is an in-flight account upgrade?
 	upgradedAccount := accountBeforeSpend.Copy(VersionModifier(newVersion))
-	nextPkScript, err := upgradedAccount.NextOutputScript()
+	nextPkScript, err := upgradedAccount.NextOutputScript(nil)
 	require.NoError(h.t, err)
 	outputs := externalOutputs
 	if newValue != nil {
@@ -964,7 +964,7 @@ func TestAccountSpendBatchNotFinalized(t *testing.T) {
 		// logic.
 		const newValue = maxAccountValue / 2
 		upgradedAccount := account.Copy(VersionModifier(tc.newVersion))
-		newPkScript, err := upgradedAccount.NextOutputScript()
+		newPkScript, err := upgradedAccount.NextOutputScript(nil)
 		require.NoError(h.t, err)
 		spendTx := &wire.MsgTx{
 			Version: 2,
@@ -1259,7 +1259,7 @@ func TestAccountDeposit(t *testing.T) {
 		)
 
 		upgradedAccount := account.Copy(VersionModifier(tc.newVersion))
-		accountOutputScript, _ := upgradedAccount.NextOutputScript()
+		accountOutputScript, _ := upgradedAccount.NextOutputScript(nil)
 
 		// We'll provide a funded PSBT to the manager that has a change
 		// output.
@@ -1388,7 +1388,7 @@ func TestAccountConsecutiveBatches(t *testing.T) {
 		const numBatches = 10
 		batchTxs := make([]*wire.MsgTx, numBatches)
 		for i := 0; i < numBatches; i++ {
-			newPkScript, err := account.NextOutputScript()
+			newPkScript, err := account.NextOutputScript(nil)
 			require.NoError(t, err)
 
 			// Create an account spend which we'll notify later.

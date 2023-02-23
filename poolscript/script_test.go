@@ -236,7 +236,7 @@ func TestWitnessCorrectness(t *testing.T) {
 			auctioneerPub := auctioneer.PubKey()
 			_, tapLeaf, err := TaprootKey(
 				version, expiry, trader.PubKey(), auctioneerPub,
-				batchPubKey, sharedSecret,
+				batchPubKey, sharedSecret, nil,
 			)
 			require.NoError(t, err)
 
@@ -362,13 +362,13 @@ func testTaprootSpend(t *testing.T, expiryPath bool, version Version) {
 
 	taprootKey, tapLeaf, err := TaprootKey(
 		version, expiry, traderPub, auctioneerPub, batchPubKey,
-		sharedSecret,
+		sharedSecret, nil,
 	)
 	require.NoError(t, err)
 
 	pkScript, err := AccountScript(
 		version, expiry, traderPub, auctioneerPub, batchPubKey,
-		sharedSecret,
+		sharedSecret, nil,
 	)
 	require.NoError(t, err)
 	tx.TxOut = []*wire.TxOut{{

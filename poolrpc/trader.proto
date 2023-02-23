@@ -85,6 +85,11 @@ service Trader {
     rpc AccountModificationFees (AccountModificationFeesRequest)
         returns (AccountModificationFeesResponse);
 
+    /* pool: `accounts mintassets`
+
+    */
+    rpc MintAssets (MintAssetsRequest) returns (MintAssetsResponse);
+
     /* pool: `orders submit`
     SubmitOrder creates a new ask or bid order and submits for the given account
     and submits it to the auction server for matching.
@@ -241,6 +246,8 @@ enum AccountVersion {
     when the connected lnd version is >= 0.16.0-beta.
     */
     ACCOUNT_VERSION_TAPROOT_V2 = 3;
+
+    ACCOUNT_VERSION_TARO = 4;
 }
 
 message InitAccountRequest {
@@ -563,6 +570,8 @@ message Account {
 
     // The current version of the account.
     AccountVersion version = 8;
+
+    TapLeaf taro_leaf = 9;
 }
 
 message SubmitOrderRequest {
@@ -1064,6 +1073,30 @@ message ListOfAccountModificationFees {
 message AccountModificationFeesResponse {
     // A map from account key to an ordered list of account modification fees.
     map<string, ListOfAccountModificationFees> accounts = 1;
+}
+
+message MintAssetsRequest {
+    /*
+    The trader key associated with the account that the assets should be minted
+    into.
+    */
+    bytes trader_key = 1;
+
+    /*
+    The Taro minting batch key that contains the asset definitions that should
+    be minted into the Pool account.
+    */
+    bytes taro_batch_key = 2;
+
+    // The new fee rate, in satoshis per kw, to use for the minting transaction.
+    uint64 fee_rate_sat_per_kw = 3;
+}
+message MintAssetsResponse {
+    // The state of the account after processing the minting request.
+    Account account = 1;
+
+    // The transaction used to mint the assets.
+    bytes mint_txid = 2;
 }
 
 message AuctionFeeRequest {

@@ -30,6 +30,7 @@ var accountsCommands = []cli.Command{
 			listAccountFeesCommand,
 			bumpAccountFeeCommand,
 			recoverAccountsCommand,
+			mintAssetsCommand,
 		},
 	},
 }
@@ -855,6 +856,78 @@ func listAccountFees(ctx *cli.Context) error {
 	}
 
 	printRespJSON(resp)
+	return nil
+}
+
+var mintAssetsCommand = cli.Command{
+	Name:      "mintassets",
+	ShortName: "m",
+	Usage:     "mint new Taro assets into Pool account",
+	Description: `
+	Mint the assets in the specified Taro minting batch into the specified
+	Pool account.
+
+	NOTE: This requires a Taro daemon to be connected to the Pool daemon and
+	the account will not be operational without the Taro daemon being
+	connected and running.
+	`,
+	ArgsUsage: "trader_key taro_batch_key sat_per_vbyte",
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name: "trader_key",
+			Usage: "the trader key associated with the account to " +
+				"mint the assets into",
+		},
+		cli.StringFlag{
+			Name: "taro_batch_key",
+			Usage: "the Taro minting batch key that contains the " +
+				"asset definitions that should be minted " +
+				"into the Pool account",
+		},
+		cli.Uint64Flag{
+			Name: "sat_per_vbyte",
+			Usage: "the fee rate expressed in sat/vbyte that " +
+				"should be used for the minting transaction",
+		},
+	},
+	Action: mintAssets,
+}
+
+func mintAssets(ctx *cli.Context) error {
+	cmd := "mintassets"
+	traderKey, err := parseHexStr(ctx, 0, "trader_key", cmd)
+	if err != nil {
+		return err
+	}
+	batchKey, err := parseHexStr(ctx, 0, "taro_batch_key", cmd)
+	if err != nil {
+		return err
+	}
+	satPerVbyte, err := parseUint64(ctx, 1, "sat_per_vbyte", cmd)
+	if err != nil {
+		return err
+	}
+	satPerKw := chainfee.SatPerKVByte(satPerVbyte * 1000).FeePerKWeight()
+
+	client, cleanup, err := getClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.MintAssets(
+		context.Background(), &poolrpc.MintAssetsRequest{
+			TraderKey:       traderKey,
+			TaroBatchKey:    batchKey,
+			FeeRateSatPerKw: uint64(satPerKw),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	printRespJSON(resp)
+
 	return nil
 }
 

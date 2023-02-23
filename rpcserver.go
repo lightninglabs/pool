@@ -27,6 +27,7 @@ import (
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/sidecar"
+	"github.com/lightninglabs/pool/taro"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/chanbackup"
 	lndFunding "github.com/lightningnetwork/lnd/funding"
@@ -115,6 +116,9 @@ func newRPCServer(server *Server) (*rpcServer, error) {
 			TxLabelPrefix:  server.cfg.TxLabelPrefix,
 			ChainParams:    lndServices.ChainParams,
 			LndVersion:     lndServices.Version,
+			Taro: taro.NewGrpcClient(
+				server.taroClientConn,
+			),
 		}),
 		orderManager: order.NewManager(&order.ManagerConfig{
 			Store:        server.db,
@@ -683,6 +687,9 @@ func MarshallAccount(a *account.Account) (*poolrpc.Account, error) {
 	case account.VersionMuSig2V100RC2:
 		rpcVersion = poolrpc.AccountVersion_ACCOUNT_VERSION_TAPROOT_V2
 
+	case account.VersionTaro:
+		rpcVersion = poolrpc.AccountVersion_ACCOUNT_VERSION_TARO
+
 	default:
 		return nil, fmt.Errorf("unknown version <%d>", a.Version)
 	}
@@ -692,6 +699,14 @@ func MarshallAccount(a *account.Account) (*poolrpc.Account, error) {
 	var latestTxHash chainhash.Hash
 	if a.LatestTx != nil {
 		latestTxHash = a.LatestTx.TxHash()
+	}
+
+	var rpcTaroLeaf *auctioneerrpc.TapLeaf
+	if a.TaroLeaf != nil {
+		rpcTaroLeaf = &auctioneerrpc.TapLeaf{
+			LeafVersion: uint32(a.TaroLeaf.LeafVersion),
+			LeafScript:  a.TaroLeaf.Script,
+		}
 	}
 
 	return &poolrpc.Account{
@@ -705,6 +720,7 @@ func MarshallAccount(a *account.Account) (*poolrpc.Account, error) {
 		State:            rpcState,
 		LatestTxid:       latestTxHash[:],
 		Version:          rpcVersion,
+		TaroLeaf:         rpcTaroLeaf,
 	}, nil
 }
 
@@ -785,13 +801,13 @@ func (s *rpcServer) WithdrawAccount(ctx context.Context,
 
 	rpcLog.Infof("Withdrawing from acct=%x", req.TraderKey)
 
-	// Ensure the trader key is well formed.
+	// Ensure the trader key is well-formed.
 	traderKey, err := btcec.ParsePubKey(req.TraderKey)
 	if err != nil {
 		return nil, err
 	}
 
-	// Ensure the outputs we'll withdraw to are well formed.
+	// Ensure the outputs we'll withdraw to are well-formed.
 	if len(req.Outputs) == 0 {
 		return nil, errors.New("missing outputs for withdrawal")
 	}
@@ -3035,6 +3051,7 @@ func (s *rpcServer) determineAccountVersion(
 	var (
 		isMuSig2V100RC2Compatible = false
 		currentVersion            = s.server.lndServices.Version
+		isTaroConnected           = s.server.taroClientConn != nil
 	)
 	verErr := lndclient.AssertVersionCompatible(
 		currentVersion, muSig2V100RC2Version,
@@ -3047,6 +3064,9 @@ func (s *rpcServer) determineAccountVersion(
 	switch newVersion {
 	case poolrpc.AccountVersion_ACCOUNT_VERSION_LND_DEPENDENT:
 		if isMuSig2V100RC2Compatible {
+			if isTaroConnected {
+				return account.VersionTaro, nil
+			}
 			return account.VersionMuSig2V100RC2, nil
 		}
 
@@ -3068,6 +3088,15 @@ func (s *rpcServer) determineAccountVersion(
 		}
 
 		return account.VersionMuSig2V100RC2, nil
+
+	case poolrpc.AccountVersion_ACCOUNT_VERSION_TARO:
+		if !isTaroConnected {
+			return 0, fmt.Errorf("cannot use Taro enabled " +
+				"account version, Pool is not connected to a " +
+				"Taro daemon")
+		}
+
+		return account.VersionTaro, nil
 
 	default:
 		return 0, fmt.Errorf("unknown account version %v", newVersion)
@@ -3145,6 +3174,58 @@ func (s *rpcServer) AccountModificationFees(ctx context.Context,
 
 	return &poolrpc.AccountModificationFeesResponse{
 		Accounts: result,
+	}, nil
+}
+
+// MintAssets handles a trader's request to deposit funds into the specified
+// account by spending the specified inputs.
+func (s *rpcServer) MintAssets(ctx context.Context,
+	req *poolrpc.MintAssetsRequest) (*poolrpc.MintAssetsResponse, error) {
+
+	rpcLog.Infof("Minting assets from batch %x into acct=%x",
+		req.TaroBatchKey, req.TraderKey)
+
+	// Ensure the trader and minting batch key are well-formed.
+	traderKey, err := btcec.ParsePubKey(req.TraderKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse trader key: %w", err)
+	}
+	taroBatchKey, err := btcec.ParsePubKey(req.TaroBatchKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse taro batch key: %w",
+			err)
+	}
+
+	// Enforce a minimum fee rate of 253 sat/kw.
+	feeRate := chainfee.SatPerKWeight(req.FeeRateSatPerKw)
+	if feeRate < chainfee.FeePerKwFloor {
+		return nil, fmt.Errorf("fee rate of %d sat/kw is too low, "+
+			"minimum is %d sat/kw", feeRate, chainfee.FeePerKwFloor)
+	}
+
+	bestHeight := atomic.LoadUint32(&s.bestHeight)
+
+	// Proceed to process the deposit and map its response to the RPC's
+	// response.
+	modifiedAccount, tx, err := s.accountManager.MintAssets(
+		ctx, traderKey, taroBatchKey, feeRate, bestHeight,
+		account.VersionTaro,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcModAccounts, err := s.marshaler.MarshallAccountsWithAvailableBalance(
+		ctx, []*account.Account{modifiedAccount},
+	)
+	if err != nil {
+		return nil, err
+	}
+	txHash := tx.TxHash()
+
+	return &poolrpc.MintAssetsResponse{
+		Account:  rpcModAccounts[0],
+		MintTxid: txHash[:],
 	}, nil
 }
 

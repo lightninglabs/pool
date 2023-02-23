@@ -1146,6 +1146,11 @@ message ServerOutput {
     bytes script = 2;
 }
 
+message TapLeaf {
+    uint32 leaf_version = 1;
+    bytes leaf_script = 2;
+}
+
 message ServerModifyAccountRequest {
     /*
     The trader's account key of the account to be modified.
@@ -1175,6 +1180,8 @@ message ServerModifyAccountRequest {
 
         // The new version of the account.
         uint32 version = 3;
+
+        TapLeaf taro_leaf = 4;
     }
 
     // The new parameters to apply for the account.

@@ -69,6 +69,8 @@ type TraderClient interface {
 	// AccountModificationFees returns a map from account key to an ordered list of
 	// account action modification fees.
 	AccountModificationFees(ctx context.Context, in *AccountModificationFeesRequest, opts ...grpc.CallOption) (*AccountModificationFeesResponse, error)
+	// pool: `accounts mintassets`
+	MintAssets(ctx context.Context, in *MintAssetsRequest, opts ...grpc.CallOption) (*MintAssetsResponse, error)
 	// pool: `orders submit`
 	// SubmitOrder creates a new ask or bid order and submits for the given account
 	// and submits it to the auction server for matching.
@@ -271,6 +273,15 @@ func (c *traderClient) RecoverAccounts(ctx context.Context, in *RecoverAccountsR
 func (c *traderClient) AccountModificationFees(ctx context.Context, in *AccountModificationFeesRequest, opts ...grpc.CallOption) (*AccountModificationFeesResponse, error) {
 	out := new(AccountModificationFeesResponse)
 	err := c.cc.Invoke(ctx, "/poolrpc.Trader/AccountModificationFees", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *traderClient) MintAssets(ctx context.Context, in *MintAssetsRequest, opts ...grpc.CallOption) (*MintAssetsResponse, error) {
+	out := new(MintAssetsResponse)
+	err := c.cc.Invoke(ctx, "/poolrpc.Trader/MintAssets", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -493,6 +504,8 @@ type TraderServer interface {
 	// AccountModificationFees returns a map from account key to an ordered list of
 	// account action modification fees.
 	AccountModificationFees(context.Context, *AccountModificationFeesRequest) (*AccountModificationFeesResponse, error)
+	// pool: `accounts mintassets`
+	MintAssets(context.Context, *MintAssetsRequest) (*MintAssetsResponse, error)
 	// pool: `orders submit`
 	// SubmitOrder creates a new ask or bid order and submits for the given account
 	// and submits it to the auction server for matching.
@@ -625,6 +638,9 @@ func (UnimplementedTraderServer) RecoverAccounts(context.Context, *RecoverAccoun
 }
 func (UnimplementedTraderServer) AccountModificationFees(context.Context, *AccountModificationFeesRequest) (*AccountModificationFeesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AccountModificationFees not implemented")
+}
+func (UnimplementedTraderServer) MintAssets(context.Context, *MintAssetsRequest) (*MintAssetsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MintAssets not implemented")
 }
 func (UnimplementedTraderServer) SubmitOrder(context.Context, *SubmitOrderRequest) (*SubmitOrderResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitOrder not implemented")
@@ -905,6 +921,24 @@ func _Trader_AccountModificationFees_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TraderServer).AccountModificationFees(ctx, req.(*AccountModificationFeesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Trader_MintAssets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MintAssetsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TraderServer).MintAssets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/poolrpc.Trader/MintAssets",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TraderServer).MintAssets(ctx, req.(*MintAssetsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1287,6 +1321,10 @@ var Trader_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AccountModificationFees",
 			Handler:    _Trader_AccountModificationFees_Handler,
+		},
+		{
+			MethodName: "MintAssets",
+			Handler:    _Trader_MintAssets_Handler,
 		},
 		{
 			MethodName: "SubmitOrder",

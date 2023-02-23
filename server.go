@@ -94,6 +94,9 @@ type Server struct {
 	lsatStore       *lsat.FileStore
 	lndServices     *lndclient.GrpcLndServices
 	lndClient       lnrpc.LightningClient
+
+	taroClientConn *grpc.ClientConn
+
 	grpcServer      *grpc.Server
 	restProxy       *http.Server
 	grpcListener    net.Listener
@@ -196,7 +199,19 @@ func (s *Server) Start() error {
 	}
 	shutdownFuncs["macaroon"] = s.macaroonService.Stop
 
-	// Setup the auctioneer client and interceptor.
+	// Set up the connection to the Taro daemon.
+	if s.cfg.Taro != nil && !s.cfg.Taro.Disable {
+		log.Infof("Connecting to taro at %s", s.cfg.Taro.Host)
+		s.taroClientConn, err = s.cfg.Taro.ClientConn()
+		if err != nil {
+			return fmt.Errorf("unable to connect to taro: %w", err)
+		}
+		shutdownFuncs["taro"] = func() error {
+			return s.taroClientConn.Close()
+		}
+	}
+
+	// Set up the auctioneer client and interceptor.
 	err = s.setupClient()
 	if err != nil {
 		return err
@@ -360,7 +375,8 @@ func (s *Server) Start() error {
 // StartAsSubserver is an alternative start method where the RPC server does not
 // create its own gRPC server but registers on an existing one.
 func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
-	lndGrpc *lndclient.GrpcLndServices, withMacaroonService bool) error {
+	lndGrpc *lndclient.GrpcLndServices, taroClient *grpc.ClientConn,
+	withMacaroonService bool) error {
 
 	if atomic.AddInt32(&s.started, 1) != 1 {
 		return fmt.Errorf("trader can only be started once")
@@ -368,6 +384,7 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 
 	s.lndClient = lndClient
 	s.lndServices = lndGrpc
+	s.taroClientConn = taroClient
 
 	// Print the version before executing either primary directive.
 	log.Infof("Version: %v", Version())
