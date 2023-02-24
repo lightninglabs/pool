@@ -50,6 +50,7 @@ func Run(cfg *Config) error {
 				"/debug/pprof", http.StatusSeeOther,
 			)
 			http.Handle("/", profileRedirect)
+			//nolint:gosec
 			fmt.Println(http.ListenAndServe(cfg.Profile, nil))
 		}()
 	}

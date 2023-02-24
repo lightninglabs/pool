@@ -429,7 +429,7 @@ type Kit struct {
 	// has been formally validated.
 	MultiSigKeyLocator keychain.KeyLocator
 
-	// MaxBatchFeeRate is is the maximum fee rate the trader is willing to
+	// MaxBatchFeeRate is the maximum fee rate the trader is willing to
 	// pay for the batch transaction, in sat/kW.
 	MaxBatchFeeRate chainfee.SatPerKWeight
 

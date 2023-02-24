@@ -56,11 +56,11 @@ all: scratch check install
 
 $(GOIMPORTS_BIN):
 	@$(call print, "Installing goimports.")
-	cd $(TOOLS_DIR); go install -trimpath -tags=tools $(GOIMPORTS_PKG)
+	cd $(TOOLS_DIR); go install -trimpath $(GOIMPORTS_PKG)
 
 $(GOACC_BIN):
 	@$(call print, "Fetching go-acc")
-	cd $(TOOLS_DIR); go install -trimpath -tags=tools $(GOACC_PKG)
+	cd $(TOOLS_DIR); go install -trimpath $(GOACC_PKG)
 
 # ============
 # INSTALLATION

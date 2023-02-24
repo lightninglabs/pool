@@ -67,6 +67,12 @@ linters:
     - golint
     - maligned
     - scopelint
+    - varcheck
+    - structcheck
+    - deadcode
+    
+    # gRPC needs snake case notation.
+    - nosnakecase
     
     # New linters that need a code adjustment first.
     - wrapcheck
@@ -103,6 +109,7 @@ linters:
     - revive
     - promlinter
     - forbidigo
+    - interfacebloat
 
 issues:
   exclude-rules:

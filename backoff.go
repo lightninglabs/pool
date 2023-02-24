@@ -3,7 +3,7 @@ package pool
 import "time"
 
 const (
-	// maxBackOff is the maximum amount of that that we'll wait to retry to
+	// maxBackOff is the maximum amount of that we'll wait to retry to
 	// w/e operation we're wanting to back off.
 	maxBackOff = time.Minute
 
