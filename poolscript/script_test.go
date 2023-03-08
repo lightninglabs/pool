@@ -14,7 +14,6 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -170,14 +169,14 @@ func TestWitnessCorrectness(t *testing.T) {
 		version      Version
 		timeout      bool
 		expectedSize int
-		witness      func(t *testing.T, trader,
+		witness      func(t *testing.T, version Version, trader,
 			auctioneer *btcec.PrivateKey) wire.TxWitness
 		check func(witness wire.TxWitness) bool
 	}{{
 		name:         "v0 multisig",
 		version:      VersionWitnessScript,
 		expectedSize: MultiSigWitnessSize,
-		witness: func(t *testing.T, trader,
+		witness: func(t *testing.T, version Version, trader,
 			auctioneer *btcec.PrivateKey) wire.TxWitness {
 
 			script, err := AccountWitnessScript(
@@ -199,7 +198,7 @@ func TestWitnessCorrectness(t *testing.T) {
 		version:      VersionWitnessScript,
 		timeout:      true,
 		expectedSize: ExpiryWitnessSize,
-		witness: func(t *testing.T, trader,
+		witness: func(t *testing.T, version Version, trader,
 			auctioneer *btcec.PrivateKey) wire.TxWitness {
 
 			script, err := AccountWitnessScript(
@@ -218,7 +217,7 @@ func TestWitnessCorrectness(t *testing.T) {
 		name:         "v1 multisig",
 		version:      VersionTaprootMuSig2,
 		expectedSize: TaprootMultiSigWitnessSize,
-		witness: func(t *testing.T, trader,
+		witness: func(t *testing.T, version Version, trader,
 			auctioneer *btcec.PrivateKey) wire.TxWitness {
 
 			traderSig, err := schnorr.Sign(trader, dummyHash[:])
@@ -231,12 +230,12 @@ func TestWitnessCorrectness(t *testing.T) {
 		version:      VersionTaprootMuSig2,
 		timeout:      true,
 		expectedSize: TaprootExpiryWitnessSize,
-		witness: func(t *testing.T, trader,
+		witness: func(t *testing.T, version Version, trader,
 			auctioneer *btcec.PrivateKey) wire.TxWitness {
 
 			auctioneerPub := auctioneer.PubKey()
 			_, tapLeaf, err := TaprootKey(
-				expiry, trader.PubKey(), auctioneerPub,
+				version, expiry, trader.PubKey(), auctioneerPub,
 				batchPubKey, sharedSecret,
 			)
 			require.NoError(t, err)
@@ -263,7 +262,9 @@ func TestWitnessCorrectness(t *testing.T) {
 
 	scenario := func(trader, auctioneer *btcec.PrivateKey) bool {
 		for _, tc := range testCases {
-			txWitness := tc.witness(t, trader, auctioneer)
+			txWitness := tc.witness(
+				t, tc.version, trader, auctioneer,
+			)
 			witness, err := serializeTxWitness(txWitness)
 			if err != nil {
 				t.Logf("Unexpected error: %v", err)
@@ -323,17 +324,23 @@ func TestWitnessCorrectness(t *testing.T) {
 func TestTaprootSpend(t *testing.T) {
 	t.Parallel()
 
-	t.Run("MuSig2", func(tt *testing.T) {
-		testTaprootSpend(tt, false)
+	t.Run("Key spend MuSig2 v0.4.0", func(tt *testing.T) {
+		testTaprootSpend(tt, false, VersionTaprootMuSig2)
 	})
-	t.Run("Expiry", func(tt *testing.T) {
-		testTaprootSpend(tt, true)
+	t.Run("Key spend MuSig2 v1.0.0-rc2", func(tt *testing.T) {
+		testTaprootSpend(tt, false, VersionTaprootMuSig2V100RC2)
+	})
+	t.Run("Expiry MuSig2 v0.4.0", func(tt *testing.T) {
+		testTaprootSpend(tt, true, VersionTaprootMuSig2)
+	})
+	t.Run("Expiry MuSig2 v1.0.0-rc2", func(tt *testing.T) {
+		testTaprootSpend(tt, true, VersionTaprootMuSig2V100RC2)
 	})
 }
 
 // testTaprootSpend executes a Taproot spend, either using the MuSig2 key spend
 // path or the expiry script path.
-func testTaprootSpend(t *testing.T, expiryPath bool) {
+func testTaprootSpend(t *testing.T, expiryPath bool, version Version) {
 	trader, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 	traderPub := trader.PubKey()
@@ -354,13 +361,14 @@ func testTaprootSpend(t *testing.T, expiryPath bool) {
 	}}
 
 	taprootKey, tapLeaf, err := TaprootKey(
-		expiry, traderPub, auctioneerPub, batchPubKey, sharedSecret,
+		version, expiry, traderPub, auctioneerPub, batchPubKey,
+		sharedSecret,
 	)
 	require.NoError(t, err)
 
 	pkScript, err := AccountScript(
-		VersionTaprootMuSig2, expiry, traderPub, auctioneerPub,
-		batchPubKey, sharedSecret,
+		version, expiry, traderPub, auctioneerPub, batchPubKey,
+		sharedSecret,
 	)
 	require.NoError(t, err)
 	tx.TxOut = []*wire.TxOut{{
@@ -410,32 +418,31 @@ func testTaprootSpend(t *testing.T, expiryPath bool) {
 		)
 		require.NoError(t, err)
 
-		traderPubSchnorr, _ := schnorr.ParsePubKey(
-			schnorr.SerializePubKey(traderPub),
-		)
-		auctioneerPubSchnorr, _ := schnorr.ParsePubKey(
-			schnorr.SerializePubKey(auctioneerPub),
-		)
-		signerKeys := []*btcec.PublicKey{
-			traderPubSchnorr, auctioneerPubSchnorr,
+		signerKeys := []*btcec.PublicKey{traderPub, auctioneerPub}
+		rootHash := tapLeaf.TapHash()
+		tweak := &input.MuSig2Tweaks{
+			TaprootTweak: rootHash[:],
 		}
 
-		rootHash := tapLeaf.TapHash()
-		rootHashOpt := musig2.WithTaprootTweakCtx(rootHash[:])
-		signerOpts := musig2.WithKnownSigners(signerKeys)
+		muSig2Version := input.MuSig2Version100RC2
+		if version == VersionTaprootMuSig2 {
+			muSig2Version = input.MuSig2Version040
 
-		traderCtx, err := musig2.NewContext(
-			trader, true, rootHashOpt, signerOpts,
+			signerKeys[0], _ = schnorr.ParsePubKey(
+				schnorr.SerializePubKey(traderPub),
+			)
+			signerKeys[1], _ = schnorr.ParsePubKey(
+				schnorr.SerializePubKey(auctioneerPub),
+			)
+		}
+
+		_, traderSession, err := input.MuSig2CreateContext(
+			muSig2Version, trader, signerKeys, tweak,
 		)
 		require.NoError(t, err)
-		auctioneerCtx, err := musig2.NewContext(
-			auctioneer, true, rootHashOpt, signerOpts,
+		_, auctioneerSession, err := input.MuSig2CreateContext(
+			muSig2Version, auctioneer, signerKeys, tweak,
 		)
-		require.NoError(t, err)
-
-		traderSession, err := traderCtx.NewSession()
-		require.NoError(t, err)
-		auctioneerSession, err := auctioneerCtx.NewSession()
 		require.NoError(t, err)
 
 		allNonces, err := traderSession.RegisterPubNonce(
@@ -451,13 +458,15 @@ func testTaprootSpend(t *testing.T, expiryPath bool) {
 
 		var msg [32]byte
 		copy(msg[:], sigHash)
-		traderSig, err := traderSession.Sign(msg)
+		traderSig, err := input.MuSig2Sign(traderSession, msg, true)
 		require.NoError(t, err)
 
-		_, err = auctioneerSession.Sign(msg)
+		_, err = input.MuSig2Sign(auctioneerSession, msg, true)
 		require.NoError(t, err)
 
-		fullSigOk, err := auctioneerSession.CombineSig(traderSig)
+		fullSigOk, err := input.MuSig2CombineSig(
+			auctioneerSession, traderSig,
+		)
 		require.NoError(t, err)
 		require.True(t, fullSigOk)
 

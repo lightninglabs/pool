@@ -130,9 +130,10 @@ func (s *batchSigner) signInputMuSig2(acctKey [33]byte,
 	}
 
 	sessionInfo, cleanup, err := poolscript.TaprootMuSig2SigningSession(
-		ctx, account.Expiry, account.TraderKey.PubKey, account.BatchKey,
-		account.Secret, account.AuctioneerKey, s.signer,
-		&account.TraderKey.KeyLocator, &serverNonces,
+		ctx, account.Version.ScriptVersion(), account.Expiry,
+		account.TraderKey.PubKey, account.BatchKey, account.Secret,
+		account.AuctioneerKey, s.signer, &account.TraderKey.KeyLocator,
+		&serverNonces,
 	)
 	if err != nil {
 		return nil, emptyNonces, fmt.Errorf("error creating MuSig2 "+

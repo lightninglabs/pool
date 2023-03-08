@@ -92,7 +92,7 @@ func EstimateTraderFee(numTraderChans uint32, feeRate chainfee.SatPerKWeight,
 	// Finally, we tack on the size of the witness spending the account
 	// outpoint.
 	switch accountVersion {
-	case account.VersionTaprootEnabled:
+	case account.VersionTaprootEnabled, account.VersionMuSig2V100RC2:
 		weightEstimate += poolscript.TaprootMultiSigWitnessSize
 
 	default:

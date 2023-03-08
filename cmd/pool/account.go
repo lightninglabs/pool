@@ -134,9 +134,11 @@ var newAccountCommand = cli.Command{
 			Name: "version",
 			Usage: "the account version to use; version 0 means " +
 				"auto-decide dependent on lnd version; " +
-				"version 1 is a p2wsh account while version " +
-				"2 is a p2tr account; version 2 requires lnd " +
-				"0.15 or later",
+				"version 1 is a p2wsh account, version 2 is " +
+				"a p2tr account, version 3 is a p2tr " +
+				"account with MuSig2 v1.0.0-rc2 support; " +
+				"version 2 requires lnd 0.15 or " +
+				"later, version 3 requires lnd 0.16 or later",
 		},
 	},
 	Action: newAccount,

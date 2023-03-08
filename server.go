@@ -26,6 +26,8 @@ import (
 	"github.com/lightninglabs/pool/perms"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
+	"github.com/lightningnetwork/lnd/kvdb"
+	"github.com/lightningnetwork/lnd/lncfg"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/lnwire"
@@ -43,13 +45,26 @@ var (
 	minimalCompatibleVersion = &verrpc.Version{
 		AppMajor: 0,
 		AppMinor: 15,
-		AppPatch: 1,
+		AppPatch: 4,
 
 		// We don't actually require the invoicesrpc calls. But if we
 		// try to use lndclient on an lnd that doesn't have it enabled,
 		// the library will try to load the invoices.macaroon anyway and
 		// fail. So until that bug is fixed in lndclient, we require the
 		// build tag to be active.
+		BuildTags: []string{
+			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
+		},
+	}
+
+	// muSig2V100RC2Version is the version of lnd that enabled the MuSig2
+	// v1.0.0-rc2 protocol in its MuSig2 RPC. We'll use this to decide what
+	// account version to default to.
+	// TODO(guggero): Update this to 0.16.0 when it's released.
+	muSig2V100RC2Version = &verrpc.Version{
+		AppMajor: 0,
+		AppMinor: 15,
+		AppPatch: 99,
 		BuildTags: []string{
 			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
 		},
@@ -86,6 +101,7 @@ type Server struct {
 	restListener    net.Listener
 	restCancel      func()
 	macaroonService *lndclient.MacaroonService
+	macaroonDB      kvdb.Backend
 	wg              sync.WaitGroup
 }
 
@@ -147,10 +163,19 @@ func (s *Server) Start() error {
 
 	// Create and start the macaroon service and let it create its default
 	// macaroon in case it doesn't exist yet.
+	rks, db, err := lndclient.NewBoltMacaroonStore(
+		s.cfg.BaseDir, lncfg.MacaroonDBName,
+		clientdb.DefaultPoolDBTimeout,
+	)
+	if err != nil {
+		return err
+	}
+	shutdownFuncs["macaroondb"] = db.Close
+
+	s.macaroonDB = db
 	s.macaroonService, err = lndclient.NewMacaroonService(
 		&lndclient.MacaroonServiceConfig{
-			DBPath:           s.cfg.BaseDir,
-			DBTimeout:        clientdb.DefaultPoolDBTimeout,
+			RootKeyStore:     rks,
 			MacaroonLocation: poolMacaroonLocation,
 			MacaroonPath:     s.cfg.MacaroonPath,
 			Checkers: []macaroons.Checker{
@@ -364,11 +389,19 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 	if withMacaroonService {
 		// Create and start the macaroon service and let it create its
 		// default macaroon in case it doesn't exist yet.
-		var err error
+		rks, db, err := lndclient.NewBoltMacaroonStore(
+			s.cfg.BaseDir, lncfg.MacaroonDBName,
+			clientdb.DefaultPoolDBTimeout,
+		)
+		if err != nil {
+			return err
+		}
+		shutdownFuncs["macaroondb"] = db.Close
+
+		s.macaroonDB = db
 		s.macaroonService, err = lndclient.NewMacaroonService(
 			&lndclient.MacaroonServiceConfig{
-				DBPath:           s.cfg.BaseDir,
-				DBTimeout:        clientdb.DefaultPoolDBTimeout,
+				RootKeyStore:     rks,
 				MacaroonLocation: poolMacaroonLocation,
 				MacaroonPath:     s.cfg.MacaroonPath,
 				Checkers: []macaroons.Checker{
@@ -648,6 +681,12 @@ func (s *Server) Stop() error {
 			log.Errorf("Error stopping macaroon service: %v", err)
 		}
 	}
+	if s.macaroonDB != nil {
+		if err := s.macaroonDB.Close(); err != nil {
+			log.Errorf("Error closing macaroon DB: %v", err)
+		}
+	}
+
 	s.lndServices.Close()
 	s.wg.Wait()
 
@@ -844,6 +883,9 @@ func (s *Server) determineBatchVersion() (order.BatchVersion, error) {
 	// We set the default value of the config flag to -1, so we can
 	// differentiate between no value set and the first version (0).
 	if configVersion >= 0 {
+		log.Infof("Using configured batch version %d for connecting "+
+			"to auctioneer", configVersion)
+
 		return order.BatchVersion(configVersion), nil
 	}
 
@@ -859,6 +901,8 @@ func (s *Server) determineBatchVersion() (order.BatchVersion, error) {
 		return 0, err
 	}
 
+	baseVersion := order.UpgradeAccountTaprootBatchVersion
+
 	// If the node supports ZeroConfChannels use that batch version.
 	_, zeroConfOpt := info.Features[uint32(lnwire.ZeroConfOptional)]
 	_, zeroConfReq := info.Features[uint32(lnwire.ZeroConfRequired)]
@@ -869,8 +913,22 @@ func (s *Server) determineBatchVersion() (order.BatchVersion, error) {
 	supportsSCIDAlias := SCIDAliasOpt || SCIDAliasReq
 
 	if supportsZeroConf && supportsSCIDAlias {
-		return order.ZeroConfChannelsBatchVersion, nil
+		baseVersion |= order.ZeroConfChannelsFlag
 	}
 
-	return order.UpgradeAccountTaprootBatchVersion, nil
+	// We can only use the new version of the MuSig2 protocol if we have a
+	// recent lnd version that added support for specifying the MuSig2
+	// version in the RPC.
+	currentLndVersion := s.lndServices.Version
+	verErr := lndclient.AssertVersionCompatible(
+		currentLndVersion, muSig2V100RC2Version,
+	)
+	if verErr == nil {
+		baseVersion |= order.UpgradeAccountTaprootV2Flag
+	}
+
+	log.Infof("Using batch version %d for connecting to auctioneer",
+		baseVersion)
+
+	return baseVersion, nil
 }

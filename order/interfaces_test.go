@@ -313,6 +313,9 @@ func TestOrderReservedValue(t *testing.T) {
 		t.Run(tc.name+"/version_1", func(t *testing.T) {
 			runTestCase(t, tc, account.VersionTaprootEnabled)
 		})
+		t.Run(tc.name+"/version_2", func(t *testing.T) {
+			runTestCase(t, tc, account.VersionMuSig2V100RC2)
+		})
 	}
 }
 

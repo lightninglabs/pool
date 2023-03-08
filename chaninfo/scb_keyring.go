@@ -5,7 +5,7 @@ import "github.com/lightningnetwork/lnd/keychain"
 // scbEncryptionKeyLocator is the key locator used to obtain the key with which
 // a channel backup is encrypted with.
 var scbEncryptionKeyLocator = keychain.KeyLocator{
-	Family: keychain.KeyFamilyStaticBackup,
+	Family: keychain.KeyFamilyBaseEncryption,
 	Index:  0,
 }
 

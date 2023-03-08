@@ -556,6 +556,10 @@ func TestNewAccountHappyFlow(t *testing.T) {
 			name:    "happy path version 1",
 			version: VersionTaprootEnabled,
 		},
+		{
+			name:    "happy path version 2",
+			version: VersionMuSig2V100RC2,
+		},
 	}
 
 	runSubTests(t, cases, func(t *testing.T, h *testHarness, tc *testCase) {
@@ -587,6 +591,10 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 		{
 			name:    "happy path version 1",
 			version: VersionTaprootEnabled,
+		},
+		{
+			name:    "happy path version 2",
+			version: VersionMuSig2V100RC2,
 		},
 	}
 
@@ -777,6 +785,15 @@ func TestAccountClose(t *testing.T) {
 			version: VersionTaprootEnabled,
 		},
 		{
+			name: "taproot v2 single wallet P2WKH output",
+			feeExpr: &OutputWithFee{
+				PkScript: nil,
+				FeeRate:  chainfee.FeePerKwFloor,
+			},
+			fee:     btcutil.Amount(100),
+			version: VersionMuSig2V100RC2,
+		},
+		{
 			name: "taproot single wallet P2TR output",
 			feeExpr: &OutputWithFee{
 				PkScript: p2tr,
@@ -784,6 +801,15 @@ func TestAccountClose(t *testing.T) {
 			},
 			fee:     btcutil.Amount(112),
 			version: VersionTaprootEnabled,
+		},
+		{
+			name: "taproot v2 single wallet P2TR output",
+			feeExpr: &OutputWithFee{
+				PkScript: p2tr,
+				FeeRate:  chainfee.FeePerKwFloor,
+			},
+			fee:     btcutil.Amount(112),
+			version: VersionMuSig2V100RC2,
 		},
 	}
 
@@ -870,6 +896,10 @@ func TestAccountExpiration(t *testing.T) {
 			name:    "happy path version 1",
 			version: VersionTaprootEnabled,
 		},
+		{
+			name:    "happy path version 2",
+			version: VersionMuSig2V100RC2,
+		},
 	}
 
 	runSubTests(t, cases, func(t *testing.T, h *testHarness, tc *testCase) {
@@ -899,9 +929,27 @@ func TestAccountSpendBatchNotFinalized(t *testing.T) {
 			newVersion: VersionTaprootEnabled,
 		},
 		{
-			name:       "happy path version upgrade during batch",
+			name: "happy path version upgrade to p2tr v1 " +
+				"during batch",
 			version:    VersionInitialNoVersion,
 			newVersion: VersionTaprootEnabled,
+		},
+		{
+			name: "happy path version upgrade to p2tr v2 " +
+				"during batch",
+			version:    VersionInitialNoVersion,
+			newVersion: VersionMuSig2V100RC2,
+		},
+		{
+			name: "happy path version upgrade from p2tr v1 to v2 " +
+				"during batch",
+			version:    VersionTaprootEnabled,
+			newVersion: VersionMuSig2V100RC2,
+		},
+		{
+			name:       "happy path version 2",
+			version:    VersionMuSig2V100RC2,
+			newVersion: VersionMuSig2V100RC2,
 		},
 	}
 
@@ -986,11 +1034,31 @@ func TestAccountWithdrawal(t *testing.T) {
 			fee:        219,
 		},
 		{
-			name: "happy path version upgrade during " +
-				"withdrawal",
+			name: "happy path version upgrade to p2tr v1 " +
+				"during batch",
 			version:    VersionInitialNoVersion,
 			newVersion: VersionTaprootEnabled,
 			fee:        260,
+		},
+		{
+			name: "happy path version upgrade to p2tr v2 " +
+				"during batch",
+			version:    VersionInitialNoVersion,
+			newVersion: VersionMuSig2V100RC2,
+			fee:        260,
+		},
+		{
+			name: "happy path version upgrade from p2tr v1 to v2 " +
+				"during batch",
+			version:    VersionTaprootEnabled,
+			newVersion: VersionMuSig2V100RC2,
+			fee:        219,
+		},
+		{
+			name:       "happy path version 2",
+			version:    VersionMuSig2V100RC2,
+			newVersion: VersionMuSig2V100RC2,
+			fee:        219,
 		},
 	}
 
@@ -1075,17 +1143,13 @@ func TestAccountDeposit(t *testing.T) {
 	const feeRate = chainfee.FeePerKwFloor
 	const accountInputFees = 110
 	const accountInputFeesTaproot = 68
+	const depositAndOutputFees = 236
 
 	cases := []*testCase{
 		{
 			name:               "happy path version 0",
 			fundedOutputAmount: depositAmount + accountInputFees,
-
-			// We'll use the lowest fee rate possible, which should
-			// yield a transaction fee of 346 satoshis when taking
-			// into account the additional inputs needed to satisfy
-			// the deposit.
-			fundingTxFee: accountInputFees + 236,
+			fundingTxFee:       accountInputFees + depositAndOutputFees,
 			utxo: &lnwallet.Utxo{
 				AddressType: lnwallet.WitnessPubKey,
 				Value:       utxoAmount,
@@ -1100,7 +1164,8 @@ func TestAccountDeposit(t *testing.T) {
 
 			// We'll use a fee that is lower than the lowest fee
 			// we can get with the lowest rate possible (which would
-			// be 346 satoshis), so we should get an error.
+			// be accountInputFees + depositAndOutputFees satoshis),
+			// so we should get an error.
 			fundingTxFee: accountInputFees + 10,
 			utxo: &lnwallet.Utxo{
 				AddressType: lnwallet.WitnessPubKey,
@@ -1116,12 +1181,8 @@ func TestAccountDeposit(t *testing.T) {
 			name: "happy path version 1",
 			fundedOutputAmount: depositAmount +
 				accountInputFeesTaproot,
-
-			// We'll use the lowest fee rate possible, which should
-			// yield a transaction fee of 304 satoshis when taking
-			// into account the additional inputs needed to satisfy
-			// the deposit.
-			fundingTxFee: accountInputFeesTaproot + 236,
+			fundingTxFee: accountInputFeesTaproot +
+				depositAndOutputFees,
 			utxo: &lnwallet.Utxo{
 				AddressType: lnwallet.WitnessPubKey,
 				Value:       utxoAmount,
@@ -1132,15 +1193,10 @@ func TestAccountDeposit(t *testing.T) {
 			newVersion: VersionTaprootEnabled,
 		},
 		{
-			name: "happy path version upgrade during deposit",
-			fundedOutputAmount: depositAmount +
-				accountInputFees,
-
-			// We'll use the lowest fee rate possible, which should
-			// yield a transaction fee of 346 satoshis when taking
-			// into account the additional inputs needed to satisfy
-			// the deposit.
-			fundingTxFee: accountInputFees + 236,
+			name: "happy path version upgrade to p2tr during " +
+				"deposit",
+			fundedOutputAmount: depositAmount + accountInputFees,
+			fundingTxFee:       accountInputFees + depositAndOutputFees,
 			utxo: &lnwallet.Utxo{
 				AddressType: lnwallet.WitnessPubKey,
 				Value:       utxoAmount,
@@ -1149,6 +1205,50 @@ func TestAccountDeposit(t *testing.T) {
 			},
 			version:    VersionInitialNoVersion,
 			newVersion: VersionTaprootEnabled,
+		},
+		{
+			name: "happy path version 2",
+			fundedOutputAmount: depositAmount +
+				accountInputFeesTaproot,
+			fundingTxFee: accountInputFeesTaproot +
+				depositAndOutputFees,
+			utxo: &lnwallet.Utxo{
+				AddressType: lnwallet.WitnessPubKey,
+				Value:       utxoAmount,
+				PkScript:    p2wpkh,
+				OutPoint:    wire.OutPoint{Index: 1},
+			},
+			version:    VersionMuSig2V100RC2,
+			newVersion: VersionMuSig2V100RC2,
+		},
+		{
+			name: "happy path version upgrade to p2tr v2 during " +
+				"deposit",
+			fundedOutputAmount: depositAmount + accountInputFees,
+			fundingTxFee:       accountInputFees + depositAndOutputFees,
+			utxo: &lnwallet.Utxo{
+				AddressType: lnwallet.WitnessPubKey,
+				Value:       utxoAmount,
+				PkScript:    p2wpkh,
+				OutPoint:    wire.OutPoint{Index: 1},
+			},
+			version:    VersionInitialNoVersion,
+			newVersion: VersionMuSig2V100RC2,
+		},
+		{
+			name: "happy path version upgrade from p2tr v1 to v2 " +
+				"during deposit",
+			fundedOutputAmount: depositAmount +
+				accountInputFeesTaproot,
+			fundingTxFee: accountInputFees + depositAndOutputFees,
+			utxo: &lnwallet.Utxo{
+				AddressType: lnwallet.WitnessPubKey,
+				Value:       utxoAmount,
+				PkScript:    p2wpkh,
+				OutPoint:    wire.OutPoint{Index: 1},
+			},
+			version:    VersionTaprootEnabled,
+			newVersion: VersionMuSig2V100RC2,
 		},
 	}
 
@@ -1251,6 +1351,29 @@ func TestAccountConsecutiveBatches(t *testing.T) {
 			version:    VersionTaprootEnabled,
 			newVersion: VersionTaprootEnabled,
 		},
+		{
+			name: "happy path version upgrade to p2tr v1 " +
+				"during batch",
+			version:    VersionInitialNoVersion,
+			newVersion: VersionTaprootEnabled,
+		},
+		{
+			name: "happy path version upgrade to p2tr v2 " +
+				"during batch",
+			version:    VersionInitialNoVersion,
+			newVersion: VersionMuSig2V100RC2,
+		},
+		{
+			name: "happy path version upgrade from p2tr v1 to v2 " +
+				"during batch",
+			version:    VersionTaprootEnabled,
+			newVersion: VersionMuSig2V100RC2,
+		},
+		{
+			name:       "happy path version 2",
+			version:    VersionMuSig2V100RC2,
+			newVersion: VersionMuSig2V100RC2,
+		},
 	}
 
 	runSubTests(t, cases, func(t *testing.T, h *testHarness, tc *testCase) {
@@ -1336,6 +1459,28 @@ func TestAccountUpdateSubscriptionOnRestart(t *testing.T) {
 		{
 			name:    "happy path version 1",
 			version: VersionTaprootEnabled,
+		},
+		{
+			name: "happy path version upgrade to p2tr v1 " +
+				"during batch",
+			version:    VersionInitialNoVersion,
+			newVersion: VersionTaprootEnabled,
+		},
+		{
+			name: "happy path version upgrade to p2tr v2 " +
+				"during batch",
+			version:    VersionInitialNoVersion,
+			newVersion: VersionMuSig2V100RC2,
+		},
+		{
+			name: "happy path version upgrade from p2tr v1 to v2 " +
+				"during batch",
+			version:    VersionTaprootEnabled,
+			newVersion: VersionMuSig2V100RC2,
+		},
+		{
+			name:    "happy path version 2",
+			version: VersionMuSig2V100RC2,
 		},
 	}
 

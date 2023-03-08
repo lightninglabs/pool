@@ -680,6 +680,9 @@ func MarshallAccount(a *account.Account) (*poolrpc.Account, error) {
 	case account.VersionTaprootEnabled:
 		rpcVersion = poolrpc.AccountVersion_ACCOUNT_VERSION_TAPROOT
 
+	case account.VersionMuSig2V100RC2:
+		rpcVersion = poolrpc.AccountVersion_ACCOUNT_VERSION_TAPROOT_V2
+
 	default:
 		return nil, fmt.Errorf("unknown version <%d>", a.Version)
 	}
@@ -3026,9 +3029,27 @@ func (s *rpcServer) setTicketStateForOrder(newState sidecar.State,
 func (s *rpcServer) determineAccountVersion(
 	newVersion poolrpc.AccountVersion) (account.Version, error) { //nolint
 
+	// We can only use the new version of the MuSig2 protocol if we have a
+	// recent lnd version that added support for specifying the MuSig2
+	// version in the RPC.
+	var (
+		isMuSig2V100RC2Compatible = false
+		currentVersion            = s.server.lndServices.Version
+	)
+	verErr := lndclient.AssertVersionCompatible(
+		currentVersion, muSig2V100RC2Version,
+	)
+	if verErr == nil {
+		isMuSig2V100RC2Compatible = true
+	}
+
 	// Now we can do the account version validation.
 	switch newVersion {
 	case poolrpc.AccountVersion_ACCOUNT_VERSION_LND_DEPENDENT:
+		if isMuSig2V100RC2Compatible {
+			return account.VersionMuSig2V100RC2, nil
+		}
+
 		return account.VersionTaprootEnabled, nil
 
 	case poolrpc.AccountVersion_ACCOUNT_VERSION_LEGACY:
@@ -3036,9 +3057,21 @@ func (s *rpcServer) determineAccountVersion(
 
 	case poolrpc.AccountVersion_ACCOUNT_VERSION_TAPROOT:
 		return account.VersionTaprootEnabled, nil
-	}
 
-	return account.VersionTaprootEnabled, nil
+	case poolrpc.AccountVersion_ACCOUNT_VERSION_TAPROOT_V2:
+		if !isMuSig2V100RC2Compatible {
+			return 0, fmt.Errorf("cannot use Taproot v2 enabled "+
+				"account version, Pool is connected to lnd "+
+				"node version %v but requires at least %v",
+				currentVersion.AppMinor,
+				muSig2V100RC2Version.AppMinor)
+		}
+
+		return account.VersionMuSig2V100RC2, nil
+
+	default:
+		return 0, fmt.Errorf("unknown account version %v", newVersion)
+	}
 }
 
 // AccountModificationFees returns a map from account key to an ordered list of

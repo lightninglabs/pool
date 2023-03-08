@@ -67,14 +67,15 @@ func (s *MockSigner) ComputeInputScript(context.Context, *wire.MsgTx,
 	return nil, fmt.Errorf("unimplemented")
 }
 
-func (s *MockSigner) SignMessage(context.Context, []byte,
-	keychain.KeyLocator) ([]byte, error) {
+func (s *MockSigner) SignMessage(_ context.Context, _ []byte,
+	_ keychain.KeyLocator, _ ...lndclient.SignMessageOption) ([]byte,
+	error) {
 
 	return s.Signature, nil
 }
 
 func (s *MockSigner) VerifyMessage(_ context.Context, msg, sig []byte,
-	_ [33]byte) (bool, error) {
+	_ [33]byte, opts ...lndclient.VerifyMessageOption) (bool, error) {
 
 	// Make the mock somewhat functional by asserting that the message and
 	// signature is what we expect from the mock parameters.
@@ -95,9 +96,9 @@ func (s *MockSigner) DeriveSharedKey(context.Context, *btcec.PublicKey,
 // all signing parties must be provided, including the public key of the local
 // signing key. If nonces of other parties are already known, they can be
 // submitted as well to reduce the number of method calls necessary later on.
-func (s *MockSigner) MuSig2CreateSession(context.Context, *keychain.KeyLocator,
-	[][32]byte, ...lndclient.MuSig2SessionOpts) (*input.MuSig2SessionInfo,
-	error) {
+func (s *MockSigner) MuSig2CreateSession(context.Context, input.MuSig2Version,
+	*keychain.KeyLocator, [][]byte, ...lndclient.MuSig2SessionOpts) (
+	*input.MuSig2SessionInfo, error) {
 
 	return nil, nil
 }

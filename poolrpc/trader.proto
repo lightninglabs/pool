@@ -218,7 +218,8 @@ enum AccountVersion {
     /*
     Let the version of lnd decide. If a version of lnd >= 0.15.0-beta is
     detected then a Taproot account is created. For earlier versions a legacy
-    account is created.
+    account is created. If a version of lnd >= 0.16.0-beta is detected, then a
+    Taproot v2 account is created.
     */
     ACCOUNT_VERSION_LND_DEPENDENT = 0;
 
@@ -232,6 +233,14 @@ enum AccountVersion {
     script as a single tap script leaf.
     */
     ACCOUNT_VERSION_TAPROOT = 2;
+
+    /*
+    A Taproot enabled account with MuSig2 combined internal key and the expiry
+    script as a single tap script leaf. This version uses the MuSig2 v1.0.0-rc2
+    protocol for creating the combined internal key. This can only be selected
+    when the connected lnd version is >= 0.16.0-beta.
+    */
+    ACCOUNT_VERSION_TAPROOT_V2 = 3;
 }
 
 message InitAccountRequest {

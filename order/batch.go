@@ -56,7 +56,7 @@ const (
 	//
 	// NOTE: This feature requires the runtime support:
 	// - The asker needs to open the channel with the right `private` value
-	// - The bidder needs to be able set the channel acceptor for the
+	// - The bidder needs to be able to set the channel acceptor for the
 	//   channel with the right `private` value.
 	// For that reason this needs to be a batch version and not only an
 	// order one.
@@ -65,7 +65,9 @@ const (
 	// UpgradeAccountTaprootBatchVersion is the batch version where accounts
 	// are automatically upgraded to Taproot accounts. We leave a gap up to
 	// 10 on purpose to allow for in-between versions (that aren't dependent
-	// on a lnd version) to be added.
+	// on a lnd version) to be added. This version is used as the base
+	// version when using a flag based versioning scheme, as this is now the
+	// feature set that every lnd node supports.
 	UpgradeAccountTaprootBatchVersion BatchVersion = 10
 
 	// ZeroConfChannelsBatchVersion is the first version where orders can
@@ -76,37 +78,68 @@ const (
 	// - The bidder needs to be able to set the channel acceptor for the
 	//   channel with the right  `Zeroconf` bool value && `MinDepth=0`.
 	// The LND node should be running version v0.15.1-beta or newer.
+	// Because this version already existed (in a deployed state) as a
+	// config dependent version before we switched to a flag based version
+	// scheme, this still has a linear version number. But the features
+	// expressed by this version can also be expressed as
+	// 	UpgradeAccountTaprootBatchVersion | ZeroConfChannelsFlag
 	ZeroConfChannelsBatchVersion BatchVersion = 11
+)
+
+const (
+	// LinearVersionEnd is the end of the linear version space. This is used
+	// to determine whether a version is one of the old, linear ones or one
+	// of the new, flag based ones.
+	LinearVersionEnd BatchVersion = 0x0000_000F
+
+	// ZeroConfChannelsFlag is the flag in the batch version that indicates
+	// that orders can set the flags to only match with confirmed/zeroconf
+	// channels.
+	ZeroConfChannelsFlag BatchVersion = 0x0000_0010
+
+	// UpgradeAccountTaprootV2Flag is the flag in the batch version that
+	// indicates accounts can automatically be upgraded to Taproot v2 (using
+	// the MuSig2 v1.0.0-rc2 spec).
+	UpgradeAccountTaprootV2Flag BatchVersion = 0x0000_0020
 )
 
 // SupportsAccountExtension is a helper function to easily check if a version
 // supports account extension after participating in a batch or not.
 func (bv BatchVersion) SupportsAccountExtension() bool {
-	return bv >= ExtendAccountBatchVersion
+	return (bv & LinearVersionEnd) >= ExtendAccountBatchVersion
 }
 
 // SupportsUnannouncedChannels is a helper function to easily check if a version
 // supports orders with unannounced channels or not.
 func (bv BatchVersion) SupportsUnannouncedChannels() bool {
-	return bv >= UnannouncedChannelsBatchVersion
+	return (bv & LinearVersionEnd) >= UnannouncedChannelsBatchVersion
 }
 
 // SupportsAccountTaprootUpgrade is a helper function to easily check if a
 // version supports upgrading SegWit v0 (p2wsh) accounts to Taproot (p2tr) or
 // not.
 func (bv BatchVersion) SupportsAccountTaprootUpgrade() bool {
-	return bv >= UpgradeAccountTaprootBatchVersion
+	return (bv & LinearVersionEnd) >= UpgradeAccountTaprootBatchVersion
+}
+
+// SupportsAccountTaprootV2Upgrade is a helper function to easily check if a
+// version supports upgrading SegWit v0 (p2wsh) or Taproot v2 (p2tr) to
+// Taproot v2 (p2tr) or not.
+func (bv BatchVersion) SupportsAccountTaprootV2Upgrade() bool {
+	return (bv & UpgradeAccountTaprootV2Flag) == UpgradeAccountTaprootV2Flag
 }
 
 // SupportsZeroConfChannels is the helper function to easily check if a version
 // supports orders with zeroconf channels or not.
 func (bv BatchVersion) SupportsZeroConfChannels() bool {
-	return bv >= ZeroConfChannelsBatchVersion
+	return (bv&LinearVersionEnd) >= ZeroConfChannelsBatchVersion ||
+		bv&ZeroConfChannelsFlag == ZeroConfChannelsFlag
 }
 
 const (
 	// LatestBatchVersion points to the most recent batch version.
-	LatestBatchVersion = ZeroConfChannelsBatchVersion
+	LatestBatchVersion = UpgradeAccountTaprootBatchVersion |
+		ZeroConfChannelsFlag | UpgradeAccountTaprootV2Flag
 
 	// LegacyLeaseDurationBucket is the single static duration bucket that
 	// was used for orders before dynamic duration buckets were added.
