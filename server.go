@@ -60,11 +60,10 @@ var (
 	// muSig2V100RC2Version is the version of lnd that enabled the MuSig2
 	// v1.0.0-rc2 protocol in its MuSig2 RPC. We'll use this to decide what
 	// account version to default to.
-	// TODO(guggero): Update this to 0.16.0 when it's released.
 	muSig2V100RC2Version = &verrpc.Version{
 		AppMajor: 0,
-		AppMinor: 15,
-		AppPatch: 99,
+		AppMinor: 16,
+		AppPatch: 0,
 		BuildTags: []string{
 			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
 		},
