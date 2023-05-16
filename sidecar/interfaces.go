@@ -9,7 +9,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/lightningnetwork/lnd/lnwire"
+	"github.com/lightninglabs/pool/codec"
 )
 
 // Version is the version of the sidecar ticket format.
@@ -266,7 +266,7 @@ func (t *Ticket) OfferDigest() ([32]byte, error) {
 	)
 	switch t.Version {
 	case VersionDefault:
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, t.ID[:], uint8(t.Version), t.Offer.Capacity,
 			t.Offer.PushAmt, t.Offer.Auto,
 		)
@@ -275,7 +275,7 @@ func (t *Ticket) OfferDigest() ([32]byte, error) {
 		}
 
 	case VersionUnannouncedZeroConf:
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, t.ID[:], uint8(t.Version), t.Offer.Capacity,
 			t.Offer.PushAmt, t.Offer.Auto,
 			t.Offer.UnannouncedChannel, t.Offer.ZeroConfChannel,
@@ -303,7 +303,7 @@ func (t *Ticket) OrderDigest() ([32]byte, error) {
 
 	switch t.Version {
 	case VersionDefault:
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, t.ID[:], uint8(t.Version), t.Offer.Capacity,
 			t.Offer.PushAmt, t.Order.BidNonce[:],
 		)
@@ -312,7 +312,7 @@ func (t *Ticket) OrderDigest() ([32]byte, error) {
 		}
 
 	case VersionUnannouncedZeroConf:
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, t.ID[:], uint8(t.Version), t.Offer.Capacity,
 			t.Offer.PushAmt, t.Offer.Auto,
 			t.Offer.UnannouncedChannel, t.Offer.ZeroConfChannel,
