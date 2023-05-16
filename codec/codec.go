@@ -55,17 +55,13 @@ func WriteElement(w *bytes.Buffer, element interface{}) error {
 		return lnwire.WriteUint64(w, uint64(e))
 
 	case *keychain.KeyDescriptor:
-		if err := WriteElements(w, e.KeyLocator, e.PubKey); err != nil {
-			return err
-		}
+		return WriteElements(w, e.KeyLocator, e.PubKey)
 
 	case keychain.KeyLocator:
 		if err := binary.Write(w, byteOrder, e.Family); err != nil {
 			return err
 		}
-		if err := binary.Write(w, byteOrder, e.Index); err != nil {
-			return err
-		}
+		return binary.Write(w, byteOrder, e.Index)
 
 	case *btcec.PublicKey:
 		return lnwire.WritePublicKey(w, e)
@@ -86,9 +82,7 @@ func WriteElement(w *bytes.Buffer, element interface{}) error {
 		return lnwire.WriteUint64(w, uint64(e.UnixNano()))
 
 	case *wire.MsgTx:
-		if err := e.Serialize(w); err != nil {
-			return err
-		}
+		return e.Serialize(w)
 
 	case wire.OutPoint:
 		return lnwire.WriteOutPoint(w, e)
@@ -99,6 +93,4 @@ func WriteElement(w *bytes.Buffer, element interface{}) error {
 	default:
 		return fmt.Errorf("unhandled element type: %T", element)
 	}
-
-	return nil
 }
