@@ -7,6 +7,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/codec"
 	"github.com/lightningnetwork/lnd/tlv"
 	"go.etcd.io/bbolt"
 )
@@ -192,9 +193,9 @@ func serializeAccount(w *bytes.Buffer, a *account.Account) error {
 		rawState = setVersionBit(rawState)
 	}
 
-	err := WriteElements(
+	err := codec.WriteElements(
 		w, a.Value, a.Expiry, a.TraderKey, a.AuctioneerKey, a.BatchKey,
-		a.Secret, rawState, a.HeightHint, a.OutPoint,
+		a.Secret, uint8(rawState), a.HeightHint, a.OutPoint,
 	)
 	if err != nil {
 		return err
@@ -206,7 +207,7 @@ func serializeAccount(w *bytes.Buffer, a *account.Account) error {
 	case account.StateInitiated, account.StateCanceledAfterRecovery:
 
 	default:
-		if err := WriteElement(w, a.LatestTx); err != nil {
+		if err := codec.WriteElement(w, a.LatestTx); err != nil {
 			return err
 		}
 	}
@@ -249,7 +250,7 @@ func serializeAccountTlvData(w *bytes.Buffer, a *account.Account) error {
 		return err
 	}
 
-	return WriteElements(w, uint32(buf.Len()), buf.Bytes())
+	return codec.WriteElements(w, uint32(buf.Len()), buf.Bytes())
 }
 
 // deserializeAccountTlvData reads all additional TLV fields of an account from

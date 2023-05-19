@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lightninglabs/pool/auctioneerrpc"
+	"github.com/lightninglabs/pool/codec"
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/poolrpc"
@@ -79,7 +80,7 @@ func (e *CreatedEvent) String() string {
 //
 // NOTE: This is part of the event.Event interface.
 func (e *CreatedEvent) Serialize(w *bytes.Buffer) error {
-	return WriteElements(w, e.nonce)
+	return codec.WriteElements(w, e.nonce[:])
 }
 
 // Deserialize reads the event data from a binary storage format. This does not
@@ -177,7 +178,10 @@ func (e *UpdatedEvent) String() string {
 //
 // NOTE: This is part of the event.Event interface.
 func (e *UpdatedEvent) Serialize(w *bytes.Buffer) error {
-	return WriteElements(w, e.nonce, e.PrevState, e.NewState, e.UnitsFilled)
+	return codec.WriteElements(
+		w, e.nonce[:], uint8(e.PrevState), uint8(e.NewState),
+		uint64(e.UnitsFilled),
+	)
 }
 
 // Deserialize reads the event data from a binary storage format. This does not
@@ -284,9 +288,9 @@ func (e *MatchEvent) String() string {
 //
 // NOTE: This is part of the event.Event interface.
 func (e *MatchEvent) Serialize(w *bytes.Buffer) error {
-	return WriteElements(
-		w, e.nonce, e.MatchState, e.UnitsFilled, e.MatchedOrder,
-		e.RejectReason,
+	return codec.WriteElements(
+		w, e.nonce[:], uint8(e.MatchState), uint64(e.UnitsFilled),
+		e.MatchedOrder[:], e.RejectReason,
 	)
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/codec"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -31,99 +32,6 @@ var (
 	//     - funding-conf-target:          <binary serialized value>
 	additionalDataSuffix = []byte("-additional-data")
 )
-
-// WriteElements is writes each element in the elements slice to the passed
-// io.Writer using WriteElement.
-func WriteElements(w *bytes.Buffer, elements ...interface{}) error {
-	for _, element := range elements {
-		err := WriteElement(w, element)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// WriteElement is a one-stop shop to write the big endian representation of
-// any element which is to be serialized. The passed io.Writer should be backed
-// by an appropriately sized byte slice, or be able to dynamically expand to
-// accommodate additional data.
-func WriteElement(w *bytes.Buffer, element interface{}) error {
-	switch e := element.(type) {
-	case order.NodeTier:
-		return lnwire.WriteElement(w, uint32(e))
-
-	case account.State:
-		return lnwire.WriteElement(w, uint8(e))
-
-	case account.Version:
-		return lnwire.WriteElement(w, uint8(e))
-
-	case order.Version:
-		return lnwire.WriteElement(w, uint32(e))
-
-	case order.BatchVersion:
-		return lnwire.WriteElement(w, uint32(e))
-
-	case order.Type:
-		return lnwire.WriteElement(w, uint8(e))
-
-	case order.State:
-		return lnwire.WriteElement(w, uint8(e))
-
-	case order.MatchState:
-		return lnwire.WriteElement(w, uint8(e))
-
-	case order.SupplyUnit:
-		return lnwire.WriteElement(w, uint64(e))
-
-	case order.FixedRatePremium:
-		return lnwire.WriteElement(w, uint32(e))
-
-	case order.Nonce:
-		return lnwire.WriteElement(w, e[:])
-
-	case terms.LinearFeeSchedule:
-		return lnwire.WriteElements(
-			w, uint64(e.BaseFee()), uint64(e.FeeRate()),
-		)
-
-	case chainfee.SatPerKWeight:
-		return lnwire.WriteElement(w, uint64(e))
-
-	case *keychain.KeyDescriptor:
-		if err := WriteElements(w, e.KeyLocator, e.PubKey); err != nil {
-			return err
-		}
-
-	case keychain.KeyLocator:
-		if err := binary.Write(w, byteOrder, e.Family); err != nil {
-			return err
-		}
-		if err := binary.Write(w, byteOrder, e.Index); err != nil {
-			return err
-		}
-
-	case lntypes.Preimage:
-		return lnwire.WriteElement(w, e[:])
-
-	case [32]byte:
-		return lnwire.WriteElement(w, e[:])
-
-	case time.Time:
-		return lnwire.WriteElement(w, uint64(e.UnixNano()))
-
-	case *wire.MsgTx:
-		if err := e.Serialize(w); err != nil {
-			return err
-		}
-
-	default:
-		return lnwire.WriteElement(w, element)
-	}
-
-	return nil
-}
 
 // ReadElements deserializes a variable number of elements into the passed
 // io.Reader, with each element being deserialized according to the ReadElement
@@ -303,7 +211,7 @@ func writeAdditionalValue(targetBucket *bbolt.Bucket, valueKey []byte,
 	value interface{}) error {
 
 	var valueBuf bytes.Buffer
-	if err := WriteElement(&valueBuf, value); err != nil {
+	if err := codec.WriteElement(&valueBuf, value); err != nil {
 		return err
 	}
 
@@ -341,7 +249,7 @@ func readAdditionalValue(sourceBucket *bbolt.Bucket, valueKey []byte,
 		// with our generic write function, then pass that raw value to
 		// the generic read function.
 		var buf bytes.Buffer
-		if err := WriteElement(&buf, defaultValue); err != nil {
+		if err := codec.WriteElement(&buf, defaultValue); err != nil {
 			return err
 		}
 		rawValue = buf.Bytes()

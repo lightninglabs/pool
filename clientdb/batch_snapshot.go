@@ -8,6 +8,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/pool/account"
+	"github.com/lightninglabs/pool/codec"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -412,9 +413,11 @@ func serializeLocalBatchSnapshot(w *bytes.Buffer, b *LocalBatchSnapshot) error {
 	// we now always store the price map afterwards, we signal a new batch
 	// by storing an explicit zero price.
 	var zeroPrice order.FixedRatePremium
-	err := WriteElements(
-		w, b.Version, b.BatchID[:], zeroPrice,
-		b.ExecutionFee, b.BatchTX, b.BatchTxFeeRate,
+	err := codec.WriteElements(
+		w, uint32(b.Version), b.BatchID[:], uint32(zeroPrice),
+		uint64(b.ExecutionFee.BaseFee()),
+		uint64(b.ExecutionFee.FeeRate()),
+		b.BatchTX, b.BatchTxFeeRate,
 	)
 	if err != nil {
 		return err
@@ -444,7 +447,7 @@ func serializeLocalBatchSnapshot(w *bytes.Buffer, b *LocalBatchSnapshot) error {
 	}
 
 	numMatches := uint32(len(matchedOrders))
-	err = WriteElements(w, numMatches)
+	err = codec.WriteElements(w, numMatches)
 	if err != nil {
 		return err
 	}
@@ -460,12 +463,12 @@ func serializeLocalBatchSnapshot(w *bytes.Buffer, b *LocalBatchSnapshot) error {
 	// need to serialize. Since both values are uint32 this is pretty
 	// straightforward.
 	numPrices := uint32(len(b.ClearingPrices))
-	err = WriteElements(w, numPrices)
+	err = codec.WriteElements(w, numPrices)
 	if err != nil {
 		return err
 	}
 	for duration, price := range b.ClearingPrices {
-		err = WriteElements(w, duration, price)
+		err = codec.WriteElements(w, duration, uint32(price))
 		if err != nil {
 			return err
 		}
@@ -547,14 +550,14 @@ func deserializeLocalBatchSnapshot(r io.Reader) (*LocalBatchSnapshot, error) {
 func serializeAccounts(w *bytes.Buffer,
 	accounts map[[33]byte]*account.Account) error {
 
-	err := WriteElements(w, uint32(len(accounts)))
+	err := codec.WriteElements(w, uint32(len(accounts)))
 	if err != nil {
 		return err
 	}
 
 	for key, a := range accounts {
 		// Write key, then account.
-		err := WriteElements(w, key)
+		err := codec.WriteElements(w, key)
 		if err != nil {
 			return err
 		}
@@ -595,13 +598,13 @@ func deserializeAccounts(r io.Reader) (map[[33]byte]*account.Account, error) {
 }
 
 func serializeOrders(w *bytes.Buffer, orders map[order.Nonce]order.Order) error {
-	err := WriteElements(w, uint32(len(orders)))
+	err := codec.WriteElements(w, uint32(len(orders)))
 	if err != nil {
 		return err
 	}
 
 	for nonce, o := range orders {
-		err := WriteElements(w, nonce)
+		err := codec.WriteElements(w, nonce[:])
 		if err != nil {
 			return err
 		}
@@ -644,7 +647,8 @@ func deserializeOrders(r io.Reader) (map[order.Nonce]order.Order, error) {
 func serializeMatchedOrder(w *bytes.Buffer, ourNonce order.Nonce,
 	m *order.MatchedOrder) error {
 
-	err := WriteElements(w, ourNonce, m.Order.Nonce())
+	orderNonce := m.Order.Nonce()
+	err := codec.WriteElements(w, ourNonce[:], orderNonce[:])
 	if err != nil {
 		return err
 	}
@@ -654,9 +658,9 @@ func serializeMatchedOrder(w *bytes.Buffer, ourNonce order.Nonce,
 		return err
 	}
 
-	err = WriteElements(
+	err = codec.WriteElements(
 		w, m.MultiSigKey, m.NodeKey, m.NodeAddrs,
-		m.UnitsFilled,
+		uint64(m.UnitsFilled),
 	)
 	if err != nil {
 		return err

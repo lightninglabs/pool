@@ -12,12 +12,12 @@ import (
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneerrpc"
+	"github.com/lightninglabs/pool/codec"
 	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
-	"github.com/lightningnetwork/lnd/lnwire"
 )
 
 // Nonce is a 32 byte pseudo randomly generated unique order ID.
@@ -533,7 +533,7 @@ func (a *Ask) Digest() ([hashSize]byte, error) {
 	)
 	switch a.Kit.Version {
 	case VersionDefault:
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
 			a.Amt, a.LeaseDuration, uint64(a.MaxBatchFeeRate),
 		)
@@ -544,7 +544,7 @@ func (a *Ask) Digest() ([hashSize]byte, error) {
 	case VersionNodeTierMinMatch, VersionLeaseDurationBuckets,
 		VersionSelfChanBalance, VersionSidecarChannel:
 
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
 			a.Amt, a.LeaseDuration, uint64(a.MaxBatchFeeRate),
 			uint32(a.MinUnitsMatch),
@@ -554,7 +554,7 @@ func (a *Ask) Digest() ([hashSize]byte, error) {
 		}
 
 	case VersionChannelType:
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, a.nonce[:], uint32(a.Version), a.FixedRate,
 			a.Amt, a.LeaseDuration, uint64(a.MaxBatchFeeRate),
 			uint32(a.MinUnitsMatch), uint8(a.ChannelType),
@@ -744,7 +744,7 @@ func (b *Bid) Digest() ([hashSize]byte, error) {
 	)
 	switch b.Kit.Version {
 	case VersionDefault:
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
 			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
 		)
@@ -753,7 +753,7 @@ func (b *Bid) Digest() ([hashSize]byte, error) {
 		}
 
 	case VersionNodeTierMinMatch, VersionLeaseDurationBuckets:
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
 			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
 			uint32(b.MinNodeTier), uint32(b.MinUnitsMatch),
@@ -763,7 +763,7 @@ func (b *Bid) Digest() ([hashSize]byte, error) {
 		}
 
 	case VersionSelfChanBalance:
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
 			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
 			uint32(b.MinNodeTier), uint32(b.MinUnitsMatch),
@@ -779,7 +779,7 @@ func (b *Bid) Digest() ([hashSize]byte, error) {
 			isSidecar = 1
 		}
 
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
 			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
 			uint32(b.MinNodeTier), uint32(b.MinUnitsMatch),
@@ -795,7 +795,7 @@ func (b *Bid) Digest() ([hashSize]byte, error) {
 			isSidecar = 1
 		}
 
-		err := lnwire.WriteElements(
+		err := codec.WriteElements(
 			&msg, b.nonce[:], uint32(b.Version), b.FixedRate,
 			b.Amt, b.LeaseDuration, uint64(b.MaxBatchFeeRate),
 			uint32(b.MinNodeTier), uint32(b.MinUnitsMatch),

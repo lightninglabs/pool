@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/lightninglabs/pool/codec"
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
 	"github.com/lightninglabs/pool/sidecar"
@@ -384,7 +385,7 @@ func storeOrderMinNoderTierTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 	}
 
 	var b bytes.Buffer
-	if err := WriteElements(&b, minNodeTier); err != nil {
+	if err := codec.WriteElements(&b, uint32(minNodeTier)); err != nil {
 		return err
 	}
 
@@ -406,7 +407,8 @@ func storeOrderMinUnitsMatchTX(rootBucket *bbolt.Bucket, nonce order.Nonce,
 	// With the order bucket created, we'll store the order's min units
 	// match.
 	var buf bytes.Buffer
-	if err := WriteElement(&buf, minUnitsMatch); err != nil {
+	err = codec.WriteElement(&buf, uint64(minUnitsMatch))
+	if err != nil {
 		return err
 	}
 	return orderBucket.Put(orderMinUnitsMatchKey, buf.Bytes())
@@ -644,11 +646,11 @@ func SerializeOrder(o order.Order, w *bytes.Buffer) error {
 	kit := o.Details()
 
 	// We don't have to deserialize the nonce as it's the sub bucket name.
-	return WriteElements(
-		w, kit.Preimage, kit.Version, o.Type(), kit.State,
-		kit.FixedRate, kit.Amt, kit.Units, kit.MultiSigKeyLocator,
-		kit.MaxBatchFeeRate, kit.AcctKey, kit.UnitsUnfulfilled,
-		kit.LeaseDuration,
+	return codec.WriteElements(
+		w, kit.Preimage, uint32(kit.Version), uint8(o.Type()),
+		uint8(kit.State), kit.FixedRate, kit.Amt, uint64(kit.Units),
+		kit.MultiSigKeyLocator, kit.MaxBatchFeeRate, kit.AcctKey,
+		uint64(kit.UnitsUnfulfilled), kit.LeaseDuration,
 	)
 }
 
