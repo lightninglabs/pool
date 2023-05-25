@@ -172,4 +172,9 @@ require (
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
+// We need to use grpc v1.39.0 because of a change in how HTTP errors are
+// formatted and sent to the client. This change was introduced in grpc v1.40.0
+// with https://github.com/grpc/grpc-go/pull/4474.
+replace google.golang.org/grpc => google.golang.org/grpc v1.39.0
+
 replace github.com/lightninglabs/pool/auctioneerrpc => ./auctioneerrpc
