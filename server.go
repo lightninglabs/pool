@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	proxy "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -34,6 +35,7 @@ import (
 	"github.com/lightningnetwork/lnd/macaroons"
 	"github.com/lightningnetwork/lnd/signal"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/macaroon-bakery.v2/bakery"
@@ -68,6 +70,12 @@ var (
 			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
 		},
 	}
+
+	// defaultClientPingTime is the default time we'll use for the client
+	// keepalive ping time. This means the client will ping the server every
+	// 10 seconds (if there is no other activity) to make sure the TCP
+	// connection is still alive.
+	defaultClientPingTime = 10 * time.Second
 )
 
 // Server is the main poold trader server.
@@ -561,6 +569,20 @@ func (s *Server) setupClient() error {
 			),
 		),
 	)
+
+	// For non-regtest networks we also want to turn on gRPC keepalive to
+	// detect stale connections. We don't do this for regtest because there
+	// might be older regtest-only servers out there where this would lead
+	// to disconnects because the server doesn't allow pings that often
+	// (since this requires a server side change to be deployed as well).
+	if s.cfg.Network != "regtest" {
+		s.cfg.AuctioneerDialOpts = append(
+			s.cfg.AuctioneerDialOpts,
+			grpc.WithKeepaliveParams(keepalive.ClientParameters{
+				Time: defaultClientPingTime,
+			}),
+		)
+	}
 
 	// Create the funding manager. The RPC server is responsible for
 	// starting/stopping it though as all that logic is currently there for
