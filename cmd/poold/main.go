@@ -18,7 +18,7 @@ var (
 func main() {
 	err := start()
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Fprintf(os.Stderr, "startup error: %v\n", err)
 		os.Exit(1)
 	}
 }
