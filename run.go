@@ -51,15 +51,26 @@ func Run(cfg *Config) error {
 			)
 			http.Handle("/", profileRedirect)
 			//nolint:gosec
-			fmt.Println(http.ListenAndServe(cfg.Profile, nil))
+			err := http.ListenAndServe(cfg.Profile, nil)
+			if err != nil {
+				log.Errorf("Unable to run profiler: %v", err)
+			}
 		}()
 	}
 
 	trader := NewServer(cfg)
 	err = trader.Start()
 	if err != nil {
+		log.Errorf("Error starting server: %v", err)
 		return fmt.Errorf("unable to start server: %v", err)
 	}
 	<-cfg.ShutdownInterceptor.ShutdownChannel()
-	return trader.Stop()
+
+	err = trader.Stop()
+	if err != nil {
+		log.Errorf("Error stopping server: %v", err)
+		return err
+	}
+
+	return nil
 }
