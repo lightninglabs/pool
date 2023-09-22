@@ -155,13 +155,28 @@ func (s *ChannelAcceptor) acceptChannel(_ context.Context,
 			}, nil
 		}
 
-		switch *req.CommitmentType {
-		case lnwallet.CommitmentTypeScriptEnforcedLease:
-		default:
+		const expectedType = lnwallet.CommitmentTypeScriptEnforcedLease
+		if *req.CommitmentType != expectedType {
 			return &lndclient.AcceptorResponse{
 				Accept: false,
 				Error: "expected script enforced channel " +
 					"lease commitment type",
+			}, nil
+		}
+
+	case order.ChannelTypeSimpleTaproot:
+		if req.CommitmentType == nil {
+			return &lndclient.AcceptorResponse{
+				Accept: false,
+				Error:  "expected explicit channel negotiation",
+			}, nil
+		}
+
+		if *req.CommitmentType != lnwallet.CommitmentTypeSimpleTaproot {
+			return &lndclient.AcceptorResponse{
+				Accept: false,
+				Error: "expected simple taproot channel " +
+					"commitment type",
 			}, nil
 		}
 

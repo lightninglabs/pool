@@ -20,6 +20,7 @@ import (
 	"github.com/lightninglabs/pool/chaninfo"
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/order"
+	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/sidecar"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -355,13 +356,18 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 		}
 	}
 
-	_, fundingOutput, err := input.GenFundingPkScript(
-		ourMultiSigKey.PubKey.SerializeCompressed(),
+	commitmentType, musig2 := order.DetermineCommitmentType(
+		ourOrder.Details(), matchedOrder.Order.Details(),
+	)
+	fundingOutput, err := poolscript.FundingOutput(
+		commitmentType, ourMultiSigKey.PubKey.SerializeCompressed(),
 		matchedOrder.MultiSigKey[:], int64(chanSize),
 	)
 	if err != nil {
 		return nil, [32]byte{}, err
 	}
+
+	log.Debugf("Funding output pkScript: %x", fundingOutput.PkScript)
 
 	// Now that we have the funding script, we'll find the output index
 	// within the batch execution transaction. We ignore the first
@@ -377,6 +383,9 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 		},
 		OutputIndex: chanOutputIndex,
 	}
+
+	log.Debugf("Found funding output at index %v of batch TX %v",
+		chanOutputIndex, batchTxID.String())
 
 	// With all the components assembled, we'll now create the chan point
 	// shim, and register it so we use the proper funding key when we
@@ -394,6 +403,7 @@ func (m *Manager) deriveFundingShim(ourOrder order.Order,
 		RemoteKey:     matchedOrder.MultiSigKey[:],
 		PendingChanId: pendingChanID[:],
 		ThawHeight:    thawHeight,
+		Musig2:        musig2,
 	}
 
 	return &lnrpc.FundingShim{
@@ -654,10 +664,10 @@ func (m *Manager) BatchChannelSetup(
 			if err != nil {
 				return nil, err
 			}
+			chanPointShim := fundingShim.GetChanPointShim()
 			chanPoint := wire.OutPoint{
-				Hash: batchTxHash,
-				Index: fundingShim.GetChanPointShim().ChanPoint.
-					OutputIndex,
+				Hash:  batchTxHash,
+				Index: chanPointShim.ChanPoint.OutputIndex,
 			}
 
 			// Some goroutines are already running from previous
@@ -689,14 +699,21 @@ func (m *Manager) BatchChannelSetup(
 			//  * also other params to set as well
 			chanAmt := matchedOrder.UnitsFilled.ToSatoshis()
 			chanAmt += matchedOrderBid.SelfChanBalance
-			var commitmentType lnrpc.CommitmentType
-			switch {
-			case ourOrder.Details().ChannelType == order.ChannelTypeScriptEnforced:
-				fallthrough
-			case matchedOrderBid.Details().ChannelType == order.ChannelTypeScriptEnforced:
-				commitmentType = lnrpc.CommitmentType_SCRIPT_ENFORCED_LEASE
-			}
+
+			commitmentType, _ := order.DetermineCommitmentType(
+				ourOrder.Details(),
+				matchedOrder.Order.Details(),
+			)
 			private := matchedOrderBid.UnannouncedChannel
+
+			log.Debugf("Opening channel to node=%x, private=%v, "+
+				"chan_point=%v, chan_amt=%v, commit_type=%v, "+
+				"musig2=%v, zero_conf=%v, thaw_height=%v",
+				matchedOrder.NodeKey[:], private, chanPoint,
+				chanAmt, commitmentType, chanPointShim.Musig2,
+				matchedOrderBid.ZeroConfChannel,
+				chanPointShim.ThawHeight)
+
 			fundingReq := &lnrpc.OpenChannelRequest{
 				NodePubkey:         matchedOrder.NodeKey[:],
 				LocalFundingAmount: int64(chanAmt),

@@ -15,6 +15,7 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnrpc"
 )
 
 // Version represents the type of Pool account script that is used for either
@@ -823,4 +824,45 @@ func IncludesPreviousOutPoint(tx *wire.MsgTx, output wire.OutPoint) bool {
 		return true
 	}
 	return false
+}
+
+// FundingOutput returns the channel funding output for the given commitment
+// type, funding keys and channel size.
+func FundingOutput(commitmentType lnrpc.CommitmentType, ourKey,
+	theirKey []byte, chanSize int64) (*wire.TxOut, error) {
+
+	switch commitmentType {
+	case lnrpc.CommitmentType_SIMPLE_TAPROOT:
+		ourPubKey, err := btcec.ParsePubKey(ourKey)
+		if err != nil {
+			return nil, err
+		}
+		theirPubKey, err := btcec.ParsePubKey(theirKey)
+		if err != nil {
+			return nil, err
+		}
+
+		log.Debugf("Creating P2TR funding script for local key %x and "+
+			"remote key %x", ourKey, theirKey)
+		_, fundingOutput, err := input.GenTaprootFundingScript(
+			ourPubKey, theirPubKey, chanSize,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		return fundingOutput, nil
+
+	default:
+		log.Debugf("Creating P2WSH funding script for local key %x "+
+			"and remote key %x", ourKey, theirKey)
+		_, fundingOutput, err := input.GenFundingPkScript(
+			ourKey, theirKey, chanSize,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		return fundingOutput, nil
+	}
 }

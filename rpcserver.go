@@ -30,7 +30,6 @@ import (
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/chanbackup"
 	lndFunding "github.com/lightningnetwork/lnd/funding"
-	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/lightningnetwork/lnd/lnwire"
@@ -2318,8 +2317,14 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					ourMultiSigPubKey = t.Recipient.MultiSigPubKey
 				}
 
+				commitType, _ := order.DetermineCommitmentType(
+					ourOrder.Details(),
+					match.Order.Details(),
+				)
+
 				chanAmt := match.UnitsFilled.ToSatoshis()
-				_, chanOutput, err := input.GenFundingPkScript(
+				chanOutput, err := poolscript.FundingOutput(
+					commitType,
 					ourMultiSigPubKey.SerializeCompressed(),
 					match.MultiSigKey[:], int64(chanAmt),
 				)
@@ -3334,6 +3339,8 @@ func marshallChannelType(
 		return auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_PEER_DEPENDENT
 	case order.ChannelTypeScriptEnforced:
 		return auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED
+	case order.ChannelTypeSimpleTaproot:
+		return auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SIMPLE_TAPROOT
 	default:
 		return auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_UNKNOWN
 	}
@@ -3365,6 +3372,9 @@ func marshallChannelInfo(chanInfos map[wire.OutPoint]*chaninfo.ChannelInfo) (
 
 		case chanbackup.ScriptEnforcedLeaseVersion:
 			channelType = auctioneerrpc.ChannelType_SCRIPT_ENFORCED_LEASE
+
+		case chanbackup.SimpleTaprootVersion:
+			channelType = auctioneerrpc.ChannelType_SIMPLE_TAPROOT
 
 		default:
 			return nil, fmt.Errorf("unknown channel type: %v",

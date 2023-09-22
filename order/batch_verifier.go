@@ -9,6 +9,7 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/terms"
+	"github.com/lightningnetwork/lnd/lnrpc"
 )
 
 const (
@@ -371,3 +372,31 @@ func (v *batchVerifier) validateChannelOutput(batch *Batch, ourOrder Order,
 
 // A compile-time constraint to ensure batchVerifier implements BatchVerifier.
 var _ BatchVerifier = (*batchVerifier)(nil)
+
+// DetermineCommitmentType determines the type of channel to open based on our
+// order and the one matched to us and also returns whether that channel type
+// uses a Musig2 construction or not.
+func DetermineCommitmentType(ourOrder,
+	theirOrder *Kit) (lnrpc.CommitmentType, bool) {
+
+	switch {
+	// Since everyone needs to be on lnd 0.15.5+ because of the chain sync
+	// issue, we can safely assume that everyone supports the new script
+	// enforced type. So if one side indicates they want it, we'll use it.
+	case ourOrder.ChannelType == ChannelTypeScriptEnforced ||
+		theirOrder.ChannelType == ChannelTypeScriptEnforced:
+
+		return lnrpc.CommitmentType_SCRIPT_ENFORCED_LEASE, false
+
+	// For Simple Taproot channels, both sides need to activate them, so we
+	// need to make sure both parties explicitly requested them (which is
+	// gated by the startup feature check).
+	case ourOrder.ChannelType == ChannelTypeSimpleTaproot &&
+		theirOrder.ChannelType == ChannelTypeSimpleTaproot:
+
+		return lnrpc.CommitmentType_SIMPLE_TAPROOT, true
+
+	default:
+		return lnrpc.CommitmentType_UNKNOWN_COMMITMENT_TYPE, false
+	}
+}
