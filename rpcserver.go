@@ -41,6 +41,40 @@ const (
 	getInfoTimeout = 5 * time.Second
 )
 
+var (
+	// wumboRequired is the uint32 cast feature flag for required wumbo
+	// channels.
+	wumboRequired = uint32(lnwire.WumboChannelsRequired)
+
+	// wumboOptional is the uint32 cast feature flag for optional wumbo
+	// channels.
+	wumboOptional = uint32(lnwire.WumboChannelsOptional)
+
+	// taprootChansStagingRequired is the uint32 cast feature flag for
+	// required Simple Taproot Channels in their staging version.
+	taprootChansStagingRequired = uint32(
+		lnwire.SimpleTaprootChannelsRequiredStaging,
+	)
+
+	// taprootChansStagingOptional is the uint32 cast feature flag for
+	// optional Simple Taproot Channels in their staging version.
+	taprootChansStagingOptional = uint32(
+		lnwire.SimpleTaprootChannelsOptionalStaging,
+	)
+
+	// taprootChansFinalRequired is the uint32 cast feature flag for
+	// required Simple Taproot Channels in their final specified version.
+	taprootChansFinalRequired = uint32(
+		lnwire.SimpleTaprootChannelsRequiredFinal,
+	)
+
+	// taprootChansFinalOptional is the uint32 cast feature flag for
+	// optional Simple Taproot Channels in their final specified version.
+	taprootChansFinalOptional = uint32(
+		lnwire.SimpleTaprootChannelsOptionalFinal,
+	)
+)
+
 // rpcServer implements the gRPC server on the client side and answers RPC calls
 // from an end user client program like the command line interface.
 type rpcServer struct {
@@ -73,6 +107,10 @@ type rpcServer struct {
 	// wumboSupported is true if the backing lnd node supports wumbo
 	// channels.
 	wumboSupported bool
+
+	// taprootChansSupported is true if the backing lnd node supports Simple
+	// Taproot Channels.
+	taprootChansSupported bool
 }
 
 // accountStore is a clientdb.DB wrapper to implement the account.Store
@@ -148,10 +186,15 @@ func (s *rpcServer) Start() error {
 		return fmt.Errorf("error in GetInfo: %v", err)
 	}
 
-	_, s.wumboSupported = info.Features[uint32(lnwire.WumboChannelsRequired)]
+	_, s.wumboSupported = info.Features[wumboRequired]
 	if !s.wumboSupported {
-		_, s.wumboSupported = info.Features[uint32(lnwire.WumboChannelsOptional)]
+		_, s.wumboSupported = info.Features[wumboOptional]
 	}
+	s.taprootChansSupported =
+		info.Features[taprootChansStagingRequired] != nil ||
+			info.Features[taprootChansStagingOptional] != nil ||
+			info.Features[taprootChansFinalRequired] != nil ||
+			info.Features[taprootChansFinalOptional] != nil
 
 	rpcLog.Infof("Connected to lnd node %v with pubkey %v", info.Alias,
 		info.IdentityPubkey)
@@ -1323,14 +1366,19 @@ func (s *rpcServer) validateOrder(o order.Order, acct *account.Account,
 
 	var usesAnchors bool
 	switch o.Details().ChannelType {
-	case order.ChannelTypeScriptEnforced:
+	case order.ChannelTypeScriptEnforced, order.ChannelTypeSimpleTaproot:
 		usesAnchors = true
 	default:
 		usesAnchors = false
 	}
 
+	canBeUnannouncedChan := false
 	switch castOrder := o.(type) {
 	case *order.Ask:
+		constraints := castOrder.AnnouncementConstraints
+		canBeUnannouncedChan = constraints == order.OnlyUnannounced ||
+			constraints == order.AnnouncementNoPreference
+
 		if castOrder.ConfirmationConstraints == order.OnlyZeroConf {
 			if !batchVersion.SupportsZeroConfChannels() {
 				return fmt.Errorf("batch version %v does not "+
@@ -1354,6 +1402,8 @@ func (s *rpcServer) validateOrder(o order.Order, acct *account.Account,
 		}
 
 	case *order.Bid:
+		canBeUnannouncedChan = castOrder.UnannouncedChannel
+
 		if castOrder.ZeroConfChannel {
 			if !batchVersion.SupportsZeroConfChannels() {
 				return fmt.Errorf("batch version %v does not "+
@@ -1366,6 +1416,38 @@ func (s *rpcServer) validateOrder(o order.Order, acct *account.Account,
 					"to use anchors. Use the script " +
 					"enforced channel type")
 			}
+		}
+	}
+
+	// Taproot channels require lnd 0.17.0 or higher.
+	if o.Details().ChannelType == order.ChannelTypeSimpleTaproot {
+		taprootNotSupportedErr := fmt.Errorf("connected lnd version "+
+			"%v does not support taproot channels, need at least "+
+			"v%d.%d.%d with --protocol.simple-taproot-chans "+
+			"turned on", s.server.lndServices.Version.Version,
+			taprootChannelsVersion.AppMajor,
+			taprootChannelsVersion.AppMinor,
+			taprootChannelsVersion.AppPatch)
+
+		// First check the lnd version itself.
+		verErr := lndclient.AssertVersionCompatible(
+			s.server.lndServices.Version, taprootChannelsVersion,
+		)
+		if verErr != nil {
+			return taprootNotSupportedErr
+		}
+
+		// Make sure the simple taproot channels protocol feature is
+		// enabled.
+		if !s.taprootChansSupported {
+			return taprootNotSupportedErr
+		}
+
+		// Simple taproot channels can only be un-announced as there is
+		// no way to gossip them yet.
+		if !canBeUnannouncedChan {
+			return fmt.Errorf("simple taproot channels can only " +
+				"be unannounced")
 		}
 	}
 
