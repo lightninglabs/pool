@@ -2168,10 +2168,11 @@
       "enum": [
         "ORDER_CHANNEL_TYPE_UNKNOWN",
         "ORDER_CHANNEL_TYPE_PEER_DEPENDENT",
-        "ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED"
+        "ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED",
+        "ORDER_CHANNEL_TYPE_SIMPLE_TAPROOT"
       ],
       "default": "ORDER_CHANNEL_TYPE_UNKNOWN",
-      "description": " - ORDER_CHANNEL_TYPE_UNKNOWN: Used to set defaults when a trader doesn't specify a channel type.\n - ORDER_CHANNEL_TYPE_PEER_DEPENDENT: The channel type will vary per matched channel based on the features shared\nbetween its participants.\n - ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED: A channel type that builds upon the anchors commitment format to enforce\nchannel lease maturities in the commitment and HTLC outputs that pay to the\nchannel initiator/seller."
+      "description": " - ORDER_CHANNEL_TYPE_UNKNOWN: Used to set defaults when a trader doesn't specify a channel type.\n - ORDER_CHANNEL_TYPE_PEER_DEPENDENT: The channel type will vary per matched channel based on the features shared\nbetween its participants.\n - ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED: A channel type that builds upon the anchors commitment format to enforce\nchannel lease maturities in the commitment and HTLC outputs that pay to the\nchannel initiator/seller.\n - ORDER_CHANNEL_TYPE_SIMPLE_TAPROOT: A channel type that uses a Pay-to-Taproot output for the funding output."
     },
     "poolrpcOrderEvent": {
       "type": "object",
