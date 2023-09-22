@@ -388,6 +388,21 @@ func (mr *MockWalletKitClientMockRecorder) ListAccounts(ctx, name, addressType i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccounts", reflect.TypeOf((*MockWalletKitClient)(nil).ListAccounts), ctx, name, addressType)
 }
 
+// ListLeases mocks base method.
+func (m *MockWalletKitClient) ListLeases(ctx context.Context) ([]lndclient.LeaseDescriptor, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListLeases", ctx)
+	ret0, _ := ret[0].([]lndclient.LeaseDescriptor)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListLeases indicates an expected call of ListLeases.
+func (mr *MockWalletKitClientMockRecorder) ListLeases(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListLeases", reflect.TypeOf((*MockWalletKitClient)(nil).ListLeases), ctx)
+}
+
 // ListSweeps mocks base method.
 func (m *MockWalletKitClient) ListSweeps(ctx context.Context) ([]string, error) {
 	m.ctrl.T.Helper()

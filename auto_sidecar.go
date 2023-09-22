@@ -70,14 +70,12 @@ func deriveProviderStreamID(ticket *sidecar.Ticket) ([64]byte, error) {
 
 	// This stream ID will simply be the fixed 64-byte signature of our
 	// sidecar ticket offer.
-	wireSig, err := lnwire.NewSigFromRawSignature(
-		ticket.Offer.SigOfferDigest.Serialize(),
-	)
+	wireSig, err := lnwire.NewSigFromSignature(ticket.Offer.SigOfferDigest)
 	if err != nil {
 		return streamID, err
 	}
 
-	copy(streamID[:], wireSig[:])
+	copy(streamID[:], wireSig.RawBytes())
 
 	return streamID, nil
 }
@@ -92,14 +90,12 @@ func deriveRecipientStreamID(ticket *sidecar.Ticket) ([64]byte, error) {
 	//
 	// To enable this, we'll use the sha256 of the offer sig as this is
 	// static for the lifetime of the entire ticket.
-	wireSig, err := lnwire.NewSigFromRawSignature(
-		ticket.Offer.SigOfferDigest.Serialize(),
-	)
+	wireSig, err := lnwire.NewSigFromSignature(ticket.Offer.SigOfferDigest)
 	if err != nil {
 		return [64]byte{}, err
 	}
 
-	streamID := sha512.Sum512(wireSig[:])
+	streamID := sha512.Sum512(wireSig.RawBytes())
 
 	return streamID, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwire"
@@ -35,7 +36,7 @@ func SignOffer(ctx context.Context, ticket *Ticket,
 	if err != nil {
 		return fmt.Errorf("error signing offer: %v", err)
 	}
-	wireSig, err := lnwire.NewSigFromRawSignature(rawSig)
+	wireSig, err := lnwire.NewSigFromECDSARawSignature(rawSig)
 	if err != nil {
 		return fmt.Errorf("error parsing raw signature: %v", err)
 	}
@@ -43,7 +44,7 @@ func SignOffer(ctx context.Context, ticket *Ticket,
 	if err != nil {
 		return fmt.Errorf("error parsing EC signature: %v", err)
 	}
-	ticket.Offer.SigOfferDigest = ecSig
+	ticket.Offer.SigOfferDigest = ecSig.(*ecdsa.Signature)
 
 	return nil
 }
@@ -120,7 +121,7 @@ func SignOrder(ctx context.Context, ticket *Ticket, bidNonce [32]byte,
 	if err != nil {
 		return fmt.Errorf("error signing order: %v", err)
 	}
-	wireSig, err := lnwire.NewSigFromRawSignature(rawSig)
+	wireSig, err := lnwire.NewSigFromECDSARawSignature(rawSig)
 	if err != nil {
 		return fmt.Errorf("error parsing raw signature: %v", err)
 	}
@@ -128,7 +129,7 @@ func SignOrder(ctx context.Context, ticket *Ticket, bidNonce [32]byte,
 	if err != nil {
 		return fmt.Errorf("error parsing EC signature: %v", err)
 	}
-	ticket.Order.SigOrderDigest = ecSig
+	ticket.Order.SigOrderDigest = ecSig.(*ecdsa.Signature)
 
 	return nil
 }
