@@ -437,11 +437,11 @@ func testTaprootSpend(t *testing.T, expiryPath bool, version Version) {
 		}
 
 		_, traderSession, err := input.MuSig2CreateContext(
-			muSig2Version, trader, signerKeys, tweak,
+			muSig2Version, trader, signerKeys, tweak, nil,
 		)
 		require.NoError(t, err)
 		_, auctioneerSession, err := input.MuSig2CreateContext(
-			muSig2Version, auctioneer, signerKeys, tweak,
+			muSig2Version, auctioneer, signerKeys, tweak, nil,
 		)
 		require.NoError(t, err)
 

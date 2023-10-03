@@ -3,24 +3,17 @@ package poolrpc
 import (
 	"fmt"
 
-	"github.com/lightninglabs/protobuf-hex-display/jsonpb"
-	"github.com/lightninglabs/protobuf-hex-display/proto"
-)
-
-var (
-	jsonMarshaler = &jsonpb.Marshaler{
-		EmitDefaults: true,
-		OrigName:     true,
-	}
+	"github.com/lightningnetwork/lnd/lnrpc"
+	"google.golang.org/protobuf/proto"
 )
 
 // PrintMsg prints a protobuf message as JSON, suitable for logging (without any
 // indentation).
 func PrintMsg(message proto.Message) string {
-	jsonStr, err := jsonMarshaler.MarshalToString(message)
+	jsonBytes, err := lnrpc.ProtoJSONMarshalOpts.Marshal(message)
 	if err != nil {
 		return fmt.Sprintf("<unable to decode proto msg: %v>", err)
 	}
 
-	return jsonStr
+	return string(jsonBytes)
 }

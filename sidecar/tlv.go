@@ -349,12 +349,11 @@ func ESig(w io.Writer, val interface{}, buf *[8]byte) error {
 	if v, ok := val.(**ecdsa.Signature); ok {
 		var s [64]byte
 		if *v != nil {
-			rawSig := (*v).Serialize()
-			sig, err := lnwire.NewSigFromRawSignature(rawSig)
+			sig, err := lnwire.NewSigFromSignature(*v)
 			if err != nil {
 				return err
 			}
-			copy(s[:], sig[:])
+			copy(s[:], sig.RawBytes())
 		}
 
 		return tlv.EBytes64(w, &s, buf)
@@ -372,13 +371,16 @@ func DSig(r io.Reader, val interface{}, buf *[8]byte, l uint64) error {
 		}
 
 		if s != ZeroSignature {
-			wireSig := lnwire.Sig(s)
+			wireSig, err := lnwire.NewSigFromWireECDSA(s[:])
+			if err != nil {
+				return err
+			}
 			ecSig, err := wireSig.ToSignature()
 			if err != nil {
 				return err
 			}
 
-			*v = ecSig
+			*v = ecSig.(*ecdsa.Signature)
 		}
 
 		return nil

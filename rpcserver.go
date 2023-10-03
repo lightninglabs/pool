@@ -1864,6 +1864,10 @@ func (s *rpcServer) CancelOrder(ctx context.Context,
 func (s *rpcServer) QuoteOrder(ctx context.Context,
 	req *poolrpc.QuoteOrderRequest) (*poolrpc.QuoteOrderResponse, error) {
 
+	if req.MinUnitsMatch == 0 {
+		return nil, fmt.Errorf("min units match must be specified")
+	}
+
 	auctionTerms, err := s.auctioneer.Terms(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to query auctioneer terms: %v",
