@@ -115,6 +115,9 @@ func ParseRPCOrder(version, leaseDuration uint32,
 	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED:
 		kit.ChannelType = ChannelTypeScriptEnforced
 
+	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SIMPLE_TAPROOT:
+		kit.ChannelType = ChannelTypeSimpleTaproot
+
 	default:
 		return nil, fmt.Errorf("unhandled channel type %v",
 			details.ChannelType)
@@ -259,6 +262,9 @@ func ParseRPCServerOrder(version uint32, details *auctioneerrpc.ServerOrder,
 
 	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED:
 		kit.ChannelType = ChannelTypeScriptEnforced
+
+	case auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SIMPLE_TAPROOT:
+		kit.ChannelType = ChannelTypeSimpleTaproot
 
 	default:
 		return nil, nodeKey, nil, multiSigKey,

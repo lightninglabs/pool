@@ -15,7 +15,6 @@ import (
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/terms"
-	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
@@ -363,9 +362,13 @@ func ChannelOutput(batchTx *wire.MsgTx, wallet lndclient.WalletKitClient,
 	}
 
 	// Gather the information we expect to find in the batch TX.
+	commitType, _ := DetermineCommitmentType(
+		ourOrder.Details(), otherOrder.Order.Details(),
+	)
 	expectedOutputSize := selfChanBalance + otherOrder.UnitsFilled.ToSatoshis()
-	_, expectedOut, err := input.GenFundingPkScript(
-		ourKey, otherOrder.MultiSigKey[:], int64(expectedOutputSize),
+	expectedOut, err := poolscript.FundingOutput(
+		commitType, ourKey, otherOrder.MultiSigKey[:],
+		int64(expectedOutputSize),
 	)
 	if err != nil {
 		return nil, 0, fmt.Errorf("could not create multisig script: "+

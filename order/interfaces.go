@@ -134,7 +134,7 @@ const (
 	StateFailed State = 6
 )
 
-// String returns a human readable string representation of the order state.
+// String returns a human-readable string representation of the order state.
 func (s State) String() string {
 	switch s {
 	case StateSubmitted:
@@ -186,7 +186,7 @@ const (
 	// OrderMatchPrepare message was received initially.
 	MatchStatePrepare MatchState = 0
 
-	// MatchStatePrepare is the state an order is in after the
+	// MatchStateAccepted is the state an order is in after the
 	// OrderMatchPrepare message was processed successfully and the batch
 	// was accepted.
 	MatchStateAccepted MatchState = 1
@@ -205,7 +205,7 @@ const (
 	MatchStateFinalized MatchState = 4
 )
 
-// String returns a human readable string representation of the match state.
+// String returns a human-readable string representation of the match state.
 func (s MatchState) String() string {
 	switch s {
 	case MatchStatePrepare:
@@ -244,6 +244,10 @@ const (
 	// leased channel in the commitment and HTLC outputs that pay directly
 	// to the channel initiator.
 	ChannelTypeScriptEnforced ChannelType = 1
+
+	// ChannelTypeSimpleTaproot represents a channel type that uses a
+	// Pay-To-Taproot funding output.
+	ChannelTypeSimpleTaproot ChannelType = 2
 )
 
 // ChannelAnnouncementConstraints is a numerical type used to denote if the

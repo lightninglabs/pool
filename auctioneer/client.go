@@ -427,6 +427,8 @@ func (c *Client) SubmitOrder(ctx context.Context, o order.Order,
 		channelType = auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_PEER_DEPENDENT
 	case order.ChannelTypeScriptEnforced:
 		channelType = auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED
+	case order.ChannelTypeSimpleTaproot:
+		channelType = auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SIMPLE_TAPROOT
 	default:
 		return fmt.Errorf("unhandled channel type %v", c)
 	}

@@ -151,7 +151,8 @@ func isSupportedBackupVersion(backup *chanbackup.Single) bool {
 	case chanbackup.TweaklessCommitVersion,
 		chanbackup.AnchorsCommitVersion,
 		chanbackup.AnchorsZeroFeeHtlcTxCommitVersion,
-		chanbackup.ScriptEnforcedLeaseVersion:
+		chanbackup.ScriptEnforcedLeaseVersion,
+		chanbackup.SimpleTaprootVersion:
 
 		return true
 	default:

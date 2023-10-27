@@ -24,6 +24,7 @@ const (
 
 	channelTypePeerDependent  = "legacy"
 	channelTypeScriptEnforced = "script-enforced"
+	channelTypeSimpleTaproot  = "simple-taproot"
 
 	auctionTypeInboundLiquidity  = "inbound"
 	auctionTypeOutboundLiquidity = "outbound"
@@ -151,9 +152,9 @@ var sharedFlags = []cli.Flag{
 	cli.StringFlag{
 		Name: "channel_type",
 		Usage: fmt.Sprintf("the type of channel resulting from the "+
-			"order being matched (%q, %q)",
-			channelTypePeerDependent,
-			channelTypeScriptEnforced),
+			"order being matched (%q, %q, %q)",
+			channelTypePeerDependent, channelTypeScriptEnforced,
+			channelTypeSimpleTaproot),
 	},
 	cli.StringFlag{
 		Name: "auction_type",
@@ -433,6 +434,9 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order,
 
 	case channelTypeScriptEnforced:
 		params.ChannelType = auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SCRIPT_ENFORCED
+
+	case channelTypeSimpleTaproot:
+		params.ChannelType = auctioneerrpc.OrderChannelType_ORDER_CHANNEL_TYPE_SIMPLE_TAPROOT
 
 	default:
 		return nil, fmt.Errorf("unknown channel type %q", channelType)

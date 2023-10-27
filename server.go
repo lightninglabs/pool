@@ -71,6 +71,17 @@ var (
 		},
 	}
 
+	// taprootChannelsVersion is the version of lnd that enabled simple
+	// taproot as a new channel type.
+	taprootChannelsVersion = &verrpc.Version{
+		AppMajor: 0,
+		AppMinor: 17,
+		AppPatch: 0,
+		BuildTags: []string{
+			"signrpc", "walletrpc", "chainrpc", "invoicesrpc",
+		},
+	}
+
 	// defaultClientPingTime is the default time we'll use for the client
 	// keepalive ping time. This means the client will ping the server every
 	// 10 seconds (if there is no other activity) to make sure the TCP
