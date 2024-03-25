@@ -2349,9 +2349,13 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 		totalAmtPaid   btcutil.Amount
 	)
 	for _, batch := range batches {
-		// Keep a tally of how many channels were created within each
-		// batch in order to estimate the chain fees paid.
-		numChans := 0
+		// Keep a tally of the total number of channels which were
+		// created within each batch in order to estimate the chain fees
+		// paid.
+		totalNumChannels := 0
+
+		// Keep a tally of the total number of channels per account key.
+		accountChannelsCount := make(map[[33]byte]uint32)
 
 		// Keep track of the index for the first lease found for this
 		// batch. We'll use this to know where to start from when
@@ -2369,7 +2373,8 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 				}
 
 				// Filter out the account if required.
-				_, ok = accounts[ourOrder.Details().AcctKey]
+				accountKey := ourOrder.Details().AcctKey
+				_, ok = accounts[accountKey]
 				if len(accounts) != 0 && !ok {
 					continue
 				}
@@ -2509,28 +2514,44 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 					SidecarChannel:       isSidecarChannel,
 				})
 
-				numChans++
+				// Count the total number of channels.
+				totalNumChannels++
+
+				// Count the total number of channels per
+				// account.
+				accountChannelsCount[accountKey]++
 			}
 
 			// Estimate the chain fees paid for the number of
 			// channels created in this batch and tally them.
-			//
-			// TODO(guggero): This is just an approximation! We
-			// should properly calculate the fees _per account_ as
-			// that's what we do on the server side. Then we can
-			// also take a look at the actual account version at the
-			// time of the batch.
-			chainFee := order.EstimateTraderFee(
-				uint32(numChans), batch.BatchTxFeeRate,
-				account.VersionInitialNoVersion,
-			)
+			chainFee := btcutil.Amount(0)
+			for accountKey, numChannels := range accountChannelsCount {
+				// Calculate and sum the account specific chain
+				// fee estimate.
+				//
+				// The account version influences the chain fee.
+				// It is important to use the account version
+				// that was used when the batch was created.
+				// Accounts might be updated within the batch.
+				// Therefore, we query the account version from
+				// an account spending snapshot.
+				spendingAcctSnapshot :=
+					batch.SpendingAccountsSnapshot[accountKey]
+
+				chainFee += order.EstimateTraderFee(
+					numChannels, batch.BatchTxFeeRate,
+					spendingAcctSnapshot.Version,
+				)
+			}
 
 			// We'll need to compute the chain fee paid for each
 			// lease. Since multiple leases can be created within a
 			// batch, we'll need to evenly distribute. We'll always
 			// apply the remainder to the first lease in the batch.
-			chainFeePerChan := chainFee / btcutil.Amount(numChans)
-			chainFeePerChanRem := chainFee % btcutil.Amount(numChans)
+			chainFeePerChan :=
+				chainFee / btcutil.Amount(totalNumChannels)
+			chainFeePerChanRem :=
+				chainFee % btcutil.Amount(totalNumChannels)
 			for i := firstIdxForBatch; i < len(rpcLeases); i++ {
 				chainFee := chainFeePerChan
 				if i == firstIdxForBatch {
