@@ -400,7 +400,7 @@ func (m *manager) InitAccount(ctx context.Context, value btcutil.Amount,
 
 	// We'll make sure to acquire the reservation lock throughout the
 	// account funding process to ensure we use the same reservation, as
-	// only one can be active per trader LSAT.
+	// only one can be active per trader L402.
 	m.reservationMtx.Lock()
 	defer m.reservationMtx.Unlock()
 

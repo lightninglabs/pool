@@ -17,7 +17,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	proxy "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/lightninglabs/aperture/lsat"
+	"github.com/lightninglabs/aperture/l402"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
@@ -102,15 +102,15 @@ type Server struct {
 	// restarted.
 	AuctioneerClient *auctioneer.Client
 
-	// GetIdentity returns the current LSAT identification of the trader
+	// GetIdentity returns the current L402 identification of the trader
 	// client or an error if none has been established yet.
-	GetIdentity func() (*lsat.TokenID, error)
+	GetIdentity func() (*l402.TokenID, error)
 
 	cfg             *Config
 	db              *clientdb.DB
 	fundingManager  *funding.Manager
 	sidecarAcceptor *SidecarAcceptor
-	lsatStore       *lsat.FileStore
+	l402Store       *l402.FileStore
 	lndServices     *lndclient.GrpcLndServices
 	lndClient       lnrpc.LightningClient
 	grpcServer      *grpc.Server
@@ -524,20 +524,20 @@ func (s *Server) setupClient() error {
 		return fmt.Errorf("unable to parse node pubkey: %v", err)
 	}
 
-	// Setup the LSAT interceptor for the client.
-	s.lsatStore, err = lsat.NewFileStore(s.cfg.BaseDir)
+	// Setup the L402 interceptor for the client.
+	s.l402Store, err = l402.NewFileStore(s.cfg.BaseDir)
 	if err != nil {
 		return err
 	}
 
-	// GetIdentity can be used to determine the current LSAT identification
+	// GetIdentity can be used to determine the current L402 identification
 	// of the trader.
-	s.GetIdentity = func() (*lsat.TokenID, error) {
-		token, err := s.lsatStore.CurrentToken()
+	s.GetIdentity = func() (*l402.TokenID, error) {
+		token, err := s.l402Store.CurrentToken()
 		if err != nil {
 			return nil, err
 		}
-		macID, err := lsat.DecodeIdentifier(
+		macID, err := l402.DecodeIdentifier(
 			bytes.NewBuffer(token.BaseMacaroon().Id()),
 		)
 		if err != nil {
@@ -546,21 +546,21 @@ func (s *Server) setupClient() error {
 		return &macID.TokenID, nil
 	}
 
-	// For any net that isn't mainnet, we allow LSAT auth to be disabled and
+	// For any net that isn't mainnet, we allow L402 auth to be disabled and
 	// create a fixed identity that is used for the whole runtime of the
 	// trader instead.
-	var interceptor Interceptor = lsat.NewInterceptor(
-		&s.lndServices.LndServices, s.lsatStore, defaultRPCTimeout,
-		defaultLsatMaxCost, s.cfg.LsatMaxRoutingFee, false,
+	var interceptor Interceptor = l402.NewInterceptor(
+		&s.lndServices.LndServices, s.l402Store, defaultRPCTimeout,
+		defaultL402MaxCost, s.cfg.L402MaxRoutingFee, false,
 	)
 	if s.cfg.FakeAuth && s.cfg.Network == "mainnet" {
-		return fmt.Errorf("cannot use fake LSAT auth for mainnet")
+		return fmt.Errorf("cannot use fake L402 auth for mainnet")
 	}
 	if s.cfg.FakeAuth {
-		var tokenID lsat.TokenID
+		var tokenID l402.TokenID
 		_, _ = rand.Read(tokenID[:])
 		interceptor = &regtestInterceptor{id: tokenID}
-		s.GetIdentity = func() (*lsat.TokenID, error) {
+		s.GetIdentity = func() (*l402.TokenID, error) {
 			return &tokenID, nil
 		}
 	}
@@ -780,12 +780,12 @@ type Interceptor interface {
 }
 
 // regtestInterceptor is a dummy gRPC interceptor that can be used on regtest to
-// simulate identification through LSAT.
+// simulate identification through L402.
 type regtestInterceptor struct {
-	id lsat.TokenID
+	id l402.TokenID
 }
 
-// UnaryInterceptor intercepts non-streaming requests and appends the dummy LSAT
+// UnaryInterceptor intercepts non-streaming requests and appends the dummy L402
 // ID.
 func (i *regtestInterceptor) UnaryInterceptor(ctx context.Context, method string,
 	req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker,
@@ -793,12 +793,12 @@ func (i *regtestInterceptor) UnaryInterceptor(ctx context.Context, method string
 
 	idStr := fmt.Sprintf("LSATID %x", i.id[:])
 	idCtx := metadata.AppendToOutgoingContext(
-		ctx, lsat.HeaderAuthorization, idStr,
+		ctx, l402.HeaderAuthorization, idStr,
 	)
 	return invoker(idCtx, method, req, reply, cc, opts...)
 }
 
-// StreamInterceptor intercepts streaming requests and appends the dummy LSAT
+// StreamInterceptor intercepts streaming requests and appends the dummy L402
 // ID.
 func (i *regtestInterceptor) StreamInterceptor(ctx context.Context,
 	desc *grpc.StreamDesc, cc *grpc.ClientConn, method string,
@@ -807,7 +807,7 @@ func (i *regtestInterceptor) StreamInterceptor(ctx context.Context,
 
 	idStr := fmt.Sprintf("LSATID %x", i.id[:])
 	idCtx := metadata.AppendToOutgoingContext(
-		ctx, lsat.HeaderAuthorization, idStr,
+		ctx, l402.HeaderAuthorization, idStr,
 	)
 	return streamer(idCtx, desc, cc, method, opts...)
 }
