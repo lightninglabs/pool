@@ -1160,13 +1160,13 @@ func (s *rpcServer) serverAssistedRecovery(ctx context.Context, target uint32) (
 
 	// The account recovery process uses a bi-directional streaming RPC on
 	// the server side. Unfortunately, because of the way streaming RPCs
-	// work, the LSAT interceptor isn't able to _purchase_ a token during
+	// work, the L402 interceptor isn't able to _purchase_ a token during
 	// a streaming RPC call (the 402/payment required error is only returned
 	// after the interceptor was handed the call, so it cannot act on it
 	// anymore). But since a user that has lost their data most likely als
-	// lost their LSAT, the recovery will fail if this is the first call to
+	// lost their L402, the recovery will fail if this is the first call to
 	// the server ever. That's why we call an RPC that's definitely not on
-	// the white list first to kick off LSAT creation.
+	// the white list first to kick off L402 creation.
 	_, _ = s.auctioneer.OrderState(ctx, order.Nonce{})
 
 	// Prepare the keys we are going to try. Possibly not all of them will
@@ -2092,13 +2092,13 @@ func (s *rpcServer) sendAcceptBatch(batch *order.Batch) error {
 	})
 }
 
-// GetLsatTokens returns all tokens that are contained in the LSAT token store.
+// GetLsatTokens returns all tokens that are contained in the L402 token store.
 func (s *rpcServer) GetLsatTokens(_ context.Context,
 	_ *poolrpc.TokensRequest) (*poolrpc.TokensResponse, error) {
 
-	log.Infof("Get LSAT tokens request received")
+	log.Infof("Get L402 tokens request received")
 
-	tokens, err := s.server.lsatStore.AllTokens()
+	tokens, err := s.server.l402Store.AllTokens()
 	if err != nil {
 		return nil, err
 	}
@@ -2738,8 +2738,8 @@ func (s *rpcServer) GetInfo(ctx context.Context,
 	}
 	info.BatchesInvolved = uint32(len(batches))
 
-	// Finally count the number of LSAT tokens in our store.
-	tokens, err := s.server.lsatStore.AllTokens()
+	// Finally count the number of L402 tokens in our store.
+	tokens, err := s.server.l402Store.AllTokens()
 	if err != nil {
 		return nil, fmt.Errorf("error loading tokens: %v", err)
 	}

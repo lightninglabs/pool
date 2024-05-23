@@ -144,10 +144,10 @@ type Config struct {
 
 	NewNodesOnly bool `long:"newnodesonly" description:"Only accept channels from nodes that the connected lnd node doesn't already have open or pending channels with."`
 
-	LsatMaxRoutingFee btcutil.Amount `long:"lsatmaxroutingfee" description:"The maximum amount in satoshis we are willing to pay in routing fees when paying for the one-time LSAT auth token that is required to use the Pool service."`
+	L402MaxRoutingFee btcutil.Amount `long:"lsatmaxroutingfee" description:"The maximum amount in satoshis we are willing to pay in routing fees when paying for the one-time L402 auth token that is required to use the Pool service."`
 
 	Profile  string `long:"profile" description:"Enable HTTP profiling on given ip:port -- NOTE port must be between 1024 and 65535"`
-	FakeAuth bool   `long:"fakeauth" description:"Disable LSAT authentication and instead use a fake LSAT ID to identify. For testing only, cannot be set on mainnet."`
+	FakeAuth bool   `long:"fakeauth" description:"Disable L402 authentication and instead use a fake L402 ID to identify. For testing only, cannot be set on mainnet."`
 
 	TxLabelPrefix string `long:"txlabelprefix" description:"If set, then every transaction poold makes will be created with a label that has this string as a prefix."`
 
@@ -190,8 +190,8 @@ const (
 	// defaultRPCTimeout is the default number of seconds an unary RPC call
 	// is allowed to take to complete.
 	defaultRPCTimeout  = 30 * time.Second
-	defaultLsatMaxCost = btcutil.Amount(1000)
-	defaultLsatMaxFee  = btcutil.Amount(50)
+	defaultL402MaxCost = btcutil.Amount(1000)
+	defaultL402MaxFee  = btcutil.Amount(50)
 )
 
 // DefaultConfig returns the default value for the Config struct.
@@ -211,7 +211,7 @@ func DefaultConfig() Config {
 		TLSCertPath:       DefaultTLSCertPath,
 		TLSKeyPath:        DefaultTLSKeyPath,
 		MacaroonPath:      DefaultMacaroonPath,
-		LsatMaxRoutingFee: defaultLsatMaxFee,
+		L402MaxRoutingFee: defaultL402MaxFee,
 		Lnd: &LndConfig{
 			Host:         "localhost:10009",
 			MacaroonPath: DefaultLndMacaroonPath,

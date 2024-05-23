@@ -6,7 +6,7 @@ import (
 	"context"
 
 	"github.com/btcsuite/btclog"
-	"github.com/lightninglabs/aperture/lsat"
+	"github.com/lightninglabs/aperture/l402"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
@@ -51,7 +51,7 @@ func SetupLoggers(root *build.RotatingLogWriter, intercept signal.Interceptor) {
 	lnd.AddSubLogger(root, "LNDC", intercept, lndclient.UseLogger)
 	lnd.AddSubLogger(root, "SGNL", intercept, signal.UseLogger)
 	lnd.AddSubLogger(root, account.Subsystem, intercept, account.UseLogger)
-	lnd.AddSubLogger(root, lsat.Subsystem, intercept, lsat.UseLogger)
+	lnd.AddSubLogger(root, l402.Subsystem, intercept, l402.UseLogger)
 	lnd.AddSubLogger(
 		root, clientdb.Subsystem, intercept, clientdb.UseLogger,
 	)

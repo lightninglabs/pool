@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lightninglabs/aperture/lsat"
+	"github.com/lightninglabs/aperture/l402"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/urfave/cli"
 	"gopkg.in/macaroon.v2"
@@ -55,7 +55,7 @@ func listAuth(ctx *cli.Context) error {
 			return fmt.Errorf("unable to unmarshal macaroon: %v",
 				err)
 		}
-		id, err := lsat.DecodeIdentifier(bytes.NewReader(mac.Id()))
+		id, err := l402.DecodeIdentifier(bytes.NewReader(mac.Id()))
 		if err != nil {
 			return fmt.Errorf("unable to decode macaroon ID: %v",
 				err)
