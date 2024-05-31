@@ -156,12 +156,12 @@ func (m *MockWalletKit) EstimateFeeRate(_ context.Context, confTarget int32) (
 }
 
 // ListSweeps returns a list of the sweep transaction ids known to our node.
-func (m *MockWalletKit) ListSweeps(_ context.Context) ([]string, error) {
+func (m *MockWalletKit) ListSweeps(context.Context, int32) ([]string, error) {
 	return m.Sweeps, nil
 }
 
-func (m *MockWalletKit) ListSweepsVerbose(
-	_ context.Context) ([]lnwallet.TransactionDetail, error) {
+func (m *MockWalletKit) ListSweepsVerbose(context.Context,
+	int32) ([]lnwallet.TransactionDetail, error) {
 
 	return nil, nil
 }

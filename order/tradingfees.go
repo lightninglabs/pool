@@ -7,6 +7,7 @@ import (
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -99,7 +100,7 @@ func EstimateTraderFee(numTraderChans uint32, feeRate chainfee.SatPerKWeight,
 		weightEstimate += poolscript.MultiSigWitnessSize
 	}
 
-	return feeRate.FeeForWeight(weightEstimate)
+	return feeRate.FeeForWeight(lntypes.WeightUnit(weightEstimate))
 }
 
 // Quote is a struct holding the result of an order quote calculation.
@@ -282,7 +283,7 @@ func minNoDustAccountSize() btcutil.Amount {
 	weightEstimator.AddWitnessInput(poolscript.MultiSigWitnessSize)
 	weightEstimator.AddP2WKHOutput()
 	minimumFee := chainfee.FeePerKwFloor.FeeForWeight(
-		int64(weightEstimator.Weight()),
+		weightEstimator.Weight(),
 	)
 
 	// After paying the fee, more than dust needs to remain, otherwise it

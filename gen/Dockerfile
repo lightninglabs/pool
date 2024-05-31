@@ -1,6 +1,6 @@
-FROM golang:1.19.4-bullseye
+FROM golang:1.22.3-bookworm
 
-RUN go install github.com/golang/mock/mockgen@73266f9366fcf2ccef0b880618e5a9266e4136f4
+RUN go install go.uber.org/mock/mockgen@v0.4.0
 
 WORKDIR /build
 

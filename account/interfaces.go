@@ -568,7 +568,7 @@ func (o *OutputWithFee) CloseOutputs(accountValue btcutil.Amount,
 		)
 	}
 
-	fee := o.FeeRate.FeeForWeight(int64(weightEstimator.Weight()))
+	fee := o.FeeRate.FeeForWeight(weightEstimator.Weight())
 	outputValue := accountValue - fee
 	if outputValue < dustLimit {
 		return nil, fmt.Errorf("closing to output %x with %v results "+

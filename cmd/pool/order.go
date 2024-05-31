@@ -499,7 +499,6 @@ func parseAccountKey(ctx *cli.Context, args cli.Args) ([]byte, error) {
 		acctKeyStr = ctx.String("acct_key")
 	case args.Present():
 		acctKeyStr = args.First()
-		args = args.Tail()
 	default:
 		return nil, fmt.Errorf("acct_key argument missing")
 	}
@@ -1004,7 +1003,6 @@ func ordersCancel(ctx *cli.Context) error { // nolint: dupl
 		nonceHex = ctx.String("order_nonce")
 	case args.Present():
 		nonceHex = args.First()
-		args = args.Tail()
 	default:
 		return fmt.Errorf("order_nonce argument missing")
 	}
