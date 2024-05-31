@@ -33,6 +33,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/verrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
+	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/btcwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -96,7 +97,7 @@ func (wt witnessType) scriptVersion() poolscript.Version {
 }
 
 // witnessSize returns the estimated weight units for an account input witness.
-func (wt witnessType) witnessSize() (int, error) {
+func (wt witnessType) witnessSize() (lntypes.WeightUnit, error) {
 	switch wt {
 	case expiryWitness:
 		return poolscript.ExpiryWitnessSize, nil
@@ -2152,7 +2153,7 @@ func valueAfterAccountUpdate(account *Account, outputs []*wire.TxOut,
 	// With the weight estimated, compute the fee, which we'll then subtract
 	// from our input total and ensure our new account value isn't below our
 	// required minimum.
-	fee := feeRate.FeeForWeight(int64(weightEstimator.Weight()))
+	fee := feeRate.FeeForWeight(weightEstimator.Weight())
 	newAccountValue := account.Value - outputTotal - fee
 	if newAccountValue < MinAccountValue {
 		return 0, fmt.Errorf("new account value is below accepted "+
@@ -2184,8 +2185,7 @@ func (m *manager) inputsForDeposit(ctx context.Context, account *Account,
 		return nil, nil, err
 	}
 	acctInputEstimator.AddWitnessInput(witnessSize)
-	acctInputWeight := int64(acctInputEstimator.Weight())
-	acctInputFee := feeRate.FeeForWeight(acctInputWeight)
+	acctInputFee := feeRate.FeeForWeight(acctInputEstimator.Weight())
 
 	outputToFund := &wire.TxOut{
 		Value:    int64(depositAmount + acctInputFee),
@@ -2425,7 +2425,9 @@ func sanityCheckAccountSpendTx(account *Account, packet *psbt.Packet,
 	// flag fields that weren't counted above because the unsigned TX has no
 	// witness.
 	fullWeight := txWeightNoWitness + 2 + witnessSize
-	minRelayFee := chainfee.FeePerKwFloor.FeeForWeight(fullWeight)
+	minRelayFee := chainfee.FeePerKwFloor.FeeForWeight(
+		lntypes.WeightUnit(fullWeight),
+	)
 	if feesPaid < minRelayFee {
 		return fmt.Errorf("signed transaction only pays %d sats "+
 			"in fees while %d are required for relay", feesPaid,
