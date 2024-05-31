@@ -10,11 +10,11 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	gomock "github.com/golang/mock/gomock"
 	"github.com/lightninglabs/pool/internal/test"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	gomock "go.uber.org/mock/gomock"
 )
 
 var (
