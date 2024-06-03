@@ -17,7 +17,7 @@ require (
 	github.com/lightninglabs/aperture v0.3.2-beta
 	github.com/lightninglabs/lndclient v0.18.0-1
 	github.com/lightninglabs/pool/auctioneerrpc v1.1.2
-	github.com/lightningnetwork/lnd v0.18.0-beta
+	github.com/lightningnetwork/lnd v0.18.0-beta.1
 	github.com/lightningnetwork/lnd/cert v1.2.2
 	github.com/lightningnetwork/lnd/kvdb v1.4.8
 	github.com/lightningnetwork/lnd/tlv v1.2.6
