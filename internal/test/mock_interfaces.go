@@ -25,6 +25,8 @@ import (
 	chainntnfs "github.com/lightningnetwork/lnd/chainntnfs"
 	input "github.com/lightningnetwork/lnd/input"
 	keychain "github.com/lightningnetwork/lnd/keychain"
+	chainrpc "github.com/lightningnetwork/lnd/lnrpc/chainrpc"
+	signrpc "github.com/lightningnetwork/lnd/lnrpc/signrpc"
 	walletrpc "github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	lnwallet "github.com/lightningnetwork/lnd/lnwallet"
 	chainfee "github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -162,6 +164,22 @@ func (m *MockSignerClient) MuSig2Sign(ctx context.Context, sessionID, message [3
 func (mr *MockSignerClientMockRecorder) MuSig2Sign(ctx, sessionID, message, cleanup any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MuSig2Sign", reflect.TypeOf((*MockSignerClient)(nil).MuSig2Sign), ctx, sessionID, message, cleanup)
+}
+
+// RawClientWithMacAuth mocks base method.
+func (m *MockSignerClient) RawClientWithMacAuth(parentCtx context.Context) (context.Context, time.Duration, signrpc.SignerClient) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RawClientWithMacAuth", parentCtx)
+	ret0, _ := ret[0].(context.Context)
+	ret1, _ := ret[1].(time.Duration)
+	ret2, _ := ret[2].(signrpc.SignerClient)
+	return ret0, ret1, ret2
+}
+
+// RawClientWithMacAuth indicates an expected call of RawClientWithMacAuth.
+func (mr *MockSignerClientMockRecorder) RawClientWithMacAuth(parentCtx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RawClientWithMacAuth", reflect.TypeOf((*MockSignerClient)(nil).RawClientWithMacAuth), parentCtx)
 }
 
 // SignMessage mocks base method.
@@ -487,6 +505,22 @@ func (mr *MockWalletKitClientMockRecorder) PublishTransaction(ctx, tx, label any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishTransaction", reflect.TypeOf((*MockWalletKitClient)(nil).PublishTransaction), ctx, tx, label)
 }
 
+// RawClientWithMacAuth mocks base method.
+func (m *MockWalletKitClient) RawClientWithMacAuth(parentCtx context.Context) (context.Context, time.Duration, walletrpc.WalletKitClient) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RawClientWithMacAuth", parentCtx)
+	ret0, _ := ret[0].(context.Context)
+	ret1, _ := ret[1].(time.Duration)
+	ret2, _ := ret[2].(walletrpc.WalletKitClient)
+	return ret0, ret1, ret2
+}
+
+// RawClientWithMacAuth indicates an expected call of RawClientWithMacAuth.
+func (mr *MockWalletKitClientMockRecorder) RawClientWithMacAuth(parentCtx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RawClientWithMacAuth", reflect.TypeOf((*MockWalletKitClient)(nil).RawClientWithMacAuth), parentCtx)
+}
+
 // ReleaseOutput mocks base method.
 func (m *MockWalletKitClient) ReleaseOutput(ctx context.Context, lockID wtxmgr.LockID, op wire.OutPoint) error {
 	m.ctrl.T.Helper()
@@ -552,6 +586,22 @@ func NewMockChainNotifierClient(ctrl *gomock.Controller) *MockChainNotifierClien
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockChainNotifierClient) EXPECT() *MockChainNotifierClientMockRecorder {
 	return m.recorder
+}
+
+// RawClientWithMacAuth mocks base method.
+func (m *MockChainNotifierClient) RawClientWithMacAuth(parentCtx context.Context) (context.Context, time.Duration, chainrpc.ChainNotifierClient) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RawClientWithMacAuth", parentCtx)
+	ret0, _ := ret[0].(context.Context)
+	ret1, _ := ret[1].(time.Duration)
+	ret2, _ := ret[2].(chainrpc.ChainNotifierClient)
+	return ret0, ret1, ret2
+}
+
+// RawClientWithMacAuth indicates an expected call of RawClientWithMacAuth.
+func (mr *MockChainNotifierClientMockRecorder) RawClientWithMacAuth(parentCtx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RawClientWithMacAuth", reflect.TypeOf((*MockChainNotifierClient)(nil).RawClientWithMacAuth), parentCtx)
 }
 
 // RegisterBlockEpochNtfn mocks base method.

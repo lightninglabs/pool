@@ -25,6 +25,7 @@ import (
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/signrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/lightningnetwork/lnd/lnwallet"
@@ -256,6 +257,13 @@ func newMockWallet() *mockWallet {
 	return &mockWallet{
 		publishChan: make(chan *wire.MsgTx, 1),
 	}
+}
+
+func (w *mockWallet) RawClientWithMacAuth(
+	ctx context.Context) (context.Context, time.Duration,
+	walletrpc.WalletKitClient) {
+
+	return ctx, 0, nil
 }
 
 func (w *mockWallet) DeriveNextKey(ctx context.Context,
@@ -589,6 +597,13 @@ func newMockChainNotifier() *mockChainNotifier {
 		blockChan: make(chan int32),
 		errChan:   make(chan error),
 	}
+}
+
+func (n *mockChainNotifier) RawClientWithMacAuth(
+	ctx context.Context) (context.Context, time.Duration,
+	chainrpc.ChainNotifierClient) {
+
+	return ctx, 0, nil
 }
 
 func (n *mockChainNotifier) RegisterConfirmationsNtfn(ctx context.Context,

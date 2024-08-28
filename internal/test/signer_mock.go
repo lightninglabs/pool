@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/lightningnetwork/lnd/lnrpc/signrpc"
 )
 
 var (
@@ -46,6 +48,13 @@ type MockSigner struct {
 }
 
 var _ lndclient.SignerClient = (*MockSigner)(nil)
+
+func (s *MockSigner) RawClientWithMacAuth(
+	ctx context.Context) (context.Context, time.Duration,
+	signrpc.SignerClient) {
+
+	return ctx, 0, nil
+}
 
 func (s *MockSigner) SignOutputRaw(_ context.Context, tx *wire.MsgTx,
 	signDescriptors []*lndclient.SignDescriptor,
