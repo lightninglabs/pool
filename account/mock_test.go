@@ -239,16 +239,12 @@ var _ Auctioneer = (*mockAuctioneer)(nil)
 type mockWallet struct {
 	TxSource
 	lndclient.WalletKitClient
-	lndclient.SignerClient
-	sync.Mutex
 
-	txs                   []lndclient.Transaction
-	publishChan           chan *wire.MsgTx
-	muSig2Sessions        map[input.MuSig2SessionID]*input.MuSig2SessionInfo
-	muSig2RemovedSessions map[input.MuSig2SessionID]*input.MuSig2SessionInfo
-	utxos                 []*lnwallet.Utxo
-	fundPsbt              *psbt.Packet
-	fundPsbtChangeIdx     int32
+	txs               []lndclient.Transaction
+	publishChan       chan *wire.MsgTx
+	utxos             []*lnwallet.Utxo
+	fundPsbt          *psbt.Packet
+	fundPsbtChangeIdx int32
 
 	sendOutputs func(context.Context, []*wire.TxOut,
 		chainfee.SatPerKWeight) (*wire.MsgTx, error)
@@ -259,12 +255,6 @@ var _ lndclient.WalletKitClient = (*mockWallet)(nil)
 func newMockWallet() *mockWallet {
 	return &mockWallet{
 		publishChan: make(chan *wire.MsgTx, 1),
-		muSig2Sessions: make(
-			map[input.MuSig2SessionID]*input.MuSig2SessionInfo,
-		),
-		muSig2RemovedSessions: make(
-			map[input.MuSig2SessionID]*input.MuSig2SessionInfo,
-		),
 	}
 }
 
@@ -272,13 +262,6 @@ func (w *mockWallet) DeriveNextKey(ctx context.Context,
 	family int32) (*keychain.KeyDescriptor, error) {
 
 	return testTraderKeyDesc, nil
-}
-
-func (w *mockWallet) DeriveSharedKey(ctx context.Context,
-	ephemeralKey *btcec.PublicKey,
-	keyLocator *keychain.KeyLocator) ([32]byte, error) {
-
-	return sharedSecret, nil
 }
 
 func (w *mockWallet) PublishTransaction(ctx context.Context, tx *wire.MsgTx,
@@ -348,24 +331,6 @@ func (w *mockWallet) ReleaseOutput(_ context.Context, lockID wtxmgr.LockID,
 	return nil
 }
 
-func (w *mockWallet) SignOutputRaw(context.Context, *wire.MsgTx,
-	[]*lndclient.SignDescriptor, []*wire.TxOut) ([][]byte, error) {
-
-	return [][]byte{[]byte("trader sig")}, nil
-}
-
-func (w *mockWallet) ComputeInputScript(context.Context, *wire.MsgTx,
-	[]*lndclient.SignDescriptor, []*wire.TxOut) ([]*input.Script, error) {
-
-	return []*input.Script{{
-		SigScript: []byte("input sig script"),
-		Witness: wire.TxWitness{
-			[]byte("input"),
-			[]byte("witness"),
-		},
-	}}, nil
-}
-
 func (w *mockWallet) EstimateFeeRate(_ context.Context,
 	_ int32) (chainfee.SatPerKWeight, error) {
 
@@ -402,7 +367,7 @@ func (w *mockWallet) SignPsbt(_ context.Context,
 }
 
 func (w *mockWallet) FinalizePsbt(_ context.Context, packet *psbt.Packet,
-	account string) (*psbt.Packet, *wire.MsgTx, error) {
+	_ string) (*psbt.Packet, *wire.MsgTx, error) {
 
 	// Just copy over any sigs we might have. This is copy/paste code from
 	// the psbt Finalizer, minus the IsComplete() check.
@@ -446,9 +411,55 @@ func (w *mockWallet) FinalizePsbt(_ context.Context, packet *psbt.Packet,
 	return packet, packet.UnsignedTx, nil
 }
 
+type mockSigner struct {
+	lndclient.SignerClient
+	sync.Mutex
+
+	muSig2Sessions        map[input.MuSig2SessionID]*input.MuSig2SessionInfo
+	muSig2RemovedSessions map[input.MuSig2SessionID]*input.MuSig2SessionInfo
+}
+
+var _ lndclient.SignerClient = (*mockSigner)(nil)
+
+func newMockSigner() *mockSigner {
+	return &mockSigner{
+		muSig2Sessions: make(
+			map[input.MuSig2SessionID]*input.MuSig2SessionInfo,
+		),
+		muSig2RemovedSessions: make(
+			map[input.MuSig2SessionID]*input.MuSig2SessionInfo,
+		),
+	}
+}
+
+func (w *mockSigner) DeriveSharedKey(ctx context.Context,
+	ephemeralKey *btcec.PublicKey,
+	keyLocator *keychain.KeyLocator) ([32]byte, error) {
+
+	return sharedSecret, nil
+}
+
+func (w *mockSigner) SignOutputRaw(context.Context, *wire.MsgTx,
+	[]*lndclient.SignDescriptor, []*wire.TxOut) ([][]byte, error) {
+
+	return [][]byte{[]byte("trader sig")}, nil
+}
+
+func (w *mockSigner) ComputeInputScript(context.Context, *wire.MsgTx,
+	[]*lndclient.SignDescriptor, []*wire.TxOut) ([]*input.Script, error) {
+
+	return []*input.Script{{
+		SigScript: []byte("input sig script"),
+		Witness: wire.TxWitness{
+			[]byte("input"),
+			[]byte("witness"),
+		},
+	}}, nil
+}
+
 // MuSig2CreateSession creates a new musig session with the key and signers
 // provided.
-func (w *mockWallet) MuSig2CreateSession(_ context.Context,
+func (w *mockSigner) MuSig2CreateSession(_ context.Context,
 	version input.MuSig2Version, _ *keychain.KeyLocator, _ [][]byte,
 	opts ...lndclient.MuSig2SessionOpts) (*input.MuSig2SessionInfo, error) {
 
@@ -485,8 +496,8 @@ func (w *mockWallet) MuSig2CreateSession(_ context.Context,
 
 // MuSig2RegisterNonces registers additional public nonces for a musig2 session.
 // It returns a boolean indicating whether we have all of our nonces present.
-func (w *mockWallet) MuSig2RegisterNonces(_ context.Context, sessionID [32]byte,
-	nonces [][66]byte) (bool, error) {
+func (w *mockSigner) MuSig2RegisterNonces(_ context.Context, _ [32]byte,
+	_ [][66]byte) (bool, error) {
 
 	return true, nil
 }
@@ -495,7 +506,7 @@ func (w *mockWallet) MuSig2RegisterNonces(_ context.Context, sessionID [32]byte,
 // message. This can only be called once all public nonces have been created. If
 // the caller will not be responsible for combining the signatures, the cleanup
 // bool should be set.
-func (w *mockWallet) MuSig2Sign(_ context.Context, sessionID [32]byte,
+func (w *mockSigner) MuSig2Sign(_ context.Context, sessionID [32]byte,
 	_ [32]byte, cleanup bool) ([]byte, error) {
 
 	var (
@@ -521,7 +532,7 @@ func (w *mockWallet) MuSig2Sign(_ context.Context, sessionID [32]byte,
 // MuSig2CombineSig combines the given partial signature(s) with the local one,
 // if it already exists. Once a partial signature of all participants are
 // registered, the final signature will be combined and returned.
-func (w *mockWallet) MuSig2CombineSig(_ context.Context, sessionID [32]byte,
+func (w *mockSigner) MuSig2CombineSig(_ context.Context, sessionID [32]byte,
 	_ [][]byte) (bool, []byte, error) {
 
 	var (
@@ -544,7 +555,7 @@ func (w *mockWallet) MuSig2CombineSig(_ context.Context, sessionID [32]byte,
 }
 
 // MuSig2Cleanup removes a session from memory to free up resources.
-func (w *mockWallet) MuSig2Cleanup(_ context.Context,
+func (w *mockSigner) MuSig2Cleanup(_ context.Context,
 	sessionID [32]byte) error {
 
 	w.Lock()

@@ -89,6 +89,7 @@ type testHarness struct {
 	store      *mockStore
 	notifier   *mockChainNotifier
 	wallet     *mockWallet
+	signer     *mockSigner
 	auctioneer *mockAuctioneer
 	manager    Manager
 }
@@ -96,6 +97,7 @@ type testHarness struct {
 func newTestHarness(t *testing.T) *testHarness {
 	store := newMockStore()
 	wallet := newMockWallet()
+	signer := newMockSigner()
 	notifier := newMockChainNotifier()
 	auctioneer := newMockAuctioneer()
 
@@ -103,13 +105,14 @@ func newTestHarness(t *testing.T) *testHarness {
 		t:          t,
 		store:      store,
 		wallet:     wallet,
+		signer:     signer,
 		notifier:   notifier,
 		auctioneer: auctioneer,
 		manager: NewManager(&ManagerConfig{
 			Store:          store,
 			Auctioneer:     auctioneer,
 			Wallet:         wallet,
-			Signer:         wallet,
+			Signer:         signer,
 			ChainNotifier:  notifier,
 			TxSource:       wallet,
 			TxFeeEstimator: wallet,
@@ -419,14 +422,14 @@ func (h *testHarness) assertAuctioneerMuSig2NoncesReceived() {
 	h.auctioneer.mu.Lock()
 	defer h.auctioneer.mu.Unlock()
 
-	h.wallet.Lock()
-	defer h.wallet.Unlock()
+	h.signer.Lock()
+	defer h.signer.Unlock()
 
-	require.Len(h.t, h.wallet.muSig2Sessions, 0)
-	require.Len(h.t, h.wallet.muSig2RemovedSessions, 1)
+	require.Len(h.t, h.signer.muSig2Sessions, 0)
+	require.Len(h.t, h.signer.muSig2RemovedSessions, 1)
 
 	var sessionInfo *input.MuSig2SessionInfo
-	for _, info := range h.wallet.muSig2RemovedSessions {
+	for _, info := range h.signer.muSig2RemovedSessions {
 		sessionInfo = info
 		break
 	}
