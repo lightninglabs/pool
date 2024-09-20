@@ -33,7 +33,7 @@ func Run(cfg *Config) error {
 	// Initialize logging at the default logging level.
 	err = logWriter.InitLogRotator(
 		filepath.Join(cfg.LogDir, DefaultLogFilename),
-		cfg.MaxLogFileSize, cfg.MaxLogFiles,
+		build.Gzip, cfg.MaxLogFileSize, cfg.MaxLogFiles,
 	)
 	if err != nil {
 		return err
