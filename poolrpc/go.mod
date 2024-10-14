@@ -1,6 +1,6 @@
 module github.com/lightninglabs/pool/poolrpc
 
-go 1.22.3
+go 1.22.6
 
 require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0

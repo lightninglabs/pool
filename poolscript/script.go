@@ -9,10 +9,12 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightninglabs/lndclient"
+	"github.com/lightningnetwork/lnd/fn"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -842,10 +844,13 @@ func FundingOutput(commitmentType lnrpc.CommitmentType, ourKey,
 			return nil, err
 		}
 
+		// Pool does not use TapscriptRoot.
+		var tapscriptRoot fn.Option[chainhash.Hash]
+
 		log.Debugf("Creating P2TR funding script for local key %x and "+
 			"remote key %x", ourKey, theirKey)
 		_, fundingOutput, err := input.GenTaprootFundingScript(
-			ourPubKey, theirPubKey, chanSize,
+			ourPubKey, theirPubKey, chanSize, tapscriptRoot,
 		)
 		if err != nil {
 			return nil, err
