@@ -1188,6 +1188,7 @@
         "matched_orders": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcMatchedOrderSnapshot"
           },
           "description": "Deprecated, use matched_markets."
@@ -1226,6 +1227,7 @@
         "batches": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcBatchSnapshotResponse"
           },
           "description": "The list of batches requested."
@@ -1760,6 +1762,7 @@
         "leases": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcLease"
           },
           "description": "The relevant list of leases purchased or sold within the auction."
@@ -1782,6 +1785,7 @@
         "accounts": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcAccount"
           }
         }
@@ -1793,6 +1797,7 @@
         "modification_fees": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcAccountModificationFee"
           }
         }
@@ -1804,12 +1809,14 @@
         "asks": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcAsk"
           }
         },
         "bids": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcBid"
           }
         }
@@ -1821,6 +1828,7 @@
         "tickets": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcDecodedSidecarTicket"
           }
         }
@@ -1875,6 +1883,7 @@
         "num_asks": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/MarketInfoTierValue"
           },
           "description": "The number of open/pending ask orders per node tier."
@@ -1882,6 +1891,7 @@
         "num_bids": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/MarketInfoTierValue"
           },
           "description": "The number of open/pending bid orders per node tier."
@@ -1889,6 +1899,7 @@
         "ask_open_interest_units": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/MarketInfoTierValue"
           },
           "description": "The total number of open/unmatched units in open/pending ask orders per node\ntier."
@@ -1896,6 +1907,7 @@
         "bid_open_interest_units": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/MarketInfoTierValue"
           },
           "description": "The total number of open/unmatched units in open/pending bid orders per node\ntier."
@@ -1956,6 +1968,7 @@
         "matched_orders": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcMatchedOrderSnapshot"
           },
           "description": "The set of all orders matched in the batch."
@@ -2040,6 +2053,7 @@
         "node_ratings": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcNodeRating"
           },
           "description": "A series of node ratings for each of the queried nodes."
@@ -2124,6 +2138,7 @@
         "events": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcOrderEvent"
           },
           "description": "A list of events that were emitted for this order. This field is only set\nwhen the verbose flag is set to true in the request."
@@ -2263,6 +2278,7 @@
         "outputs": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcOutput"
           }
         }
@@ -2522,6 +2538,7 @@
         "tokens": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcLsatToken"
           },
           "description": "*\nList of all tokens the daemon knows of, including old/expired tokens."
@@ -2557,6 +2574,7 @@
         "outputs": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/poolrpcOutput"
           },
           "description": "The outputs we'll withdraw funds from the account into."
@@ -2618,6 +2636,7 @@
         "details": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
         }
