@@ -42,6 +42,13 @@ type MockWalletKit struct {
 
 var _ lndclient.WalletKitClient = (*MockWalletKit)(nil)
 
+func (m *MockWalletKit) RawClientWithMacAuth(
+	ctx context.Context) (context.Context, time.Duration,
+	walletrpc.WalletKitClient) {
+
+	return ctx, 0, nil
+}
+
 func (m *MockWalletKit) ListUnspent(context.Context, int32, int32,
 	...lndclient.ListUnspentOption) ([]*lnwallet.Utxo, error) {
 
