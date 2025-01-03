@@ -69,7 +69,7 @@ needs to work, therefore we show the more involved example here.
 
    The addition of this "auto" mode means that both sides need to only execute
    a single and the rest of the negotiation happens in the background. If the
-   `auto` flag is ommitted, then only the capacity and balance need to be
+   `auto` flag is omitted, then only the capacity and balance need to be
    specified, otherwise, all the other information one presents when submitting
    a full order needs to be specified.
 
