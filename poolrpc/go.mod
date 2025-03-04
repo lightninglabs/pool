@@ -1,7 +1,5 @@
 module github.com/lightninglabs/pool/poolrpc
 
-go 1.22.3
-
 require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0
 	github.com/lightninglabs/pool/auctioneerrpc v1.1.2
@@ -20,3 +18,5 @@ require (
 replace github.com/lightninglabs/pool/auctioneerrpc => ../auctioneerrpc
 
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.34.2-hex-display
+
+go 1.23.6
