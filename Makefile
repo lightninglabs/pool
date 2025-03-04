@@ -73,8 +73,8 @@ build:
 
 install:
 	@$(call print, "Installing Pool.")
-	$(GOINSTALL) -ldflags="$(LDFLAGS)" $(PKG)/cmd/pool
-	$(GOINSTALL) -ldflags="$(LDFLAGS)" $(PKG)/cmd/poold
+	$(GOINSTALL) -tags="${tags}" -ldflags="$(LDFLAGS)" $(PKG)/cmd/pool
+	$(GOINSTALL) -tags="${tags}" -ldflags="$(LDFLAGS)" $(PKG)/cmd/poold
 
 release:
 	@$(call print, "Releasing pool and poold binaries.")
