@@ -29,6 +29,8 @@ func NewMockWalletKit() *MockWalletKit {
 }
 
 type MockWalletKit struct {
+	lndclient.WalletKitClient
+
 	keyIndex     int32
 	feeEstimates map[int32]chainfee.SatPerKWeight
 
@@ -178,12 +180,6 @@ func (m *MockWalletKit) AddTx(tx *wire.MsgTx) {
 	m.lock.Lock()
 	m.Transactions = append(m.Transactions, tx.Copy())
 	m.lock.Unlock()
-}
-
-func (m *MockWalletKit) BumpFee(context.Context, wire.OutPoint,
-	chainfee.SatPerKWeight) error {
-
-	panic("unimplemented")
 }
 
 // ListAccounts retrieves all accounts belonging to the wallet by default.

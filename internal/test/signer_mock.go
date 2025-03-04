@@ -3,7 +3,6 @@ package test
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -39,6 +38,8 @@ func NewMockSigner() *MockSigner {
 }
 
 type MockSigner struct {
+	lndclient.SignerClient
+
 	SignOutputRawChannel chan SignOutputRawRequest
 
 	Height       int32
@@ -46,8 +47,6 @@ type MockSigner struct {
 	Signature    []byte
 	SignatureMsg string
 }
-
-var _ lndclient.SignerClient = (*MockSigner)(nil)
 
 func (s *MockSigner) RawClientWithMacAuth(
 	ctx context.Context) (context.Context, time.Duration,
@@ -68,12 +67,6 @@ func (s *MockSigner) SignOutputRaw(_ context.Context, tx *wire.MsgTx,
 	rawSigs := [][]byte{{1, 2, 3}}
 
 	return rawSigs, nil
-}
-
-func (s *MockSigner) ComputeInputScript(context.Context, *wire.MsgTx,
-	[]*lndclient.SignDescriptor, []*wire.TxOut) ([]*input.Script, error) {
-
-	return nil, fmt.Errorf("unimplemented")
 }
 
 func (s *MockSigner) SignMessage(_ context.Context, _ []byte,

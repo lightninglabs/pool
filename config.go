@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/cert"
 	"github.com/lightningnetwork/lnd/lncfg"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -37,9 +38,6 @@ var (
 	defaultLogLevel   = "info"
 	defaultLogDirname = "logs"
 	defaultLogDir     = filepath.Join(DefaultBaseDir, defaultLogDirname)
-
-	defaultMaxLogFiles    = 3
-	defaultMaxLogFileSize = 10
 
 	defaultMinBackoff = 5 * time.Second
 	defaultMaxBackoff = 1 * time.Minute
@@ -126,8 +124,8 @@ type Config struct {
 	BaseDir        string `long:"basedir" description:"The base directory where pool stores all its data. If set, this option overwrites --logdir, --macaroonpath, --tlscertpath and --tlskeypath."`
 
 	LogDir         string `long:"logdir" description:"Directory to log output."`
-	MaxLogFiles    int    `long:"maxlogfiles" description:"Maximum logfiles to keep (0 for no rotation)"`
-	MaxLogFileSize int    `long:"maxlogfilesize" description:"Maximum logfile size in MB"`
+	MaxLogFiles    int    `long:"maxlogfiles" description:"Maximum logfiles to keep (0 for no rotation). DEPRECATED: Use --logging.file.max-files instead" hidden:"true"`
+	MaxLogFileSize int    `long:"maxlogfilesize" description:"Maximum logfile size in MB. DEPRECATED: Use --logging.file.max-file-size instead" hidden:"true"`
 
 	MinBackoff time.Duration `long:"minbackoff" description:"Shortest backoff when reconnecting to the server. Valid time units are {s, m, h}."`
 	MaxBackoff time.Duration `long:"maxbackoff" description:"Longest backoff when reconnecting to the server. Valid time units are {s, m, h}."`
@@ -152,6 +150,9 @@ type Config struct {
 	TxLabelPrefix string `long:"txlabelprefix" description:"If set, then every transaction poold makes will be created with a label that has this string as a prefix."`
 
 	Lnd *LndConfig `group:"lnd" namespace:"lnd"`
+
+	// Logging controls various aspects of pool logging.
+	Logging *build.LogConfig `group:"logging" namespace:"logging"`
 
 	// RPCListener is a network listener that can be set if poold should be
 	// used as a library and listen on the given listener instead of what is
@@ -203,8 +204,7 @@ func DefaultConfig() Config {
 		Insecure:          false,
 		BaseDir:           DefaultBaseDir,
 		LogDir:            defaultLogDir,
-		MaxLogFiles:       defaultMaxLogFiles,
-		MaxLogFileSize:    defaultMaxLogFileSize,
+		Logging:           build.DefaultLogConfig(),
 		MinBackoff:        defaultMinBackoff,
 		MaxBackoff:        defaultMaxBackoff,
 		DebugLevel:        defaultLogLevel,

@@ -1,34 +1,34 @@
 module github.com/lightninglabs/pool
 
 require (
-	github.com/btcsuite/btcd v0.24.3-0.20240921052913-67b8efd3ba53
+	github.com/btcsuite/btcd v0.24.3-0.20241210095828-e646d437e95b
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/btcsuite/btcd/btcutil v1.1.5
 	github.com/btcsuite/btcd/btcutil/psbt v1.1.8
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
-	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f
-	github.com/btcsuite/btcwallet v0.16.10-0.20240809133323-7d3434c65ae2
-	github.com/btcsuite/btcwallet/wallet/txrules v1.2.1
-	github.com/btcsuite/btcwallet/wtxmgr v1.5.3
+	github.com/btcsuite/btclog/v2 v2.0.1-0.20250110154127-3ae4bf1cb318
+	github.com/btcsuite/btcwallet v0.16.10-0.20241127094224-93c858b2ad63
+	github.com/btcsuite/btcwallet/wallet/txrules v1.2.2
+	github.com/btcsuite/btcwallet/wtxmgr v1.5.4
 	github.com/davecgh/go-spew v1.1.1
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0
 	github.com/jessevdk/go-flags v1.4.0
-	github.com/lightninglabs/aperture v0.3.2-beta
-	github.com/lightninglabs/lndclient v0.18.4-0
+	github.com/lightninglabs/aperture v0.3.8-beta
+	github.com/lightninglabs/lndclient v0.19.0-2
 	github.com/lightninglabs/pool/auctioneerrpc v1.1.2
 	github.com/lightninglabs/pool/poolrpc v1.0.0
-	github.com/lightningnetwork/lnd v0.18.3-beta.rc3.0.20241011124628-ca3bde901eb8
+	github.com/lightningnetwork/lnd v0.18.0-beta.rc4.0.20250304192711-9feb761b4ec4
 	github.com/lightningnetwork/lnd/cert v1.2.2
-	github.com/lightningnetwork/lnd/fn v1.2.1
-	github.com/lightningnetwork/lnd/kvdb v1.4.10
-	github.com/lightningnetwork/lnd/tlv v1.2.6
-	github.com/lightningnetwork/lnd/tor v1.1.2
+	github.com/lightningnetwork/lnd/fn/v2 v2.0.8
+	github.com/lightningnetwork/lnd/kvdb v1.4.12
+	github.com/lightningnetwork/lnd/tlv v1.3.0
+	github.com/lightningnetwork/lnd/tor v1.1.4
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.9
-	go.etcd.io/bbolt v1.3.7
+	go.etcd.io/bbolt v1.3.11
 	go.uber.org/mock v0.4.0
-	golang.org/x/sync v0.8.0
+	golang.org/x/sync v0.10.0
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/macaroon-bakery.v2 v2.1.0
@@ -45,9 +45,10 @@ require (
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
 	github.com/aead/siphash v1.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/btcsuite/btcwallet/wallet/txauthor v1.3.4 // indirect
-	github.com/btcsuite/btcwallet/wallet/txsizes v1.2.4 // indirect
-	github.com/btcsuite/btcwallet/walletdb v1.4.2 // indirect
+	github.com/btcsuite/btclog v0.0.0-20241003133417-09c4e92e319c // indirect
+	github.com/btcsuite/btcwallet/wallet/txauthor v1.3.5 // indirect
+	github.com/btcsuite/btcwallet/wallet/txsizes v1.2.5 // indirect
+	github.com/btcsuite/btcwallet/walletdb v1.4.4 // indirect
 	github.com/btcsuite/go-socks v0.0.0-20170105172521-4720035b7bfd // indirect
 	github.com/btcsuite/websocket v0.0.0-20150119174127-31079b680792 // indirect
 	github.com/btcsuite/winsvc v1.0.0 // indirect
@@ -103,15 +104,16 @@ require (
 	github.com/json-iterator/go v1.1.11 // indirect
 	github.com/juju/loggo v0.0.0-20210728185423-eebad3a902c4 // indirect
 	github.com/kkdai/bstream v1.0.0 // indirect
+	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/lightninglabs/gozmq v0.0.0-20191113021534-d20a764486bf // indirect
 	github.com/lightninglabs/neutrino v0.16.1-0.20240425105051-602843d34ffd // indirect
 	github.com/lightninglabs/neutrino/cache v1.1.2 // indirect
 	github.com/lightningnetwork/lightning-onion v1.2.1-0.20240712235311-98bd56499dfb // indirect
 	github.com/lightningnetwork/lnd/clock v1.1.1 // indirect
-	github.com/lightningnetwork/lnd/healthcheck v1.2.5 // indirect
+	github.com/lightningnetwork/lnd/healthcheck v1.2.6 // indirect
 	github.com/lightningnetwork/lnd/queue v1.1.1 // indirect
-	github.com/lightningnetwork/lnd/sqldb v1.0.4 // indirect
+	github.com/lightningnetwork/lnd/sqldb v1.0.7 // indirect
 	github.com/lightningnetwork/lnd/ticker v1.1.1 // indirect
 	github.com/ltcsuite/ltcd v0.0.0-20190101042124-f37f8bf35796 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -167,13 +169,13 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect
-	golang.org/x/crypto v0.25.0 // indirect
+	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.27.0 // indirect
-	golang.org/x/sys v0.22.0 // indirect
-	golang.org/x/term v0.22.0 // indirect
-	golang.org/x/text v0.17.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	google.golang.org/genproto v0.0.0-20231016165738-49dd2c1f3d0b // indirect
@@ -201,4 +203,4 @@ replace github.com/lightninglabs/pool/auctioneerrpc => ./auctioneerrpc
 
 replace github.com/lightninglabs/pool/poolrpc => ./poolrpc
 
-go 1.22.6
+go 1.23.6
