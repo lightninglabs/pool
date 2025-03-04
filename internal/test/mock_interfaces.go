@@ -217,6 +217,21 @@ func (mr *MockSignerClientMockRecorder) SignOutputRaw(ctx, tx, signDescriptors, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignOutputRaw", reflect.TypeOf((*MockSignerClient)(nil).SignOutputRaw), ctx, tx, signDescriptors, prevOutputs)
 }
 
+// SignOutputRawKeyLocator mocks base method.
+func (m *MockSignerClient) SignOutputRawKeyLocator(ctx context.Context, tx *wire.MsgTx, signDescriptors []*lndclient.SignDescriptor, prevOutputs []*wire.TxOut) ([][]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SignOutputRawKeyLocator", ctx, tx, signDescriptors, prevOutputs)
+	ret0, _ := ret[0].([][]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SignOutputRawKeyLocator indicates an expected call of SignOutputRawKeyLocator.
+func (mr *MockSignerClientMockRecorder) SignOutputRawKeyLocator(ctx, tx, signDescriptors, prevOutputs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignOutputRawKeyLocator", reflect.TypeOf((*MockSignerClient)(nil).SignOutputRawKeyLocator), ctx, tx, signDescriptors, prevOutputs)
+}
+
 // VerifyMessage mocks base method.
 func (m *MockSignerClient) VerifyMessage(ctx context.Context, msg, sig []byte, pubkey [33]byte, opts ...lndclient.VerifyMessageOption) (bool, error) {
 	m.ctrl.T.Helper()
@@ -261,17 +276,22 @@ func (m *MockWalletKitClient) EXPECT() *MockWalletKitClientMockRecorder {
 }
 
 // BumpFee mocks base method.
-func (m *MockWalletKitClient) BumpFee(arg0 context.Context, arg1 wire.OutPoint, arg2 chainfee.SatPerKWeight) error {
+func (m *MockWalletKitClient) BumpFee(arg0 context.Context, arg1 wire.OutPoint, arg2 chainfee.SatPerKWeight, arg3 ...lndclient.BumpFeeOption) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BumpFee", arg0, arg1, arg2)
+	varargs := []any{arg0, arg1, arg2}
+	for _, a := range arg3 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BumpFee", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // BumpFee indicates an expected call of BumpFee.
-func (mr *MockWalletKitClientMockRecorder) BumpFee(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockWalletKitClientMockRecorder) BumpFee(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BumpFee", reflect.TypeOf((*MockWalletKitClient)(nil).BumpFee), arg0, arg1, arg2)
+	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BumpFee", reflect.TypeOf((*MockWalletKitClient)(nil).BumpFee), varargs...)
 }
 
 // DeriveKey mocks base method.
@@ -474,6 +494,21 @@ func (mr *MockWalletKitClientMockRecorder) ListUnspent(ctx, minConfs, maxConfs a
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, minConfs, maxConfs}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUnspent", reflect.TypeOf((*MockWalletKitClient)(nil).ListUnspent), varargs...)
+}
+
+// MinRelayFee mocks base method.
+func (m *MockWalletKitClient) MinRelayFee(ctx context.Context) (chainfee.SatPerKWeight, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MinRelayFee", ctx)
+	ret0, _ := ret[0].(chainfee.SatPerKWeight)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MinRelayFee indicates an expected call of MinRelayFee.
+func (mr *MockWalletKitClientMockRecorder) MinRelayFee(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinRelayFee", reflect.TypeOf((*MockWalletKitClient)(nil).MinRelayFee), ctx)
 }
 
 // NextAddr mocks base method.
