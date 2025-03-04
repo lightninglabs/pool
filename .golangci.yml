@@ -1,6 +1,6 @@
 run:
   # timeout for analysis
-  deadline: 4m
+  timeout: 4m
 
 linters-settings:
   govet:
@@ -20,6 +20,8 @@ linters-settings:
     excludes:
       - G402 # Look for bad TLS connection settings.
       - G306 # Poor file permissions used when writing to a new file.
+      - G601 # Implicit memory aliasing in for loop.
+      - G115 # Integer overflow in conversion.
   staticcheck:
     go: "1.19"
     checks: ["-SA1019"]
@@ -61,21 +63,20 @@ linters:
     
     # Causes stack overflow, see https://github.com/polyfloyd/go-errorlint/issues/19.
     - errorlint
-    
-    # Deprecated linters. See https://golangci-lint.run/usage/linters/.
-    - interfacer
-    - golint
-    - maligned
-    - scopelint
-    - varcheck
-    - structcheck
-    - deadcode
-    
-    # gRPC needs snake case notation.
-    - nosnakecase
-    
+
     # New linters that need a code adjustment first.
+    - intrange
+    - revive
+    - gosmopolitan
+    - goconst
+    - copyloopvar
     - wrapcheck
+    - depguard
+    - inamedparam
+    - protogetter
+    - perfsprint
+    - tagalign
+    - testifylint
     - nolintlint
     - paralleltest
     - tparallel
@@ -90,11 +91,8 @@ linters:
     - containedctx
     - contextcheck
     - errname
-    - exhaustivestruct
     - exhaustruct
-    - goerr113
-    - gomnd
-    - ifshort
+    - err113
     - noctx
     - nestif
     - wsl
@@ -111,7 +109,14 @@ linters:
     - forbidigo
     - interfacebloat
 
+    # The linter is too aggressive and doesn't add much value since reviewers
+    # will also catch magic numbers that make sense to extract.
+    - mnd
+
 issues:
+  # Only show newly introduced problems.
+  new-from-rev: c5b37702e0bead2408ba72aad792ea4ff9fc930f
+
   exclude-rules:
     # Exclude gosec from running for tests so that tests with weak randomness
     # (math/rand) will pass the linter.

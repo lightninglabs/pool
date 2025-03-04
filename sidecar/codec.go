@@ -36,7 +36,7 @@ func EncodeToString(t *Ticket) (string, error) {
 	// First, we'll write the sidecar prefix, as well as the serialized
 	// ticket into the buffer that we'll use to generate the checksum. We
 	// do this as we won't encode the checksum using base58.
-	if _, err := checksumBuf.Write([]byte(sidecarPrefix)); err != nil {
+	if _, err := checksumBuf.WriteString(sidecarPrefix); err != nil {
 		return "", err
 	}
 	if _, err := checksumBuf.Write(encodingVersion); err != nil {
