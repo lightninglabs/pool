@@ -20,25 +20,47 @@ func Run(cfg *Config) error {
 	}
 	cfg.RequestShutdown = cfg.ShutdownInterceptor.RequestShutdown
 
-	logWriter = build.NewRotatingLogWriter()
-	SetupLoggers(logWriter, cfg.ShutdownInterceptor)
+	sugLogMgr := build.NewSubLoggerManager(
+		build.NewDefaultLogHandlers(cfg.Logging, logWriter)...,
+	)
+	SetupLoggers(sugLogMgr, cfg.ShutdownInterceptor)
 
 	// Special show command to list supported subsystems and exit.
 	if cfg.DebugLevel == "show" {
 		fmt.Printf("Supported subsystems: %v\n",
-			logWriter.SupportedSubsystems())
+			sugLogMgr.SupportedSubsystems())
 		os.Exit(0)
 	}
 
-	// Initialize logging at the default logging level.
+	if cfg.MaxLogFiles != 0 {
+		if cfg.Logging.File.MaxLogFiles !=
+			build.DefaultMaxLogFiles {
+
+			return fmt.Errorf("cannot set both maxlogfiles and "+
+				"logging.file.max-files: %w", err)
+		}
+
+		cfg.Logging.File.MaxLogFiles = cfg.MaxLogFiles
+	}
+	if cfg.MaxLogFileSize != 0 {
+		if cfg.Logging.File.MaxLogFileSize !=
+			build.DefaultMaxLogFileSize {
+
+			return fmt.Errorf("cannot set both maxlogfilesize and "+
+				"logging.file.max-file-size: %w", err)
+		}
+
+		cfg.Logging.File.MaxLogFileSize = cfg.MaxLogFileSize
+	}
+
 	err = logWriter.InitLogRotator(
-		filepath.Join(cfg.LogDir, DefaultLogFilename),
-		cfg.MaxLogFileSize, cfg.MaxLogFiles,
+		cfg.Logging.File, filepath.Join(cfg.LogDir, DefaultLogFilename),
 	)
 	if err != nil {
 		return err
 	}
-	err = build.ParseAndSetDebugLevels(cfg.DebugLevel, logWriter)
+
+	err = build.ParseAndSetDebugLevels(cfg.DebugLevel, sugLogMgr)
 	if err != nil {
 		return err
 	}

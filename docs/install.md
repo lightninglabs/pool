@@ -16,7 +16,8 @@ To run `poold` integrated into the Lightning Terminal, download [the latest rele
 
 ### Building the binaries from source
 
-To build both the `poold` and `pool` binaries from the source code, at least the `go 1.14` and `make` must be installed.
+To build both the `poold` and `pool` binaries from the source code, at least 
+the `go 1.18` and `make` must be installed.
 
 To download the code, compile and install it, the following commands can then be run:
 

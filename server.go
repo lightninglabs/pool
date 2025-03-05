@@ -564,7 +564,7 @@ func (s *Server) setupClient() error {
 			return &tokenID, nil
 		}
 	}
-	activeLoggers := logWriter.SubLoggers()
+	activeLoggers := subLogMgr.SubLoggers()
 	s.cfg.AuctioneerDialOpts = append(
 		s.cfg.AuctioneerDialOpts,
 		grpc.WithChainUnaryInterceptor(
