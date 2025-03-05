@@ -23,7 +23,6 @@ linters-settings:
       - G601 # Implicit memory aliasing in for loop.
       - G115 # Integer overflow in conversion.
   staticcheck:
-    go: "1.19"
     checks: ["-SA1019"]
 
 linters:
