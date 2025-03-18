@@ -103,6 +103,7 @@ var renewAccountTestCases = []struct {
 	},
 	mockSetter: func(req *poolrpc.RenewAccountRequest,
 		accMgr *account.MockManager, marshalerMock *MockMarshaler) {
+
 		// Renew account params
 		bestHeight := uint32(100)
 		feeRate := chainfee.SatPerKWeight(req.FeeRateSatPerKw)
@@ -110,7 +111,7 @@ var renewAccountTestCases = []struct {
 		if expiryHeight == 0 {
 			expiryHeight = 100 + req.GetRelativeExpiry()
 		}
-		version := account.VersionTaprootEnabled
+		version := account.VersionMuSig2V100RC2
 		acc := &account.Account{}
 		tx := &wire.MsgTx{}
 		accMgr.EXPECT().
@@ -175,8 +176,6 @@ var renewAccountTestCases = []struct {
 
 func TestRenewAccount(t *testing.T) {
 	for _, tc := range renewAccountTestCases {
-		tc := tc
-
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
