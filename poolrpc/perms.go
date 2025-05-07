@@ -1,4 +1,4 @@
-package perms
+package poolrpc
 
 import "gopkg.in/macaroon-bakery.v2/bakery"
 
