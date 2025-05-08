@@ -24,7 +24,6 @@ import (
 	"github.com/lightninglabs/pool/clientdb"
 	"github.com/lightninglabs/pool/funding"
 	"github.com/lightninglabs/pool/order"
-	"github.com/lightninglabs/pool/perms"
 	"github.com/lightninglabs/pool/poolrpc"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/lightningnetwork/lnd/kvdb"
@@ -199,7 +198,7 @@ func (s *Server) Start() error {
 			Checkers: []macaroons.Checker{
 				macaroons.IPLockChecker,
 			},
-			RequiredPerms: perms.RequiredPermissions,
+			RequiredPerms: poolrpc.RequiredPermissions,
 			DBPassword:    macDbDefaultPw,
 			LndClient:     &s.lndServices.LndServices,
 			EphemeralKey:  lndclient.SharedKeyNUMS,
@@ -425,7 +424,7 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 				Checkers: []macaroons.Checker{
 					macaroons.IPLockChecker,
 				},
-				RequiredPerms: perms.RequiredPermissions,
+				RequiredPerms: poolrpc.RequiredPermissions,
 				DBPassword:    macDbDefaultPw,
 				LndClient:     &s.lndServices.LndServices,
 				EphemeralKey:  lndclient.SharedKeyNUMS,
