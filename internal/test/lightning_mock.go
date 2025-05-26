@@ -232,8 +232,8 @@ func (m *MockLightning) ListTransactions(_ context.Context, _, _ int32,
 }
 
 // ListChannels retrieves all channels of the backing lnd node.
-func (m *MockLightning) ListChannels(context.Context, bool,
-	bool) ([]lndclient.ChannelInfo, error) {
+func (m *MockLightning) ListChannels(context.Context, bool, bool,
+	...lndclient.ListChannelsOption) ([]lndclient.ChannelInfo, error) {
 
 	return m.Channels, nil
 }
@@ -370,7 +370,8 @@ func (m *MockLightning) OpenChannel(_ context.Context, peer route.Vertex,
 }
 
 func (m *MockLightning) CloseChannel(context.Context, *wire.OutPoint,
-	bool, int32, btcutil.Address) (chan lndclient.CloseChannelUpdate,
+	bool, int32, btcutil.Address,
+	...lndclient.CloseChannelOption) (chan lndclient.CloseChannelUpdate,
 	chan error, error) {
 
 	return nil, nil, nil
