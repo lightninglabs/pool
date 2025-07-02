@@ -99,6 +99,10 @@ type channelEventStream struct {
 	quit               chan struct{}
 }
 
+func (c *channelEventStream) Context() context.Context {
+	return c.ctx
+}
+
 func (c *channelEventStream) Recv() (*lnrpc.ChannelEventUpdate, error) {
 	select {
 	case msg := <-c.updateChan:
