@@ -319,7 +319,6 @@ func findAccounts(cfg RecoveryConfig, possibleAccounts []*Account) []*Account {
 
 	accountLoop:
 		for acctIdx, acc := range remainingAccounts {
-			acc := acc
 			traderKey := acc.TraderKey.PubKey
 
 			helper.NextAccount(traderKey, acc.Secret)

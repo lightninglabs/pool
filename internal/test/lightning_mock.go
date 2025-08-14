@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -392,9 +393,7 @@ func (m *MockLightning) Connections() map[route.Vertex]string {
 	defer m.lock.Unlock()
 
 	connections := make(map[route.Vertex]string)
-	for k, v := range m.connections {
-		connections[k] = v
-	}
+	maps.Copy(connections, m.connections)
 
 	return connections
 }

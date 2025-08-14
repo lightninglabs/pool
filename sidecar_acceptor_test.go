@@ -176,7 +176,6 @@ var registerSidecarTestCases = []struct {
 // the ticket and stores it to the local database.
 func TestRegisterSidecar(t *testing.T) {
 	for _, tc := range registerSidecarTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			mockCtrl := gomock.NewController(t)

@@ -67,7 +67,6 @@ func TestSignOffer(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
-		tc := tc
 
 		if tc.ticket != nil {
 			digest, err := tc.ticket.OfferDigest()
@@ -146,7 +145,6 @@ func TestVerifyOffer(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
-		tc := tc
 
 		if tc.ticket != nil {
 			digest, err := tc.ticket.OfferDigest()
@@ -211,7 +209,6 @@ func TestSignOrder(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
-		tc := tc
 
 		if tc.ticket != nil {
 			digest, err := tc.ticket.OfferDigest()
@@ -321,7 +318,6 @@ func TestVerifyOrder(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
-		tc := tc
 
 		if tc.ticket != nil && tc.ticket.Order != nil {
 			digest, err := tc.ticket.OrderDigest()

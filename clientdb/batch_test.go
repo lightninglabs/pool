@@ -304,7 +304,6 @@ func TestPersistBatchResult(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a new store every time to make sure we start
 			// with a clean slate.

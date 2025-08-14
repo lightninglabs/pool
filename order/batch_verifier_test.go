@@ -397,7 +397,6 @@ func TestBatchVerifier(t *testing.T) {
 	// Run through all the test cases, creating a new, valid batch each
 	// time so no state carries over from the last run.
 	for _, tc := range testCases {
-		tc := tc
 
 		// We'll create two accounts: A smaller one that has one ask for
 		// 4 units that will be completely used up. Then a larger

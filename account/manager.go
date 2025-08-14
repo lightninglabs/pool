@@ -2608,10 +2608,7 @@ func validateAccountParams(value, maxValue btcutil.Amount, expiry,
 // threshold" (basically a multiplier for the amount of work/fiat-burnt that
 // would need to be done to undo N blocks).
 func NumConfsForValue(value, maxAccountValue btcutil.Amount) uint32 {
-	confs := maxConfs * value / maxAccountValue
-	if confs < minConfs {
-		confs = minConfs
-	}
+	confs := max(maxConfs*value/maxAccountValue, minConfs)
 	if confs > maxConfs {
 		confs = maxConfs
 	}

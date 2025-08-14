@@ -2359,7 +2359,6 @@ func (s *rpcServer) prepareLeasesResponse(ctx context.Context,
 		firstIdxForBatch := len(rpcLeases)
 
 		for nonce, matches := range batch.MatchedOrders {
-			nonce := nonce
 			for _, match := range matches {
 				// Obtain our order that was matched.
 				ourOrder, ok := batch.Orders[nonce]

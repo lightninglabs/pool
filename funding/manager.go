@@ -253,10 +253,7 @@ func newStreamBackoff(maxDelay time.Duration) *streamBackoff {
 func (s *streamBackoff) nextDelay() time.Duration {
 	s.attempts++
 
-	delay := time.Duration(s.attempts) * time.Second
-	if delay > s.maxDelay {
-		delay = s.maxDelay
-	}
+	delay := min(time.Duration(s.attempts)*time.Second, s.maxDelay)
 
 	return delay
 }

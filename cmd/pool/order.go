@@ -386,13 +386,10 @@ func parseCommonParams(ctx *cli.Context, blockDuration uint32) (*poolrpc.Order,
 			"least 1 sat/vByte")
 	}
 
-	satPerKw := chainfee.SatPerKVByte(satPerByte * 1000).FeePerKWeight()
-
-	// Because of rounding, we ensure the set rate is at least our fee
-	// floor.
-	if satPerKw < chainfee.FeePerKwFloor {
-		satPerKw = chainfee.FeePerKwFloor
-	}
+	satPerKw := max(
+		// Because of rounding, we ensure the set rate is at least our fee
+		// floor.
+		chainfee.SatPerKVByte(satPerByte*1000).FeePerKWeight(), chainfee.FeePerKwFloor)
 
 	params.MaxBatchFeeRateSatPerKw = uint64(satPerKw)
 

@@ -55,7 +55,6 @@ var controllerLifeCycleTestCases = []struct {
 
 func TestWatcherControllerLifeCycle(t *testing.T) {
 	for _, tc := range controllerLifeCycleTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -105,7 +104,6 @@ var controllerNewBlocksTestCases = []struct {
 
 func TestWatcherControllerNewBlocks(t *testing.T) {
 	for _, tc := range controllerNewBlocksTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -183,7 +181,6 @@ func TestWatcherControllerWatchAccount(t *testing.T) {
 	heightHint := uint32(8)
 
 	for _, tc := range controllerWatchAccountTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -275,7 +272,6 @@ func TestWatcherControllerWatchAccountSpend(t *testing.T) {
 	heightHint := uint32(8)
 
 	for _, tc := range controllerWatchAccountSpendTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
