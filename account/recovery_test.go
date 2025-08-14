@@ -94,7 +94,6 @@ var findAccountTestCases = []struct {
 // for some lost accounts.
 func TestFindInitialAccountState(t *testing.T) {
 	for _, tc := range findAccountTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -207,7 +206,6 @@ var findAccountUpdateTestCases = []struct {
 // an update.
 func TestFindAccountUpdate(t *testing.T) {
 	for _, tc := range findAccountUpdateTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

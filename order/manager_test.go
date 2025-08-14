@@ -237,7 +237,6 @@ func TestValidateOrder(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			err := orderManager.validateOrder(
@@ -365,7 +364,6 @@ func TestPrepareOrderSidecarTicket(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
-		tc := tc
 
 		bid.SidecarTicket = tc.ticket
 		if tc.ticket != nil {

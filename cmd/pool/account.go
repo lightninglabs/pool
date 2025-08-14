@@ -169,10 +169,7 @@ func newAccount(ctx *cli.Context) error {
 
 		// Enforce a minimum fee rate of 253 sat/kw by rounding up if 1
 		// sat/byte is used.
-		feeRate := chainfee.SatPerKVByte(satPerVByte * 1000).FeePerKWeight()
-		if feeRate < chainfee.FeePerKwFloor {
-			feeRate = chainfee.FeePerKwFloor
-		}
+		feeRate := max(chainfee.SatPerKVByte(satPerVByte*1000).FeePerKWeight(), chainfee.FeePerKwFloor)
 		req.Fees = &poolrpc.InitAccountRequest_FeeRateSatPerKw{
 			FeeRateSatPerKw: uint64(feeRate),
 		}
@@ -382,10 +379,7 @@ func renewAccount(ctx *cli.Context) error {
 
 	// Enforce a minimum fee rate of 253 sat/kw by rounding up if 1
 	// sat/byte is used.
-	feeRate := chainfee.SatPerKVByte(satPerVByte * 1000).FeePerKWeight()
-	if feeRate < chainfee.FeePerKwFloor {
-		feeRate = chainfee.FeePerKwFloor
-	}
+	feeRate := max(chainfee.SatPerKVByte(satPerVByte*1000).FeePerKWeight(), chainfee.FeePerKwFloor)
 
 	// Parse the expiry in either of its forms. We'll always prefer the
 	// absolute expiry over the relative as the relative has a default value
@@ -495,10 +489,7 @@ func depositAccount(ctx *cli.Context) error {
 
 	// Enforce a minimum fee rate of 253 sat/kw by rounding up if 1
 	// sat/byte is used.
-	feeRate := chainfee.SatPerKVByte(satPerVByte * 1000).FeePerKWeight()
-	if feeRate < chainfee.FeePerKwFloor {
-		feeRate = chainfee.FeePerKwFloor
-	}
+	feeRate := max(chainfee.SatPerKVByte(satPerVByte*1000).FeePerKWeight(), chainfee.FeePerKwFloor)
 
 	req := &poolrpc.DepositAccountRequest{
 		TraderKey:       traderKey,
@@ -622,10 +613,7 @@ func withdrawAccount(ctx *cli.Context) error {
 
 	// Enforce a minimum fee rate of 253 sat/kw by rounding up if 1
 	// sat/byte is used.
-	feeRate := chainfee.SatPerKVByte(satPerVByte * 1000).FeePerKWeight()
-	if feeRate < chainfee.FeePerKwFloor {
-		feeRate = chainfee.FeePerKwFloor
-	}
+	feeRate := max(chainfee.SatPerKVByte(satPerVByte*1000).FeePerKWeight(), chainfee.FeePerKwFloor)
 
 	req := &poolrpc.WithdrawAccountRequest{
 		TraderKey: traderKey,
@@ -726,10 +714,7 @@ func closeAccount(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	satPerKw := chainfee.SatPerKVByte(satPerVByte * 1000).FeePerKWeight()
-	if satPerKw < chainfee.FeePerKwFloor {
-		satPerKw = chainfee.FeePerKwFloor
-	}
+	satPerKw := max(chainfee.SatPerKVByte(satPerVByte*1000).FeePerKWeight(), chainfee.FeePerKwFloor)
 
 	client, cleanup, err := getClient(ctx)
 	if err != nil {

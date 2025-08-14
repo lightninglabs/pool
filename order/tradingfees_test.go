@@ -74,7 +74,6 @@ func TestNewQuote(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
-		tc := tc
 
 		q := NewQuote(
 			tc.amt, tc.minChanAmt, tc.rate, tc.leaseDuration,

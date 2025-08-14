@@ -265,7 +265,6 @@ func (r *RecoveryHelper) LocateAnyOutput(expiry uint32,
 	for _, tx := range txns {
 		// We shouldn't return a pointer to a loop iterator value, so
 		// make a copy first.
-		tx := tx
 
 		idx, ok, err := r.LocateOutput(expiry, tx)
 		if err != nil {
@@ -802,7 +801,6 @@ func MatchPreviousOutPoint(op wire.OutPoint, txs []*wire.MsgTx) (*wire.MsgTx,
 	bool) {
 
 	for _, tx := range txs {
-		tx := tx
 		if IncludesPreviousOutPoint(tx, op) {
 			return tx, true
 		}

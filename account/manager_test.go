@@ -68,7 +68,6 @@ func runSubTests(t *testing.T, testCases []*testCase,
 	runTest func(t *testing.T, h *testHarness, tc *testCase)) {
 
 	for _, tc := range testCases {
-		tc := tc
 		success := t.Run(tc.name, func(tt *testing.T) {
 			tt.Parallel()
 

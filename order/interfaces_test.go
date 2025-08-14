@@ -305,7 +305,6 @@ func TestOrderReservedValue(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 
 		t.Run(tc.name+"/version_0", func(t *testing.T) {
 			runTestCase(t, tc, account.VersionInitialNoVersion)
@@ -358,7 +357,6 @@ var channelAnnouncementConstrainsTestCases = []struct {
 
 func TestChannelAnnouncementConstrainsCompatibility(t *testing.T) {
 	for _, tc := range channelAnnouncementConstrainsTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -410,7 +408,6 @@ var channelConfirmationConstrainsTestCases = []struct {
 
 func TestChannelConstrainsCompatibility(t *testing.T) {
 	for _, tc := range channelConfirmationConstrainsTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

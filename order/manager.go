@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -557,21 +558,11 @@ func IsNodeIDAValidMatch(nodeID [33]byte, allowed, notAllowed [][33]byte) bool {
 
 	// The lists are only taken into account if they are not empty.
 	if len(allowed) > 0 {
-		for _, allowedNodeID := range allowed {
-			if nodeID == allowedNodeID {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(allowed, nodeID)
 	}
 
 	if len(notAllowed) > 0 {
-		for _, notAllowedNodeID := range notAllowed {
-			if nodeID == notAllowedNodeID {
-				return false
-			}
-		}
-		return true
+		return !slices.Contains(notAllowed, nodeID)
 	}
 
 	// If we get here is because both lists were empty.
