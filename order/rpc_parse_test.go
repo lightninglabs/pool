@@ -59,7 +59,6 @@ var nodeIDSerializationTestCases = []struct {
 // deserialize a slice of node ids.
 func TestNodeIDSliceSerialization(t *testing.T) {
 	for _, tc := range nodeIDSerializationTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

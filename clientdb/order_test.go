@@ -84,7 +84,6 @@ var submitOrderTestCases = []struct {
 // TestSubmitOrder tests that orders can be stored and retrieved correctly.
 func TestSubmitOrder(t *testing.T) {
 	for _, tc := range submitOrderTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

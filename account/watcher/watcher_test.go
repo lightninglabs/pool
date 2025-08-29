@@ -102,7 +102,6 @@ var overdueExpirationsTestCases = []struct {
 
 func TestOverdueExpirations(t *testing.T) {
 	for _, tc := range overdueExpirationsTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -116,7 +115,6 @@ func TestOverdueExpirations(t *testing.T) {
 			watcher.expirationsPerHeight = tc.expirationsPerHeight
 
 			for _, trader := range tc.handledExpirations {
-				trader := trader
 				handlers.EXPECT().
 					HandleAccountExpiry(
 						trader,
@@ -208,7 +206,6 @@ var addAccountExpirationTestCases = []struct {
 
 func TestAddAccountExpiration(t *testing.T) {
 	for _, tc := range addAccountExpirationTestCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -225,7 +222,6 @@ func TestAddAccountExpiration(t *testing.T) {
 			watcher.bestHeight = tc.bestHeight
 
 			for trader, height := range tc.expirations {
-				trader := trader
 				if height < tc.bestHeight {
 					handlers.EXPECT().
 						HandleAccountExpiry(

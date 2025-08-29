@@ -121,7 +121,6 @@ func (s *mockStore) Accounts() ([]*Account, error) {
 
 	accounts := make([]*Account, 0, len(s.accounts))
 	for _, account := range s.accounts {
-		account := account
 		accounts = append(accounts, &account)
 	}
 	return accounts, nil
