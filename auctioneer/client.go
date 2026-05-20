@@ -46,12 +46,9 @@ const (
 )
 
 var (
-	// ErrServerShutdown is the error that is returned if the auction server
-	// signals it's going to shut down.
-	ErrServerShutdown = errors.New("server shutting down")
-
 	// ErrServerErrored is the error that is returned if the auction server
-	// sends back an error instead of a proper message.
+	// sends back an error instead of a proper message, or if the server
+	// stream is closed in a way that requires a reconnect.
 	ErrServerErrored = errors.New("server sent unexpected error")
 
 	// ErrClientShutdown is the error that is returned if the trader client
@@ -1043,14 +1040,16 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 			poolrpc.PrintMsg(msg), err)
 
 		switch {
-		// EOF is the "normal" close signal, meaning the server has
-		// cut its side of the connection. We will only get this during
-		// the proper shutdown of the server where we already have a
-		// reconnect scheduled. On an improper shutdown, we'll get an
-		// error, usually "transport is closing".
+		// EOF means the server has cut its side of the stream cleanly.
+		// This happens on planned server shutdowns, but also on
+		// proxy/load-balancer idle timeouts or any other clean-close
+		// scenario where the underlying TCP connection may still be
+		// alive. In all cases the long-lived subscription is gone and
+		// we need to trigger a reconnect, so route this through the
+		// same error path as any other stream failure.
 		case err == io.EOF:
 			select {
-			case c.errChanSwitch.ErrChan() <- ErrServerShutdown:
+			case c.errChanSwitch.ErrChan() <- ErrServerErrored:
 			case <-c.quit:
 			}
 			return

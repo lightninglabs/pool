@@ -307,10 +307,13 @@ func (s *rpcServer) serverHandler(blockChan chan int32,
 			}
 
 		case err := <-s.auctioneer.StreamErrChan:
-			// If the server is shutting down, then the client has
-			// already scheduled a restart. We only need to handle
-			// other errors here.
-			if err != nil && err != auctioneer.ErrServerShutdown {
+			// Any error received on the stream means the
+			// long-lived subscription is gone and needs to be
+			// re-established. The only other "shutdown" signal
+			// the client raises (an explicit SERVER_SHUTDOWN
+			// message from the auctioneer) is handled inline in
+			// the read loop and never reaches this channel.
+			if err != nil {
 				rpcLog.Errorf("Error in server stream: %v", err)
 				err := s.auctioneer.HandleServerShutdown(err)
 				if err != nil {
@@ -318,8 +321,6 @@ func (s *rpcServer) serverHandler(blockChan chan int32,
 						"%v", err)
 				}
 			}
-
-			rpcLog.Errorf("Unknown server error: %v", err)
 
 		case height := <-blockChan:
 			rpcLog.Infof("Received new block notification: "+
