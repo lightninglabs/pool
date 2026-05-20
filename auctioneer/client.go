@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand/v2"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -46,12 +47,9 @@ const (
 )
 
 var (
-	// ErrServerShutdown is the error that is returned if the auction server
-	// signals it's going to shut down.
-	ErrServerShutdown = errors.New("server shutting down")
-
 	// ErrServerErrored is the error that is returned if the auction server
-	// sends back an error instead of a proper message.
+	// sends back an error instead of a proper message, or if the server
+	// stream is closed in a way that requires a reconnect.
 	ErrServerErrored = errors.New("server sent unexpected error")
 
 	// ErrClientShutdown is the error that is returned if the trader client
@@ -932,6 +930,16 @@ func (c *Client) IsSubscribed() bool {
 	return c.serverStream != nil
 }
 
+// jitterBackoff returns backoff with up to 25% additive jitter so reconnect
+// attempts from a population of traders observing the same disconnect event
+// fan out over a window rather than spike at one instant. The jitter is
+// one-sided so we never wait less than the operator's configured floor.
+//
+//nolint:gosec // Backoff jitter doesn't need cryptographic randomness.
+func jitterBackoff(backoff time.Duration) time.Duration {
+	return backoff + time.Duration(rand.Int64N(int64(backoff)/4+1))
+}
+
 // connectServerStream opens the initial connection to the server for the stream
 // of account updates and handles reconnect trials with incremental backoff.
 func (c *Client) connectServerStream(initialBackoff time.Duration,
@@ -948,8 +956,11 @@ func (c *Client) connectServerStream(initialBackoff time.Duration,
 	)
 	for i := 0; i < numRetries; i++ {
 		// Wait before connecting in case this is a reconnect trial.
+		// Apply additive jitter so a population of traders that all
+		// hit the same disconnect event don't fan in on the server at
+		// exactly the same instant.
 		if backoff != 0 {
-			err = c.wait(backoff)
+			err = c.wait(jitterBackoff(backoff))
 			if err != nil {
 				return err
 			}
@@ -1043,14 +1054,16 @@ func (c *Client) readIncomingStream() { // nolint:gocyclo
 			poolrpc.PrintMsg(msg), err)
 
 		switch {
-		// EOF is the "normal" close signal, meaning the server has
-		// cut its side of the connection. We will only get this during
-		// the proper shutdown of the server where we already have a
-		// reconnect scheduled. On an improper shutdown, we'll get an
-		// error, usually "transport is closing".
+		// EOF means the server has cut its side of the stream cleanly.
+		// This happens on planned server shutdowns, but also on
+		// proxy/load-balancer idle timeouts or any other clean-close
+		// scenario where the underlying TCP connection may still be
+		// alive. In all cases the long-lived subscription is gone and
+		// we need to trigger a reconnect, so route this through the
+		// same error path as any other stream failure.
 		case err == io.EOF:
 			select {
-			case c.errChanSwitch.ErrChan() <- ErrServerShutdown:
+			case c.errChanSwitch.ErrChan() <- ErrServerErrored:
 			case <-c.quit:
 			}
 			return
