@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand/v2"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -929,6 +930,16 @@ func (c *Client) IsSubscribed() bool {
 	return c.serverStream != nil
 }
 
+// jitterBackoff returns backoff with up to 25% additive jitter so reconnect
+// attempts from a population of traders observing the same disconnect event
+// fan out over a window rather than spike at one instant. The jitter is
+// one-sided so we never wait less than the operator's configured floor.
+//
+//nolint:gosec // Backoff jitter doesn't need cryptographic randomness.
+func jitterBackoff(backoff time.Duration) time.Duration {
+	return backoff + time.Duration(rand.Int64N(int64(backoff)/4+1))
+}
+
 // connectServerStream opens the initial connection to the server for the stream
 // of account updates and handles reconnect trials with incremental backoff.
 func (c *Client) connectServerStream(initialBackoff time.Duration,
@@ -945,8 +956,11 @@ func (c *Client) connectServerStream(initialBackoff time.Duration,
 	)
 	for i := 0; i < numRetries; i++ {
 		// Wait before connecting in case this is a reconnect trial.
+		// Apply additive jitter so a population of traders that all
+		// hit the same disconnect event don't fan in on the server at
+		// exactly the same instant.
 		if backoff != 0 {
-			err = c.wait(backoff)
+			err = c.wait(jitterBackoff(backoff))
 			if err != nil {
 				return err
 			}

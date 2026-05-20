@@ -12,6 +12,35 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestJitterBackoffBounds samples the jitter helper for a typical configured
+// backoff and asserts results fall in the expected [backoff, backoff +
+// backoff/4] range and aren't pinned to a single value.
+func TestJitterBackoffBounds(t *testing.T) {
+	t.Parallel()
+
+	const (
+		base    = 5 * time.Second
+		samples = 200
+	)
+	seen := make(map[time.Duration]struct{}, samples)
+	for i := 0; i < samples; i++ {
+		got := jitterBackoff(base)
+		if got < base || got > base+base/4 {
+			t.Fatalf("jitterBackoff(%v) = %v, out of [%v, %v]",
+				base, got, base, base+base/4)
+		}
+		seen[got] = struct{}{}
+	}
+
+	// In 200 samples over a 1.25s window of nanosecond resolution we
+	// expect many distinct values. If we get only a handful, jitter is
+	// broken.
+	if len(seen) < 10 {
+		t.Fatalf("expected diverse jitter samples, "+
+			"only got %d unique values", len(seen))
+	}
+}
+
 // fakeServerStream is a minimal implementation of
 // ChannelAuctioneer_SubscribeBatchAuctionClient that returns predetermined
 // results from Recv. It is only sufficient for driving the client's read loop.
