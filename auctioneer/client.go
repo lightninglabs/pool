@@ -1311,13 +1311,21 @@ func (c *Client) HandleServerShutdown(err error) error {
 		delete(c.subscribedAccts, key)
 	}
 	c.subscribedAcctsMtx.Unlock()
+
+	// Attempt every account even if some fail — bailing on the first
+	// error here would leave the remaining accounts silently
+	// un-subscribed and offline to the matchmaker until the next
+	// reconnect or process restart.
+	var errs []error
 	for _, acctKey := range acctKeys {
 		err := c.StartAccountSubscription(context.Background(), acctKey)
 		if err != nil {
-			return err
+			log.Errorf("Failed to re-subscribe account %x: %v",
+				acctKey.PubKey.SerializeCompressed(), err)
+			errs = append(errs, err)
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // unmarshallServerAccount parses the account information sent from the
