@@ -1,12 +1,14 @@
 package auctioneer
 
 import (
+	"context"
 	"errors"
 	"io"
 	"testing"
 	"time"
 
 	"github.com/lightninglabs/pool/auctioneerrpc"
+	"github.com/lightninglabs/pool/order"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -43,11 +45,14 @@ func TestJitterBackoffBounds(t *testing.T) {
 
 // fakeServerStream is a minimal implementation of
 // ChannelAuctioneer_SubscribeBatchAuctionClient that returns predetermined
-// results from Recv. It is only sufficient for driving the client's read loop.
+// results from Recv and captures client-sent messages on `sent` (when
+// non-nil). It is only sufficient for driving the client's read loop and
+// the auth handshake.
 type fakeServerStream struct {
 	grpc.ClientStream
 
 	recv chan recvResult
+	sent chan *auctioneerrpc.ClientAuctionMessage
 }
 
 type recvResult struct {
@@ -55,7 +60,10 @@ type recvResult struct {
 	err error
 }
 
-func (s *fakeServerStream) Send(*auctioneerrpc.ClientAuctionMessage) error {
+func (s *fakeServerStream) Send(msg *auctioneerrpc.ClientAuctionMessage) error {
+	if s.sent != nil {
+		s.sent <- msg
+	}
 	return nil
 }
 
@@ -201,5 +209,156 @@ func TestReadIncomingStreamContextCanceledDoesNotReconnect(t *testing.T) {
 		t.Fatalf("unexpected error surfaced on cancel: %v", err)
 	case <-time.After(defaultTimeout):
 		// Expected: no error surfaced.
+	}
+}
+
+// TestConnectAndAuthenticateCleansUpOnAccountDoesNotExist drives a full
+// connectAndAuthenticate call in recovery mode against a scripted fake stream
+// that responds with ACCOUNT_DOES_NOT_EXIST after the client's Subscribe. It
+// asserts the subscription entry is removed from c.subscribedAccts on return.
+//
+// Regression: previously the entry was added to the map before authenticate
+// ran (so readIncomingStream could route the server's Challenge/Error back
+// to it) and was never removed on error paths. A later StartAccountSubscription
+// for the same account — typically when handleStateOpen runs after on-chain
+// confirmation — would hit the "already subscribed" early-return guard at the
+// top of connectAndAuthenticate and silently no-op without sending a fresh
+// Commit. The per-account 3-way handshake never ran and the trader stayed
+// filtered as offline at matching time until the process restarted.
+func TestConnectAndAuthenticateCleansUpOnAccountDoesNotExist(t *testing.T) {
+	t.Parallel()
+
+	stream := &fakeServerStream{
+		recv: make(chan recvResult, 1),
+		sent: make(chan *auctioneerrpc.ClientAuctionMessage, 2),
+	}
+
+	mainErrChan := make(chan error, 1)
+	c := &Client{
+		cfg: &Config{
+			Signer:       testSigner,
+			BatchVersion: order.LatestBatchVersion,
+		},
+		serverStream:    stream,
+		FromServerChan:  make(chan *auctioneerrpc.ServerAuctionMessage),
+		StreamErrChan:   mainErrChan,
+		errChanSwitch:   NewErrChanSwitch(mainErrChan),
+		quit:            make(chan struct{}),
+		subscribedAccts: make(map[[33]byte]*acctSubscription),
+	}
+	c.errChanSwitch.Start()
+	defer c.errChanSwitch.Stop()
+	defer close(c.quit)
+
+	// Run the read loop in the background so server responses are routed
+	// to the subscription's msgChan via subscribedAccts lookups.
+	readDone := make(chan struct{})
+	go func() {
+		c.readIncomingStream()
+		close(readDone)
+	}()
+
+	type result struct {
+		sub        *acctSubscription
+		canRecover bool
+		err        error
+	}
+	resCh := make(chan result, 1)
+	go func() {
+		sub, canRecover, err := c.connectAndAuthenticate(
+			context.Background(), testAccountDesc, true,
+		)
+		resCh <- result{sub, canRecover, err}
+	}()
+
+	// Step 1: capture the Commit and echo its commitHash back in the
+	// Challenge so readIncomingStream can route it to the right sub.
+	var commitHash []byte
+	select {
+	case msg := <-stream.sent:
+		commit, ok := msg.Msg.(*auctioneerrpc.ClientAuctionMessage_Commit)
+		if !ok {
+			t.Fatalf("expected Commit, got %T", msg.Msg)
+		}
+		commitHash = commit.Commit.CommitHash
+	case <-time.After(defaultTimeout):
+		t.Fatal("did not receive Commit from client")
+	}
+
+	// Step 2: feed back the Challenge.
+	stream.recv <- recvResult{
+		msg: &auctioneerrpc.ServerAuctionMessage{
+			Msg: &auctioneerrpc.ServerAuctionMessage_Challenge{
+				Challenge: &auctioneerrpc.ServerChallenge{
+					Challenge:  []byte{1, 2, 3, 4},
+					CommitHash: commitHash,
+				},
+			},
+		},
+	}
+
+	// Step 3: drain the Subscribe message so authenticate() returns.
+	select {
+	case msg := <-stream.sent:
+		if _, ok := msg.Msg.(*auctioneerrpc.ClientAuctionMessage_Subscribe); !ok {
+			t.Fatalf("expected Subscribe, got %T", msg.Msg)
+		}
+	case <-time.After(defaultTimeout):
+		t.Fatal("did not receive Subscribe from client")
+	}
+
+	// Step 4: server responds with ACCOUNT_DOES_NOT_EXIST (the realistic
+	// case where RecoverAccounts probes a key the auctioneer hasn't yet
+	// seen on chain).
+	var pubKey [33]byte
+	copy(pubKey[:], testAccountDesc.PubKey.SerializeCompressed())
+	stream.recv <- recvResult{
+		msg: &auctioneerrpc.ServerAuctionMessage{
+			Msg: &auctioneerrpc.ServerAuctionMessage_Error{
+				Error: &auctioneerrpc.SubscribeError{
+					ErrorCode: auctioneerrpc.SubscribeError_ACCOUNT_DOES_NOT_EXIST,
+					TraderKey: pubKey[:],
+				},
+			},
+		},
+	}
+
+	// Step 5: connectAndAuthenticate should return (sub, false, nil) ...
+	var res result
+	select {
+	case res = <-resCh:
+	case <-time.After(defaultTimeout):
+		t.Fatal("connectAndAuthenticate did not return")
+	}
+	if res.err != nil {
+		t.Fatalf("unexpected error: %v", res.err)
+	}
+	if res.canRecover {
+		t.Fatal("expected canRecover=false on ACCOUNT_DOES_NOT_EXIST")
+	}
+	if res.sub == nil {
+		t.Fatal("expected non-nil subscription")
+	}
+
+	// ... and the subscription must NOT be left in the map. A later
+	// StartAccountSubscription for this account would otherwise hit the
+	// "already subscribed" guard and silently no-op without ever sending
+	// a fresh Commit.
+	c.subscribedAcctsMtx.Lock()
+	_, present := c.subscribedAccts[pubKey]
+	c.subscribedAcctsMtx.Unlock()
+	if present {
+		t.Fatal("subscribedAccts entry was not cleaned up after " +
+			"ACCOUNT_DOES_NOT_EXIST; later subscribes for the " +
+			"same account would silently no-op")
+	}
+
+	// Clean up the background read loop. Sending io.EOF unblocks the
+	// Recv call and lets readIncomingStream exit cleanly.
+	stream.recv <- recvResult{err: io.EOF}
+	select {
+	case <-readDone:
+	case <-time.After(defaultTimeout):
+		t.Fatal("read loop did not exit after EOF")
 	}
 }

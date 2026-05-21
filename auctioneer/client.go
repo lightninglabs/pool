@@ -643,6 +643,25 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 	c.subscribedAcctsMtx.Lock()
 	c.subscribedAccts[acctPubKey] = sub
 	c.subscribedAcctsMtx.Unlock()
+
+	// The subscription needs to be in the map before authenticate runs so
+	// that readIncomingStream can route the server's Challenge/Error
+	// responses back to it. But if the handshake doesn't reach the
+	// GetSuccess branch below, the entry is stale — a later subscribe
+	// attempt for the same account would hit the "already subscribed"
+	// guard at the top of this function and silently no-op without ever
+	// sending a fresh Commit. Clean up here so only genuinely live
+	// subscriptions remain in the map.
+	success := false
+	defer func() {
+		if success {
+			return
+		}
+		c.subscribedAcctsMtx.Lock()
+		delete(c.subscribedAccts, acctPubKey)
+		c.subscribedAcctsMtx.Unlock()
+	}()
+
 	err := sub.authenticate(ctx)
 	if err != nil {
 		log.Errorf("Authentication failed for account %x: %v",
@@ -679,8 +698,11 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 
 		// Did the server find the account we're interested in?
 		switch {
-		// Account exists, everything's good to continue.
+		// Account exists, everything's good to continue. This is the
+		// only path that keeps the subscription in the map; every
+		// other exit triggers the deferred cleanup above.
 		case srvMsg.GetSuccess() != nil:
+			success = true
 			return sub, true, nil
 
 		// We got an error. If we're in recovery mode, this could either
