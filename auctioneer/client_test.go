@@ -1,6 +1,7 @@
 package auctioneer
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -212,10 +213,11 @@ func TestReadIncomingStreamContextCanceledDoesNotReconnect(t *testing.T) {
 	}
 }
 
-// TestConnectAndAuthenticateCleansUpOnAccountDoesNotExist drives a full
+// TestConnectAndAuthenticateCleansUpOnError drives a full
 // connectAndAuthenticate call in recovery mode against a scripted fake stream
-// that responds with ACCOUNT_DOES_NOT_EXIST after the client's Subscribe. It
-// asserts the subscription entry is removed from c.subscribedAccts on return.
+// for each per-account error path that the auctioneer can return after the
+// Subscribe message, and asserts the subscription entry is always removed
+// from c.subscribedAccts on return.
 //
 // Regression: previously the entry was added to the map before authenticate
 // ran (so readIncomingStream could route the server's Challenge/Error back
@@ -225,8 +227,96 @@ func TestReadIncomingStreamContextCanceledDoesNotReconnect(t *testing.T) {
 // top of connectAndAuthenticate and silently no-op without sending a fresh
 // Commit. The per-account 3-way handshake never ran and the trader stayed
 // filtered as offline at matching time until the process restarted.
-func TestConnectAndAuthenticateCleansUpOnAccountDoesNotExist(t *testing.T) {
+func TestConnectAndAuthenticateCleansUpOnError(t *testing.T) {
 	t.Parallel()
+
+	var pubKey [33]byte
+	copy(pubKey[:], testAccountDesc.PubKey.SerializeCompressed())
+
+	cases := []struct {
+		name     string
+		errResp  *auctioneerrpc.SubscribeError
+		checkRes func(t *testing.T, sub *acctSubscription,
+			canRecover bool, err error)
+	}{
+		{
+			// Realistic case: RecoverAccounts probes a key the
+			// auctioneer hasn't yet seen on chain.
+			name: "account does not exist",
+			errResp: &auctioneerrpc.SubscribeError{
+				ErrorCode: auctioneerrpc.SubscribeError_ACCOUNT_DOES_NOT_EXIST,
+				TraderKey: pubKey[:],
+			},
+			checkRes: func(t *testing.T, sub *acctSubscription,
+				canRecover bool, err error) {
+
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if canRecover {
+					t.Fatal("expected canRecover=false")
+				}
+				if sub == nil {
+					t.Fatal("expected non-nil subscription")
+				}
+			},
+		},
+		{
+			// The auctioneer knows about a reservation for this
+			// key but the funding tx hasn't confirmed yet. The
+			// function returns a non-nil sub *and* a typed error,
+			// which makes the cleanup invariant especially easy
+			// to get wrong.
+			name: "incomplete account reservation",
+			errResp: &auctioneerrpc.SubscribeError{
+				ErrorCode: auctioneerrpc.SubscribeError_INCOMPLETE_ACCOUNT_RESERVATION,
+				TraderKey: pubKey[:],
+				AccountReservation: &auctioneerrpc.AuctionAccount{
+					Value:         100_000,
+					Expiry:        144,
+					TraderKey:     pubKey[:],
+					AuctioneerKey: bytes.Repeat([]byte{0x02}, 33),
+					BatchKey:      bytes.Repeat([]byte{0x03}, 33),
+					HeightHint:    1,
+				},
+			},
+			checkRes: func(t *testing.T, sub *acctSubscription,
+				canRecover bool, err error) {
+
+				var resErr *AcctResNotCompletedError
+				if !errors.As(err, &resErr) {
+					t.Fatalf("expected "+
+						"AcctResNotCompletedError, "+
+						"got %v", err)
+				}
+				if !canRecover {
+					t.Fatal("expected canRecover=true")
+				}
+				if sub == nil {
+					t.Fatal("expected non-nil subscription")
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			runCleanupCase(t, pubKey, tc.errResp, tc.checkRes)
+		})
+	}
+}
+
+// runCleanupCase wires up a fresh Client + fake stream, drives a full
+// connectAndAuthenticate handshake in recovery mode, feeds the supplied
+// error response back at the Subscribe step, runs the caller's assertions on
+// the return values, and finally asserts that subscribedAccts is empty.
+func runCleanupCase(t *testing.T, pubKey [33]byte,
+	errResp *auctioneerrpc.SubscribeError,
+	checkRes func(t *testing.T, sub *acctSubscription, canRecover bool,
+		err error)) {
 
 	stream := &fakeServerStream{
 		recv: make(chan recvResult, 1),
@@ -307,50 +397,35 @@ func TestConnectAndAuthenticateCleansUpOnAccountDoesNotExist(t *testing.T) {
 		t.Fatal("did not receive Subscribe from client")
 	}
 
-	// Step 4: server responds with ACCOUNT_DOES_NOT_EXIST (the realistic
-	// case where RecoverAccounts probes a key the auctioneer hasn't yet
-	// seen on chain).
-	var pubKey [33]byte
-	copy(pubKey[:], testAccountDesc.PubKey.SerializeCompressed())
+	// Step 4: server responds with the supplied error.
 	stream.recv <- recvResult{
 		msg: &auctioneerrpc.ServerAuctionMessage{
 			Msg: &auctioneerrpc.ServerAuctionMessage_Error{
-				Error: &auctioneerrpc.SubscribeError{
-					ErrorCode: auctioneerrpc.SubscribeError_ACCOUNT_DOES_NOT_EXIST,
-					TraderKey: pubKey[:],
-				},
+				Error: errResp,
 			},
 		},
 	}
 
-	// Step 5: connectAndAuthenticate should return (sub, false, nil) ...
+	// Step 5: connectAndAuthenticate should return; let the caller assert
+	// the return values.
 	var res result
 	select {
 	case res = <-resCh:
 	case <-time.After(defaultTimeout):
 		t.Fatal("connectAndAuthenticate did not return")
 	}
-	if res.err != nil {
-		t.Fatalf("unexpected error: %v", res.err)
-	}
-	if res.canRecover {
-		t.Fatal("expected canRecover=false on ACCOUNT_DOES_NOT_EXIST")
-	}
-	if res.sub == nil {
-		t.Fatal("expected non-nil subscription")
-	}
+	checkRes(t, res.sub, res.canRecover, res.err)
 
-	// ... and the subscription must NOT be left in the map. A later
-	// StartAccountSubscription for this account would otherwise hit the
-	// "already subscribed" guard and silently no-op without ever sending
-	// a fresh Commit.
+	// In every error case, the subscription must NOT be left in the map.
+	// A later StartAccountSubscription for this account would otherwise
+	// hit the "already subscribed" guard and silently no-op without ever
+	// sending a fresh Commit.
 	c.subscribedAcctsMtx.Lock()
 	_, present := c.subscribedAccts[pubKey]
 	c.subscribedAcctsMtx.Unlock()
 	if present {
-		t.Fatal("subscribedAccts entry was not cleaned up after " +
-			"ACCOUNT_DOES_NOT_EXIST; later subscribes for the " +
-			"same account would silently no-op")
+		t.Fatal("subscribedAccts entry was not cleaned up; later " +
+			"subscribes for the same account would silently no-op")
 	}
 
 	// Clean up the background read loop. Sending io.EOF unblocks the
