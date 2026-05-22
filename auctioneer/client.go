@@ -680,6 +680,16 @@ func (c *Client) connectAndAuthenticate(ctx context.Context,
 			// Ah, so it's the server shutting down, so let's re-
 			// try our connection.
 			if err == ErrServerErrored {
+				// HandleServerShutdown clears subscribedAccts
+				// and re-runs StartAccountSubscription for
+				// every previously-live account, including
+				// this one. That inner call installs a fresh
+				// entry in the map for acctPubKey. We must
+				// suppress our deferred cleanup so it doesn't
+				// turn around and delete that fresh entry on
+				// the way out, leaving the resubscribed
+				// account unreachable from sendToSubscription.
+				success = true
 				return sub, false, c.HandleServerShutdown(nil)
 			}
 
