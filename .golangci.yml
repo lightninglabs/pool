@@ -83,7 +83,7 @@ linters:
         - G115
     staticcheck:
       checks:
-        - -SA1019
+        - "S*"
     tagliatelle:
       case:
         rules:
