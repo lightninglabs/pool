@@ -20,4 +20,4 @@ replace github.com/lightninglabs/pool/auctioneerrpc => ../auctioneerrpc
 
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.34.2-hex-display
 
-go 1.23.6
+go 1.27.3

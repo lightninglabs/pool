@@ -207,4 +207,4 @@ replace github.com/lightninglabs/pool/auctioneerrpc => ./auctioneerrpc
 
 replace github.com/lightninglabs/pool/poolrpc => ./poolrpc
 
-go 1.23.6
+go 1.27.3
