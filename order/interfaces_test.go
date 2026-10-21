@@ -3,7 +3,7 @@ package order
 import (
 	"testing"
 
-	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/btcutil/v2"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/terms"
 	"github.com/stretchr/testify/require"

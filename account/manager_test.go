@@ -11,12 +11,13 @@ import (
 	"testing"
 	"time"
 
+	btcaddr "github.com/btcsuite/btcd/address/v2"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/psbt/v2"
+	"github.com/btcsuite/btcd/txscript/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
@@ -295,13 +296,13 @@ func (h *testHarness) assertSpendTxBroadcast(accountBeforeSpend *Account,
 		)
 		require.NoError(h.t, err)
 		require.Len(h.t, addrs, 1)
-		addr, ok := addrs[0].(*btcutil.AddressWitnessPubKeyHash)
+		addr, ok := addrs[0].(*btcaddr.AddressWitnessPubKeyHash)
 		if !ok {
 			h.t.Fatalf("expected P2WPKH address, found %T", addr)
 		}
 		// Witness program of address returned by the mock
 		// implementation of NextAddr.
-		witnessProgram := btcutil.Hash160(testRawTraderKey)
+		witnessProgram := btcaddr.Hash160(testRawTraderKey)
 		if !bytes.Equal(addr.WitnessProgram(), witnessProgram) {
 			h.t.Fatalf("expected witness program %x, got %x",
 				witnessProgram, addr.WitnessProgram())
@@ -628,7 +629,7 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 		// still have a persisted intent to create the account.
 		go func() {
 			_, _ = h.manager.InitAccount(
-				context.Background(), value, tc.version,
+				t.Context(), value, tc.version,
 				chainfee.FeePerKwFloor, expiry, bestHeight,
 			)
 		}()
@@ -827,7 +828,7 @@ func TestAccountClose(t *testing.T) {
 		// We'll immediately attempt to close the account with the
 		// test's fee expression.
 		_, err := h.manager.CloseAccount(
-			context.Background(), account.TraderKey.PubKey,
+			t.Context(), account.TraderKey.PubKey,
 			tc.feeExpr, bestHeight,
 		)
 
@@ -1075,7 +1076,7 @@ func TestAccountWithdrawal(t *testing.T) {
 		// withdrawal to a dust output, which should fail.
 		dustOutput := &wire.TxOut{Value: 0, PkScript: p2wsh}
 		_, _, err := h.manager.WithdrawAccount(
-			context.Background(), account.TraderKey.PubKey,
+			t.Context(), account.TraderKey.PubKey,
 			[]*wire.TxOut{dustOutput}, feeRate, bestHeight, 0,
 			tc.newVersion,
 		)
@@ -1107,7 +1108,7 @@ func TestAccountWithdrawal(t *testing.T) {
 		// If successful, we'll follow with a series of assertions to
 		// ensure it was performed correctly.
 		_, _, err = h.manager.WithdrawAccount(
-			context.Background(), account.TraderKey.PubKey, outputs,
+			t.Context(), account.TraderKey.PubKey, outputs,
 			feeRate, bestHeight, 0, tc.newVersion,
 		)
 		require.NoError(h.t, err)
@@ -1306,7 +1307,7 @@ func TestAccountDeposit(t *testing.T) {
 		// If successful, we'll follow with a series of assertions to
 		// ensure it was performed correctly.
 		_, _, err := h.manager.DepositAccount(
-			context.Background(), account.TraderKey.PubKey,
+			t.Context(), account.TraderKey.PubKey,
 			depositAmount, feeRate, bestHeight, 0, tc.newVersion,
 		)
 
@@ -1430,7 +1431,7 @@ func TestAccountConsecutiveBatches(t *testing.T) {
 			// The RPC server will notify the manager each time a
 			// batch is finalized, we do the same here.
 			err = h.manager.WatchMatchedAccounts(
-				context.Background(),
+				t.Context(),
 				[]*btcec.PublicKey{account.TraderKey.PubKey},
 			)
 			require.NoError(t, err)

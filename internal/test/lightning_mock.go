@@ -9,12 +9,13 @@ import (
 	"sync"
 	"time"
 
+	btcaddr "github.com/btcsuite/btcd/address/v2"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/chanbackup"
 	"github.com/lightningnetwork/lnd/channeldb"
@@ -370,7 +371,7 @@ func (m *MockLightning) OpenChannel(_ context.Context, peer route.Vertex,
 }
 
 func (m *MockLightning) CloseChannel(context.Context, *wire.OutPoint,
-	bool, int32, btcutil.Address,
+	bool, int32, btcaddr.Address,
 	...lndclient.CloseChannelOption) (chan lndclient.CloseChannelUpdate,
 	chan error, error) {
 

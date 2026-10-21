@@ -10,11 +10,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	btcaddr "github.com/btcsuite/btcd/address/v2"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
+	"github.com/btcsuite/btcd/txscript/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/auctioneer"
@@ -1124,7 +1125,7 @@ func (s *rpcServer) CloseAccount(ctx context.Context,
 // parseOutputScript parses the output script from the string representation of
 // an on-chain address and ensures it's valid for the current network.
 func (s *rpcServer) parseOutputScript(addrStr string) ([]byte, error) {
-	addr, err := btcutil.DecodeAddress(addrStr, s.lndServices.ChainParams)
+	addr, err := btcaddr.DecodeAddress(addrStr, s.lndServices.ChainParams)
 	if err != nil {
 		return nil, err
 	}

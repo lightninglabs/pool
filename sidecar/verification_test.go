@@ -1,7 +1,6 @@
 package sidecar
 
 import (
-	"context"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -76,7 +75,7 @@ func TestSignOffer(t *testing.T) {
 		}
 
 		err := SignOffer(
-			context.Background(), tc.ticket, keychain.KeyLocator{},
+			t.Context(), tc.ticket, keychain.KeyLocator{},
 			mockSigner,
 		)
 
@@ -155,7 +154,7 @@ func TestVerifyOffer(t *testing.T) {
 		}
 
 		err := VerifyOffer(
-			context.Background(), tc.ticket, mockSigner,
+			t.Context(), tc.ticket, mockSigner,
 		)
 
 		if tc.expectedErr == "" {
@@ -220,7 +219,7 @@ func TestSignOrder(t *testing.T) {
 		}
 
 		err := SignOrder(
-			context.Background(), tc.ticket, [32]byte{},
+			t.Context(), tc.ticket, [32]byte{},
 			keychain.KeyLocator{}, mockSigner,
 		)
 
@@ -330,7 +329,7 @@ func TestVerifyOrder(t *testing.T) {
 		}
 
 		err := VerifyOrder(
-			context.Background(), tc.ticket, mockSigner,
+			t.Context(), tc.ticket, mockSigner,
 		)
 
 		if tc.expectedErr == "" {

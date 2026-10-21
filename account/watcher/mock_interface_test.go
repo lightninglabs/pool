@@ -13,8 +13,8 @@ import (
 	reflect "reflect"
 
 	btcec "github.com/btcsuite/btcd/btcec/v2"
-	chainhash "github.com/btcsuite/btcd/chaincfg/chainhash"
-	wire "github.com/btcsuite/btcd/wire"
+	chainhash "github.com/btcsuite/btcd/chainhash/v2"
+	wire "github.com/btcsuite/btcd/wire/v2"
 	chainntnfs "github.com/lightningnetwork/lnd/chainntnfs"
 	gomock "go.uber.org/mock/gomock"
 )

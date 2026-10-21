@@ -14,8 +14,8 @@ import (
 	reflect "reflect"
 
 	btcec "github.com/btcsuite/btcd/btcec/v2"
-	btcutil "github.com/btcsuite/btcd/btcutil"
-	wire "github.com/btcsuite/btcd/wire"
+	btcutil "github.com/btcsuite/btcd/btcutil/v2"
+	wire "github.com/btcsuite/btcd/wire/v2"
 	wtxmgr "github.com/btcsuite/btcwallet/wtxmgr"
 	lndclient "github.com/lightninglabs/lndclient"
 	terms "github.com/lightninglabs/pool/terms"

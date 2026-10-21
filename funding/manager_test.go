@@ -13,8 +13,8 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/auctioneerrpc"
 	"github.com/lightninglabs/pool/chaninfo"
@@ -699,7 +699,7 @@ func TestWaitForPeerConnections(t *testing.T) {
 		node1Key: "1.1.1.1",
 		node2Key: "2.2.2.2",
 	}
-	ctxt, cancel := context.WithTimeout(context.Background(), testTimeout)
+	ctxt, cancel := context.WithTimeout(t.Context(), testTimeout)
 	defer cancel()
 	expectedConnections := map[route.Vertex]struct{}{
 		node1Key: {},
@@ -728,7 +728,7 @@ func TestWaitForPeerConnections(t *testing.T) {
 			Type:   lnrpc.PeerEvent_PEER_ONLINE,
 		}
 	}()
-	ctxt, cancel = context.WithTimeout(context.Background(), testTimeout)
+	ctxt, cancel = context.WithTimeout(t.Context(), testTimeout)
 	defer cancel()
 	expectedConnections = map[route.Vertex]struct{}{
 		node1Key: {},
@@ -763,7 +763,7 @@ func TestWaitForPeerConnections(t *testing.T) {
 	}
 
 	// Trigger a deadline exceeded error after a short timeout.
-	ctxt, cancel = context.WithTimeout(context.Background(), testTimeout)
+	ctxt, cancel = context.WithTimeout(t.Context(), testTimeout)
 	defer cancel()
 	expectedConnections = map[route.Vertex]struct{}{
 		node1Key: {},
@@ -786,7 +786,7 @@ func TestWaitForPeerConnections(t *testing.T) {
 	// Do the same again, but now trigger a context cancel. We make the
 	// context expire afterwards, since that will trigger the actual error
 	// return.
-	ctxt, cancel = context.WithTimeout(context.Background(), 2*testTimeout)
+	ctxt, cancel = context.WithTimeout(t.Context(), 2*testTimeout)
 	defer cancel()
 
 	go func() {
@@ -859,7 +859,7 @@ func TestOfferSidecarValidation(t *testing.T) {
 
 	for _, testCase := range negativeCases {
 		_, err := h.mgr.OfferSidecar(
-			context.Background(), testCase.capacity,
+			t.Context(), testCase.capacity,
 			testCase.pushAmt, 2016, desc, testCase.bid, false,
 		)
 		fmt.Println(testCase.expectedErr)
@@ -900,7 +900,7 @@ func TestOfferSidecar(t *testing.T) {
 	// Let's create our offer now.
 	capacity, pushAmt := btcutil.Amount(100_000), btcutil.Amount(40_000)
 	ticket, err := h.mgr.OfferSidecar(
-		context.Background(), capacity, pushAmt, 2016,
+		t.Context(), capacity, pushAmt, 2016,
 		&keychain.KeyDescriptor{
 			PubKey: privKey.PubKey(),
 		}, bid, false,

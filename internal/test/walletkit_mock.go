@@ -6,12 +6,12 @@ import (
 	"sync"
 	"time"
 
+	btcaddr "github.com/btcsuite/btcd/address/v2"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
+	"github.com/btcsuite/btcd/psbt/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/lndclient"
@@ -104,9 +104,9 @@ func (m *MockWalletKit) DeriveKey(_ context.Context, in *keychain.KeyLocator) (
 }
 
 func (m *MockWalletKit) NextAddr(context.Context, string,
-	walletrpc.AddressType, bool) (btcutil.Address, error) {
+	walletrpc.AddressType, bool) (btcaddr.Address, error) {
 
-	addr, err := btcutil.NewAddressWitnessPubKeyHash(
+	addr, err := btcaddr.NewAddressWitnessPubKeyHash(
 		make([]byte, 20), &chaincfg.TestNet3Params,
 	)
 	if err != nil {
@@ -260,7 +260,7 @@ func (m *MockWalletKit) ImportPublicKey(ctx context.Context,
 // ImportTaprootScript imports a user-provided taproot script into the wallet.
 // The imported script will act as a pay-to-taproot address.
 func (m *MockWalletKit) ImportTaprootScript(_ context.Context,
-	_ *waddrmgr.Tapscript) (btcutil.Address, error) {
+	_ *waddrmgr.Tapscript) (btcaddr.Address, error) {
 
 	return nil, nil
 }
