@@ -398,7 +398,7 @@ func runCleanupCase(t *testing.T, pubKey [33]byte,
 	resCh := make(chan result, 1)
 	go func() {
 		sub, canRecover, err := c.connectAndAuthenticate(
-			context.Background(), testAccountDesc, true,
+			t.Context(), testAccountDesc, true,
 		)
 		resCh <- result{sub, canRecover, err}
 	}()

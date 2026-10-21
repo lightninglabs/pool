@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/wire/v2"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/account"
 	"github.com/lightninglabs/pool/order"
@@ -205,7 +205,7 @@ func TestRenewAccount(t *testing.T) {
 			srv.bestHeight = 100
 
 			ctx, cancel := context.WithTimeout(
-				context.Background(), ctxTimeout,
+				t.Context(), ctxTimeout,
 			)
 			defer cancel()
 

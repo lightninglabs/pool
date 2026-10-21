@@ -52,7 +52,7 @@ func TestAccountSubscriptionAuthenticate(t *testing.T) {
 	// First, kick off the auth handshake in a goroutine. Every step will
 	// block because we don't use buffered channels.
 	go func() {
-		errChan <- sub.authenticate(context.Background())
+		errChan <- sub.authenticate(t.Context())
 	}()
 
 	// Step 1: We expect a commitment message.
@@ -115,7 +115,7 @@ func TestAccountSubscriptionAuthenticateAbort(t *testing.T) {
 	// First, kick off the auth handshake in a goroutine. Every step will
 	// block because we don't use buffered channels.
 	go func() {
-		errChan <- sub.authenticate(context.Background())
+		errChan <- sub.authenticate(t.Context())
 	}()
 
 	// Step 1: We expect a commitment message.
@@ -163,7 +163,7 @@ func TestAccountSubscriptionAuthenticateContextClose(t *testing.T) {
 			msgChan:      srvMsgChan,
 			batchVersion: order.LatestBatchVersion,
 		}
-		ctxc, cancel = context.WithCancel(context.Background())
+		ctxc, cancel = context.WithCancel(t.Context())
 	)
 
 	// First, kick off the auth handshake in a goroutine. Every step will
@@ -224,7 +224,7 @@ func TestAccountSubscriptionAuthenticateError(t *testing.T) {
 	// First, kick off the auth handshake in a goroutine. Every step will
 	// block because we don't use buffered channels.
 	go func() {
-		errChan <- sub.authenticate(context.Background())
+		errChan <- sub.authenticate(t.Context())
 	}()
 
 	// Step 1: We expect a commitment message.

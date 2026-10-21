@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	btcutil "github.com/btcsuite/btcd/btcutil"
+	btcutil "github.com/btcsuite/btcd/btcutil/v2"
 	account "github.com/lightninglabs/pool/account"
 	terms "github.com/lightninglabs/pool/terms"
 	gomock "go.uber.org/mock/gomock"

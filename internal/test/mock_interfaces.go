@@ -14,11 +14,11 @@ import (
 	reflect "reflect"
 	time "time"
 
+	address "github.com/btcsuite/btcd/address/v2"
 	btcec "github.com/btcsuite/btcd/btcec/v2"
-	btcutil "github.com/btcsuite/btcd/btcutil"
-	psbt "github.com/btcsuite/btcd/btcutil/psbt"
-	chainhash "github.com/btcsuite/btcd/chaincfg/chainhash"
-	wire "github.com/btcsuite/btcd/wire"
+	chainhash "github.com/btcsuite/btcd/chainhash/v2"
+	psbt "github.com/btcsuite/btcd/psbt/v2"
+	wire "github.com/btcsuite/btcd/wire/v2"
 	waddrmgr "github.com/btcsuite/btcwallet/waddrmgr"
 	wtxmgr "github.com/btcsuite/btcwallet/wtxmgr"
 	lndclient "github.com/lightninglabs/lndclient"
@@ -134,6 +134,35 @@ func (mr *MockSignerClientMockRecorder) MuSig2CreateSession(ctx, version, signer
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, version, signerLoc, signers}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MuSig2CreateSession", reflect.TypeOf((*MockSignerClient)(nil).MuSig2CreateSession), varargs...)
+}
+
+// MuSig2GetCombinedNonce mocks base method.
+func (m *MockSignerClient) MuSig2GetCombinedNonce(ctx context.Context, sessionID [32]byte) ([66]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MuSig2GetCombinedNonce", ctx, sessionID)
+	ret0, _ := ret[0].([66]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MuSig2GetCombinedNonce indicates an expected call of MuSig2GetCombinedNonce.
+func (mr *MockSignerClientMockRecorder) MuSig2GetCombinedNonce(ctx, sessionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MuSig2GetCombinedNonce", reflect.TypeOf((*MockSignerClient)(nil).MuSig2GetCombinedNonce), ctx, sessionID)
+}
+
+// MuSig2RegisterCombinedNonce mocks base method.
+func (m *MockSignerClient) MuSig2RegisterCombinedNonce(ctx context.Context, sessionID [32]byte, combinedNonce [66]byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MuSig2RegisterCombinedNonce", ctx, sessionID, combinedNonce)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MuSig2RegisterCombinedNonce indicates an expected call of MuSig2RegisterCombinedNonce.
+func (mr *MockSignerClientMockRecorder) MuSig2RegisterCombinedNonce(ctx, sessionID, combinedNonce any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MuSig2RegisterCombinedNonce", reflect.TypeOf((*MockSignerClient)(nil).MuSig2RegisterCombinedNonce), ctx, sessionID, combinedNonce)
 }
 
 // MuSig2RegisterNonces mocks base method.
@@ -372,6 +401,21 @@ func (mr *MockWalletKitClientMockRecorder) FundPsbt(ctx, req any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FundPsbt", reflect.TypeOf((*MockWalletKitClient)(nil).FundPsbt), ctx, req)
 }
 
+// GetTransaction mocks base method.
+func (m *MockWalletKitClient) GetTransaction(ctx context.Context, txid chainhash.Hash) (lndclient.Transaction, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransaction", ctx, txid)
+	ret0, _ := ret[0].(lndclient.Transaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTransaction indicates an expected call of GetTransaction.
+func (mr *MockWalletKitClientMockRecorder) GetTransaction(ctx, txid any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransaction", reflect.TypeOf((*MockWalletKitClient)(nil).GetTransaction), ctx, txid)
+}
+
 // ImportPublicKey mocks base method.
 func (m *MockWalletKitClient) ImportPublicKey(ctx context.Context, pubkey *btcec.PublicKey, addrType lnwallet.AddressType) error {
 	m.ctrl.T.Helper()
@@ -387,10 +431,10 @@ func (mr *MockWalletKitClientMockRecorder) ImportPublicKey(ctx, pubkey, addrType
 }
 
 // ImportTaprootScript mocks base method.
-func (m *MockWalletKitClient) ImportTaprootScript(ctx context.Context, tapscript *waddrmgr.Tapscript) (btcutil.Address, error) {
+func (m *MockWalletKitClient) ImportTaprootScript(ctx context.Context, tapscript *waddrmgr.Tapscript) (address.Address, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ImportTaprootScript", ctx, tapscript)
-	ret0, _ := ret[0].(btcutil.Address)
+	ret0, _ := ret[0].(address.Address)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -512,10 +556,10 @@ func (mr *MockWalletKitClientMockRecorder) MinRelayFee(ctx any) *gomock.Call {
 }
 
 // NextAddr mocks base method.
-func (m *MockWalletKitClient) NextAddr(ctx context.Context, accountName string, addressType walletrpc.AddressType, change bool) (btcutil.Address, error) {
+func (m *MockWalletKitClient) NextAddr(ctx context.Context, accountName string, addressType walletrpc.AddressType, change bool) (address.Address, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NextAddr", ctx, accountName, addressType, change)
-	ret0, _ := ret[0].(btcutil.Address)
+	ret0, _ := ret[0].(address.Address)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -570,6 +614,20 @@ func (mr *MockWalletKitClientMockRecorder) ReleaseOutput(ctx, lockID, op any) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseOutput", reflect.TypeOf((*MockWalletKitClient)(nil).ReleaseOutput), ctx, lockID, op)
 }
 
+// RemoveTransaction mocks base method.
+func (m *MockWalletKitClient) RemoveTransaction(ctx context.Context, txid chainhash.Hash) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveTransaction", ctx, txid)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveTransaction indicates an expected call of RemoveTransaction.
+func (mr *MockWalletKitClientMockRecorder) RemoveTransaction(ctx, txid any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveTransaction", reflect.TypeOf((*MockWalletKitClient)(nil).RemoveTransaction), ctx, txid)
+}
+
 // SendOutputs mocks base method.
 func (m *MockWalletKitClient) SendOutputs(ctx context.Context, outputs []*wire.TxOut, feeRate chainfee.SatPerKWeight, label string) (*wire.MsgTx, error) {
 	m.ctrl.T.Helper()
@@ -598,6 +656,21 @@ func (m *MockWalletKitClient) SignPsbt(ctx context.Context, packet *psbt.Packet)
 func (mr *MockWalletKitClientMockRecorder) SignPsbt(ctx, packet any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignPsbt", reflect.TypeOf((*MockWalletKitClient)(nil).SignPsbt), ctx, packet)
+}
+
+// SubmitPackage mocks base method.
+func (m *MockWalletKitClient) SubmitPackage(ctx context.Context, txns []*wire.MsgTx, maxFeeRate *chainfee.SatPerVByte) (*lndclient.SubmitPackageResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitPackage", ctx, txns, maxFeeRate)
+	ret0, _ := ret[0].(*lndclient.SubmitPackageResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitPackage indicates an expected call of SubmitPackage.
+func (mr *MockWalletKitClientMockRecorder) SubmitPackage(ctx, txns, maxFeeRate any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPackage", reflect.TypeOf((*MockWalletKitClient)(nil).SubmitPackage), ctx, txns, maxFeeRate)
 }
 
 // MockChainNotifierClient is a mock of ChainNotifierClient interface.
@@ -677,9 +750,13 @@ func (mr *MockChainNotifierClientMockRecorder) RegisterConfirmationsNtfn(ctx, tx
 }
 
 // RegisterSpendNtfn mocks base method.
-func (m *MockChainNotifierClient) RegisterSpendNtfn(ctx context.Context, outpoint *wire.OutPoint, pkScript []byte, heightHint int32) (chan *chainntnfs.SpendDetail, chan error, error) {
+func (m *MockChainNotifierClient) RegisterSpendNtfn(ctx context.Context, outpoint *wire.OutPoint, pkScript []byte, heightHint int32, optFuncs ...lndclient.NotifierOption) (chan *chainntnfs.SpendDetail, chan error, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RegisterSpendNtfn", ctx, outpoint, pkScript, heightHint)
+	varargs := []any{ctx, outpoint, pkScript, heightHint}
+	for _, a := range optFuncs {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "RegisterSpendNtfn", varargs...)
 	ret0, _ := ret[0].(chan *chainntnfs.SpendDetail)
 	ret1, _ := ret[1].(chan error)
 	ret2, _ := ret[2].(error)
@@ -687,7 +764,8 @@ func (m *MockChainNotifierClient) RegisterSpendNtfn(ctx context.Context, outpoin
 }
 
 // RegisterSpendNtfn indicates an expected call of RegisterSpendNtfn.
-func (mr *MockChainNotifierClientMockRecorder) RegisterSpendNtfn(ctx, outpoint, pkScript, heightHint any) *gomock.Call {
+func (mr *MockChainNotifierClientMockRecorder) RegisterSpendNtfn(ctx, outpoint, pkScript, heightHint any, optFuncs ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterSpendNtfn", reflect.TypeOf((*MockChainNotifierClient)(nil).RegisterSpendNtfn), ctx, outpoint, pkScript, heightHint)
+	varargs := append([]any{ctx, outpoint, pkScript, heightHint}, optFuncs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterSpendNtfn", reflect.TypeOf((*MockChainNotifierClient)(nil).RegisterSpendNtfn), varargs...)
 }

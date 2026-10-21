@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/btcutil/v2"
 	"github.com/lightninglabs/pool/codec"
 	"github.com/lightninglabs/pool/event"
 	"github.com/lightninglabs/pool/order"
