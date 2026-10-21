@@ -1,4 +1,4 @@
-FROM golang:1.23.6-bookworm
+FROM golang:1.26-bookworm
 
 RUN go install go.uber.org/mock/mockgen@v0.4.0
 

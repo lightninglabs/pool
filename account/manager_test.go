@@ -11,12 +11,13 @@ import (
 	"testing"
 	"time"
 
+	btcaddr "github.com/btcsuite/btcd/address/v2"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/psbt/v2"
+	"github.com/btcsuite/btcd/txscript/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/input"
@@ -295,13 +296,13 @@ func (h *testHarness) assertSpendTxBroadcast(accountBeforeSpend *Account,
 		)
 		require.NoError(h.t, err)
 		require.Len(h.t, addrs, 1)
-		addr, ok := addrs[0].(*btcutil.AddressWitnessPubKeyHash)
+		addr, ok := addrs[0].(*btcaddr.AddressWitnessPubKeyHash)
 		if !ok {
 			h.t.Fatalf("expected P2WPKH address, found %T", addr)
 		}
 		// Witness program of address returned by the mock
 		// implementation of NextAddr.
-		witnessProgram := btcutil.Hash160(testRawTraderKey)
+		witnessProgram := btcaddr.Hash160(testRawTraderKey)
 		if !bytes.Equal(addr.WitnessProgram(), witnessProgram) {
 			h.t.Fatalf("expected witness program %x, got %x",
 				witnessProgram, addr.WitnessProgram())

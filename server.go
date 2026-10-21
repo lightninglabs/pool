@@ -42,11 +42,12 @@ import (
 
 var (
 	// minimalCompatibleVersion is the minimum version and build tags
-	// required in lnd to run pool.
+	// required in lnd to run pool. L402 payments use SendPaymentV2 with an
+	// unset timeout, which lnd defaults to 60 seconds since v0.19.0-beta.
 	minimalCompatibleVersion = &verrpc.Version{
 		AppMajor: 0,
-		AppMinor: 18,
-		AppPatch: 5,
+		AppMinor: 19,
+		AppPatch: 0,
 
 		// We don't actually require the invoicesrpc calls. But if we
 		// try to use lndclient on an lnd that doesn't have it enabled,

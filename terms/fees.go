@@ -1,6 +1,6 @@
 package terms
 
-import "github.com/btcsuite/btcd/btcutil"
+import "github.com/btcsuite/btcd/btcutil/v2"
 
 // FeeSchedule is an interface that represents the configuration source that
 // the auctioneer will use to determine how much to charge in fees for each

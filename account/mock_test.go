@@ -10,14 +10,15 @@ import (
 	"sync"
 	"time"
 
+	btcaddr "github.com/btcsuite/btcd/address/v2"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
+	"github.com/btcsuite/btcd/psbt/v2"
+	"github.com/btcsuite/btcd/txscript/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/pool/poolscript"
@@ -296,10 +297,10 @@ func (w *mockWallet) SendOutputs(ctx context.Context, outputs []*wire.TxOut,
 }
 
 func (w *mockWallet) NextAddr(context.Context, string,
-	walletrpc.AddressType, bool) (btcutil.Address, error) {
+	walletrpc.AddressType, bool) (btcaddr.Address, error) {
 
-	pubKeyHash := btcutil.Hash160(testTraderKey.SerializeCompressed())
-	return btcutil.NewAddressWitnessPubKeyHash(
+	pubKeyHash := btcaddr.Hash160(testTraderKey.SerializeCompressed())
+	return btcaddr.NewAddressWitnessPubKeyHash(
 		pubKeyHash, &chaincfg.MainNetParams,
 	)
 }
@@ -616,7 +617,8 @@ func (n *mockChainNotifier) RegisterConfirmationsNtfn(ctx context.Context,
 
 func (n *mockChainNotifier) RegisterSpendNtfn(ctx context.Context,
 	outpoint *wire.OutPoint, pkScript []byte,
-	heightHint int32) (chan *chainntnfs.SpendDetail, chan error, error) {
+	heightHint int32, _ ...lndclient.NotifierOption) (
+	chan *chainntnfs.SpendDetail, chan error, error) {
 
 	return n.spendChan, n.errChan, nil
 }

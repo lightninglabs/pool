@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/wire/v2"
 	"github.com/lightninglabs/pool/internal/test"
 	"github.com/lightninglabs/pool/poolscript"
 	"github.com/lightninglabs/pool/sidecar"
