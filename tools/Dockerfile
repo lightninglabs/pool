@@ -1,6 +1,7 @@
 FROM golang:1.27.3-bookworm
 
-RUN apt-get update && apt-get install -y git
+RUN apt-get update && apt-get install -y git \
+  && git config --global --add safe.directory /build
 ENV GOCACHE=/tmp/build/.cache
 ENV GOMODCACHE=/tmp/build/.modcache
 ENV GOFLAGS="-buildvcs=false"
