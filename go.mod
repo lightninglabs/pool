@@ -207,7 +207,7 @@ replace github.com/lightninglabs/pool/auctioneerrpc => ./auctioneerrpc
 
 replace github.com/lightninglabs/pool/poolrpc => ./poolrpc
 
-go 1.26.8
+go 1.27.3
 
 // Match the lnd source revision, including its SQL schema and pgx v5 fixes.
 replace github.com/lightningnetwork/lnd/sqldb => github.com/lightningnetwork/lnd/sqldb v1.0.13-0.20260925031608-f2963ce1fd19

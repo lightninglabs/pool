@@ -625,7 +625,13 @@ func TestHandleServerShutdownPartialResubscribeFailure(t *testing.T) {
 	// after the first handshake's error. With a fix, it returns after
 	// all three handshakes complete.
 	select {
-	case <-shutdownErr:
+	case err := <-shutdownErr:
+		// One handshake fails by design here, so a non-nil error is
+		// an expected outcome. This test only requires that the call
+		// returns; the assertion below covers what it must have done
+		// before returning.
+		_ = err
+
 	case <-time.After(2 * time.Second):
 		t.Fatal("HandleServerShutdown did not return")
 	}
