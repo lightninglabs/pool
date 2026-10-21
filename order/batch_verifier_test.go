@@ -1,7 +1,6 @@
 package order
 
 import (
-	"context"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -653,7 +652,7 @@ func scriptForChan(t *testing.T, walletKit *test.MockWalletKit, loc1,
 func deriveRawKey(t *testing.T, walletKit *test.MockWalletKit,
 	loc keychain.KeyLocator) [33]byte {
 
-	key, err := walletKit.DeriveKey(context.Background(), &loc)
+	key, err := walletKit.DeriveKey(t.Context(), &loc)
 	if err != nil {
 		t.Fatalf("error deriving key: %v", err)
 	}

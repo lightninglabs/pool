@@ -200,7 +200,7 @@ func TestRegisterSidecar(t *testing.T) {
 			})
 
 			ticket, err := acceptor.RegisterSidecar(
-				context.Background(), *tc.ticket,
+				t.Context(), *tc.ticket,
 			)
 
 			if tc.expectedErr != "" {

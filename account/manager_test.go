@@ -629,7 +629,7 @@ func TestResumeAccountAfterRestart(t *testing.T) {
 		// still have a persisted intent to create the account.
 		go func() {
 			_, _ = h.manager.InitAccount(
-				context.Background(), value, tc.version,
+				t.Context(), value, tc.version,
 				chainfee.FeePerKwFloor, expiry, bestHeight,
 			)
 		}()
@@ -828,7 +828,7 @@ func TestAccountClose(t *testing.T) {
 		// We'll immediately attempt to close the account with the
 		// test's fee expression.
 		_, err := h.manager.CloseAccount(
-			context.Background(), account.TraderKey.PubKey,
+			t.Context(), account.TraderKey.PubKey,
 			tc.feeExpr, bestHeight,
 		)
 
@@ -1076,7 +1076,7 @@ func TestAccountWithdrawal(t *testing.T) {
 		// withdrawal to a dust output, which should fail.
 		dustOutput := &wire.TxOut{Value: 0, PkScript: p2wsh}
 		_, _, err := h.manager.WithdrawAccount(
-			context.Background(), account.TraderKey.PubKey,
+			t.Context(), account.TraderKey.PubKey,
 			[]*wire.TxOut{dustOutput}, feeRate, bestHeight, 0,
 			tc.newVersion,
 		)
@@ -1108,7 +1108,7 @@ func TestAccountWithdrawal(t *testing.T) {
 		// If successful, we'll follow with a series of assertions to
 		// ensure it was performed correctly.
 		_, _, err = h.manager.WithdrawAccount(
-			context.Background(), account.TraderKey.PubKey, outputs,
+			t.Context(), account.TraderKey.PubKey, outputs,
 			feeRate, bestHeight, 0, tc.newVersion,
 		)
 		require.NoError(h.t, err)
@@ -1307,7 +1307,7 @@ func TestAccountDeposit(t *testing.T) {
 		// If successful, we'll follow with a series of assertions to
 		// ensure it was performed correctly.
 		_, _, err := h.manager.DepositAccount(
-			context.Background(), account.TraderKey.PubKey,
+			t.Context(), account.TraderKey.PubKey,
 			depositAmount, feeRate, bestHeight, 0, tc.newVersion,
 		)
 
@@ -1431,7 +1431,7 @@ func TestAccountConsecutiveBatches(t *testing.T) {
 			// The RPC server will notify the manager each time a
 			// batch is finalized, we do the same here.
 			err = h.manager.WatchMatchedAccounts(
-				context.Background(),
+				t.Context(),
 				[]*btcec.PublicKey{account.TraderKey.PubKey},
 			)
 			require.NoError(t, err)

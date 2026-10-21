@@ -205,7 +205,7 @@ func TestRenewAccount(t *testing.T) {
 			srv.bestHeight = 100
 
 			ctx, cancel := context.WithTimeout(
-				context.Background(), ctxTimeout,
+				t.Context(), ctxTimeout,
 			)
 			defer cancel()
 

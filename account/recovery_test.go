@@ -1,7 +1,6 @@
 package account
 
 import (
-	"context"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -258,7 +257,7 @@ func TestGenerateRecoveryKeys(t *testing.T) {
 
 	walletKit := test.NewMockWalletKit()
 	keys, err := GenerateRecoveryKeys(
-		context.Background(), DefaultAccountKeyWindow, walletKit,
+		t.Context(), DefaultAccountKeyWindow, walletKit,
 	)
 	if err != nil {
 		t.Fatalf("could not generate keys: %v", err)
