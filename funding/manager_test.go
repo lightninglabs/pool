@@ -786,7 +786,7 @@ func TestWaitForPeerConnections(t *testing.T) {
 	// Do the same again, but now trigger a context cancel. We make the
 	// context expire afterwards, since that will trigger the actual error
 	// return.
-	ctxt, cancel = context.WithTimeout(context.Background(), 2*testTimeout)
+	ctxt, cancel = context.WithTimeout(t.Context(), 2*testTimeout)
 	defer cancel()
 
 	go func() {
