@@ -105,6 +105,8 @@ func (db *DB) StorePendingBatch(batch *order.Batch, orders []order.Nonce,
 			return err
 		}
 
+		spendingAccountsSnapshot := accounts
+
 		var updatedAccounts []*account.Account
 		for idx, acct := range accounts {
 			accountKey := getAccountKey(acct)
@@ -125,10 +127,11 @@ func (db *DB) StorePendingBatch(batch *order.Batch, orders []order.Nonce,
 			return err
 		}
 
-		// Before we are done, we store a snapshot of the this batch,
+		// Before we are done, we store a snapshot of the batch,
 		// so we retain this history for later.
 		snapshot, err := NewSnapshot(
-			batch, updatedOrders, updatedAccounts,
+			batch, updatedOrders, spendingAccountsSnapshot,
+			updatedAccounts,
 		)
 		if err != nil {
 			return err
