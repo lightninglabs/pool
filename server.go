@@ -113,6 +113,13 @@ type Server struct {
 	l402Store       *l402.FileStore
 	lndServices     *lndclient.GrpcLndServices
 	lndClient       lnrpc.LightningClient
+
+	// lndOwned indicates whether the server created the lnd connection
+	// itself (standalone mode via Start) and therefore owns its
+	// lifecycle. When the server is started as a subserver
+	// (StartAsSubserver), the lnd connection is shared with and owned
+	// by the parent process (e.g. LiT) and must not be closed here.
+	lndOwned        bool
 	grpcServer      *grpc.Server
 	restProxy       *http.Server
 	grpcListener    net.Listener
@@ -160,6 +167,10 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
+
+	// We created the lnd connection ourselves, so we own it and are
+	// responsible for closing it on shutdown.
+	s.lndOwned = true
 	shutdownFuncs["lnd"] = func() error { // nolint:unparam
 		s.lndServices.Close()
 		return nil
@@ -387,6 +398,11 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 
 	s.lndClient = lndClient
 	s.lndServices = lndGrpc
+
+	// The lnd connection is owned by the parent process (e.g. LiT) and
+	// potentially shared with other subservers, so we must never close
+	// it ourselves.
+	s.lndOwned = false
 
 	// Print the version before executing either primary directive.
 	log.Infof("Version: %v", Version())
@@ -719,13 +735,23 @@ func (s *Server) Stop() error {
 		}
 	}
 
-	s.lndServices.Close()
+	s.stopLnd()
 	s.wg.Wait()
 
 	if shutdownErr != nil {
 		return fmt.Errorf("error shutting down server: %v", shutdownErr)
 	}
 	return nil
+}
+
+// stopLnd closes the connection to lnd, but only if the server created the
+// connection itself (standalone mode). In subserver mode the connection is
+// owned by the parent process (e.g. LiT) and shared with other subservers,
+// closing it here would tear down their lnd access as well.
+func (s *Server) stopLnd() {
+	if s.lndServices != nil && s.lndOwned {
+		s.lndServices.Close()
+	}
 }
 
 // getLnd returns an instance of the lnd services proxy.
