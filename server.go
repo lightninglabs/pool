@@ -111,15 +111,21 @@ type Server struct {
 	fundingManager  *funding.Manager
 	sidecarAcceptor *SidecarAcceptor
 	l402Store       *l402.FileStore
-	lndServices     *lndclient.GrpcLndServices
-	lndClient       lnrpc.LightningClient
 
-	// lndOwned indicates whether the server created the lnd connection
-	// itself (standalone mode via Start) and therefore owns its
-	// lifecycle. When the server is started as a subserver
-	// (StartAsSubserver), the lnd connection is shared with and owned
-	// by the parent process (e.g. LiT) and must not be closed here.
-	lndOwned        bool
+	// lndServices is the set of lnd services the server uses. It is a
+	// non-closable view: the closeable connection wrapper is only ever
+	// held in lndOwner, and only when the server created the connection
+	// itself (standalone mode).
+	lndServices *lndclient.LndServices
+	lndClient   lnrpc.LightningClient
+
+	// lndOwner holds the full lnd services wrapper, including its Close
+	// method, if and only if the server created the lnd connection
+	// itself (standalone mode via Start). When the server is started as
+	// a subserver (StartAsSubserver), the lnd connection is shared with
+	// and owned by the parent process (e.g. LiT) and lndOwner is nil,
+	// so there is no closable handle to the borrowed connection.
+	lndOwner        *lndclient.GrpcLndServices
 	grpcServer      *grpc.Server
 	restProxy       *http.Server
 	grpcListener    net.Listener
@@ -161,7 +167,7 @@ func (s *Server) Start() error {
 	}()
 
 	var err error
-	s.lndServices, err = getLnd(
+	lndGrpc, err := getLnd(
 		s.cfg.Network, s.cfg.Lnd, s.cfg.ShutdownInterceptor,
 	)
 	if err != nil {
@@ -169,10 +175,12 @@ func (s *Server) Start() error {
 	}
 
 	// We created the lnd connection ourselves, so we own it and are
-	// responsible for closing it on shutdown.
-	s.lndOwned = true
+	// responsible for closing it on shutdown. The rest of the server
+	// only ever sees the non-closable services view.
+	s.lndOwner = lndGrpc
+	s.lndServices = &lndGrpc.LndServices
 	shutdownFuncs["lnd"] = func() error { // nolint:unparam
-		s.lndServices.Close()
+		s.lndOwner.Close()
 		return nil
 	}
 
@@ -212,7 +220,7 @@ func (s *Server) Start() error {
 			},
 			RequiredPerms: poolrpc.RequiredPermissions,
 			DBPassword:    macDbDefaultPw,
-			LndClient:     &s.lndServices.LndServices,
+			LndClient:     s.lndServices,
 			EphemeralKey:  lndclient.SharedKeyNUMS,
 			KeyLocator:    lndclient.SharedKeyLocator,
 		},
@@ -390,19 +398,20 @@ func (s *Server) Start() error {
 // StartAsSubserver is an alternative start method where the RPC server does not
 // create its own gRPC server but registers on an existing one.
 func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
-	lndGrpc *lndclient.GrpcLndServices, withMacaroonService bool) error {
+	lndServices *lndclient.LndServices, withMacaroonService bool) error {
 
 	if atomic.AddInt32(&s.started, 1) != 1 {
 		return fmt.Errorf("trader can only be started once")
 	}
 
 	s.lndClient = lndClient
-	s.lndServices = lndGrpc
 
-	// The lnd connection is owned by the parent process (e.g. LiT) and
-	// potentially shared with other subservers, so we must never close
-	// it ourselves.
-	s.lndOwned = false
+	// When starting as a subserver, we get passed in an already
+	// established connection to lnd that might be shared among other
+	// subservers. We only receive the non-closable services view: the
+	// connection is owned by the parent process (e.g. LiT) and it is
+	// not possible for us to close it.
+	s.lndServices = lndServices
 
 	// Print the version before executing either primary directive.
 	log.Infof("Version: %v", Version())
@@ -443,7 +452,7 @@ func (s *Server) StartAsSubserver(lndClient lnrpc.LightningClient,
 				},
 				RequiredPerms: poolrpc.RequiredPermissions,
 				DBPassword:    macDbDefaultPw,
-				LndClient:     &s.lndServices.LndServices,
+				LndClient:     s.lndServices,
 				EphemeralKey:  lndclient.SharedKeyNUMS,
 				KeyLocator:    lndclient.SharedKeyLocator,
 			},
@@ -566,7 +575,7 @@ func (s *Server) setupClient() error {
 	// create a fixed identity that is used for the whole runtime of the
 	// trader instead.
 	var interceptor Interceptor = l402.NewInterceptor(
-		&s.lndServices.LndServices, s.l402Store, defaultRPCTimeout,
+		s.lndServices, s.l402Store, defaultRPCTimeout,
 		defaultL402MaxCost, s.cfg.L402MaxRoutingFee, false,
 	)
 	if s.cfg.FakeAuth && s.cfg.Network == "mainnet" {
@@ -745,12 +754,13 @@ func (s *Server) Stop() error {
 }
 
 // stopLnd closes the connection to lnd, but only if the server created the
-// connection itself (standalone mode). In subserver mode the connection is
-// owned by the parent process (e.g. LiT) and shared with other subservers,
-// closing it here would tear down their lnd access as well.
+// connection itself (standalone mode), in which case lndOwner holds the
+// closable wrapper. In subserver mode the connection is owned by the parent
+// process (e.g. LiT) and shared with other subservers, closing it here
+// would tear down their lnd access as well.
 func (s *Server) stopLnd() {
-	if s.lndServices != nil && s.lndOwned {
-		s.lndServices.Close()
+	if s.lndOwner != nil {
+		s.lndOwner.Close()
 	}
 }
 

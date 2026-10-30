@@ -325,11 +325,13 @@ func TestSubserverDoesNotCloseSharedLndConn(t *testing.T) {
 	cfg.FakeAuth = true
 
 	// Start the trader as a subserver with the shared (borrowed) lnd
-	// connection and a basic client on the same connection, exactly like
-	// LiT passes them.
+	// services and a basic client on the same connection, exactly like
+	// LiT passes them. Note that the trader only receives the
+	// non-closable view of the connection.
 	server := NewServer(&cfg)
 	basicClient := lnrpc.NewLightningClient(conn)
-	err := server.StartAsSubserver(basicClient, services, false)
+	err := server.StartAsSubserver(basicClient, &services.LndServices,
+		false)
 	require.NoError(t, err)
 
 	// Stopping the trader server must not close the shared lnd
@@ -355,14 +357,15 @@ func TestOwnedLndConnClosedOnStop(t *testing.T) {
 	conn := services.ClientConn
 
 	// Simulate a server that created its own lnd connection (standalone
-	// mode via Start) by marking the connection as owned.
+	// mode via Start): it keeps the closable wrapper in lndOwner while
+	// the rest of the server only sees the non-closable services view.
 	cfg := DefaultConfig()
 	cfg.Network = "testnet"
 	cfg.BaseDir = t.TempDir()
 
 	server := NewServer(&cfg)
-	server.lndServices = services
-	server.lndOwned = true
+	server.lndServices = &services.LndServices
+	server.lndOwner = services
 
 	// Stopping the server must close the connection it owns. We call the
 	// relevant part of the shutdown logic directly as the rest of the
