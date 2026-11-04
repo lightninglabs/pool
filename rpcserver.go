@@ -132,7 +132,7 @@ func (s *accountStore) PendingBatch() error {
 // database is created in `serverDir` if it does not yet exist.
 func newRPCServer(server *Server) (*rpcServer, error) {
 	accountStore := &accountStore{server.db}
-	lndServices := &server.lndServices.LndServices
+	lndServices := server.lndServices
 	batchVersion, err := server.determineBatchVersion()
 	if err != nil {
 		return nil, err

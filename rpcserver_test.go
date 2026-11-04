@@ -197,9 +197,7 @@ func TestRenewAccount(t *testing.T) {
 				orderManager:   orderMgr,
 				marshaler:      marshaler,
 				server: &Server{
-					lndServices: &lndclient.GrpcLndServices{
-						LndServices: lndServices,
-					},
+					lndServices: &lndServices,
 				},
 			}
 			srv.bestHeight = 100
